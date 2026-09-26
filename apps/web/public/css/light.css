@@ -1,0 +1,123 @@
+/* ---------------------------------------------------------------
+   Light interface
+   White toolbars and panels on a soft grey desk, blue for what is
+   picked — the look of a desktop PDF reader. It is the interface
+   only: the page's own reading theme (Paper, Sepia, Night) is a
+   separate choice and still applies on top.
+   Everything that reads its colour from a variable follows by itself;
+   what is left here are the places that were written for dark.
+   --------------------------------------------------------------- */
+
+body[data-ui="light"] {
+  --chrome: #FFFFFF;
+  --chrome-2: #F3F4F6;
+  --stage: #E8E9EB;
+  --line: #DADCE0;
+  --paper: #FFFFFF;
+  --text: #1F2328;
+  --text-dim: #646A73;
+  --marker: #1473E6;
+  --danger: #D7373F;
+  --accent-ink: #FFFFFF;          /* text on a blue fill */
+  --hover: rgba(0, 0, 0, .045);
+  --shadow-pop: 0 10px 30px rgba(15, 23, 42, .14), 0 2px 6px rgba(15, 23, 42, .08);
+  color-scheme: light;
+}
+
+/* The photo screens stay dark, like a camera or a photo viewer: a picture
+   reads better on black. They get the dark values back. */
+body[data-ui="light"] :is(#pm, #cam, #lb) {
+  --chrome: #050505; --chrome-2: #181818; --stage: #111111; --line: #333333;
+  --text: #E4E4E4; --text-dim: #8D8D8D; --marker: #FFFFFF; --danger: #E27C68;
+  color: var(--text);
+  color-scheme: dark;
+}
+
+/* ---- toolbar, ribbon and buttons ---- */
+body[data-ui="light"] .bar,
+body[data-ui="light"] .ribbon { box-shadow: 0 1px 0 rgba(0, 0, 0, .02) }
+body[data-ui="light"] .btn:hover:not(:disabled) { background: var(--hover); border-color: transparent }
+body[data-ui="light"] .btn.on { background: #E8F1FC; border-color: #C4DAF6; color: var(--marker) }
+body[data-ui="light"] .btn.primary { background: var(--marker); color: var(--accent-ink); border-color: transparent }
+body[data-ui="light"] .btn.primary:hover:not(:disabled) { background: #0D66D0; border-color: transparent }
+body[data-ui="light"] .ribbon .btn.on::after { color: var(--marker) }
+body[data-ui="light"] .admark { color: #1F2328; border-color: #9AA0A6 }
+body[data-ui="light"] a.admark:hover { border-color: #1F2328 }
+body[data-ui="light"] #btnHome { background: #FFFFFF }
+body[data-ui="light"] #btnHome:hover:not(:disabled) { background: var(--marker); color: var(--accent-ink) }
+body[data-ui="light"] .pager input,
+body[data-ui="light"] .search-in,
+body[data-ui="light"] .pop input,
+body[data-ui="light"] .pw input { background: #FFFFFF }
+
+/* ---- pops and floating panels: a soft shadow, not a black one ---- */
+body[data-ui="light"] :is(.pop, .markpop, .swpop) { box-shadow: var(--shadow-pop) }
+body[data-ui="light"] .scrim { background: rgba(15, 23, 42, .32) }
+
+/* a dark toast stands out over a white page, the way desktop readers do it */
+body[data-ui="light"] .toast { background: #2B2F36; border-color: #2B2F36; color: #FFFFFF;
+                               box-shadow: 0 8px 24px rgba(15, 23, 42, .25) }
+body[data-ui="light"] .toast b { color: #8CC4FF }
+/* a thin ring, so the white swatch does not vanish into the white bar */
+body[data-ui="light"] :is(.sw, .swpop button, .markpop .cbtn i) { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18) }
+body[data-ui="light"] .sw.on { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18), 0 0 0 2px var(--chrome-2) }
+
+/* ---- sidebar ---- */
+body[data-ui="light"] .rail { background: #FAFAFB }
+body[data-ui="light"] .thumb .shell { box-shadow: 0 1px 3px rgba(0, 0, 0, .12) }
+body[data-ui="light"] .thumb.active .shell,
+body[data-ui="light"] .thumb.picked .shell { box-shadow: 0 0 0 2px rgba(20, 115, 230, .28) }
+body[data-ui="light"] :is(.thumb .tools button, .thumb .tickbox, .ptools button) {
+  background: rgba(255, 255, 255, .96); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
+}
+body[data-ui="light"] :is(.thumb .tickbox.on, .btn .cnt, .texted .acts button.ok) { color: var(--accent-ink) }
+body[data-ui="light"] .thumb .badge,
+body[data-ui="light"] .pagebox.added .ptools::before { background: var(--marker); color: var(--accent-ink) }
+body[data-ui="light"] .hit-item mark { background: rgba(255, 196, 0, .45); color: inherit }
+body[data-ui="light"] .pined figure { background: #F1F2F4 }
+
+/* ---- the pages on the desk ---- */
+body[data-ui="light"] .page { box-shadow: 0 1px 3px rgba(0, 0, 0, .16), 0 6px 18px rgba(0, 0, 0, .08) }
+
+/* ---- open file / home screen ---- */
+body[data-ui="light"] :is(.drop h1, .htop h1, .hdrop h2, .hsec h3) { color: var(--text) }
+body[data-ui="light"] :is(.pick, .hdrop .art .dot) { color: var(--accent-ink) }
+body[data-ui="light"] .pick:hover { background: #0D66D0 }
+body[data-ui="light"] .home { background: #F4F5F7 }
+body[data-ui="light"] .hnav { background: #FFFFFF }
+body[data-ui="light"] .hnav .safe svg { stroke: #7A808A }
+body[data-ui="light"] .hdrop { background: #FFFFFF; border-color: #C3C7CD }
+body[data-ui="light"] .hdrop.hot { background: #EEF5FD; border-color: var(--marker) }
+body[data-ui="light"] .hdrop .art .pg { box-shadow: 0 4px 12px rgba(0, 0, 0, .14) }
+body[data-ui="light"] .tcard:hover { border-color: #AEB4BC; background: #FFFFFF; box-shadow: 0 4px 14px rgba(0, 0, 0, .06) }
+body[data-ui="light"] .tcard .ic { background: #EEF5FD; border-color: #CFE0F7; color: var(--marker) }
+body[data-ui="light"] .rrow .fi { box-shadow: inset 0 0 0 1px #D5D8DC }
+body[data-ui="light"] .rrow .x:hover { background: var(--hover) }
+
+/* ---- site navigation strip ---- */
+body[data-ui="light"] .adnav { background: #FFFFFF; border-bottom-color: var(--line); color: var(--text) }
+body[data-ui="light"] .adnav-logo { color: #1F2328; border-color: #9AA0A6 }
+body[data-ui="light"] :is(.adnav-links > a, .adnav-trigger, .adnav-drop a) { color: var(--text-dim) }
+body[data-ui="light"] .adnav-logo:hover { border-color: #1F2328 }
+body[data-ui="light"] :is(.adnav-links > a:hover, .adnav-trigger:hover, .adnav-trigger[aria-expanded=true]) { color: var(--text) }
+body[data-ui="light"] .adnav-drop { background: #FFFFFF; border-color: var(--line); box-shadow: var(--shadow-pop) }
+body[data-ui="light"] .adnav-drop a:hover { color: var(--text); background: var(--chrome-2) }
+body[data-ui="light"] .adnav-drop a[aria-current] { color: var(--text) }
+body[data-ui="light"] .adnav-drop i { color: var(--text-dim); border-color: var(--line) }
+
+/* ---- the feature panels in pro.css ---- */
+body[data-ui="light"] :is(.cthread .lnk:hover, .citem:hover, .rcitem:hover, .rcitem footer .lnk:hover) { background: var(--hover) }
+body[data-ui="light"] .sigtabs button.on { background: var(--chrome-2) }
+body[data-ui="light"] .dhint.block { background: var(--chrome-2) }
+body[data-ui="light"] :is(.anno-sw .sw, .sigcolors .sw) { border-color: rgba(0, 0, 0, .18) }
+body[data-ui="light"] .orgshell.pending { background: repeating-linear-gradient(45deg, #EEEFF1 0 8px, #F6F7F8 8px 16px) }
+body[data-ui="light"] .hdrop .install:hover { border-color: #AEB4BC; color: var(--text) }
+body[data-ui="light"] .instpop .txt b { color: var(--text) }
+body[data-ui="light"] :is(.sigmodal, .docmodal, .sharemodal) > * { box-shadow: var(--shadow-pop) }
+
+/* ---- the switch itself: a sun in the dark, a moon in the light ---- */
+.resume.uimode svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8;
+                     stroke-linecap: round; stroke-linejoin: round; flex: none }
+.uimode .moon { display: none }
+body[data-ui="light"] .uimode .sun { display: none }
+body[data-ui="light"] .uimode .moon { display: inline }

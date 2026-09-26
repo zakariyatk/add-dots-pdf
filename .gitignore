@@ -1,0 +1,24 @@
+# dependencies and build output
+node_modules/
+dist/
+.turbo/
+coverage/
+*.tsbuildinfo
+
+# source archives and the original single-file dump - kept on disk, not in git
+/*.zip
+/index.html
+
+# PHP API secrets and uploads (see legacy/README.md)
+legacy/api/config.php
+pdfreader-storage/
+router.php
+
+# local
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+Thumbs.db
+.claude/

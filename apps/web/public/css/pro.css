@@ -1,0 +1,1281 @@
+/* ADD DOTS PDF — Pro feature styles (annotate, organize, forms, document ops)
+   Loads after app.css and reuses its variables, so the reading themes,
+   the mobile layout and the dark chrome all carry over unchanged. */
+
+/* ---------------------------------------------------------------
+   Annotate & comment
+   --------------------------------------------------------------- */
+
+/* Text-markup tools read from the text layer, so the capture layer that
+   the drawing tools rely on has to get out of the way. */
+body[data-tool="highlight"] .capture,
+body[data-tool="underline"] .capture,
+body[data-tool="strike"]    .capture { display: none }
+
+body[data-tool="highlight"] .textLayer,
+body[data-tool="underline"] .textLayer,
+body[data-tool="strike"]    .textLayer {
+  pointer-events: auto;
+  user-select: text;
+  -webkit-user-select: text;
+  cursor: text;
+}
+/* the drag shows the colour that is about to be applied */
+body[data-tool="highlight"] .textLayer ::selection,
+body[data-tool="underline"] .textLayer ::selection,
+body[data-tool="strike"]    .textLayer ::selection {
+  background: var(--mk-sel, #F2C14E);
+  opacity: .5;
+}
+
+body[data-tool="ink"]   .capture { cursor: crosshair }
+body[data-tool="note"]  .capture { cursor: copy }
+body[data-tool="stamp"] .capture { cursor: cell }
+
+/* marks stay clickable in Read mode so a comment can be opened from the page */
+body[data-tool="select"] .anno .mk *,
+body[data-tool="select"] .anno .note-mk,
+body[data-tool="select"] .anno .stamp-mk { pointer-events: all }
+.anno .note-mk:hover  { filter: brightness(1.12) }
+.anno .stamp-mk:hover { filter: brightness(1.12) }
+
+/* --- mode-bar extras --- */
+.anno-ctl { display: flex; align-items: center; gap: 6px }
+.anno-ctl[hidden] { display: none }
+.anno-lbl {
+  font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--text-dim);
+}
+.anno-sw { gap: 5px }
+.anno-sw .sw {
+  width: 20px; height: 20px; border-radius: 50%;
+  border: 1px solid rgba(255,255,255,.28);
+  cursor: pointer; padding: 0;
+}
+.anno-sw .sw.on {
+  box-shadow: 0 0 0 2px var(--chrome), 0 0 0 4px var(--marker);
+}
+
+/* --- comment thread popover --- */
+.cthread {
+  position: fixed; z-index: 90; width: 310px; max-width: calc(100vw - 24px);
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 18px 44px rgba(0,0,0,.55);
+  padding: 10px; color: var(--text); font-size: 13px;
+  display: flex; flex-direction: column; gap: 8px;
+}
+.cthread[hidden] { display: none }
+.cthread.resolved { opacity: .82 }
+.cthread header { display: flex; align-items: center; gap: 8px; font-size: 12px }
+.cthread header .grow { flex: 1 }
+.cthread .lnk {
+  background: none; border: 0; color: var(--text-dim); cursor: pointer;
+  font-size: 12px; padding: 2px 4px; border-radius: 4px;
+}
+.cthread .lnk:hover { color: var(--text); background: rgba(255,255,255,.07) }
+.cthread .lnk.del:hover { color: var(--danger) }
+.cthread .x {
+  background: none; border: 0; color: var(--text-dim); cursor: pointer;
+  font-size: 18px; line-height: 1; padding: 0 2px;
+}
+.cthread .x:hover { color: var(--text) }
+.cthread .cq, .citem blockquote {
+  margin: 0; padding: 6px 9px; border-left: 2px solid var(--line);
+  color: var(--text-dim); font-style: italic; font-size: 12px;
+  max-height: 84px; overflow: auto;
+}
+.cthread textarea {
+  width: 100%; resize: vertical; min-height: 58px;
+  background: var(--stage); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 8px;
+  font: inherit;
+}
+.cthread textarea:focus { outline: none; border-color: var(--text-dim) }
+.creplies { display: flex; flex-direction: column; gap: 5px }
+.crep {
+  display: flex; align-items: flex-start; gap: 6px;
+  background: rgba(255,255,255,.04); border-radius: 6px; padding: 5px 7px;
+}
+.crep p { margin: 0; flex: 1; font-size: 12px; white-space: pre-wrap; word-break: break-word }
+.cacts { display: flex; gap: 6px }
+.cacts input {
+  flex: 1; background: var(--stage); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font: inherit;
+}
+.cacts input:focus { outline: none; border-color: var(--text-dim) }
+
+/* --- comments rail --- */
+.cbar { display: flex; gap: 6px; padding: 8px; border-bottom: 1px solid var(--line) }
+.cbar select {
+  flex: 1; background: var(--stage); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px; padding: 5px 7px; font: inherit; font-size: 12px;
+}
+.ccount { padding: 7px 10px; font-size: 12px; color: var(--text-dim) }
+.cempty { padding: 18px 14px; font-size: 12.5px; color: var(--text-dim); line-height: 1.6 }
+.citem {
+  padding: 9px 11px; border-bottom: 1px solid var(--line); cursor: pointer;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.citem:hover { background: rgba(255,255,255,.045) }
+.citem.done { opacity: .55 }
+.citem.done p { text-decoration: line-through }
+.citem header { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-dim) }
+.citem .dot { width: 9px; height: 9px; border-radius: 50%; flex: none }
+.citem .pg { margin-left: auto }
+.citem p { margin: 0; font-size: 12.5px; line-height: 1.45; word-break: break-word }
+.citem p.muted { color: var(--text-dim); font-style: italic }
+.citem .reps { font-size: 11px; color: var(--text-dim) }
+
+/* ---------------------------------------------------------------
+   Organize & combine
+   --------------------------------------------------------------- */
+
+/* drop marker for both the sidebar column and the Organize grid */
+.thumb.dragging, .orgcell.dragging { opacity: .35 }
+.thumb { position: relative }
+.thumb.drop-before::before, .thumb.drop-after::after,
+.orgcell.drop-before::before, .orgcell.drop-after::after {
+  content: ''; position: absolute; background: var(--marker); border-radius: 2px; z-index: 5;
+}
+.thumb.drop-before::before { left: 6px; right: 6px; top: -2px; height: 3px }
+.thumb.drop-after::after   { left: 6px; right: 6px; bottom: -2px; height: 3px }
+.orgcell.drop-before::before { top: 4px; bottom: 4px; left: -3px; width: 3px }
+.orgcell.drop-after::after   { top: 4px; bottom: 4px; right: -3px; width: 3px }
+.thumb[draggable="true"] .hitbox { cursor: grab }
+.thumb[draggable="true"]:active .hitbox { cursor: grabbing }
+
+/* --- Organize Pages --- */
+.orgview {
+  position: fixed; inset: 0; z-index: 70;
+  background: var(--chrome); color: var(--text);
+  display: flex; flex-direction: column;
+}
+.orgview[hidden] { display: none }
+.orgview > header {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--chrome-2);
+}
+.orgview > header .grow { flex: 1 }
+.orgview > header .sep { width: 1px; height: 20px; background: var(--line) }
+.orgcount { font-size: 12px; color: var(--text-dim) }
+.orghint { margin: 0; padding: 8px 14px; font-size: 12px; color: var(--text-dim) }
+.orggrid {
+  flex: 1; overflow: auto; padding: 8px 14px 24px;
+  display: grid; gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
+  align-content: start;
+}
+.orgcell {
+  margin: 0; position: relative; cursor: grab;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+}
+.orgcell:active { cursor: grabbing }
+.orgshell {
+  width: 100%; aspect-ratio: 1 / 1.35;
+  background: var(--stage); border: 1px solid var(--line); border-radius: 6px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.orgshell img { max-width: 100%; max-height: 100%; display: block }
+.orgshell.pending { background: repeating-linear-gradient(45deg, #1a1a1a 0 8px, #1f1f1f 8px 16px) }
+.orgcell figcaption { font-size: 11.5px; color: var(--text-dim) }
+.orgcell figcaption.isnew { color: var(--marker) }
+.orgcell.picked .orgshell { border-color: var(--marker); box-shadow: 0 0 0 2px var(--marker) }
+.orgcell.picked figcaption { color: var(--text) }
+.orgview .btn.del:hover:not(:disabled) { color: var(--danger); border-color: var(--danger) }
+.orgview .btn:disabled { opacity: .4; cursor: default }
+body.organizing { overflow: hidden }
+
+/* --- split popover extras --- */
+#splitPop .row { display: flex; align-items: center; gap: 8px; margin: 7px 0; font-size: 13px }
+#splitPop .mini {
+  width: 48px; text-align: center; background: var(--stage); color: var(--text);
+  border: 1px solid var(--line); border-radius: 5px; padding: 3px 4px; font: inherit;
+}
+#splitPop .note { margin: 8px 0 2px; font-size: 12px; color: var(--text-dim) }
+
+/* ---------------------------------------------------------------
+   Forms & signatures
+   --------------------------------------------------------------- */
+
+.formlayer { position: absolute; inset: 0; z-index: 4; pointer-events: none }
+.formlayer[hidden] { display: none }
+.ffield {
+  position: absolute; pointer-events: auto; box-sizing: border-box;
+  font-family: inherit; color: #0B0B0B;
+  background: rgba(96,165,250,.16);
+  border: 1px solid rgba(37,99,235,.55); border-radius: 2px;
+  padding: 0 3px; margin: 0;
+}
+.ffield:hover  { background: rgba(96,165,250,.26) }
+.ffield:focus  { outline: 2px solid #2563EB; outline-offset: 0; background: rgba(255,255,255,.92) }
+.ffield:disabled { background: rgba(140,140,140,.16); border-style: dashed; cursor: not-allowed }
+textarea.ffield { resize: none; line-height: 1.25; padding: 2px 3px }
+select.ffield { padding: 0 2px }
+input.ffield[type="checkbox"], input.ffield[type="radio"] {
+  padding: 0; accent-color: #2563EB; cursor: pointer;
+}
+.ffield.sigslot {
+  background: rgba(242,193,78,.24); border: 1px dashed #B98A18;
+  color: #6B4E06; font-size: 11px; cursor: pointer; white-space: nowrap; overflow: hidden;
+}
+.ffield.sigslot:hover { background: rgba(242,193,78,.42) }
+/* the fields belong to the page, so they hide while a drawing tool is live */
+body:not([data-tool="select"]) .formlayer { display: none }
+
+/* --- signature modal --- */
+.sigmodal {
+  position: fixed; inset: 0; z-index: 95; background: rgba(0,0,0,.62);
+  display: flex; align-items: center; justify-content: center; padding: 18px;
+}
+.sigmodal[hidden] { display: none }
+.sigbox {
+  width: min(660px, 100%); max-height: calc(100vh - 36px); overflow: auto;
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.6); color: var(--text);
+  display: flex; flex-direction: column; gap: 12px; padding: 14px;
+}
+.sigbox header { display: flex; align-items: center; gap: 8px }
+.sigbox header .grow { flex: 1 }
+.sigbox .x {
+  background: none; border: 0; color: var(--text-dim); font-size: 22px;
+  line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.sigbox .x:hover { color: var(--text) }
+.sigtabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 8px }
+.sigtabs button {
+  background: none; border: 1px solid transparent; color: var(--text-dim);
+  padding: 6px 14px; border-radius: 7px; cursor: pointer; font: inherit; font-size: 13px;
+}
+.sigtabs button:hover { color: var(--text) }
+.sigtabs button.on { color: var(--text); background: rgba(255,255,255,.08); border-color: var(--line) }
+.sigpane { display: flex; flex-direction: column; gap: 9px }
+.sigpane[hidden] { display: none }
+#sigCanvas {
+  width: 100%; height: 200px; background: #FFFFFF; border-radius: 8px;
+  border: 1px solid var(--line); touch-action: none; cursor: crosshair;
+  background-image: linear-gradient(to right, transparent 0 24px, rgba(0,0,0,.07) 24px 25px, transparent 25px),
+                    linear-gradient(to top, transparent 0 46px, rgba(0,0,0,.14) 46px 47px, transparent 47px);
+}
+.sighint { margin: 0; font-size: 12px; color: var(--text-dim) }
+#sigName, #sigFile {
+  background: var(--stage); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 9px 10px; font: inherit; width: 100%;
+}
+#sigName:focus { outline: none; border-color: var(--text-dim) }
+.sigfonts { display: flex; gap: 8px; flex-wrap: wrap; color: #1B2A4A }
+.sigfonts button {
+  flex: 1; min-width: 150px; background: #FFFFFF; color: inherit;
+  border: 1px solid var(--line); border-radius: 8px; padding: 12px 10px;
+  font-size: 26px; cursor: pointer; line-height: 1.1;
+}
+.sigfonts button.on { box-shadow: 0 0 0 2px var(--marker) }
+.sigprev { min-height: 70px; display: flex; align-items: center; justify-content: center }
+.sigprev img { max-width: 100%; max-height: 150px; background: #FFF; border-radius: 6px; padding: 6px }
+.sigcolors { display: flex; align-items: center; gap: 7px }
+.sigcolors .sw {
+  width: 22px; height: 22px; border-radius: 50%; padding: 0;
+  border: 1px solid rgba(255,255,255,.3); cursor: pointer;
+}
+.sigcolors .sw.on { box-shadow: 0 0 0 2px var(--chrome-2), 0 0 0 4px var(--marker) }
+.sigbox footer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap }
+.sigbox footer .grow { flex: 1 }
+.sigsave { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-dim) }
+.sigbox .btn:disabled { opacity: .45; cursor: default }
+
+/* ---------------------------------------------------------------
+   Insert: crop-image modal (reuses .sigmodal/.sigbox chrome)
+   --------------------------------------------------------------- */
+#cropStage { position: relative; max-height: 60vh; overflow: hidden; display: flex;
+             align-items: center; justify-content: center; background: #0D0D0D; border-radius: 8px; touch-action: none }
+#cropStage img { display: block; max-width: 100%; max-height: 60vh; user-select: none; pointer-events: none }
+#cropBox { position: absolute; border: 2px solid var(--marker); box-shadow: 0 0 0 2000px rgba(0,0,0,.55); cursor: move }
+#cropBox i { position: absolute; width: 14px; height: 14px; background: var(--marker); border-radius: 3px; display: block }
+#cropBox i.tl { left: -7px; top: -7px; cursor: nwse-resize }
+#cropBox i.tr { right: -7px; top: -7px; cursor: nesw-resize }
+#cropBox i.bl { left: -7px; bottom: -7px; cursor: nesw-resize }
+#cropBox i.br { right: -7px; bottom: -7px; cursor: nwse-resize }
+
+/* ---------------------------------------------------------------
+   Insert: editable table overlay (mirrors .texted)
+   --------------------------------------------------------------- */
+.tabled { position: absolute; z-index: 6; background: var(--chrome-2); border: 1px solid var(--marker);
+          border-radius: 6px; padding: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.45) }
+.tabled table { border-collapse: collapse }
+.tabled td { border: 1px solid var(--line); min-width: 44px; height: 26px; padding: 2px 5px;
+             font-size: 12.5px; color: var(--text); outline: none }
+.tabled td:focus { background: rgba(59,130,246,.12) }
+.tabled .trow { display: flex; gap: 8px; align-items: center; margin-top: 8px }
+.tabled .trow label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim) }
+.tabled .trow input { width: 42px; height: 24px; text-align: center; background: var(--chrome);
+                       border: 1px solid var(--line); border-radius: 5px; color: var(--text) }
+.tabled .acts { display: flex; gap: 6px; margin-top: 8px }
+.tabled .acts .ok { background: var(--marker); color: #050505; border-color: transparent; font-weight: 700 }
+.tabled .acts button { flex: 1; height: 30px; border-radius: 6px; border: 1px solid var(--line);
+                        background: var(--chrome); color: var(--text); cursor: pointer; font-size: 12.5px }
+
+/* ---------------------------------------------------------------
+   Document operations
+   --------------------------------------------------------------- */
+
+body[data-tool="redact"] .capture { cursor: crosshair }
+.redact-mk { fill: #000; stroke: #E2483D; stroke-width: 1.5; stroke-dasharray: 4 3 }
+body[data-tool="select"] .anno .redact-mk { cursor: move }
+.wm-mk text { pointer-events: none; user-select: none }
+
+/* --- shared modal for the document jobs --- */
+.docmodal {
+  position: fixed; inset: 0; z-index: 92; background: rgba(0,0,0,.6);
+  display: flex; align-items: center; justify-content: center; padding: 18px;
+}
+.docmodal[hidden] { display: none }
+.docbox {
+  width: min(560px, 100%); max-height: calc(100vh - 36px);
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.6); color: var(--text);
+  display: flex; flex-direction: column;
+}
+.docbox header, .docbox footer {
+  display: flex; align-items: center; gap: 9px; padding: 12px 14px;
+}
+.docbox header { border-bottom: 1px solid var(--line) }
+.docbox footer { border-top: 1px solid var(--line); flex-wrap: wrap }
+.docbox .grow { flex: 1 }
+.docbox .x {
+  background: none; border: 0; color: var(--text-dim); font-size: 22px;
+  line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.docbox .x:hover { color: var(--text) }
+.docbody { padding: 12px 14px; overflow: auto; display: flex; flex-direction: column; gap: 9px }
+.drow { display: flex; align-items: center; gap: 10px; font-size: 13px }
+.drow > span:first-child { width: 96px; flex: none; color: var(--text-dim) }
+.drow input:not([type="checkbox"]):not([type="range"]):not([type="color"]),
+.drow select {
+  flex: 1; min-width: 0; background: var(--stage); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px; font: inherit; font-size: 13px;
+}
+.drow input:focus, .drow select:focus { outline: none; border-color: var(--text-dim) }
+.drow input[type="color"] {
+  width: 46px; height: 30px; padding: 2px; background: var(--stage);
+  border: 1px solid var(--line); border-radius: 7px; cursor: pointer;
+}
+.drow input[type="range"] { flex: 1; accent-color: var(--marker) }
+.drow output { width: 44px; text-align: right; font-size: 12px; color: var(--text-dim) }
+.dhint { font-size: 12px; color: var(--text-dim); margin: 0 }
+.dhint.block { line-height: 1.55; padding: 8px 10px; background: rgba(255,255,255,.04); border-radius: 7px }
+.dgrid3 {
+  display: grid; grid-template-columns: 96px repeat(3, 1fr); gap: 7px; align-items: center;
+}
+.dgrid3 .dlab { font-size: 13px; color: var(--text-dim) }
+.dgrid3 input {
+  min-width: 0; background: var(--stage); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 8px; font: inherit; font-size: 12.5px;
+}
+.dgrid3 input:focus { outline: none; border-color: var(--text-dim) }
+.dfacts {
+  margin-top: 4px; border-top: 1px solid var(--line); padding-top: 10px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.dfact { display: flex; gap: 12px; font-size: 12.5px; align-items: baseline }
+.dfact > span { width: 96px; flex: none; color: var(--text-dim) }
+.dfact > b { flex: 1; font-weight: 500; word-break: break-word }
+.docnote { font-size: 12px; color: var(--text-dim) }
+.docnote .bad { color: var(--danger) }
+.docbox .btn:disabled { opacity: .45; cursor: default }
+
+/* ---------------------------------------------------------------
+   Share & review
+   --------------------------------------------------------------- */
+
+.livebadge {
+  font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 999px; margin-right: 8px;
+  border: 1px solid var(--line); color: var(--text-dim); white-space: nowrap;
+}
+.livebadge[data-tone="ok"]     { color: #3FB950; border-color: #1F5B2E }
+.livebadge[data-tone="review"] { color: #D9A441; border-color: #6B4E12 }
+
+.sharemodal {
+  position: fixed; inset: 0; z-index: 93; background: rgba(0,0,0,.62);
+  display: flex; align-items: center; justify-content: center; padding: 18px;
+}
+.sharemodal[hidden] { display: none }
+.sharebox {
+  width: min(620px, 100%); max-height: calc(100vh - 36px);
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.6); color: var(--text);
+  display: flex; flex-direction: column;
+}
+.sharebox header {
+  display: flex; align-items: center; gap: 9px;
+  padding: 12px 14px; border-bottom: 1px solid var(--line);
+}
+.sharebox .grow { flex: 1 }
+.sharebox .x {
+  background: none; border: 0; color: var(--text-dim); font-size: 22px;
+  line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.sharebox .x:hover { color: var(--text) }
+.sharebody { padding: 14px; overflow: auto; display: flex; flex-direction: column; gap: 10px }
+.sharebody h4 { margin: 2px 0; font-size: 13px }
+.sharebody hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100% }
+.shnote { margin: 0; font-size: 12.5px; color: var(--text-dim); line-height: 1.55 }
+.shnote.small { font-size: 11.5px }
+.shnote .bad, .shwarn { color: var(--danger) }
+.shwarn { margin: 0; font-size: 12.5px }
+.shrow, .shfresh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
+.shfresh { flex-direction: row; margin-top: 8px }
+.shfresh .shnote { flex-basis: 100%; margin-top: 4px }
+.shlab {
+  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
+  color: var(--text-dim); width: 78px; flex: none;
+}
+.shrow input, .shfresh input {
+  flex: 1; min-width: 160px; background: var(--stage); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px;
+  font: inherit; font-size: 12px;
+}
+.shgrid { display: flex; flex-direction: column; gap: 8px }
+.shacts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px }
+.shacts.spread { justify-content: space-between }
+.shcount { color: var(--text-dim); font-weight: 400; font-size: 12px }
+.shlist { display: flex; flex-direction: column; gap: 7px }
+.shitem {
+  display: flex; align-items: center; gap: 9px;
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
+}
+.shitem.off { opacity: .5 }
+.shmeta { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0 }
+.shmeta b { font-size: 13px }
+.shmeta span { font-size: 11.5px; color: var(--text-dim) }
+.shviews { font-size: 11px !important }
+.sharebox .btn.del:hover { color: var(--danger); border-color: var(--danger) }
+
+/* --- loading / fatal splash --- */
+.shsplash {
+  position: fixed; inset: 0; z-index: 96; background: var(--chrome);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 16px; color: var(--text); text-align: center; padding: 24px;
+}
+.shsplash[hidden] { display: none }
+.shsplash p { margin: 0; color: var(--text-dim) }
+.shspin {
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 3px solid var(--line); border-top-color: var(--marker);
+  animation: shspin 0.9s linear infinite;
+}
+@keyframes shspin { to { transform: rotate(360deg) } }
+@media (prefers-reduced-motion: reduce) { .shspin { animation-duration: 3s } }
+.shfatal { max-width: 420px; display: flex; flex-direction: column; gap: 12px; align-items: center }
+.shfatal h2 { margin: 0; font-size: 18px }
+.shfatal p { color: var(--text-dim) }
+
+/* --- review rail --- */
+.rcbar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 10px;
+  border-bottom: 1px solid var(--line); font-size: 12px; color: var(--text-dim);
+}
+.rcbar .grow { flex: 1 }
+.rcname {
+  width: 108px; background: var(--stage); color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; padding: 4px 6px;
+  font: inherit; font-size: 11.5px;
+}
+.rcview { font-size: 11px; text-transform: uppercase; letter-spacing: .04em }
+.rcnew { display: flex; gap: 6px; padding: 9px 10px; border-bottom: 1px solid var(--line) }
+.rcnew textarea {
+  flex: 1; resize: vertical; background: var(--stage); color: var(--text);
+  border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 12.5px;
+}
+.rcnew textarea:focus { outline: none; border-color: var(--text-dim) }
+.rclist { display: flex; flex-direction: column }
+.rcitem {
+  padding: 9px 11px; border-bottom: 1px solid var(--line); cursor: pointer;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.rcitem:hover { background: rgba(255,255,255,.045) }
+.rcitem.done { opacity: .58 }
+.rcitem.flash { background: rgba(242,193,78,.18) }
+.rcitem header { display: flex; align-items: center; gap: 7px; font-size: 11.5px; color: var(--text-dim) }
+.rcitem .dot { width: 9px; height: 9px; border-radius: 50%; flex: none }
+.rcitem .pg { margin-left: auto }
+.rcitem blockquote {
+  margin: 0; padding: 5px 8px; border-left: 2px solid var(--line);
+  font-style: italic; font-size: 11.5px; color: var(--text-dim);
+}
+.rcitem p { margin: 0; font-size: 12.5px; line-height: 1.45; word-break: break-word }
+.rcrep {
+  font-size: 11.5px; color: var(--text-dim); padding: 4px 7px;
+  background: rgba(255,255,255,.04); border-radius: 6px;
+}
+.rcitem footer { display: flex; align-items: center; gap: 9px; font-size: 11px; color: var(--text-dim) }
+.rcitem footer .lnk {
+  background: none; border: 0; color: var(--text-dim); cursor: pointer;
+  font-size: 11px; padding: 1px 3px; border-radius: 4px;
+}
+.rcitem footer .lnk:hover { color: var(--text); background: rgba(255,255,255,.07) }
+.rcitem footer .when { margin-left: auto }
+.remote-mk.done { opacity: .6 }
+
+/* ---------------------------------------------------------------
+   Pan (hand tool)
+   --------------------------------------------------------------- */
+
+body[data-tool="pan"] .capture { cursor: grab }
+body[data-tool="pan"].panning .capture { cursor: grabbing }
+/* the whole window follows, so the cursor does not flicker when a fast drag
+   runs off the edge of the page */
+body.panning, body.panning * { cursor: grabbing !important }
+/* text would otherwise select as the hand sweeps across the page */
+body[data-tool="pan"] .textLayer { pointer-events: none; user-select: none }
+body[data-tool="pan"] .stage { scroll-behavior: auto }
+
+/* The free float. Panning past the end of the scroller lands here, which is
+   what lets the page be dragged anywhere on screen instead of stopping at the
+   edge of its own content. A transform does not move offsetTop, so core's
+   scroll maths and lazy rendering are untouched by it. */
+#stage > .pagebox {
+  transform: translate(var(--pan-x, 0px), var(--pan-y, 0px));
+}
+/* promote only while a drag is actually happening — a compositing layer per
+   page would otherwise cost real memory on a long document */
+body.panning #stage > .pagebox { will-change: transform }
+/* the journey back is worth animating; the drag itself must not be */
+#stage.pan-ease > .pagebox { transition: transform .2s ease-out }
+@media (prefers-reduced-motion: reduce) {
+  #stage.pan-ease > .pagebox { transition: none }
+}
+/* Middle-drag pans from any tool, so the grab cursor has to win over
+   whatever that tool was showing. */
+body.midpan, body.midpan * { cursor: grabbing !important }
+
+/* Recentre rides over the page rather than in the toolbar: it exists only
+   while the page is off its mark, and should not make the toolbar jump. */
+.panhome {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
+  z-index: 40; display: flex; align-items: center; gap: 7px;
+  padding: 8px 14px; border-radius: 999px;
+  background: var(--chrome-2); color: var(--text);
+  border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.45);
+  font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.panhome[hidden] { display: none }
+.panhome:hover { border-color: var(--text-dim) }
+.panhome svg {
+  width: 15px; height: 15px; fill: none;
+  stroke: currentColor; stroke-width: 1.7;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+/* it must not sit under the pointer while a drag is in progress */
+body.panning .panhome { opacity: 0; pointer-events: none }
+
+/* ---------------------------------------------------------------
+   Toolbar arrangement, touch targets and the phone dock
+   --------------------------------------------------------------- */
+
+/* dividers between the tool groups */
+.tsep {
+  flex: none; align-self: center;
+  width: 1px; height: 30px; margin: 0 5px;
+  background: var(--line);
+}
+.ribbon .tsep { height: 34px; margin: 0 7px }
+
+/* --- fingers need bigger targets than a mouse, at every width --- */
+@media (pointer: coarse) {
+  .btn { min-height: 44px; min-width: 44px }
+  .ribbon .btn { min-height: 52px; min-width: 60px }
+  .txctl select, .txctl input, .txctl .tg,
+  .drow select, .drow input, .cbar select { min-height: 38px }
+  .anno-sw .sw, .sigcolors .sw { width: 28px; height: 28px }
+  .cthread .lnk, .rcitem footer .lnk { padding: 7px 8px }
+  .shitem .btn, .sharebox .btn, .docbox .btn { min-height: 40px }
+  /* hover-only affordances have to be permanently visible on a touch screen */
+  .thumb .tools, .ptools { opacity: 1 }
+  .panhome { padding: 12px 18px }
+}
+
+/* --- the phone dock --- */
+@media (max-width: 760px) {
+  /* It used to divide the width between every tool, which gave 17 of them
+     20px each. Scroll instead, and keep each target the size of a fingertip. */
+  .dock {
+    overflow-x: auto; overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: none;
+    scroll-padding-inline: 12px;
+  }
+  .dock::-webkit-scrollbar { display: none }
+
+  .dock[data-crowded="yes"] .grp { width: auto; justify-content: flex-start }
+  .dock[data-crowded="yes"] .btn {
+    flex: 0 0 auto;
+    min-width: 58px;
+    scroll-snap-align: center;
+  }
+  .dock[data-crowded="yes"] { scroll-snap-type: x proximity }
+
+  .dock .btn::after {
+    max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .dock .tsep { height: 30px; margin: 0 4px }
+
+  /* a hint that there is more to the side */
+  .dock { position: relative }
+  .dock[data-crowded="yes"]::after {
+    content: ''; position: sticky; right: 0; flex: none;
+    width: 18px; height: 48px; margin-left: -18px; pointer-events: none;
+    background: linear-gradient(to right, transparent, var(--chrome));
+  }
+
+  /* The sheet's own two-column list from app.css is the right shape for this,
+     so leave it alone — it already scrolls at 80dvh. All that is needed is a
+     divider between the groups now that there are far more of them. */
+  #moreBody .sep { display: none }
+  #moreBody .grp { border-bottom: 1px solid var(--line); padding-bottom: 10px }
+  #moreBody .grp:last-child { border-bottom: 0 }
+
+  /* our own overlays must clear the dock and the safe area */
+  .panhome { bottom: calc(76px + env(safe-area-inset-bottom)) }
+  .cthread { max-width: calc(100vw - 20px) }
+  .orgview > header { gap: 6px; padding: 8px 10px }
+  .orggrid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px }
+}
+
+/* --- tablets: the ribbon stays, but it has to be scrollable and obvious --- */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .ribbon .btn { min-width: 54px; max-width: 84px; padding: 0 6px }
+  .ribbon .btn::after { font-size: 10px }
+  .ribbon .sep { margin: 0 5px }
+  .ribbon .tsep { margin: 0 5px }
+}
+
+/* --- very narrow phones --- */
+@media (max-width: 400px) {
+  .dock[data-crowded="yes"] .btn { min-width: 54px }
+  .dock .btn::after { font-size: 8.5px }
+  .panhome span { display: none }
+  .panhome { padding: 12px 14px }
+}
+
+/* --- landscape phone: vertical space is the scarce thing --- */
+@media (max-width: 900px) and (max-height: 480px) {
+  .dock .btn { height: 40px }
+  .panhome { bottom: calc(52px + env(safe-area-inset-bottom)); padding: 8px 12px }
+  .sigbox, .docbox, .sharebox { max-height: calc(100vh - 20px) }
+  #sigCanvas { height: 130px }
+}
+
+/* ---------------------------------------------------------------
+   Sidebar tabs
+   --------------------------------------------------------------- */
+
+/* The strip was built for three tabs and now carries five. Sharing one row
+   between them gave each 38px — narrower than the words inside — so the
+   labels ran into each other.
+
+   A two-column grid instead. Wrapping with flex was worse: `flex: 1 1 auto`
+   makes each item grow to fill its row, so five tabs became four rows. The
+   grid is predictable — two per row, always. The usual case is four tabs in
+   two rows; Review only appears once a document has been shared. */
+.rail-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  align-items: center;
+}
+.rail-tabs .btn {
+  min-width: 0;                   /* let it shrink inside its grid cell */
+  padding: 0 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;        /* a backstop, so it can never overlap */
+}
+/* Review is appended last and only appears once a document has been shared,
+   which makes it the odd one out in a two-column grid. Let it stretch rather
+   than leave a hole beside it. (:last-child does not work here — the close
+   button is the real last child, merely hidden.) */
+#tabReview { grid-column: 1 / -1 }
+
+/* app.css already hides the close button outside the mobile drawer, so it
+   takes no grid cell there. Here it just needs placing. */
+@media (max-width: 760px) {
+  .rail-tabs { grid-template-columns: 1fr 1fr auto; padding-right: 8px }
+  #railClose {
+    display: inline-flex;
+    grid-column: 3; grid-row: 1;
+    width: 38px; min-width: 38px; padding: 0;
+  }
+  .rail-tabs .btn { min-width: 0 }
+}
+
+/* ---------------------------------------------------------------
+   Option rows inside a popover
+   --------------------------------------------------------------- */
+
+/* app.css styles `.pop label` for its stacked "LABEL / field" forms — mono,
+   uppercase, 10px — and `.pop input` for full-width fields, 100% by 34px.
+   A radio button picked both up, which is why the Split panel had giant
+   circles beside shouting labels. These rows opt out of all of it. */
+.optlist { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 2px }
+
+.pop .opt {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  padding: 8px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  /* undo the stacked-form label styling */
+  font-family: var(--sans);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text);
+}
+.pop .opt:hover { background: var(--chrome-2) }
+.pop .opt.on { background: var(--chrome-2) }
+
+.pop .opt input[type="radio"] {
+  width: 17px; height: 17px;
+  min-width: 17px;
+  flex: none;
+  margin: 0;
+  padding: 0;
+  accent-color: var(--marker);
+  cursor: pointer;
+}
+.pop .optlabel {
+  font-family: var(--sans);
+  font-size: 13px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: inherit;
+  white-space: nowrap;
+}
+.pop .optnum {
+  width: 54px; height: 28px;
+  flex: none;
+  padding: 0 6px;
+  text-align: center;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+.pop .optfield {
+  width: 100%; height: 32px;
+  margin: 2px 0 0;
+  font-family: var(--sans);
+  font-size: 13px;
+}
+/* a field that belongs to an option nobody picked should look inert */
+.pop .optnum:disabled, .pop .optfield:disabled {
+  opacity: .42;
+  cursor: not-allowed;
+}
+.pop .acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px }
+
+@media (pointer: coarse) {
+  .pop .opt { padding: 11px 8px }
+  .pop .opt input[type="radio"] { width: 20px; height: 20px; min-width: 20px }
+  .pop .optnum { height: 34px }
+  .pop .optfield { height: 38px }
+}
+
+/* Draw has its own Select button so you need not cross back to the Edit tab
+   for it. On a phone there are no tabs — both groups sit in one dock — so the
+   second one is just a duplicate. */
+@media (max-width: 760px) {
+  #tDrawSelect { display: none }
+}
+
+/* ---------------------------------------------------------------
+   Select tool in the photo measurer
+   --------------------------------------------------------------- */
+
+body.pmsel #pmcv { cursor: default }
+#pmEdit:disabled, #pmDel:disabled { opacity: .38; cursor: default }
+#pmDel:not(:disabled):hover { color: var(--danger); border-color: var(--danger) }
+
+@media (pointer: coarse) {
+  /* the grips are drawn on the canvas, so the targets that matter here are
+     the buttons underneath it */
+  #pmtools .btn { min-height: 44px }
+  #pmEdit, #pmDel, #pmDup, #pmUndo, #pmRedo, #pmClear { min-height: 44px; min-width: 60px }
+}
+
+/* ---------- install app ----------
+   The same metrics as the Select files button beside it — 40px tall, 14px
+   text, a 16px icon — in the secondary treatment, because opening a PDF is
+   still the primary thing to do on this panel. The 19px padding plus a 1px
+   border gives the same optical inset as the 20px on a button with no border. */
+.hdrop .install { height: 40px; padding: 0 19px; display: inline-flex; align-items: center; gap: 8px;
+                  background: transparent; color: var(--text); border: 1px solid var(--line);
+                  border-radius: 8px; font-size: 14px; font-weight: 650; cursor: pointer }
+.hdrop .install:hover { border-color: #777777; background: var(--chrome-2); color: #fff }
+.hdrop .install svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2;
+                      stroke-linecap: round; stroke-linejoin: round }
+/* the hint drops to its own line, so a second button never squeezes the row */
+.hdrop .acts .or { flex: 1 0 100%; margin-top: 2px }
+@media (max-width: 760px) {
+  /* on a phone the two share the width evenly rather than wrapping apart */
+  .hdrop .acts .pick, .hdrop .acts .install { flex: 1 1 0; min-width: 0; justify-content: center }
+}
+
+/* ---------- install offer ----------
+   A card in the corner rather than a modal: the browser will not open its own
+   install dialog without a click, so this is what does the asking, and it must
+   not stand between anyone and the document they came to read. */
+.instpop { position: fixed; right: 18px; bottom: 18px; z-index: 88;
+           width: min(360px, calc(100vw - 32px));
+           display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; padding: 14px;
+           background: var(--chrome); border: 1px solid var(--line); border-radius: 12px;
+           box-shadow: 0 18px 44px rgba(0, 0, 0, .55);
+           opacity: 0; transform: translateY(10px); transition: opacity .18s, transform .18s;
+           /* nothing to click until it is actually on screen: a background tab
+              holds back the frame that fades it in, and an invisible card must
+              not sit in the corner swallowing clicks */
+           pointer-events: none }
+.instpop.show { opacity: 1; transform: none; pointer-events: auto }
+.instpop[hidden] { display: none }
+.instpop .ic { flex: none; width: 48px; height: 48px; border-radius: 10px }
+.instpop .txt { flex: 1; min-width: 0 }
+.instpop .txt b { display: block; font-size: 14px; font-weight: 650; color: #fff; margin-bottom: 4px }
+.instpop .txt p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--text-dim) }
+.instpop .acts { display: flex; gap: 8px; width: 100%; justify-content: flex-end }
+.instpop .pick { height: 34px; padding: 0 16px; font-size: 13px }
+.instpop .no { height: 34px; padding: 0 12px; background: transparent; color: var(--text-dim);
+               border: 1px solid transparent; border-radius: 8px; font-size: 13px; cursor: pointer }
+.instpop .no:hover { color: var(--text); border-color: var(--line) }
+@media (max-width: 760px) {
+  /* a phone gets it across the foot of the screen, clear of the home indicator */
+  .instpop { right: 10px; left: 10px; width: auto; bottom: calc(10px + env(safe-area-inset-bottom)) }
+}
+@media (prefers-reduced-motion: reduce) {
+  .instpop { transition: none }
+}
+
+/* the module slot on the mark properties popover (js/draw.js fills it for a
+   dimension) — lays out in the same rhythm as the built-in fields */
+.markpop .mpext { display: flex; align-items: center; gap: 8px; flex: none }
+.markpop .mpext[hidden] { display: none }
+.markpop .mpscale select { max-width: 78px }
+
+/* Pan and Select head every ribbon tab. On a phone the dock already opens
+   with the Edit pair, so the Draw copies would only repeat it. */
+.dock #tDrawPan, .dock #tDrawSelect { display: none; }
+
+/* Convert: a thin progress bar under the dialog body while pages are read */
+.cvprog { height: 3px; margin: 0 14px 10px; background: var(--line); border-radius: 2px; overflow: hidden }
+.cvprog[hidden] { display: none }
+.cvprog i { display: block; height: 100%; width: 0; background: var(--marker, #2F6FEB); transition: width .2s }
+
+/* Calibrate is a word, not a one-letter toggle: let it size to its label
+   instead of spilling out of a 26px square over the scale note. */
+.txctl #dimCal { width: auto; padding: 0 10px; white-space: nowrap; flex: none }
+.txctl #dimScaleNote { white-space: nowrap; margin-left: 4px }
+
+/* ---------- Books: book view, read-aloud bar, bookmarks ---------- */
+.bk {
+  position: fixed; inset: 0; z-index: 95; display: flex; flex-direction: column;
+  background: #2b2d31; color: #e9e9ea;
+}
+.bk[hidden] { display: none }
+.bk[data-theme="sepia"] { background: #3a3128 }
+.bk[data-theme="night"] { background: #0d0e10 }
+body.bk-on { overflow: hidden }
+.bk-top, .bk-foot { display: flex; align-items: center; gap: 8px; padding: 8px 14px; flex: none }
+.bk-top .grow { flex: 1 }
+.bk-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0 }
+.bk-b {
+  height: 32px; min-width: 32px; padding: 0 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,.16);
+  background: rgba(255,255,255,.06); color: inherit; font: inherit; font-size: 12.5px; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; white-space: nowrap;
+}
+.bk-b.ic { padding: 0; width: 32px }
+.bk-b svg, .bk-nav svg, .tts-b svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
+.bk-b:hover { background: rgba(255,255,255,.14) }
+.bk-b.on { border-color: #f2c14e; color: #f2c14e }
+.bk-stage { flex: 1; min-height: 0; display: flex; align-items: center; gap: 6px; padding: 4px 8px; user-select: none; touch-action: pan-y }
+.bk-spread { flex: 1; height: 100%; min-width: 0; display: flex; align-items: center; justify-content: center }
+.bk-page { display: block; background: #fff; box-shadow: 0 10px 34px rgba(0,0,0,.45) }
+.bk-page.l { box-shadow: -8px 10px 30px rgba(0,0,0,.4), inset -18px 0 24px -18px rgba(0,0,0,.35) }
+.bk-page.r { box-shadow: 8px 10px 30px rgba(0,0,0,.4) }
+.bk[data-theme="sepia"] .bk-page { filter: sepia(.5) saturate(.9) brightness(.96) }
+.bk[data-theme="night"] .bk-page { filter: invert(.9) hue-rotate(180deg) brightness(.95) }
+.bk-spread.turn-next { animation: bkNext .28s ease-out }
+.bk-spread.turn-prev { animation: bkPrev .28s ease-out }
+@keyframes bkNext { from { opacity: .35; transform: translateX(26px) } to { opacity: 1; transform: none } }
+@keyframes bkPrev { from { opacity: .35; transform: translateX(-26px) } to { opacity: 1; transform: none } }
+@media (prefers-reduced-motion: reduce) { .bk-spread.turn-next, .bk-spread.turn-prev { animation: none } }
+.bk-wait { opacity: .7; font-size: 14px }
+.bk-nav {
+  flex: none; width: 42px; height: 64px; border-radius: 10px; border: 0; cursor: pointer;
+  background: rgba(255,255,255,.07); color: inherit; display: flex; align-items: center; justify-content: center;
+}
+.bk-nav:hover:not(:disabled) { background: rgba(255,255,255,.16) }
+.bk-nav:disabled { opacity: .25; cursor: default }
+.bk-foot input[type="range"] { flex: 1; accent-color: #f2c14e }
+.bk-pg { font-size: 12.5px; opacity: .8; min-width: 78px; text-align: right; font-variant-numeric: tabular-nums }
+@media (max-width: 640px) {
+  .bk-nav { display: none }
+  .bk-top { flex-wrap: wrap }
+  .bk-title { flex-basis: 100% }
+}
+
+.ttsbar {
+  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 97;
+  display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 999px;
+  background: var(--chrome-2); color: var(--text); border: 1px solid var(--line);
+  box-shadow: 0 10px 30px rgba(0,0,0,.35); max-width: calc(100vw - 24px);
+}
+.ttsbar[hidden] { display: none }
+.tts-b {
+  width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--line); background: transparent;
+  color: inherit; cursor: pointer; display: flex; align-items: center; justify-content: center; flex: none;
+}
+.tts-b:hover { border-color: var(--text-dim) }
+.tts-pg { font-size: 12.5px; white-space: nowrap; color: var(--text-dim) }
+.ttsbar select {
+  height: 30px; border-radius: 7px; border: 1px solid var(--line); background: var(--stage); color: var(--text);
+  font: inherit; font-size: 12px; padding: 0 6px; max-width: 170px; min-width: 0;
+}
+
+.bkpop {
+  position: fixed; z-index: 98; width: 300px; max-height: min(70vh, 520px); overflow: auto;
+  background: var(--chrome-2); color: var(--text); border: 1px solid var(--line); border-radius: 12px;
+  box-shadow: 0 18px 50px rgba(0,0,0,.45); padding: 6px 0;
+}
+.bkpop[hidden] { display: none }
+.bkpop-h { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); padding: 8px 14px 4px }
+.bkpop-empty { font-size: 12.5px; color: var(--text-dim); margin: 2px 14px 8px; line-height: 1.5 }
+.bkpop-list { list-style: none; margin: 0; padding: 0 6px 4px }
+.bkpop-list li { display: flex; align-items: center; gap: 2px }
+.bkpop-go {
+  flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left;
+  background: none; border: 0; color: inherit; font: inherit; font-size: 13px; padding: 7px 8px; border-radius: 7px; cursor: pointer;
+}
+.bkpop-go:hover { background: rgba(127,127,127,.14) }
+.bkpop-go span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.bkpop-go b { font-variant-numeric: tabular-nums; color: var(--text-dim); font-weight: 600; min-width: 22px }
+.toc .bkpop-go b { text-align: right }
+.bkpop-ren, .bkpop-del {
+  flex: none; width: 26px; height: 26px; border: 0; border-radius: 6px; background: none;
+  color: var(--text-dim); cursor: pointer; font-size: 15px;
+}
+.bkpop-ren:hover, .bkpop-del:hover { color: var(--text); background: rgba(127,127,127,.14) }
+
+/* ---------- Drawing Tool tab: the tool's properties inside the ribbon ---------- */
+.tabs .tab.ctx { color: var(--marker); }
+.tabs .tab.ctx:not(.on) { background: color-mix(in srgb, var(--marker) 12%, transparent); border-radius: 7px }
+.tabs .tab.ctx[hidden] { display: none }
+#panTool { align-items: center }
+#panTool .toolprops { align-items: center; min-width: 0 }
+body.props-in-ribbon #modeBar {
+  background: transparent; border: 0; padding: 0 4px; gap: 12px;
+  flex-wrap: nowrap; z-index: auto; min-height: 50px;
+}
+body.props-in-ribbon #modeBar:not(.show) { display: none }
+body.props-in-ribbon #modeBar > * { flex: none }
+/* the ribbon's big stacked buttons are for tools; these are plain controls */
+#panTool #modeBar .btn {
+  height: 30px; min-width: 0; max-width: none; flex-direction: row; padding: 0 12px; gap: 6px; border-radius: 7px;
+}
+#panTool #modeBar .btn::after { content: none }
+#panTool #modeBar .hint {
+  order: 90; max-width: 340px; font-size: 11.5px; line-height: 1.35; white-space: normal;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+#panTool #modeBar .grow { order: 91; flex: 1 }
+#panTool #modeBar #modeDone { order: 92 }
+#btnToolNow { cursor: pointer }
+
+/* the selected mark's panel, laid into the Drawing Tool tab instead of floating */
+body.props-in-ribbon #panTool .markpop {
+  position: static !important; left: auto !important; top: auto !important;
+  background: transparent; border: 0; box-shadow: none; padding: 0 4px;
+  max-width: none; flex-wrap: nowrap; overflow: visible; min-height: 50px; z-index: auto;
+}
+body.props-in-ribbon #panTool .markpop[hidden] { display: none }
+body.props-in-ribbon #panTool .markpop .mtitle,
+body.props-in-ribbon #panTool .markpop .mtitle + .mdiv { display: none }
+#panTool .toolprops[hidden] { display: none }
+
+/* ---------- Illustrator-style cursors ----------
+   Thin black lines on a white halo, so they read on light and dark drawings.
+   Generated as SVG data URIs; each falls back to the nearest system cursor. */
+:root {
+  --cur-cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M12 2.5V9M12 15v6.5M2.5 12H9M15 12h6.5' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M12 2.5V9M12 15v6.5M2.5 12H9M15 12h6.5' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='12' cy='12' r='.9' fill='black' stroke='white' stroke-width='.8'/%3E%3C/svg%3E") 12 12, crosshair;
+  --cur-cross-add: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M12 2.5V9M12 15v6.5M2.5 12H9M15 12h6.5' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M12 2.5V9M12 15v6.5M2.5 12H9M15 12h6.5' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='12' cy='12' r='.9' fill='black' stroke='white' stroke-width='.8'/%3E%3Cpath d='M18.5 16v6M15.5 19h6' stroke='white' stroke-width='3.4000000000000004' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M18.5 16v6M15.5 19h6' stroke='black' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, copy;
+  --cur-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E") 5 3, default;
+  --cur-arrow-obj: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='16.5' y='17.5' width='5' height='5' fill='black' stroke='white' stroke-width='1'/%3E%3C/svg%3E") 5 3, move;
+  --cur-arrow-point: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Crect x='16.5' y='17.5' width='5' height='5' fill='white' stroke='black' stroke-width='1.1'/%3E%3C/svg%3E") 5 3, pointer;
+  --cur-nwse: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M6 6l12 12M6 6v4.5M6 6h4.5M18 18v-4.5M18 18h-4.5' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M6 6l12 12M6 6v4.5M6 6h4.5M18 18v-4.5M18 18h-4.5' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, nwse-resize;
+  --cur-nesw: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M18 6L6 18M18 6v4.5M18 6h-4.5M6 18v-4.5M6 18h4.5' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M18 6L6 18M18 6v4.5M18 6h-4.5M6 18v-4.5M6 18h4.5' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, nesw-resize;
+  --cur-rotate: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M5 15A10 10 0 0 1 15 5M5 15l-1.8-3.6M5 15l3.8-1.6M15 5l-3.6-1.8M15 5l-1.6 3.8' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M5 15A10 10 0 0 1 15 5M5 15l-1.8-3.6M5 15l3.8-1.6M15 5l-3.6-1.8M15 5l-1.6 3.8' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 10 10, grab;
+  --cur-pencil: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M3.5 20.5l1.2-4.6L15.6 5a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.1 19.3z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M3.5 20.5l1.2-4.6 3.4 3.4z' fill='black'/%3E%3Cpath d='M14 6.6l3.4 3.4' stroke='black' stroke-width='1.1'/%3E%3C/svg%3E") 4 20, crosshair;
+  --cur-type: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Crect x='3.5' y='3.5' width='17' height='17' fill='none' stroke='white' stroke-width='2.4'/%3E%3Crect x='3.5' y='3.5' width='17' height='17' fill='none' stroke='black' stroke-width='1' stroke-dasharray='1.6 1.6'/%3E%3Cpath d='M9.5 7h5M12 7v10M9.5 17h5' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M9.5 7h5M12 7v10M9.5 17h5' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 15, text;
+  --cur-crop: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M12 2.5V9M12 15v6.5M2.5 12H9M15 12h6.5' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M12 2.5V9M12 15v6.5M2.5 12H9M15 12h6.5' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='12' cy='12' r='.9' fill='black' stroke='white' stroke-width='.8'/%3E%3Cpath d='M16.5 15v5.5h5.5M15 16.5h5.5V22' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M16.5 15v5.5h5.5M15 16.5h5.5V22' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, crosshair;
+  --cur-hand: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M9 11V4.6a1.6 1.6 0 0 1 3.2 0V10M12.2 10V3.8a1.6 1.6 0 0 1 3.2 0V10M15.4 10.4V5.6a1.6 1.6 0 0 1 3.2 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-4.5-2l-3-3.4a1.7 1.7 0 0 1 2.4-2.4L9 15.4V11' fill='white' stroke='black' stroke-width='1.2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, grab;
+  --cur-hand-shut: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M7.2 12.2V11a1.6 1.6 0 0 1 3.2 0v-.6a1.6 1.6 0 0 1 3.2 0v.3a1.6 1.6 0 0 1 3.2 0v.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.4a5.2 5.2 0 0 1-4.1-2l-1.9-2.6a1.6 1.6 0 0 1 2.4-2z' fill='white' stroke='black' stroke-width='1.2' stroke-linejoin='round'/%3E%3Cpath d='M10.4 11v2.2M13.6 10.7v2.3M16.8 11v2.2' stroke='black' stroke-width='1' fill='none'/%3E%3C/svg%3E") 12 12, grabbing;
+  /* a single dot, matching the pin mark itself — no crosshair badge */
+  --cur-pin: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Ccircle cx='12' cy='12' r='8' fill='%23E03616' stroke='white' stroke-width='2'/%3E%3C/svg%3E") 12 12, pointer;
+}
+/* drawing: a precise crosshair for every tool that draws on the page */
+body:not([data-tool="select"]) .capture { cursor: var(--cur-cross) }
+body[data-tool="text"] .capture { cursor: var(--cur-type) }
+body[data-tool="ink"] .capture { cursor: var(--cur-pencil) }
+body[data-tool="crop"] .capture { cursor: var(--cur-crop) }
+body[data-tool="pin"] .capture { cursor: var(--cur-pin) }
+body[data-tool="note"] .capture,
+body[data-tool="stamp"] .capture { cursor: var(--cur-cross-add) }
+body[data-tool="pin"] .anno .pin { cursor: var(--cur-arrow-obj) }
+
+/* selecting and editing */
+body[data-tool="select"] .pagebox { cursor: var(--cur-arrow) }
+body[data-tool="select"] .anno .sh,
+body[data-tool="select"] .anno .tx,
+body[data-tool="select"] .anno .patch,
+body[data-tool="select"] .anno .redact-mk { cursor: var(--cur-arrow-obj) }
+.anno .kn { cursor: var(--cur-nwse) }
+.anno .kn[data-cur="nesw"] { cursor: var(--cur-nesw) }
+.anno .kn[data-cur="point"] { cursor: var(--cur-arrow-point) }
+.anno .kn.turn, .anno .kn.turn:active { cursor: var(--cur-rotate) }
+
+/* the hand */
+body[data-tool="pan"] .capture { cursor: var(--cur-hand) }
+body[data-tool="pan"].panning .capture { cursor: var(--cur-hand-shut) }
+body.panning, body.panning *, body.midpan, body.midpan * { cursor: var(--cur-hand-shut) !important }
+
+/* the photo markup window keeps the same family */
+#pmcv { cursor: var(--cur-cross) }
+body.pmpan #pmcv { cursor: var(--cur-hand) }
+body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
+
+/* ---------- object snap ---------- */
+.snapmark {
+  position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none;
+  display: flex; align-items: center; gap: 6px; will-change: transform;
+}
+.snapmark[hidden] { display: none }
+.snapmark svg {
+  width: 18px; height: 18px; margin: -9px 0 0 -9px; overflow: visible;
+  fill: none; stroke: #16c172; stroke-width: 2; stroke-linejoin: round;
+  filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000);
+}
+.snapmark svg .dot { fill: #16c172; stroke: none }
+.snapmark span {
+  margin: 14px 0 0 2px; padding: 2px 6px; border-radius: 4px; white-space: nowrap;
+  font: 600 10.5px/1.2 Helvetica, Arial, sans-serif; color: #0b1a12; background: #16c172;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+.snapbtn {
+  height: 26px; padding: 0 9px; border-radius: 6px; border: 1px solid var(--line); background: transparent;
+  color: var(--text-dim); font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
+}
+.snapbtn svg { width: 12px; height: 12px; fill: none; stroke: currentColor; stroke-width: 2 }
+.snapbtn.on { color: #16c172; border-color: #16c172 }
+.snapbtn.more { padding: 0 6px; margin-left: -4px }
+.snappop {
+  position: fixed; z-index: 98; width: 230px; padding: 6px 0 8px;
+  background: var(--chrome-2); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0,0,0,.4);
+}
+.snappop[hidden] { display: none }
+.snappop-h { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); padding: 6px 12px 4px }
+.snappop label { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer }
+.snappop label:hover { background: rgba(127,127,127,.12) }
+.snappop input { accent-color: #16c172 }
+.snappop-note { margin: 6px 12px 0; font-size: 11.5px; color: var(--text-dim); line-height: 1.45 }
+
+/* The marker is a zero-size anchor at the snap point itself: the symbol is
+   centred on it, and the label hangs off to the lower right, so neither can
+   push the other out of place. */
+.snapmark { display: block; width: 0; height: 0; gap: 0 }
+.snapmark svg { position: absolute; left: -9px; top: -9px; margin: 0; display: block }
+.snapmark span { position: absolute; left: 12px; top: 10px; margin: 0 }
+
+/* ---------- multi-selection ---------- */
+.marquee {
+  position: fixed; z-index: 40; pointer-events: none;
+  border: 1px dashed #2f7cf6; background: rgba(47,124,246,.08);
+}
+.marquee[hidden] { display: none }
+.anno .halo.multi { stroke: #2f7cf6; stroke-width: 1; stroke-dasharray: 4 3; fill: rgba(47,124,246,.04); opacity: 1 }
+
+/* ---------- ribbon: bigger, darker, cleaner ----------
+   Larger icons with a firmer line, labels in the main text colour at a
+   readable size, and tab names that do not look greyed out — closer to
+   WPS / Office than to a thin sketch. */
+.ribbon { padding: 6px 12px }
+.ribbon .btn {
+  height: 60px; min-width: 64px; max-width: 116px; gap: 5px; padding: 0 10px; border-radius: 9px;
+  color: var(--text);
+}
+.ribbon .btn svg { width: 24px; height: 24px; stroke-width: 1.75 }
+.ribbon .btn::after {
+  font-size: 12.5px; line-height: 1.15; font-weight: 500; color: var(--text); letter-spacing: 0;
+}
+.ribbon .btn:disabled::after { color: var(--text-dim) }
+.ribbon .btn.on::after { color: var(--marker); font-weight: 600 }
+.ribbon #btnTheme .lbl { font-size: 12.5px; font-weight: 500; color: var(--text) }
+.ribbon .sep, .ribbon .tsep { height: 42px }
+.ribbon .zoomval { font-size: 13px; font-weight: 600; color: var(--text) }
+.tabs .tab { font-size: 14.5px; font-weight: 500; color: var(--text); height: 32px; padding: 0 14px }
+.tabs .tab:hover { color: var(--marker) }
+.tabs .tab.on { font-weight: 650 }
+body[data-ui="light"] .tabs .tab:not(.on):not(.ctx) { color: #2B2F36 }
+
+/* the tool properties inside the ribbon line up with the taller buttons */
+body.props-in-ribbon #modeBar, body.props-in-ribbon #panTool .markpop { min-height: 60px }
+#panTool #modeBar .hint { font-size: 12px }
+
+/* narrower windows: keep it a little tighter so the row still fits */
+@media (min-width: 761px) and (max-width: 1100px) {
+  .ribbon .btn { min-width: 56px; max-width: 92px; padding: 0 7px }
+  .ribbon .btn svg { width: 22px; height: 22px }
+  .ribbon .btn::after { font-size: 11.5px }
+  .tabs .tab { font-size: 13.5px; padding: 0 10px }
+}
+
+/* ---------- ribbon: crisp, like WPS ----------
+   Windows' own interface font at a whole pixel size, and icons drawn with a
+   one-device-pixel line in near-black. toolbar.js nudges each icon so its
+   straight lines fall exactly on screen pixels instead of between two. */
+.ribbon, .tabs .tab {
+  font-family: "Segoe UI", system-ui, -apple-system, "Helvetica Neue", Roboto, Arial, sans-serif;
+  -webkit-font-smoothing: auto; -moz-osx-font-smoothing: auto;
+}
+.ribbon .btn { color: #161616 }
+.ribbon .btn svg { width: 24px; height: 24px; stroke-width: var(--ico-stroke, 1); display: block; flex: none }
+.ribbon .btn::after, .ribbon #btnTheme .lbl {
+  font-size: 13px; line-height: 16px; font-weight: 400; color: #1b1b1b;
+}
+.ribbon .btn.on::after { color: var(--marker); font-weight: 600 }
+.ribbon .btn:disabled::after { color: #8a8f98 }
+.ribbon .zoomval { font-family: inherit; font-size: 13px; font-weight: 600; color: #1b1b1b }
+.tabs .tab { font-size: 14px; font-weight: 400; color: #1b1b1b }
+.tabs .tab.on { font-weight: 600 }
+body[data-ui="light"] .tabs .tab:not(.on):not(.ctx) { color: #1b1b1b }
+body[data-ui="dark"] .ribbon .btn, body:not([data-ui="light"]) .ribbon .btn { color: var(--text) }
+body:not([data-ui="light"]) .ribbon .btn::after,
+body:not([data-ui="light"]) .ribbon #btnTheme .lbl,
+body:not([data-ui="light"]) .ribbon .zoomval,
+body:not([data-ui="light"]) .tabs .tab:not(.on) { color: var(--text) }
+@media (min-width: 761px) and (max-width: 1100px) {
+  .ribbon .btn svg { width: 24px; height: 24px }
+  .ribbon .btn::after { font-size: 12px }
+}
+
+/* ---------- full-contrast text and icons: pure black in light, pure white in dark ----------
+   Ribbon, tab names and the top bar. What is switched on keeps its blue, and
+   what is disabled stays faded, so both still read at a glance. */
+body[data-ui="light"] { --ink: #000000 }
+body:not([data-ui="light"]) { --ink: #FFFFFF }
+
+.ribbon .btn,
+.ribbon .btn::after,
+.ribbon #btnTheme .lbl,
+.ribbon .zoomval,
+.tabs .tab:not(.on):not(.ctx),
+.bar .btn:not(.primary):not(.on),
+.bar .pager, .bar .pager input, .bar #pageTotal,
+.bar .admark,
+#panTool #modeBar, #panTool .markpop { color: var(--ink) }
+body[data-ui="light"] .tabs .tab:not(.on):not(.ctx) { color: var(--ink) }
+body:not([data-ui="light"]) .ribbon .btn::after,
+body:not([data-ui="light"]) .ribbon #btnTheme .lbl,
+body:not([data-ui="light"]) .ribbon .zoomval,
+body:not([data-ui="light"]) .tabs .tab:not(.on) { color: var(--ink) }
+
+/* keep the live states */
+.ribbon .btn.on, .ribbon .btn.on::after { color: var(--marker) }
+.tabs .tab.on { color: var(--marker) }
+.ribbon .btn:disabled, .ribbon .btn:disabled::after, .bar .btn:disabled { color: var(--text-dim) }
+body:not([data-ui="light"]) .ribbon .btn:not(.on):not(:disabled) { color: var(--ink) }
+
+/* ---------- colours: square swatches and the full palette ---------- */
+.sw, .anno-sw .sw, .sigcolors .sw, #pmswatch button, .swpop button {
+  border-radius: 3px !important;
+}
+.sw {
+  width: 20px; height: 20px; border: 1px solid rgba(0,0,0,.28); box-shadow: none; flex: none;
+}
+.sw.on { outline: 2px solid var(--marker); outline-offset: 2px; border-color: rgba(0,0,0,.28); box-shadow: none }
+body[data-ui="light"] .sw, body[data-ui="light"] .sw.on { box-shadow: none }
+body:not([data-ui="light"]) .sw { border-color: rgba(255,255,255,.35) }
+.swatches { gap: 4px; align-items: center }
+.swmore {
+  height: 26px; display: inline-flex; align-items: center; gap: 5px; padding: 0 7px 0 5px; margin-left: 4px;
+  border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--ink, var(--text));
+  font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.swmore:hover { border-color: var(--text-dim) }
+.swmore i { width: 16px; height: 16px; border-radius: 2px; border: 1px solid rgba(0,0,0,.3); display: block }
+.swmore b { font-weight: 400; font-size: 10px; color: var(--text-dim) }
+
+.swpop.palette {
+  width: auto; display: block; padding: 10px 12px 12px; border-radius: 10px;
+  background: var(--chrome); border: 1px solid var(--line); box-shadow: 0 16px 40px rgba(0,0,0,.35); z-index: 99;
+}
+.swpop.palette .phead { font-size: 11.5px; color: var(--text-dim); margin: 8px 0 5px }
+.swpop.palette .phead:first-child { margin-top: 0 }
+.pgrid { display: grid; grid-template-columns: repeat(10, 20px); gap: 4px }
+.pgrid.shades { margin-top: 6px; row-gap: 0; column-gap: 4px }
+.pgrid .psq {
+  width: 20px; height: 20px; padding: 0; margin: 0; cursor: pointer;
+  border: 1px solid rgba(0,0,0,.22); border-radius: 2px !important;
+}
+.pgrid.shades .psq { border-top-width: 0; border-bottom-width: 0; border-radius: 0 !important; height: 17px }
+.pgrid.shades .psq:nth-child(-n+10) { border-top-width: 1px }
+.pgrid.shades .psq:nth-last-child(-n+10) { border-bottom-width: 1px }
+.pgrid .psq:hover { outline: 2px solid var(--text); outline-offset: 0; position: relative; z-index: 1 }
+.pgrid .psq.on { outline: 2px solid var(--marker); outline-offset: 1px; position: relative; z-index: 2 }
+body:not([data-ui="light"]) .pgrid .psq { border-color: rgba(255,255,255,.25) }
+.pcustom { display: flex; align-items: center; gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line) }
+.pcustom .plab { font-size: 11.5px; color: var(--text-dim); margin-right: 2px }
+.pcustom input[type="color"] { width: 30px; height: 26px; padding: 1px; border: 1px solid var(--line); border-radius: 4px; background: transparent; cursor: pointer }
+.pcustom input[type="text"] {
+  width: 84px; height: 26px; border: 1px solid var(--line); border-radius: 4px; padding: 0 6px;
+  background: var(--stage); color: var(--text); font: 12.5px/1 ui-monospace, Consolas, monospace; text-transform: uppercase;
+}
+.pcustom input.bad { border-color: var(--danger) }
+.pcustom .btn { height: 26px; padding: 0 10px; font-size: 12.5px; border-color: var(--line) }
+.pnofill {
+  display: flex; align-items: center; gap: 8px; width: 100%; height: 28px; margin-bottom: 8px; padding: 0 8px;
+  border: 1px solid var(--line) !important; border-radius: 5px !important; background: transparent !important;
+  color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.pnofill.on { border-color: var(--marker) !important }
+.pnofill i {
+  width: 16px; height: 16px; border: 1px solid rgba(0,0,0,.3); border-radius: 2px; display: block;
+  background: linear-gradient(45deg, transparent 44%, var(--danger) 44%, var(--danger) 56%, transparent 56%), #fff;
+}
+.swpop.palette .pcustom .btn { width: auto; min-width: 44px; border-width: 1px; border-radius: 5px !important }
+.swpop.palette .pcustom input[type="color"] { width: 30px; height: 26px }
+
+/* ---------- colour and width: one dropdown each ---------- */
+.swmore { margin-left: 0 }
+.wdrop {
+  height: 26px; display: inline-flex; align-items: center; gap: 7px; padding: 0 7px 0 8px;
+  border: 1px solid var(--line); border-radius: 5px; background: transparent; color: var(--ink, var(--text));
+  font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap;
+}
+.wdrop:hover { border-color: var(--text-dim) }
+.wdrop i { display: block; width: 26px; background: currentColor; border-radius: 1px }
+.wdrop b { font-weight: 400; font-size: 10px; color: var(--text-dim) }
+.widths { gap: 0 }
+.wdmenu {
+  position: fixed; z-index: 99; min-width: 150px; padding: 5px;
+  background: var(--chrome); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.3);
+}
+.wdmenu[hidden] { display: none }
+.wdmenu button {
+  display: flex; align-items: center; gap: 12px; width: 100%; height: 28px; padding: 0 10px;
+  border: 0; border-radius: 5px; background: transparent; color: var(--ink, var(--text));
+  font: inherit; font-size: 12.5px; cursor: pointer; text-align: left;
+}
+.wdmenu button:hover { background: rgba(127,127,127,.14) }
+.wdmenu button.on { background: rgba(20,115,230,.12); color: var(--marker) }
+.wdmenu button i { display: block; width: 54px; background: currentColor; border-radius: 1px; flex: none }

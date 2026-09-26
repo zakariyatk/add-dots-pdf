@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- The ADD DOTS mark: the same square-and-AD lockup as .admark in css/app.css.
+       This file is the source the PNGs in this folder were rasterised from. -->
+  <rect width="512" height="512" fill="#050505"/>
+  <rect x="48" y="48" width="416" height="416" fill="none" stroke="#9A9A9A" stroke-width="22"/>
+  <text x="263" y="260" text-anchor="middle" dominant-baseline="central"
+        font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="214"
+        letter-spacing="14" fill="#FFFFFF">AD</text>
+</svg>

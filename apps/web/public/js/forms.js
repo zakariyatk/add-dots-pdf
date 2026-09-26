@@ -1,0 +1,680 @@
+/* ADD DOTS PDF — Forms & signatures
+   ---------------------------------
+   Reads the AcroForm fields pdf.js finds on each page, floats a real HTML
+   control over each one so they can be filled in, and writes the answers back
+   out on Save. Also draws, types or uploads a signature and drops it anywhere
+   on the page.
+
+   On saving, core rebuilds the document page by page (that is what lets pages
+   be reordered, dropped and merged), and a rebuilt page cannot carry the
+   original interactive widgets with it. So filled values are painted into the
+   page — flattened — which is what a signed, issued copy should be anyway.
+   When the page set is untouched there is a second path that keeps the fields
+   live; the Form panel offers it whenever it applies. */
+(function () {
+  'use strict';
+
+  const X = window.ADDPDF;
+  if (!X) { console.error('[forms] core bridge missing'); return; }
+
+  X.on('ready', function () {
+    const S = X.S, $ = X.$, PDFLib = X.PDFLib;
+
+    /* fieldName -> value. Kept per document, cleared when a new file opens. */
+    let values = {};
+    let showFields = true;
+
+    /* ---------------- ribbon tab ---------------- */
+
+    const tab = document.createElement('button');
+    tab.className = 'tab'; tab.id = 'ribForm'; tab.type = 'button';
+    tab.setAttribute('role', 'tab'); tab.setAttribute('aria-selected', 'false');
+    tab.setAttribute('aria-controls', 'panForm');
+    tab.textContent = 'Form';
+    $('ribTabs').appendChild(tab);
+
+    const pan = document.createElement('div');
+    pan.className = 'rpan'; pan.id = 'panForm'; pan.hidden = true;
+    pan.setAttribute('role', 'tabpanel'); pan.setAttribute('aria-labelledby', 'ribForm');
+    pan.innerHTML =
+      '<div class="grp">' +
+      '<button class="btn" id="btnFields" title="Show the fillable fields on the page" data-label="Fill fields">' +
+      '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="5" rx="1"/>' +
+      '<rect x="3" y="14" width="11" height="5" rx="1"/></svg><span class="lbl">Fields</span></button>' +
+      '<span class="cnt" id="fieldCount" hidden></span>' +
+      '<button class="btn" id="btnFormClear" title="Empty every field" data-label="Clear form">' +
+      '<svg viewBox="0 0 24 24"><path d="M19 5L5 19"/><path d="M5 5l14 14"/></svg></button>' +
+      '</div>' +
+      '<span class="sep"></span>' +
+      '<div class="grp">' +
+      '<button class="btn" id="btnSign" title="Add a signature (Shift+S)" data-label="Signature">' +
+      '<svg viewBox="0 0 24 24"><path d="M3 18c3 0 4-9 7-9s2 7 4.5 7S18 12 21 12"/>' +
+      '<line x1="3" y1="21" x2="21" y2="21"/></svg><span class="lbl">Sign</span></button>' +
+      '<button class="btn" id="btnInitials" title="Place your initials" data-label="Initials">' +
+      '<svg viewBox="0 0 24 24"><path d="M6 6v12"/><path d="M12 18V6l6 12V6"/></svg></button>' +
+      '</div>' +
+      '<span class="sep"></span>' +
+      '<div class="grp">' +
+      '<button class="btn" id="btnFlatten" title="Bake the filled values and signatures into the page" data-label="Flatten">' +
+      '<svg viewBox="0 0 24 24"><path d="M3 9l9-5 9 5-9 5z"/><path d="M3 14l9 5 9-5"/></svg>' +
+      '<span class="lbl">Flatten</span></button>' +
+      '</div>';
+    $('ribbon').appendChild(pan);
+    X.addRibbonTab('ribForm', 'panForm');
+
+    /* ---------------- reading the fields off each page ---------------- */
+
+    /* One descriptor per widget: where it sits on the page (PDF points), what
+       kind it is, and the HTML control we floated over it. */
+    async function readFields(it) {
+      if (it.fields) return it.fields;
+      await X.ensurePage(it);
+      let annots = [];
+      try { annots = await it.page.getAnnotations({ intent: 'display' }); }
+      catch (e) { annots = []; }
+      it.fields = annots.filter(function (a) {
+        return a.subtype === 'Widget' && a.fieldType && !a.hidden;
+      }).map(function (a) {
+        return {
+          name: a.fieldName,
+          type: a.fieldType,                       /* Tx | Btn | Ch | Sig */
+          rect: a.rect,                            /* [x1,y1,x2,y2] in PDF points */
+          readOnly: !!a.readOnly,
+          multiline: !!a.multiLine,
+          maxLen: a.maxLen || 0,
+          options: (a.options || []).map(function (o) {
+            return { v: o.exportValue != null ? o.exportValue : o.displayValue, l: o.displayValue };
+          }),
+          radio: !!a.radioButton,
+          checkbox: !!a.checkBox,
+          exportValue: a.exportValue,
+          fontSize: a.fontSize || 0,
+          initial: a.fieldValue
+        };
+      });
+      /* seed the answers from whatever the file already had in it */
+      it.fields.forEach(function (f) {
+        if (values[f.name] === undefined && f.initial != null && f.initial !== '') {
+          values[f.name] = f.initial;
+        }
+      });
+      return it.fields;
+    }
+
+    async function scanAll() {
+      let n = 0;
+      for (const it of S.items) { n += (await readFields(it)).length; }
+      const c = $('fieldCount');
+      c.textContent = n ? String(n) : '';
+      c.hidden = !n;
+      $('btnFields').classList.toggle('on', n > 0 && showFields);
+      $('btnFields').disabled = !n;
+      $('btnFormClear').disabled = !n;
+      return n;
+    }
+
+    /* ---------------- floating the controls over the page ---------------- */
+
+    function layerFor(it) {
+      if (it.formLayer) return it.formLayer;
+      const d = document.createElement('div');
+      d.className = 'formlayer';
+      it.inner.appendChild(d);
+      it.formLayer = d;
+      return d;
+    }
+
+    function paintFields(it) {
+      if (!it.vp || !it.fields) return;
+      const host = layerFor(it);
+      host.innerHTML = '';
+      host.hidden = !showFields;
+      if (!showFields) return;
+
+      it.fields.forEach(function (f) {
+        const a = it.vp.convertToViewportPoint(f.rect[0], f.rect[1]);
+        const b = it.vp.convertToViewportPoint(f.rect[2], f.rect[3]);
+        const x = Math.min(a[0], b[0]), y = Math.min(a[1], b[1]);
+        const w = Math.abs(b[0] - a[0]), h = Math.abs(b[1] - a[1]);
+        if (w < 4 || h < 4) return;
+
+        let el;
+        if (f.type === 'Btn' && f.checkbox) {
+          el = document.createElement('input');
+          el.type = 'checkbox';
+          el.checked = isOn(values[f.name], f.exportValue);
+          el.addEventListener('change', function () {
+            values[f.name] = el.checked ? (f.exportValue || 'Yes') : 'Off';
+            X.updateMeta();
+          });
+        } else if (f.type === 'Btn' && f.radio) {
+          el = document.createElement('input');
+          el.type = 'radio';
+          el.name = 'adf_' + f.name;
+          el.checked = values[f.name] === f.exportValue;
+          el.addEventListener('change', function () {
+            if (el.checked) values[f.name] = f.exportValue;
+            X.updateMeta();
+          });
+        } else if (f.type === 'Ch') {
+          el = document.createElement('select');
+          el.innerHTML = '<option value=""></option>' + f.options.map(function (o) {
+            return '<option value="' + X.esc(o.v) + '">' + X.esc(o.l) + '</option>';
+          }).join('');
+          el.value = values[f.name] || '';
+          el.addEventListener('change', function () { values[f.name] = el.value; X.updateMeta(); });
+        } else if (f.type === 'Sig') {
+          el = document.createElement('button');
+          el.type = 'button';
+          el.className = 'sigslot';
+          el.textContent = 'Sign here';
+          el.addEventListener('click', function () { openSign(it, f); });
+        } else {
+          el = document.createElement(f.multiline ? 'textarea' : 'input');
+          if (!f.multiline) el.type = 'text';
+          if (f.maxLen) el.maxLength = f.maxLen;
+          el.value = values[f.name] || '';
+          el.addEventListener('input', function () { values[f.name] = el.value; });
+          el.addEventListener('change', X.updateMeta);
+        }
+
+        el.classList.add('ffield');
+        el.title = f.name + (f.readOnly ? ' (read only)' : '');
+        if (f.readOnly) el.disabled = true;
+        el.style.left = x + 'px'; el.style.top = y + 'px';
+        el.style.width = w + 'px'; el.style.height = h + 'px';
+        if (el.tagName !== 'BUTTON' && el.type !== 'checkbox' && el.type !== 'radio') {
+          el.style.fontSize = Math.max(7, Math.min(h * 0.68, (f.fontSize || 0) * S.scale || h * 0.68)) + 'px';
+        }
+        host.appendChild(el);
+      });
+    }
+
+    function isOn(v, exportValue) {
+      if (v == null) return false;
+      if (typeof v === 'boolean') return v;
+      const s = String(v);
+      return s !== 'Off' && s !== '' && (exportValue ? s === exportValue : true);
+    }
+
+    function paintAll() { S.items.forEach(paintFields); }
+
+    $('btnFields').addEventListener('click', function () {
+      showFields = !showFields;
+      $('btnFields').classList.toggle('on', showFields);
+      paintAll();
+      X.toast(showFields ? 'Fields shown' : 'Fields hidden');
+    });
+
+    $('btnFormClear').addEventListener('click', function () {
+      values = {};
+      paintAll();
+      X.toast('Every field cleared');
+    });
+
+    /* ---------------- signatures ---------------- */
+
+    const sigModal = document.createElement('div');
+    sigModal.className = 'sigmodal'; sigModal.id = 'sigModal'; sigModal.hidden = true;
+    sigModal.innerHTML =
+      '<div class="sigbox" role="dialog" aria-modal="true" aria-label="Add a signature">' +
+      '<header><b id="sigTitle">Add your signature</b><span class="grow"></span>' +
+      '<button class="x" id="sigClose" aria-label="Close">&times;</button></header>' +
+      '<div class="sigtabs">' +
+      '<button class="on" data-m="draw">Draw</button>' +
+      '<button data-m="type">Type</button>' +
+      '<button data-m="upload">Upload</button>' +
+      '</div>' +
+      '<div class="sigpane" id="sigDraw">' +
+      '<canvas id="sigCanvas" width="620" height="200"></canvas>' +
+      '<p class="sighint">Draw with a mouse, a finger or a stylus.</p>' +
+      '</div>' +
+      '<div class="sigpane" id="sigType" hidden>' +
+      '<input id="sigName" placeholder="Type your name" autocomplete="name">' +
+      '<div class="sigfonts" id="sigFonts"></div>' +
+      '</div>' +
+      '<div class="sigpane" id="sigUpload" hidden>' +
+      '<input type="file" id="sigFile" accept="image/*">' +
+      '<p class="sighint">A PNG with a transparent background looks best.</p>' +
+      '<div class="sigprev" id="sigPrev"></div>' +
+      '</div>' +
+      '<div class="sigcolors">' +
+      '<span class="anno-lbl">Ink</span>' +
+      '<button class="sw on" data-c="#1B2A4A" style="background:#1B2A4A"></button>' +
+      '<button class="sw" data-c="#0B0B0B" style="background:#0B0B0B"></button>' +
+      '<button class="sw" data-c="#123C8C" style="background:#123C8C"></button>' +
+      '</div>' +
+      '<footer>' +
+      '<label class="sigsave"><input type="checkbox" id="sigRemember" checked> Remember on this device</label>' +
+      '<span class="grow"></span>' +
+      '<button class="btn" id="sigClear">Clear</button>' +
+      '<button class="btn primary" id="sigApply" disabled>Place</button>' +
+      '</footer></div>';
+    document.body.appendChild(sigModal);
+
+    const SIG_FONTS = [
+      { n: 'Brush', css: '"Segoe Script","Bradley Hand","Lucida Handwriting",cursive' },
+      { n: 'Formal', css: '"Palatino Linotype","Book Antiqua",Georgia,serif' },
+      { n: 'Plain', css: '"Segoe UI",Helvetica,Arial,sans-serif' }
+    ];
+    let sigMode = 'draw', sigInk = '#1B2A4A', sigFont = SIG_FONTS[0];
+    let sigData = null;          /* dataURL of the signature about to be placed */
+    let sigTarget = null;        /* {it, field} when a Sig widget asked for it */
+    let sigKind = 'sig';         /* sig | initials */
+
+    $('sigFonts').innerHTML = SIG_FONTS.map(function (f, i) {
+      return '<button data-f="' + i + '"' + (i === 0 ? ' class="on"' : '') +
+        ' style="font-family:' + f.css + '">Signature</button>';
+    }).join('');
+
+    const cv = $('sigCanvas');
+    const cx = cv.getContext('2d');
+    let drawing = false, inked = false;
+
+    function cvPoint(e) {
+      const r = cv.getBoundingClientRect();
+      return [(e.clientX - r.left) * (cv.width / r.width), (e.clientY - r.top) * (cv.height / r.height)];
+    }
+    cv.addEventListener('pointerdown', function (e) {
+      e.preventDefault(); cv.setPointerCapture(e.pointerId);
+      drawing = true; inked = true;
+      const p = cvPoint(e);
+      cx.beginPath(); cx.moveTo(p[0], p[1]);
+      cx.lineWidth = 3.2; cx.lineCap = 'round'; cx.lineJoin = 'round'; cx.strokeStyle = sigInk;
+      syncApply();
+    });
+    cv.addEventListener('pointermove', function (e) {
+      if (!drawing) return;
+      const p = cvPoint(e);
+      cx.lineTo(p[0], p[1]); cx.stroke();
+    });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) {
+      cv.addEventListener(ev, function () { drawing = false; });
+    });
+
+    function clearCanvas() { cx.clearRect(0, 0, cv.width, cv.height); inked = false; syncApply(); }
+
+    sigModal.querySelector('.sigtabs').addEventListener('click', function (e) {
+      const b = e.target.closest('button'); if (!b) return;
+      sigMode = b.dataset.m;
+      Array.prototype.forEach.call(b.parentNode.children, function (x) { x.classList.toggle('on', x === b); });
+      $('sigDraw').hidden = sigMode !== 'draw';
+      $('sigType').hidden = sigMode !== 'type';
+      $('sigUpload').hidden = sigMode !== 'upload';
+      syncApply();
+    });
+    $('sigFonts').addEventListener('click', function (e) {
+      const b = e.target.closest('button'); if (!b) return;
+      sigFont = SIG_FONTS[+b.dataset.f];
+      Array.prototype.forEach.call(b.parentNode.children, function (x) { x.classList.toggle('on', x === b); });
+      syncApply();
+    });
+    sigModal.querySelector('.sigcolors').addEventListener('click', function (e) {
+      const b = e.target.closest('button'); if (!b) return;
+      sigInk = b.dataset.c;
+      Array.prototype.forEach.call(b.parentNode.querySelectorAll('.sw'), function (x) {
+        x.classList.toggle('on', x === b);
+      });
+      $('sigFonts').style.color = sigInk;
+      syncApply();
+    });
+    $('sigName').addEventListener('input', syncApply);
+    $('sigClear').addEventListener('click', function () {
+      clearCanvas(); $('sigName').value = ''; $('sigPrev').innerHTML = '';
+      uploaded = null; syncApply();
+    });
+    $('sigClose').addEventListener('click', closeSign);
+    sigModal.addEventListener('mousedown', function (e) {
+      if (e.target === sigModal) closeSign();
+    });
+
+    let uploaded = null;
+    $('sigFile').addEventListener('change', function (e) {
+      const f = e.target.files && e.target.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = function () {
+        uploaded = r.result;
+        $('sigPrev').innerHTML = '<img src="' + uploaded + '" alt="Signature preview">';
+        syncApply();
+      };
+      r.readAsDataURL(f);
+    });
+
+    function syncApply() {
+      let ok = false;
+      if (sigMode === 'draw') ok = inked;
+      if (sigMode === 'type') ok = !!$('sigName').value.trim();
+      if (sigMode === 'upload') ok = !!uploaded;
+      $('sigApply').disabled = !ok;
+    }
+
+    /* Render the typed name onto a canvas so every mode ends in the same
+       place: a PNG we can embed straight into the PDF. */
+    function typedToPng(text) {
+      const c = document.createElement('canvas');
+      c.width = 900; c.height = 260;
+      const g = c.getContext('2d');
+      const size = 120;
+      g.font = size + 'px ' + sigFont.css;
+      g.fillStyle = sigInk;
+      g.textBaseline = 'middle';
+      const w = g.measureText(text).width;
+      const k = Math.min(1, (c.width - 40) / Math.max(1, w));
+      g.translate(20, c.height / 2);
+      g.scale(k, k);
+      g.fillText(text, 0, 0);
+      return c.toDataURL('image/png');
+    }
+
+    /* Crop the transparent margin off so the placed signature is tight. */
+    function trimPng(dataUrl) {
+      return new Promise(function (res) {
+        const img = new Image();
+        img.onload = function () {
+          const c = document.createElement('canvas');
+          c.width = img.width; c.height = img.height;
+          const g = c.getContext('2d');
+          g.drawImage(img, 0, 0);
+          let d;
+          try { d = g.getImageData(0, 0, c.width, c.height).data; }
+          catch (e) { res({ url: dataUrl, w: img.width, h: img.height }); return; }
+          let x1 = c.width, y1 = c.height, x2 = -1, y2 = -1;
+          for (let y = 0; y < c.height; y++) {
+            for (let x = 0; x < c.width; x++) {
+              if (d[(y * c.width + x) * 4 + 3] > 12) {
+                if (x < x1) x1 = x; if (x > x2) x2 = x;
+                if (y < y1) y1 = y; if (y > y2) y2 = y;
+              }
+            }
+          }
+          if (x2 < 0) { res({ url: dataUrl, w: img.width, h: img.height }); return; }
+          const pad = 6;
+          x1 = Math.max(0, x1 - pad); y1 = Math.max(0, y1 - pad);
+          x2 = Math.min(c.width - 1, x2 + pad); y2 = Math.min(c.height - 1, y2 + pad);
+          const o = document.createElement('canvas');
+          o.width = x2 - x1 + 1; o.height = y2 - y1 + 1;
+          o.getContext('2d').drawImage(c, x1, y1, o.width, o.height, 0, 0, o.width, o.height);
+          res({ url: o.toDataURL('image/png'), w: o.width, h: o.height });
+        };
+        img.onerror = function () { res(null); };
+        img.src = dataUrl;
+      });
+    }
+
+    function openSign(it, field, kind) {
+      /* the Sign and Initials buttons toggle their own modal */
+      if (!sigModal.hidden && !it && (kind || 'sig') === sigKind) { closeSign(); return; }
+      sigTarget = it ? { it: it, field: field } : null;
+      sigKind = kind || 'sig';
+      $('sigTitle').textContent = sigKind === 'initials' ? 'Add your initials' : 'Add your signature';
+      sigModal.hidden = false;
+      const saved = remembered();
+      if (saved && !inked) {
+        $('sigPrev').innerHTML = '<img src="' + saved + '" alt="Saved signature">';
+        uploaded = saved;
+      }
+      syncApply();
+    }
+    function closeSign() { sigModal.hidden = true; sigTarget = null; }
+
+    function remembered() {
+      try { return localStorage.getItem('adddots.sig.' + sigKind) || null; }
+      catch (e) { return null; }
+    }
+    function remember(url) {
+      try { localStorage.setItem('adddots.sig.' + sigKind, url); } catch (e) {}
+    }
+
+    $('sigApply').addEventListener('click', async function () {
+      let raw = null;
+      if (sigMode === 'draw') raw = cv.toDataURL('image/png');
+      if (sigMode === 'type') raw = typedToPng($('sigName').value.trim());
+      if (sigMode === 'upload') raw = uploaded;
+      if (!raw) return;
+      const trimmed = await trimPng(raw);
+      if (!trimmed) { X.toast('That image could not be read'); return; }
+      sigData = trimmed;
+      if ($('sigRemember').checked) remember(trimmed.url);
+
+      if (sigTarget) {
+        placeInField(sigTarget.it, sigTarget.field, trimmed);
+      } else {
+        placeOnPage(trimmed);
+      }
+      closeSign();
+    });
+
+    function placeInField(it, field, img) {
+      X.snapshot();
+      const w = field.rect[2] - field.rect[0], h = field.rect[3] - field.rect[1];
+      const k = Math.min(w / img.w, h / img.h);
+      const dw = img.w * k, dh = img.h * k;
+      it.shapes.push({
+        t: 'sig', id: 'sig' + Date.now().toString(36),
+        url: img.url, iw: img.w, ih: img.h,
+        a: [field.rect[0] + (w - dw) / 2, field.rect[1] + (h - dh) / 2],
+        b: [field.rect[0] + (w + dw) / 2, field.rect[1] + (h + dh) / 2]
+      });
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      X.toast('Signature placed');
+    }
+
+    function placeOnPage(img) {
+      const it = S.items[S.current - 1];
+      if (!it || !it.page) { X.toast('Open a page first'); return; }
+      X.snapshot();
+      const v = it.page.view;
+      const pw = v[2] - v[0], ph = v[3] - v[1];
+      const targetW = Math.min(pw * 0.34, 210);
+      const k = targetW / img.w;
+      const dw = img.w * k, dh = img.h * k;
+      /* park it low and right, where a signature usually goes */
+      const x = v[0] + pw * 0.58, y = v[1] + ph * 0.12;
+      it.shapes.push({
+        t: 'sig', id: 'sig' + Date.now().toString(36),
+        url: img.url, iw: img.w, ih: img.h,
+        a: [x, y], b: [x + dw, y + dh]
+      });
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      X.setTool('select');
+      X.toast('Signature placed — drag it where you want it');
+    }
+
+    $('btnSign').addEventListener('click', function () {
+      if (!S.items.length) { X.toast('Open a PDF first'); return; }
+      openSign(null, null, 'sig');
+    });
+    $('btnInitials').addEventListener('click', function () {
+      if (!S.items.length) { X.toast('Open a PDF first'); return; }
+      openSign(null, null, 'initials');
+    });
+
+    /* ---------------- the signature as a mark ---------------- */
+
+    X.shapeRenderers.sig = function (it, s, vp, idx) {
+      const a = vp.convertToViewportPoint(s.a[0], s.a[1]);
+      const b = vp.convertToViewportPoint(s.b[0], s.b[1]);
+      const g = document.createElementNS(X.SVGNS, 'g');
+      g.setAttribute('class', 'sig-mk');
+      const im = document.createElementNS(X.SVGNS, 'image');
+      im.setAttribute('x', Math.min(a[0], b[0]));
+      im.setAttribute('y', Math.min(a[1], b[1]));
+      im.setAttribute('width', Math.abs(b[0] - a[0]));
+      im.setAttribute('height', Math.abs(b[1] - a[1]));
+      im.setAttribute('preserveAspectRatio', 'none');
+      im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', s.url);
+      im.setAttribute('href', s.url);
+      g.appendChild(im);
+      g.style.pointerEvents = 'all';
+      if (idx >= 0) g.addEventListener('pointerdown', function (e) {
+        if (S.tool === 'select') {
+          e.stopPropagation();
+          S.sel = { it: it, i: idx };
+          S.items.forEach(function (x) { X.drawShapes(x); });
+        }
+      });
+      return g;
+    };
+
+    /* embedding is async, so it happens in the prepare pass */
+    X.prepare.push(async function (out, items, extra) {
+      extra.sigs = {};
+      for (const it of items) {
+        for (const s of it.shapes) {
+          if (s.t !== 'sig' || extra.sigs[s.url]) continue;
+          try { extra.sigs[s.url] = await out.embedPng(s.url); }
+          catch (e) { /* a JPEG that slipped through */
+            try { extra.sigs[s.url] = await out.embedJpg(s.url); } catch (e2) {}
+          }
+        }
+      }
+    });
+
+    X.shapePainters.sig = function (p, s, ctx) {
+      const img = ctx.extra.sigs && ctx.extra.sigs[s.url];
+      if (!img) return;
+      p.drawImage(img, {
+        x: Math.min(s.a[0], s.b[0]), y: Math.min(s.a[1], s.b[1]),
+        width: Math.abs(s.b[0] - s.a[0]), height: Math.abs(s.b[1] - s.a[1])
+      });
+    };
+
+    /* ---------------- writing the filled values into the PDF ---------------- */
+
+    /* Values are painted onto the rebuilt page. Core already turned each page
+       by it.rot after we run, and a widget rect is in the un-turned page space,
+       so drawing here lands correctly whatever the page rotation. */
+    X.finish.push(async function (out, items, slots, extra) {
+      const any = items.some(function (it) {
+        return (it.fields || []).some(function (f) { return hasValue(f); });
+      });
+      if (!any) return;
+      const helv = await out.embedFont(PDFLib.StandardFonts.Helvetica);
+
+      items.forEach(function (it, i) {
+        const p = slots[i];
+        if (!p || !it.fields) return;
+        it.fields.forEach(function (f) {
+          if (!hasValue(f)) return;
+          const x1 = Math.min(f.rect[0], f.rect[2]), x2 = Math.max(f.rect[0], f.rect[2]);
+          const y1 = Math.min(f.rect[1], f.rect[3]), y2 = Math.max(f.rect[1], f.rect[3]);
+          const w = x2 - x1, h = y2 - y1;
+          const v = values[f.name];
+
+          if (f.type === 'Btn') {
+            if (!isOn(v, f.exportValue)) return;
+            /* Two strokes rather than a Dingbats glyph: the tick then renders
+               in every viewer without depending on a font's encoding. */
+            const m = Math.min(w, h), cxp = x1 + w / 2, cyp = y1 + h / 2;
+            const th = Math.max(0.8, m * 0.14);
+            const ink = X.hexRgb('#1B2A4A');
+            p.drawLine({ start: { x: cxp - m * 0.30, y: cyp + m * 0.02 },
+                         end:   { x: cxp - m * 0.07, y: cyp - m * 0.24 },
+                         thickness: th, color: ink, lineCap: PDFLib.LineCapStyle.Round });
+            p.drawLine({ start: { x: cxp - m * 0.07, y: cyp - m * 0.24 },
+                         end:   { x: cxp + m * 0.32, y: cyp + m * 0.28 },
+                         thickness: th, color: ink, lineCap: PDFLib.LineCapStyle.Round });
+            return;
+          }
+
+          const text = String(v);
+          if (!text.trim()) return;
+          const size = f.fontSize > 0 ? f.fontSize : Math.min(11, Math.max(6, h * 0.62));
+          if (f.multiline) {
+            wrap(text, helv, size, w - 4).forEach(function (line, li) {
+              const ly = y2 - size - 2 - li * size * 1.22;
+              if (ly < y1 - size) return;
+              p.drawText(line, { x: x1 + 2, y: ly, size: size, font: helv, color: X.hexRgb('#0B0B0B') });
+            });
+          } else {
+            p.drawText(text, {
+              x: x1 + 2, y: y1 + (h - size) / 2 + size * 0.2,
+              size: size, font: helv, color: X.hexRgb('#0B0B0B'),
+              maxWidth: w - 4
+            });
+          }
+        });
+      });
+    });
+
+    function hasValue(f) {
+      const v = values[f.name];
+      if (v == null || v === '') return false;
+      if (f.type === 'Btn') return isOn(v, f.exportValue);
+      return String(v).trim().length > 0;
+    }
+
+    function wrap(text, font, size, max) {
+      const out = [];
+      String(text).split('\n').forEach(function (para) {
+        let line = '';
+        para.split(/\s+/).forEach(function (word) {
+          const probe = line ? line + ' ' + word : word;
+          if (font.widthOfTextAtSize(probe, size) <= max || !line) line = probe;
+          else { out.push(line); line = word; }
+        });
+        out.push(line);
+      });
+      return out;
+    }
+
+    /* ---------------- flatten ---------------- */
+
+    $('btnFlatten').addEventListener('click', function () {
+      const filled = S.items.reduce(function (n, it) {
+        return n + (it.fields || []).filter(hasValue).length;
+      }, 0);
+      const sigs = S.items.reduce(function (n, it) {
+        return n + it.shapes.filter(function (s) { return s.t === 'sig'; }).length;
+      }, 0);
+      X.toast(filled || sigs
+        ? 'Saving flattens <b>' + filled + '</b> field' + (filled === 1 ? '' : 's') +
+          ' and <b>' + sigs + '</b> signature' + (sigs === 1 ? '' : 's') + ' into the page'
+        : 'Nothing to flatten yet — fill a field or add a signature first');
+    });
+
+    /* ---------------- keep in step with the viewer ---------------- */
+
+    let repaintTimer = null;
+    function repaintSoon() {
+      clearTimeout(repaintTimer);
+      repaintTimer = setTimeout(paintAll, 60);
+    }
+    /* the controls are positioned in viewport pixels, so any zoom or rotate
+       has to move them too */
+    window.addEventListener('resize', repaintSoon);
+    $('stage').addEventListener('scroll', function () { /* positions are page-relative */ }, { passive: true });
+
+    const origRelayout = X.relayout;
+    X.relayout = function () {
+      return origRelayout.apply(null, arguments).then(function (r) { repaintSoon(); return r; });
+    };
+
+    X.on('pages', function () {
+      scanAll().then(repaintSoon);
+    });
+    X.on('reset', function () {
+      values = {};
+      S.items.forEach(function (it) { it.fields = null; it.formLayer = null; });
+      const c = $('fieldCount'); c.hidden = true; c.textContent = '';
+    });
+
+    document.addEventListener('keydown', function (e) {
+      if (e.target.matches && e.target.matches('input,textarea,select')) return;
+      if (e.key === 'Escape' && !sigModal.hidden) { closeSign(); return; }
+      if (e.shiftKey && !e.ctrlKey && !e.metaKey && e.key.toLowerCase() === 's' && S.items.length) {
+        e.preventDefault(); openSign(null, null, 'sig');
+      }
+    });
+
+    scanAll();
+    X.forms = {
+      values: function () { return values; },
+      scan: scanAll,
+      paint: paintAll,
+      openSign: openSign,
+      hasValue: hasValue
+    };
+  });
+})();

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+body{margin:0;background:#F2F4F5;font-family:Figtree,system-ui,sans-serif;color:#0B2A31;-webkit-font-smoothing:antialiased}
+a{color:#0A6C7D;text-decoration:none}a:hover{color:#06303A;text-decoration:underline}
+*{box-sizing:border-box}button{font-family:inherit}
+</style>
+</helmet>
+
+<sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+<div data-screen-label="Web Home" style="min-height:100vh;display:grid;grid-template-columns:248px minmax(0,1fr);background:linear-gradient(180deg,#8DDCEA 0,#C4ECF2 220px,#EEF2F3 420px,#F2F4F5 640px)">
+  <aside style="padding:24px 16px;display:flex;flex-direction:column;gap:28px;position:sticky;top:0;height:100vh">
+    <div style="display:flex;align-items:center;gap:12px;padding:0 8px">
+      <div style="width:40px;height:40px;background:#050505;display:grid;place-items:center;outline:2px solid #9A9A9A;outline-offset:-6px;color:#fff;font:700 14px/1 Arial,Helvetica,sans-serif;letter-spacing:1px">AD</div>
+      <div style="display:flex;flex-direction:column"><span style="font-weight:800;font-size:15px;letter-spacing:.04em">ADD DOTS</span><span style="font-size:13px;color:#34494E">PDF Editor</span></div>
+    </div>
+    <nav style="display:flex;flex-direction:column;gap:4px">
+      <div style="height:46px;border-radius:23px;background:#06303A;color:#fff;display:flex;align-items:center;gap:12px;padding:0 16px;font-weight:600;font-size:15px"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6"></path></svg>Home</div>
+      <div style="height:46px;border-radius:23px;display:flex;align-items:center;gap:12px;padding:0 16px;font-weight:500;font-size:15px;color:#1E363C;cursor:pointer" style-hover="background:rgba(255,255,255,.6)"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z"></path></svg>All tools</div>
+      <div style="height:46px;border-radius:23px;display:flex;align-items:center;gap:12px;padding:0 16px;font-weight:500;font-size:15px;color:#1E363C;cursor:pointer" style-hover="background:rgba(255,255,255,.6)"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3.5 2"></path></svg>Recent files</div>
+          </nav>
+    <div style="flex:1"></div>
+    <div style="background:#fff;border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:8px">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#22A06B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6zM8.5 12 11 14.5l4.5-5"></path></svg>
+      <span style="font-size:14px;font-weight:600">Private by design</span>
+      <span style="font-size:13px;line-height:1.45;color:#51686E">Files open and edit on this device. Nothing is ever uploaded.</span>
+    </div>
+  </aside>
+
+  <main style="padding:32px 40px 64px;display:flex;flex-direction:column;gap:32px;max-width:1240px;width:100%">
+    <div style="display:flex;align-items:center;gap:20px;flex-wrap:wrap">
+      <div style="flex:1;min-width:260px;display:flex;flex-direction:column;gap:6px">
+        <h1 style="margin:0;font-size:34px;font-weight:700;letter-spacing:-.02em">Good morning, Anand</h1>
+        <p style="margin:0;font-size:16px;color:#34494E">Read, edit, mark up, pin site photos, organise and convert your PDFs.</p>
+      </div>
+      <div style="height:52px;flex:0 1 380px;min-width:220px;border-radius:26px;background:#fff;display:flex;align-items:center;gap:12px;padding:0 20px;color:#6B8186;font-size:15px"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#0B2A31" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"></circle><path d="M16 16l5 5"></path></svg>Search your PDFs…</div>
+      <div style="width:52px;height:52px;border-radius:26px;background:#fff;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#06303A" stroke-width="2" stroke-linecap="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg></div>
+      <div style="width:52px;height:52px;border-radius:26px;background:#fff;display:grid;place-items:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#06303A" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"></circle><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1"></path></svg></div>
+    </div>
+
+    <section style="background:#06303A;border-radius:32px;padding:14px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:14px;color:#fff">
+      <div style="border:1.5px dashed rgba(255,255,255,.25);border-radius:24px;padding:28px;display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+        <div style="width:72px;height:72px;border-radius:22px;background:rgba(255,255,255,.12);display:grid;place-items:center;flex:none"><svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"></path></svg></div>
+        <div style="flex:1;min-width:240px;display:flex;flex-direction:column;gap:6px">
+          <span style="font-size:24px;font-weight:700">Drop a PDF to get started</span>
+          <span style="font-size:15px;color:#A9C4C9;line-height:1.45">Select several at once to merge them into one document, in order.</span>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button onClick="{{ openEditor }}" style="height:52px;padding:0 24px;border-radius:26px;border:0;background:#fff;color:#06303A;font-size:16px;font-weight:600;display:flex;align-items:center;gap:10px;cursor:pointer"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path></svg>Select files</button>
+          <button style="height:52px;padding:0 22px;border-radius:26px;border:1.5px solid rgba(255,255,255,.3);background:transparent;color:#fff;font-size:16px;font-weight:600;display:flex;align-items:center;gap:10px;cursor:pointer"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"></path></svg>Install app</button>
+        </div>
+      </div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:16px">
+      <h2 style="margin:0;font-size:22px;font-weight:700">Tools</h2>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:14px">
+        <sc-for list="{{ tools }}" as="t" hint-placeholder-count="9">
+          <div onClick="{{ openEditor }}" style="background:#fff;border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:14px;cursor:pointer;transition:transform .15s,box-shadow .15s" style-hover="transform:translateY(-2px);box-shadow:0 14px 30px -18px rgba(6,48,58,.4)">
+            <div style="width:46px;height:46px;border-radius:14px;background:{{ t.bg }};display:grid;place-items:center"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="{{ t.c }}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ t.d }}"></path></svg></div>
+            <div style="display:flex;flex-direction:column;gap:4px"><span style="font-size:16px;font-weight:600">{{ t.name }}</span><span style="font-size:13.5px;line-height:1.4;color:#51686E">{{ t.desc }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section style="display:flex;flex-direction:column;gap:16px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline"><h2 style="margin:0;font-size:22px;font-weight:700">Recent files</h2><span style="font-size:14px;color:#51686E;cursor:pointer">Clear list</span></div>
+      <div style="background:#fff;border-radius:26px;padding:6px 22px">
+        <sc-for list="{{ files }}" as="f" hint-placeholder-count="5">
+          <div onClick="{{ openEditor }}" style="display:grid;grid-template-columns:{{ rowCols }};gap:16px;align-items:center;padding:14px 0;border-bottom:1px solid #EEF1F2;cursor:pointer">
+            <div style="width:48px;height:48px;border-radius:14px;background:#FDECEC;display:grid;place-items:center"><div style="width:26px;height:30px;border-radius:5px;background:#E5322D;color:#fff;font:800 8px/30px Figtree,sans-serif;text-align:center">PDF</div></div>
+            <div style="min-width:0;display:flex;flex-direction:column;gap:3px"><span style="font-size:15.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.name }}</span><span style="font-size:13px;color:#6B8186;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ f.pages }}<sc-if value="{{ rowNarrow }}" hint-placeholder-val="{{ false }}"> · {{ f.date }} · {{ f.size }}</sc-if></span></div>
+            <sc-if value="{{ rowWide }}" hint-placeholder-val="{{ true }}"><span style="font-size:14px;color:#51686E;white-space:nowrap">{{ f.date }}</span>
+            <span style="font-size:14px;color:#51686E;white-space:nowrap">{{ f.size }}</span>
+            <span style="white-space:nowrap;justify-self:start;height:28px;padding:0 12px;border-radius:14px;background:{{ f.tagBg }};color:{{ f.tagC }};font-size:12.5px;font-weight:600;display:flex;align-items:center">{{ f.tag }}</span></sc-if>
+            <svg viewBox="0 0 24 24" width="20" height="20" fill="#8FA2A6"><circle cx="12" cy="5" r="1.6"></circle><circle cx="12" cy="12" r="1.6"></circle><circle cx="12" cy="19" r="1.6"></circle></svg>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+  </main>
+</div>
+</sc-if>
+
+<sc-if value="{{ isEditor }}" hint-placeholder-val="{{ false }}">
+<div data-screen-label="Web Editor" style="height:100vh;display:flex;flex-direction:column;background:linear-gradient(180deg,#A6E3EE 0,#D6F1F5 120px,#EEF2F3 240px)">
+  <header style="height:68px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px">
+    <div style="width:40px;height:40px;background:#050505;display:grid;place-items:center;outline:2px solid #9A9A9A;outline-offset:-6px;color:#fff;font:700 14px/1 Arial,Helvetica,sans-serif;letter-spacing:1px;flex:none">AD</div>
+    <button onClick="{{ goHome }}" style="width:44px;height:44px;border-radius:22px;border:0;background:#fff;display:grid;place-items:center;cursor:pointer;flex:none"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#06303A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-7 9 7M5 10v10h14V10M10 20v-6h4v6"></path></svg></button>
+    <div style="min-width:0;display:flex;flex-direction:column;gap:1px;padding:0 6px;flex:{{ fileFlex }};min-width:0"><span style="font-size:16px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">SDS-JD-048 Main Entrance Door.pdf</span><span style="font-size:12.5px;color:#34494E;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">4 pages · 3.2 MB · Edited just now</span></div>
+    <sc-if value="{{ showRight }}" hint-placeholder-val="{{ true }}"><div style="flex:1;min-width:0"></div></sc-if>
+    <div style="background:#fff;border-radius:24px;padding:4px;display:flex;gap:2px;flex:none">
+      <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="5">
+        <button onClick="{{ tb.onClick }}" style="height:40px;padding:0 14px;flex:none;border-radius:20px;border:0;background:{{ tb.bg }};color:{{ tb.c }};font-size:14.5px;font-weight:600;cursor:pointer">{{ tb.label }}</button>
+      </sc-for>
+    </div>
+    <sc-if value="{{ showRight }}" hint-placeholder-val="{{ true }}"><div style="flex:1"></div></sc-if>
+    <sc-if value="{{ showRight }}" hint-placeholder-val="{{ true }}"><div style="height:44px;border-radius:22px;background:#fff;display:flex;align-items:center;gap:4px;padding:0 6px;font-size:14px;font-weight:600;white-space:nowrap;flex:none">
+      <span style="width:32px;height:32px;display:grid;place-items:center">‹</span><span>2 / 4</span><span style="width:32px;height:32px;display:grid;place-items:center">›</span>
+    </div></sc-if>
+    <button style="width:44px;height:44px;flex:none;border-radius:22px;border:0;background:#fff;display:grid;place-items:center;cursor:pointer"><svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="#06303A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5 4 10l5 5M4 10h9a6 6 0 0 1 0 12h-3"></path></svg></button>
+    <button style="height:44px;flex:none;padding:0 14px;border-radius:22px;border:0;background:#fff;color:#06303A;font-size:15px;font-weight:600;display:flex;align-items:center;gap:8px;cursor:pointer"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 13v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"></path></svg><sc-if value="{{ showRight }}" hint-placeholder-val="{{ true }}">Share</sc-if></button>
+    <button style="height:44px;flex:none;padding:0 24px;border-radius:22px;border:0;background:#06303A;color:#fff;font-size:15px;font-weight:600;cursor:pointer">Save</button>
+  </header>
+
+  <div style="margin:0 16px;background:#fff;border-radius:22px;padding:8px 10px;display:flex;align-items:center;gap:4px;flex-wrap:wrap">
+    <sc-for list="{{ ribbon }}" as="r" hint-placeholder-count="8">
+      <button onClick="{{ r.onClick }}" title="{{ r.label }}" style="height:56px;min-width:64px;padding:0 10px;border-radius:16px;border:0;background:{{ r.bg }};color:{{ r.c }};display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font-size:12px;font-weight:500;cursor:pointer"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ r.d }}"></path></svg>{{ r.label }}</button>
+    </sc-for>
+    <div style="width:1px;height:32px;background:#E3E9EA;margin:0 10px"></div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <sc-for list="{{ swatches }}" as="s" hint-placeholder-count="5">
+        <button onClick="{{ s.onClick }}" style="width:26px;height:26px;border-radius:13px;border:0;background:{{ s.hex }};box-shadow:{{ s.ring }};cursor:pointer"></button>
+      </sc-for>
+    </div>
+    <div style="width:1px;height:32px;background:#E3E9EA;margin:0 10px"></div>
+    <div style="display:flex;gap:4px;background:#F2F5F6;border-radius:14px;padding:4px">
+      <div style="height:34px;padding:0 12px;border-radius:10px;background:#fff;font-size:13px;font-weight:600;display:flex;align-items:center;gap:8px"><i style="width:18px;height:1px;background:#0B2A31"></i>1pt</div>
+      <div style="height:34px;padding:0 12px;border-radius:10px;font-size:13px;color:#51686E;display:flex;align-items:center;gap:8px"><i style="width:18px;height:3px;background:#51686E"></i>3pt</div>
+      <div style="height:34px;padding:0 12px;border-radius:10px;font-size:13px;color:#51686E;display:flex;align-items:center;gap:8px"><i style="width:18px;height:5px;background:#51686E"></i>5pt</div>
+    </div>
+  </div>
+
+  <div style="flex:1;min-height:0;display:grid;grid-template-columns:{{ edCols }};gap:16px;padding:16px">
+    <sc-if value="{{ showRail }}" hint-placeholder-val="{{ true }}"><aside style="background:#fff;border-radius:24px;padding:16px;display:flex;flex-direction:column;gap:14px;overflow:auto">
+      <div style="display:flex;background:#F2F5F6;border-radius:14px;padding:4px;gap:2px;font-size:13px;font-weight:600">
+        <span style="flex:1;height:32px;border-radius:10px;background:#fff;display:grid;place-items:center">Pages</span>
+        <span style="flex:1;height:32px;border-radius:10px;display:grid;place-items:center;color:#51686E">Find</span>
+      </div>
+      <sc-for list="{{ thumbs }}" as="p" hint-placeholder-count="4">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:6px">
+          <div style="width:118px;height:152px;border-radius:8px;background:#fff;border:{{ p.border }};padding:12px 10px;display:flex;flex-direction:column;gap:5px;box-shadow:0 4px 14px -8px rgba(6,48,58,.3)">
+            <i style="height:5px;width:70%;background:#0B2A31;border-radius:2px"></i><i style="height:3px;width:90%;background:#D5DDDF;border-radius:2px"></i><i style="height:3px;width:80%;background:#D5DDDF;border-radius:2px"></i>
+            <i style="flex:1;border-radius:4px;background:#F1F4F5;margin:4px 0"></i>
+            <i style="height:3px;width:85%;background:#D5DDDF;border-radius:2px"></i><i style="height:3px;width:60%;background:#D5DDDF;border-radius:2px"></i>
+          </div>
+          <span style="font-size:12.5px;font-weight:600;color:{{ p.c }}">{{ p.n }}</span>
+        </div>
+      </sc-for>
+    </aside></sc-if>
+
+    <div style="position:relative;overflow:auto;border-radius:24px;display:flex;justify-content:center;padding:8px 0 80px">
+      <div style="width:100%;max-width:680px;aspect-ratio:612/792;background:#fff;border-radius:6px;box-shadow:0 20px 50px -26px rgba(6,48,58,.45);padding:56px 60px;position:relative;flex:none;height:max-content">
+        <div style="font-size:22px;font-weight:700;letter-spacing:-.01em">Door Schedule — Main Entrance D1</div>
+        <div style="font-size:12px;color:#51686E;margin-top:6px">SDS-JD-048 · R0 · Resubmit · Ground floor</div>
+        <div style="font-size:13px;font-weight:700;margin-top:24px">1. Scope</div>
+        <div style="font-size:12.5px;line-height:1.65;color:#2B4046;margin-top:6px;text-wrap:pretty">Supply and install a double-leaf entrance door, type D1, with <span style="background:#FFE66B;padding:0 2px">solid hardwood core and bronze-tint glazing</span>, including frame, ironmongery, seals and all fixings to the structural opening.</div>
+        <div style="margin-top:20px;height:230px;border-radius:10px;background:repeating-linear-gradient(135deg,#F1F4F5 0 10px,#FAFBFB 10px 20px);border:1px solid #E3E9EA;position:relative;display:grid;place-items:center">
+          <span style="font:500 11px 'JetBrains Mono',monospace;color:#7B8E92">elevation drawing</span>
+          <div style="position:absolute;left:14%;top:18%;width:30%;height:52%;border:2px solid #E2483D;border-radius:3px"></div>
+          <div style="position:absolute;left:44%;top:44%;width:18%;height:2px;background:#E2483D"></div>
+          <div style="position:absolute;left:62%;top:36%;background:#fff;border:1.5px solid #E2483D;color:#E2483D;font-size:11px;font-weight:600;padding:4px 8px;border-radius:6px">Confirm leaf width</div>
+          <div style="position:absolute;right:12%;top:14%;width:30px;height:30px;border-radius:15px 15px 15px 2px;transform:rotate(-45deg);background:#E03616;display:grid;place-items:center;box-shadow:0 6px 12px -4px rgba(224,54,22,.6)"><span style="transform:rotate(45deg);color:#fff;font-weight:700;font-size:13px">1</span></div>
+        </div>
+        <div style="font-size:13px;font-weight:700;margin-top:22px">2. Hardware</div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:8px;font-size:12.5px;color:#2B4046">
+          <div style="position:relative;padding:3px 6px;margin-left:-6px;border:1.5px solid #2FA9BF;border-radius:4px;align-self:flex-start">• Pull handles, 600 mm, satin bronze
+            <i style="position:absolute;left:-5px;top:-5px;width:8px;height:8px;background:#fff;border:1.5px solid #2FA9BF"></i><i style="position:absolute;right:-5px;bottom:-5px;width:8px;height:8px;background:#fff;border:1.5px solid #2FA9BF"></i>
+            <div style="position:absolute;left:0;top:34px;background:#fff;border-radius:14px;padding:6px;display:flex;gap:2px;box-shadow:0 14px 30px -10px rgba(6,48,58,.35),0 0 0 1px rgba(6,48,58,.06);z-index:2">
+              <span style="padding:6px 12px;font-size:12px;display:flex;gap:6px;align-items:center;color:#34494E"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16z"></path></svg>Edit</span>
+              <span style="padding:6px 12px;font-size:12px;display:flex;gap:6px;align-items:center;color:#34494E"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>Copy</span>
+              <span style="padding:6px 12px;font-size:12px;display:flex;gap:6px;align-items:center;color:#E5322D"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"></path></svg>Delete</span>
+            </div>
+          </div>
+          <div>• Floor spring, double action</div>
+          <div>• Concealed flush bolts, top and bottom</div>
+          <div>• Brush seals to meeting stiles</div>
+        </div>
+      </div>
+      <div style="position:absolute;bottom:16px;left:50%;transform:translateX(-50%);height:44px;border-radius:22px;background:#06303A;color:#fff;display:flex;align-items:center;gap:4px;padding:0 6px;font-size:13.5px;font-weight:600;flex:none;white-space:nowrap">
+        <span style="width:32px;height:32px;display:grid;place-items:center;font-size:18px">−</span><span style="padding:0 6px">100%</span><span style="width:32px;height:32px;display:grid;place-items:center;font-size:18px">+</span><i style="width:1px;height:20px;background:rgba(255,255,255,.2)"></i><span style="padding:0 10px">Fit width</span>
+      </div>
+    </div>
+
+    <sc-if value="{{ showRight }}" hint-placeholder-val="{{ true }}"><aside style="display:flex;flex-direction:column;gap:16px;overflow:auto">
+      <div style="background:#fff;border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:16px">
+        <div style="display:flex;justify-content:space-between;align-items:center"><span style="font-size:16px;font-weight:700">Box</span><span style="font:500 11px 'JetBrains Mono',monospace;color:#6B8186">PAGE 2</span></div>
+        <div style="display:flex;flex-direction:column;gap:8px"><span style="font-size:13px;color:#51686E">Colour</span><div style="display:flex;gap:8px"><i style="width:28px;height:28px;border-radius:14px;background:#E2483D;box-shadow:0 0 0 2px #fff,0 0 0 4px #E2483D"></i><i style="width:28px;height:28px;border-radius:14px;background:#3B82F6"></i><i style="width:28px;height:28px;border-radius:14px;background:#22A06B"></i><i style="width:28px;height:28px;border-radius:14px;background:#F59E0B"></i><i style="width:28px;height:28px;border-radius:14px;background:#0B2A31"></i></div></div>
+        <div style="display:flex;flex-direction:column;gap:8px"><div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#51686E">Opacity</span><span style="font-weight:600">100%</span></div><div style="height:6px;border-radius:3px;background:#06303A;position:relative"><i style="position:absolute;right:-2px;top:-6px;width:18px;height:18px;border-radius:9px;background:#fff;box-shadow:0 0 0 2px #06303A"></i></div></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div style="height:44px;border-radius:14px;background:#F2F5F6;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13.5px;font-weight:600"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="8" y="8" width="12" height="12" rx="2"></rect><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"></path></svg>Duplicate</div>
+          <div style="height:44px;border-radius:14px;background:#FDECEC;color:#C8241F;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13.5px;font-weight:600"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"></path></svg>Delete</div>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:24px;padding:18px;display:flex;flex-direction:column;gap:16px;flex:1">
+        <span style="font-size:16px;font-weight:700">Download &amp; share</span>
+        <div style="display:flex;background:#F2F5F6;border-radius:14px;padding:4px;gap:2px;font-size:13px;font-weight:600">
+          <span style="flex:1;height:34px;border-radius:10px;background:#fff;display:grid;place-items:center">PDF</span>
+          <span style="flex:1;height:34px;border-radius:10px;display:grid;place-items:center;color:#51686E">JPG pages</span>
+          <span style="flex:1;height:34px;border-radius:10px;display:grid;place-items:center;color:#51686E">Selected</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;font-size:14px"><span>Include marks &amp; pins</span><div style="width:42px;height:26px;border-radius:13px;background:#1D9BB2;padding:2px;display:flex;justify-content:flex-end"><i style="width:22px;height:22px;border-radius:11px;background:#fff"></i></div></div>
+        <button style="height:48px;border-radius:24px;border:0;background:#06303A;color:#fff;font-size:15px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7.5 10.5 12 15l4.5-4.5M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"></path></svg>Download PDF</button>
+        <span style="font-size:13px;color:#51686E">Send with</span>
+        <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px">
+          <sc-for list="{{ apps }}" as="ap" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer">
+              <div style="width:46px;height:46px;border-radius:14px;background:{{ ap.bg }};display:grid;place-items:center"><svg viewBox="0 0 24 24" width="21" height="21" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="{{ ap.d }}"></path></svg></div>
+              <span style="font-size:12px;color:#34494E;white-space:nowrap">{{ ap.label }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </aside></sc-if>
+  </div>
+</div>
+</sc-if>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;startView&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;Home&quot;,&quot;Editor&quot;],&quot;default&quot;:&quot;Home&quot;,&quot;tsType&quot;:&quot;'Home'|'Editor'&quot;}}">
+const TABS = {
+  View: [
+    { id: 'out', label: 'Zoom out', d: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14M8 11h6M16 16l5 5' },
+    { id: 'in', label: 'Zoom in', d: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14M8 11h6M11 8v6M16 16l5 5' },
+    { id: 'fit', label: 'Fit width', d: 'M6 4h12v16H6zM4 9l-2.5 3L4 15M20 9l2.5 3L20 15' },
+    { id: 'pan', label: 'Pan', d: 'M8 13V5.5a1.5 1.5 0 0 1 3 0V12M11 11V4.5a1.5 1.5 0 0 1 3 0V11M14 11V6a1.5 1.5 0 0 1 3 0v8a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-3l-2-4a1.5 1.5 0 0 1 2.6-1.5L8 14' },
+    { id: 'find', label: 'Find', d: 'M11 4a7 7 0 1 0 0 14a7 7 0 1 0 0-14M16 16l5 5' },
+    { id: 'tr', label: 'Translate', d: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18' }
+  ],
+  Edit: [
+    { id: 'select', label: 'Select', d: 'M5 3l14 8-6 1.4L10 19z' },
+    { id: 'text', label: 'Text', d: 'M5 7V4h14v3M12 4v16M9 20h6' },
+    { id: 'hl', label: 'Highlight', d: 'M9 11l6-6 4 4-6 6M9 11l-4 4v4h4l4-4M3 21h18' },
+    { id: 'ul', label: 'Underline', d: 'M7 4v7a5 5 0 0 0 10 0V4M5 21h14' },
+    { id: 'pen', label: 'Pen', d: 'M3 17c3 0 4-6 6-6s1 5 3 5 3-3 5-3' },
+    { id: 'note', label: 'Note', d: 'M4 4h16v12l-4 4H4zM16 20v-4h4' },
+    { id: 'stamp', label: 'Stamp', d: 'M9 4h6l-1 7h4v4H6v-4h4zM5 20h14' },
+    { id: 'crop', label: 'Crop', d: 'M7 2v15h15M2 7h15v15' },
+    { id: 'pin', label: 'PIN', d: 'M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11zM12 8.2a1.8 1.8 0 1 0 0 3.6a1.8 1.8 0 1 0 0-3.6' }
+  ],
+  Draw: [
+    { id: 'select', label: 'Select', d: 'M5 3l14 8-6 1.4L10 19z' },
+    { id: 'box', label: 'Box', d: 'M4 6h16v12H4z' },
+    { id: 'circle', label: 'Circle', d: 'M12 4a8 8 0 1 0 0 16a8 8 0 1 0 0-16' },
+    { id: 'line', label: 'Line', d: 'M4 19L20 5' },
+    { id: 'arrow', label: 'Arrow', d: 'M4 19L19 6M12 5h8v8' },
+    { id: 'cloud', label: 'Cloud', d: 'M7 17a4 4 0 0 1 0-8a5 5 0 0 1 9.5-1A4.5 4.5 0 0 1 17 17z' },
+    { id: 'dim', label: 'Dimension', d: 'M3 12h18M3 8v8M21 8v8M6 9l-3 3 3 3M18 9l3 3-3 3' }
+  ],
+  Insert: [
+    { id: 'img', label: 'Image', d: 'M3 4h18v16H3zM4 17l5-5 4 4 3-3 4 4' },
+    { id: 'link', label: 'Link', d: 'M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1.5-1.5' },
+    { id: 'table', label: 'Table', d: 'M3 4h18v16H3zM3 10h18M3 16h18M9 4v16M15 4v16' },
+    { id: 'sig', label: 'Signature', d: 'M3 17c3 0 4-6 6-6s1 5 3 5 3-3 5-3M3 21h18' },
+    { id: 'wm', label: 'Watermark', d: 'M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z' }
+  ],
+  Page: [
+    { id: 'rl', label: 'Rotate', d: 'M3 4v6h6M3.5 14a8.5 8.5 0 1 0 2.1-7.4L3 9' },
+    { id: 'add', label: 'Add', d: 'M12 5v14M5 12h14' },
+    { id: 'org', label: 'Organize', d: 'M3 4h7v9H3zM14 4h7v9h-7zM6 17v3h12v-3' },
+    { id: 'ext', label: 'Extract', d: 'M14 3v5h5M19 11V8l-5-5H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M17 14v7M14 18l3 3 3-3' },
+    { id: 'jpg', label: 'To JPG', d: 'M3 4h18v16H3zM4 17l5-5 4 4 3-3 4 4' },
+    { id: 'del', label: 'Remove', d: 'M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13' }
+  ]
+};
+class Component extends DCLogic {
+  componentDidMount() { this.onR = () => this.setState({ w: window.innerWidth }); window.addEventListener('resize', this.onR); this.onR(); }
+  componentWillUnmount() { window.removeEventListener('resize', this.onR); }
+  state = { w: typeof window !== 'undefined' ? window.innerWidth : 1440, view: this.props.startView === 'Editor' ? 'editor' : 'home', tab: 'Draw', tool: 'box', color: '#E2483D' };
+  renderVals() {
+    const { view, tab, tool, color, w } = this.state;
+    const rowWide = w >= 1060, wide = w >= 1200, mid = w >= 860;
+    return {
+      rowWide, rowNarrow: !rowWide,
+      rowCols: rowWide ? '48px minmax(0,1fr) 100px 80px 100px 24px' : '48px minmax(0,1fr) 24px',
+      showRight: wide, showRail: mid, fileFlex: wide ? '0 1 auto' : '1 1 0',
+      edCols: wide ? '200px minmax(0,1fr) 300px' : mid ? '160px minmax(0,1fr)' : 'minmax(0,1fr)',
+      isHome: view === 'home', isEditor: view === 'editor',
+      openEditor: () => this.setState({ view: 'editor' }),
+      goHome: () => this.setState({ view: 'home' }),
+      tabs: Object.keys(TABS).map(l => ({ label: l, bg: l === tab ? '#06303A' : 'transparent', c: l === tab ? '#fff' : '#34494E', onClick: () => this.setState({ tab: l }) })),
+      ribbon: TABS[tab].map(r => ({ ...r, bg: r.id === tool ? '#06303A' : 'transparent', c: r.id === tool ? '#fff' : '#1E363C', onClick: () => this.setState({ tool: r.id === tool ? 'select' : r.id }) })),
+      swatches: ['#E2483D', '#3B82F6', '#22A06B', '#F59E0B', '#0B2A31'].map(h => ({ hex: h, ring: h === color ? `0 0 0 2px #fff,0 0 0 4px ${h}` : 'none', onClick: () => this.setState({ color: h }) })),
+      thumbs: [1, 2, 3, 4].map(n => ({ n, border: n === 2 ? '2px solid #1D9BB2' : '1px solid #E3E9EA', c: n === 2 ? '#0A6C7D' : '#6B8186' })),
+      tools: [
+        { name: 'Edit text', desc: 'Retype a line of the PDF or add new text.', c: '#3B82F6', bg: '#E8F0FE', d: 'M5 7V4h14v3M12 4v16M9 20h6' },
+        { name: 'Comment & mark up', desc: 'Boxes, clouds, arrows and dimensions.', c: '#E2483D', bg: '#FDECEA', d: 'M4 6h16v12H4zM4 21h10' },
+        { name: 'PIN site photos', desc: 'Numbered pins with photos; export a report.', c: '#E03616', bg: '#FDEBE6', d: 'M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11zM12 8.2a1.8 1.8 0 1 0 0 3.6a1.8 1.8 0 1 0 0-3.6' },
+        { name: 'Merge PDFs', desc: 'Combine several files into one, in order.', c: '#8B5CF6', bg: '#F1ECFE', d: 'M4 4h7v7H4zM13 13h7v7h-7zM11 7.5h4a2 2 0 0 1 2 2V13' },
+        { name: 'Organize pages', desc: 'Reorder, rotate, insert or remove pages.', c: '#22A06B', bg: '#E6F6EE', d: 'M3 4h7v9H3zM14 4h7v9h-7zM6 17v3h12v-3' },
+        { name: 'Extract & split', desc: 'Pull out pages as one PDF or many.', c: '#0EA5E9', bg: '#E2F4FC', d: 'M14 3v5h5M19 11V8l-5-5H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4M17 14v7M14 18l3 3 3-3' },
+        { name: 'Fill & sign', desc: 'Complete forms and add your signature.', c: '#0F766E', bg: '#E0F2F0', d: 'M3 17c3 0 4-6 6-6s1 5 3 5 3-3 5-3M3 21h18' },
+        { name: 'PDF to JPG', desc: 'Save pages as images at print quality.', c: '#F59E0B', bg: '#FEF4E2', d: 'M3 4h18v16H3zM4 17l5-5 4 4 3-3 4 4' },
+        { name: 'Translate', desc: 'Read a translation beside each page.', c: '#EC4899', bg: '#FDE8F3', d: 'M12 3a9 9 0 1 0 0 18a9 9 0 1 0 0-18M3 12h18M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18' }
+      ],
+      files: [
+        { name: 'SDS-JD-048 Main Entrance Door.pdf', pages: '4 pages · 6 marks', date: 'Today', size: '3.2 MB', tag: 'Edited', tagBg: '#E2F4F8', tagC: '#0A6C7D' },
+        { name: 'Site Survey — Level 2.pdf', pages: '12 pages · 18 pins', date: 'Yesterday', size: '8.4 MB', tag: 'Local', tagBg: '#F2F5F6', tagC: '#51686E' },
+        { name: 'Joinery Schedule Rev B.pdf', pages: '6 pages', date: '22/09/2026', size: '1.1 MB', tag: 'Local', tagBg: '#F2F5F6', tagC: '#51686E' },
+        { name: 'Contract — Signed.pdf', pages: '9 pages · signed', date: '18/09/2026', size: '640 KB', tag: 'Signed', tagBg: '#E6F6EE', tagC: '#1A7F54' },
+        { name: 'Kitchen Elevations.pdf', pages: '3 pages', date: '15/09/2026', size: '2.7 MB', tag: 'Local', tagBg: '#F2F5F6', tagC: '#51686E' }
+      ],
+      apps: [
+        { label: 'WhatsApp', bg: '#25A35A', d: 'M4 20l1.3-3.9A8 8 0 1 1 8 19z' },
+        { label: 'Email', bg: '#2F7FE6', d: 'M3 6h18v12H3zM3 7l9 6 9-6' },
+        { label: 'Print', bg: '#0B2A31', d: 'M6 9V3h12v6M6 18H4v-7h16v7h-2M6 14h12v7H6z' },
+        { label: 'More', bg: '#8FA2A6', d: 'M6 12h.01M12 12h.01M18 12h.01' }
+      ],
+      comments: [
+        { i: 'RK', bg: '#1D9BB2', who: 'Ravi K.', when: '10 min', text: 'Leaf width looks narrow for the DDA clear opening — please confirm.' },
+        { i: 'SM', bg: '#8B5CF6', who: 'Sara M.', when: '1 h', text: 'Handles approved. Change finish to satin bronze.' },
+        { i: 'AD', bg: '#06303A', who: 'You', when: 'now', text: 'Updated — revised elevation on page 3.' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>
