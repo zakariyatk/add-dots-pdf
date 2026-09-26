@@ -1,0 +1,12 @@
+{
+  "name": "@adddots/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}

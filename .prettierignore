@@ -1,0 +1,9 @@
+# The v1 app keeps its own formatting until each file moves into packages/engine,
+# so the history of those files stays readable.
+apps/web/public/
+apps/web/index.html
+legacy/
+design/
+dist/
+.turbo/
+package-lock.json
