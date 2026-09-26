@@ -36,6 +36,7 @@ const SHELL = [
   'css/app.css',
   'css/pro.css',
   'css/light.css',
+  'js/engine.js',
   'js/core.js',
   'js/navigate.js',
   'js/annotate.js',

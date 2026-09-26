@@ -3,11 +3,15 @@
   const $ = function (id) { return document.getElementById(id); };
   const SVGNS = 'http://www.w3.org/2000/svg';
 
-  if (!window.pdfjsLib || !window.PDFLib) {
+  if (!window.pdfjsLib || !window.PDFLib || !window.ADDPDFEngine) {
     $('errMsg').hidden = false;
     $('errMsg').textContent = 'The PDF libraries did not load. Check the connection and reload this page.';
     return;
   }
+  /* The engine (packages/engine) now owns mark geometry, styling and saving.
+     The functions below keep their names so every module calling them through
+     ADDPDF is unchanged; they hand the work to the engine. */
+  const E = window.ADDPDFEngine;
   /* Vendored locally: the worker used to come from a CDN, which quietly broke
      the "nothing leaves this device" promise and the offline story. */
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/vendor/pdf.worker.min.js';
@@ -33,19 +37,13 @@
   const WIDTHS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4, 5, 6];
   /* mark styling: dash patterns are multiples of the stroke width, so a thick
      dashed line keeps the same rhythm as a thin one */
-  const DASH_N = [null, [4, 3], [1, 2.2]];
   const CAP_CSS = ['butt', 'round', 'square'];
   const JOIN_CSS = ['miter', 'round', 'bevel'];
   const STYLE_NAME = ['Solid', 'Dashed', 'Dotted'];
-  const PDF_CAP = [PDFLib.LineCapStyle.Butt, PDFLib.LineCapStyle.Round, PDFLib.LineCapStyle.Projecting];
-  const PDF_JOIN = [PDFLib.LineJoinStyle.Miter, PDFLib.LineJoinStyle.Round, PDFLib.LineJoinStyle.Bevel];
-  function shOp(s) { return s.o == null ? 1 : s.o; }
-  function shCap(s) { return s.cap == null ? 1 : s.cap; }
-  function shJoin(s) { return s.j == null ? 1 : s.j; }
-  function dashOf(s, sw) {
-    const d = DASH_N[s.d || 0];
-    return d ? d.map(function (n) { return +(Math.max(0.15, n * sw)).toFixed(2); }) : null;
-  }
+  function shOp(s) { return E.shOp(s); }
+  function shCap(s) { return E.shCap(s); }
+  function shJoin(s) { return E.shJoin(s); }
+  function dashOf(s, sw) { return E.dashOf(s, sw); }
 
   const S = {
     sources: [], items: [],
@@ -129,42 +127,19 @@
     times: '"Times New Roman", Times, serif',
     cour: '"Courier New", Courier, monospace'
   };
-  function fontIdx(b, i) { return (b ? 1 : 0) + (i ? 2 : 0); }
+  function fontIdx(b, i) { return E.fontIdx(b, i); }
 
-  /* scratch document, used only to measure standard-font text widths */
+  /* standard-font text widths; null for the moment it takes to embed the fonts */
   let measure = null;
-  (async function () {
-    try {
-      const d = await PDFLib.PDFDocument.create();
-      const m = {};
-      for (const k of Object.keys(FONTS)) {
-        m[k] = [];
-        for (let i = 0; i < 4; i++) m[k].push(await d.embedFont(FONTS[k][i]));
-      }
-      measure = m;
-    } catch (e) { measure = null; }
-  })();
+  E.createTextMeasurer().then(function (m) { measure = m; }, function () { measure = null; });
 
   function textWidth(item, line) {
-    if (!measure) return null;
-    try { return measure[item.f][fontIdx(item.b, item.i)].widthOfTextAtSize(line, item.size); }
-    catch (e) { return null; }
+    return measure ? measure(item, line) : null;
   }
   const WINANSI_OK = /^[\u0000-\u00FF\u20AC\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u017D\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u017E\u0178\n]*$/;
 
-  function hexRgb(h) {
-    const n = parseInt(h.slice(1), 16);
-    return PDFLib.rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
-  }
-  function arrowHead(ax, ay, bx, by, w) {
-    const dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1;
-    const ux = dx / len, uy = dy / len, hl = Math.max(9, w * 4), a = 0.42;
-    const ca = Math.cos(a), sa = Math.sin(a);
-    return [
-      [bx - (ux * ca - uy * sa) * hl, by - (uy * ca + ux * sa) * hl],
-      [bx - (ux * ca + uy * sa) * hl, by - (uy * ca - ux * sa) * hl]
-    ];
-  }
+  function hexRgb(h) { return E.hexRgb(h); }
+  function arrowHead(ax, ay, bx, by, w) { return E.arrowHead(ax, ay, bx, by, w); }
 
   /* ---------------- opening ---------------- */
   let srcId = 0;
@@ -902,36 +877,15 @@
 
   /* ---- mark geometry: every mark is stored in PDF points, so move, resize and
      rotate all happen in PDF space and the screen, the JPGs and the PDF agree ---- */
-  function rotPt(p, c, deg) {
-    if (!deg) return [p[0], p[1]];
-    const t = deg * Math.PI / 180, cs = Math.cos(t), sn = Math.sin(t);
-    const x = p[0] - c[0], y = p[1] - c[1];
-    return [c[0] + x * cs - y * sn, c[1] + x * sn + y * cs];
-  }
-  function boxOf(s) {
-    return { x1: Math.min(s.a[0], s.b[0]), y1: Math.min(s.a[1], s.b[1]),
-             x2: Math.max(s.a[0], s.b[0]), y2: Math.max(s.a[1], s.b[1]) };
-  }
-  function shapeMid(s) { return [(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2]; }
+  function rotPt(p, c, deg) { return E.rotPt(p, c, deg); }
+  function boxOf(s) { return E.boxOf(s); }
+  function shapeMid(s) { return E.shapeMid(s); }
   /* the four corners of a box, turned by its own rotation */
-  function rectCorners(s) {
-    const b = boxOf(s), c = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
-    const q = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
-    return s.r ? q.map(function (p) { return rotPt(p, c, s.r); }) : q;
-  }
+  function rectCorners(s) { return E.rectCorners(s); }
   /* text turns about its own anchor, which is also where pdf-lib turns it */
-  function rotCenter(s) {
-    return s.t === 'text' ? [s.a[0], s.a[1]] : shapeMid(s);
-  }
+  function rotCenter(s) { return E.rotCenter(s); }
   /* the un-turned footprint of a text mark, in PDF points */
-  function textRect(s) {
-    if (s.patch) return { x: s.patch.x, y: s.patch.y, w: s.patch.w, h: s.patch.h };
-    const lines = String(s.text).split('\n');
-    let wid = 0;
-    lines.forEach(function (l) { wid = Math.max(wid, textWidth(s, l) || l.length * s.size * 0.5); });
-    const hgt = s.size * 1.2 * lines.length;
-    return { x: s.a[0], y: s.a[1] - hgt + s.size, w: Math.max(wid, s.size), h: hgt };
-  }
+  function textRect(s) { return E.textRect(s, textWidth); }
   /* that footprint as four viewport points, turned */
   function textQuad(s, vp) {
     const r = textRect(s), c = rotCenter(s);
@@ -942,17 +896,7 @@
   /* baseline origin of one line of a text mark, turned with the rest.
      lineWidth is that one line's own width — needed to offset centre- and
      right-aligned lines off the box's left edge, which is s.a[0] itself. */
-  function lineOrigin(s, li, lineWidth) {
-    const d = li * s.size * 1.2;
-    let dx = 0;
-    if (s.align === 'center' || s.align === 'right') {
-      const W = textRect(s).w, lw = lineWidth || 0;
-      dx = s.align === 'center' ? (W - lw) / 2 : (W - lw);
-    }
-    const base = [s.a[0] + dx, s.a[1] - d];
-    if (!s.r) return base;
-    return rotPt(base, [s.a[0], s.a[1]], s.r);
-  }
+  function lineOrigin(s, li, lineWidth) { return E.lineOrigin(s, li, lineWidth, textWidth); }
   function vpts(q) { return q.map(function (p) { return p[0] + ',' + p[1]; }).join(' '); }
 
   function textEl(it, s, vp, idx) {
@@ -4634,181 +4578,20 @@
   /* ---------------- saving ---------------- */
   /* Source documents are kept in an optional cache so that splitting a file page by
      page does not re-parse the same original once for every page it produces. */
-  async function loadSrc(s, cache) {
-    if (cache && cache.has(s.id)) return cache.get(s.id);
-    const d = await PDFLib.PDFDocument.load(s.bytes, { ignoreEncryption: true });
-    if (cache) cache.set(s.id, d);
-    return d;
-  }
+  async function loadSrc(s, cache) { return E.loadSrc(s, cache); }
 
-  /* rebuilds the given items into a fresh PDF, carrying rotation, crop, marks and text */
+  /* rebuilds the given items into a fresh PDF, carrying rotation, crop, marks and
+     text. The work is in the engine; core supplies what only it knows: the
+     modules' painters and hooks, and how photo pins are drawn. */
   async function buildPdf(items, cache, opts) {
-    const out = await PDFLib.PDFDocument.create();
-    const embedded = {};
-    const hasPins = items.some(function (it) {
-      return it.shapes.some(function (s) { return s.t === 'pin' && S.locs[s.id]; });
+    return E.buildPdf(items, cache, opts, {
+      measure: textWidth,
+      fontNeeds: EXT.fontNeeds,
+      shapePainters: EXT.shapePainters,
+      prepare: EXT.prepare,
+      finish: EXT.finish,
+      pins: { locs: S.locs, draw: drawPin, addPhotoPages: addPhotoPages }
     });
-    let pinFont = null, pinFontB = null;
-    if (hasPins) {
-      pinFont = await out.embedFont(PDFLib.StandardFonts.Helvetica);
-      pinFontB = await out.embedFont(PDFLib.StandardFonts.HelveticaBold);
-    }
-    const pinsOut = [];
-    for (const it of items) {
-      for (const s of it.shapes) {
-        if (s.t !== 'text' || !String(s.text).trim()) {
-          /* a module mark can ask for a standard font by name */
-          const want = EXT.fontNeeds[s.t] && EXT.fontNeeds[s.t](s);
-          if (want && !embedded[want]) embedded[want] = await out.embedFont(PDFLib.StandardFonts[want]);
-          continue;
-        }
-        const key = s.f + fontIdx(s.b, s.i);
-        if (!embedded[key]) embedded[key] = await out.embedFont(FONTS[s.f][fontIdx(s.b, s.i)]);
-      }
-    }
-    const fontFor = function (s) { return embedded[s.f + fontIdx(s.b, s.i)] || null; };
-
-    const groups = new Map();
-    items.forEach(function (it, i) {
-      if (!groups.has(it.src.id)) groups.set(it.src.id, { src: it.src, idxs: [], slots: [] });
-      const g = groups.get(it.src.id);
-      g.idxs.push(it.num - 1); g.slots.push(i);
-    });
-
-    /* modules that need to embed something (a signature image, a logo) do it
-       here, while we can still await, and stash the result in `extra` */
-    const extra = {};
-    for (const fn of (EXT.prepare || [])) { await fn(out, items, extra); }
-
-    const slots = new Array(items.length);
-    for (const g of groups.values()) {
-      const srcDoc = await loadSrc(g.src, cache);
-      const copied = await out.copyPages(srcDoc, g.idxs);
-      copied.forEach(function (p, k) { slots[g.slots[k]] = p; });
-    }
-
-    slots.forEach(function (p, i) {
-      const it = items[i];
-
-      /* text patches and text first, so marks sit on top */
-      it.shapes.forEach(function (s) {
-        if (s.t !== 'text') return;
-        if (s.bg) {
-          const r = textRect(s);
-          const bo = s.r ? rotPt([r.x, r.y], [s.a[0], s.a[1]], s.r) : [r.x, r.y];
-          p.drawRectangle({
-            x: bo[0], y: bo[1], width: r.w, height: r.h,
-            rotate: PDFLib.degrees(s.r || 0),
-            color: hexRgb(s.bg), opacity: s.bgOp == null ? 1 : s.bgOp, borderWidth: 0
-          });
-        }
-        if (s.patch) {
-          /* pdf-lib turns a rectangle about its own x,y, so move that corner round
-             the anchor first and the block lands exactly where the screen shows it */
-          const po = s.r ? rotPt([s.patch.x, s.patch.y], [s.a[0], s.a[1]], s.r)
-                         : [s.patch.x, s.patch.y];
-          p.drawRectangle({
-            x: po[0], y: po[1], width: s.patch.w, height: s.patch.h,
-            rotate: PDFLib.degrees(s.r || 0),
-            color: hexRgb(s.patch.c), borderWidth: 0
-          });
-        }
-        const txt = String(s.text);
-        if (!txt.trim()) return;
-        const f = fontFor(s);
-        if (!f) return;
-        txt.split('\n').forEach(function (line, li) {
-          if (!line) return;
-          const lineW = textWidth(s, line) || 0;
-          const lo = lineOrigin(s, li, lineW);
-          p.drawText(line, {
-            x: lo[0], y: lo[1], rotate: PDFLib.degrees(s.r || 0),
-            size: s.size, font: f, color: hexRgb(s.c), opacity: shOp(s)
-          });
-          /* standard PDF fonts carry no underline/strike glyphs — draw the
-             line ourselves, pivoted about the same baseline point as the text
-             so it turns with it */
-          if (s.u || s.k) {
-            const w = lineW;
-            const th = Math.max(0.5, s.size * 0.06);
-            /* offset above the baseline: negative dips below it (underline),
-               positive rises through the glyphs (strikethrough) */
-            [s.u ? -s.size * 0.08 : null, s.k ? s.size * 0.3 : null].forEach(function (off) {
-              if (off == null) return;
-              const corner = [lo[0], lo[1] + off];
-              const o0 = s.r ? rotPt(corner, lo, s.r) : corner;
-              p.drawRectangle({
-                x: o0[0], y: o0[1], width: w, height: th,
-                rotate: PDFLib.degrees(s.r || 0),
-                color: hexRgb(s.c), opacity: shOp(s), borderWidth: 0
-              });
-            });
-          }
-        });
-      });
-
-      it.shapes.forEach(function (s) {
-        if (s.t === 'text' || s.t === 'pin') return;
-        if (EXT.shapePainters[s.t]) {
-          EXT.shapePainters[s.t](p, s, { out: out, doc: out, it: it, index: i, fonts: embedded, extra: extra });
-          return;
-        }
-        const col = hexRgb(s.c), th = s.w;
-        const op = shOp(s), da = dashOf(s, th);
-        const cap = PDF_CAP[shCap(s)];
-        if (s.t === 'rect') {
-          const bx = boxOf(s), mid = [(bx.x1 + bx.x2) / 2, (bx.y1 + bx.y2) / 2];
-          /* pdf-lib turns a rectangle about its own x,y, so move that corner first */
-          const o0 = s.r ? rotPt([bx.x1, bx.y1], mid, s.r) : [bx.x1, bx.y1];
-          const opts = {
-            x: o0[0], y: o0[1], width: bx.x2 - bx.x1, height: bx.y2 - bx.y1,
-            rotate: PDFLib.degrees(s.r || 0),
-            borderColor: col, borderWidth: th, borderOpacity: op
-          };
-          if (s.fill) { opts.color = hexRgb(s.fill); opts.opacity = op; }
-          if (da) opts.borderDashArray = da;
-          p.pushOperators(PDFLib.pushGraphicsState(),
-                          PDFLib.setLineJoin(PDF_JOIN[shJoin(s)]),
-                          PDFLib.setLineCap(cap));
-          p.drawRectangle(opts);
-          p.pushOperators(PDFLib.popGraphicsState());
-        } else {
-          const line = { start: { x: s.a[0], y: s.a[1] }, end: { x: s.b[0], y: s.b[1] },
-                         thickness: th, color: col, opacity: op, lineCap: cap };
-          if (da) { line.dashArray = da; line.dashPhase = 0; }
-          p.drawLine(line);
-          if (s.t === 'arrow') {
-            const h = arrowHead(s.a[0], s.a[1], s.b[0], s.b[1], th);
-            h.forEach(function (q) {                       /* the head stays solid */
-              p.drawLine({ start: { x: q[0], y: q[1] }, end: { x: s.b[0], y: s.b[1] },
-                           thickness: th, color: col, opacity: op, lineCap: cap });
-            });
-          }
-        }
-      });
-
-      if (it.crop) {
-        p.setCropBox(it.crop.x, it.crop.y, it.crop.w, it.crop.h);
-        p.setMediaBox(it.crop.x, it.crop.y, it.crop.w, it.crop.h);
-      }
-      const turned = (((p.getRotation().angle) || 0) + it.rot) % 360;
-      it.shapes.forEach(function (s) {
-        if (s.t !== 'pin' || !S.locs[s.id]) return;
-        drawPin(p, s, S.locs[s.id], (turned + 360) % 360, pinFontB);
-        pinsOut.push({ s: s, L: S.locs[s.id], outPage: p, pageNo: i + 1 });
-      });
-      if (it.rot) {
-        const cur = (p.getRotation().angle) || 0;
-        p.setRotation(PDFLib.degrees(((cur + it.rot) % 360 + 360) % 360));
-      }
-      out.addPage(p);
-    });
-
-    if (opts && opts.photos && pinsOut.length) await addPhotoPages(out, pinsOut, pinFont, pinFontB);
-
-    for (const fn of (EXT.finish || [])) { await fn(out, items, slots, extra, opts); }
-
-    return out.save();
   }
 
   async function saveAs(name) {

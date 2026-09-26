@@ -11,7 +11,7 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "turbo run dev --filter=@adddots/web",
+    "dev": "turbo run dev --filter=@adddots/web...",
     "build": "turbo run build",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",

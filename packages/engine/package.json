@@ -10,7 +10,15 @@
     ".": "./src/index.ts"
   },
   "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "pdf-lib": "1.17.1"
+  },
+  "devDependencies": {
+    "pdfjs-dist": "3.11.174"
   }
 }

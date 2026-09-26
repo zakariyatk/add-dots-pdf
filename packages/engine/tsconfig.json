@@ -1,4 +1,9 @@
 {
   "extends": "../../tsconfig.base.json",
-  "include": ["src/**/*.ts", "test/**/*.ts"]
+  "compilerOptions": {
+    /* for the tests and the build config; src/ itself uses no Node APIs, so the
+       engine runs the same in the browser, Tauri and the Expo WebView */
+    "types": ["node"]
+  },
+  "include": ["src/**/*.ts", "test/**/*.ts", "vite.config.ts"]
 }

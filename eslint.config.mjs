@@ -9,6 +9,7 @@ export default tseslint.config(
       '**/dist/**',
       '**/.turbo/**',
       'apps/web/public/js/vendor/**',
+      'apps/web/public/js/engine.js',
       'design/**',
       'legacy/**',
     ],

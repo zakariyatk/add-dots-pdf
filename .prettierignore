@@ -7,3 +7,6 @@ design/
 dist/
 .turbo/
 package-lock.json
+
+# recorded output, written by the /__golden/ recorder
+packages/engine/test/golden/
