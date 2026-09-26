@@ -10,3 +10,4 @@ export * from './painters/draw';
 export * from './painters/docops';
 export * from './painters/leader';
 export * from './painters/insert';
+export * from './pages';

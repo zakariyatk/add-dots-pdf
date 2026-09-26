@@ -13,6 +13,7 @@
 
   X.on('ready', function () {
     const S = X.S, $ = X.$, PDFLib = X.PDFLib, pdfjsLib = X.pdfjsLib;
+    const E = window.ADDPDFEngine;
 
     /* ---------------- ribbon buttons ---------------- */
 
@@ -151,26 +152,11 @@
     }
     function splitGroups() {
       const n = S.items.length, how = splitHow();
-      if (how === 'each') return S.items.map(function (_, i) { return [i]; });
-      if (how === 'every') {
-        const k = Math.max(1, parseInt($('splitN').value, 10) || 1), out = [];
-        for (let i = 0; i < n; i += k) {
-          out.push(Array.from({ length: Math.min(k, n - i) }, function (_, j) { return i + j; }));
-        }
-        return out;
-      }
+      if (how === 'each') return E.splitEach(n);
+      if (how === 'every') return E.splitEvery(n, $('splitN').value);
       return parseRanges($('splitR').value, n);
     }
-    function parseRanges(text, n) {
-      return String(text || '').split(',').map(function (part) {
-        const m = part.trim().match(/^(\d+)\s*(?:[-–]\s*(\d+))?$/);
-        if (!m) return null;
-        const a = Math.max(1, Math.min(n, +m[1]));
-        const b = m[2] ? Math.max(1, Math.min(n, +m[2])) : a;
-        const lo = Math.min(a, b), hi = Math.max(a, b);
-        return Array.from({ length: hi - lo + 1 }, function (_, j) { return lo - 1 + j; });
-      }).filter(function (g) { return g && g.length; });
-    }
+    function parseRanges(text, n) { return E.parseRangeGroups(text, n); }
     function splitNote() {
       /* grey out the inputs that do not belong to the chosen option, so the
          panel says what it is going to do rather than offering three at once */
