@@ -27,7 +27,8 @@ export const FONTS: Readonly<Record<FontFamily, readonly StandardFonts[]>> = {
 };
 
 /** A character the standard fonts can encode (WinAnsi / Windows-1252). */
-const WIN_CH = /[ -~ -ÿ€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/;
+const WIN_CH =
+  /[ -~\u00A0-\u00FF\u20AC\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u017D\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u017E\u0178]/;
 
 /** Text the standard fonts can draw: whitespace becomes a space and anything
     they cannot encode becomes '?', instead of failing the whole save. */
