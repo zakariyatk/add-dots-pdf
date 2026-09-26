@@ -150,10 +150,25 @@ export async function buildPdf(
   const slots: PDFPage[] = new Array(items.length);
   for (const g of groups.values()) {
     const srcDoc = await loadSrc(g.src, cache);
-    const copied = await out.copyPages(srcDoc, g.idxs);
-    copied.forEach((p, k) => {
-      slots[g.slots[k]!] = p;
+    /* pdf-lib reuses objects it has already copied within one copyPages call,
+       so a page used twice (Duplicate) came back sharing its content list, and
+       marks drawn on one copy printed on both. Each repeat gets its own call:
+       first uses in round 0, second uses in round 1, and so on. */
+    const rounds: { idxs: number[]; slots: number[] }[] = [];
+    const uses = new Map<number, number>();
+    g.idxs.forEach((idx, k) => {
+      const r = uses.get(idx) || 0;
+      uses.set(idx, r + 1);
+      const round = rounds[r] || (rounds[r] = { idxs: [], slots: [] });
+      round.idxs.push(idx);
+      round.slots.push(g.slots[k]!);
     });
+    for (const round of rounds) {
+      const copied = await out.copyPages(srcDoc, round.idxs);
+      copied.forEach((p, k) => {
+        slots[round.slots[k]!] = p;
+      });
+    }
   }
 
   slots.forEach((p, i) => {

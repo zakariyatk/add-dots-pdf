@@ -38,7 +38,44 @@ describe('buildPdf matches v1 (golden)', () => {
     });
   });
 
-  it.each(golden.map((g, i) => [i + 1, g] as const))('page %i: content streams', (n, g) => {
-    expect(pages[n - 1]!.streams).toEqual(g.streams);
+  /* Page 4 repeats page 1 of source A. v1 printed page 1's marks on it too (see
+     "a page used twice" below), so it is the one deliberate difference: it now
+     carries only its own source content. */
+  const REPEATED_PAGE = 4;
+
+  it.each(golden.map((g, i) => [i + 1, g] as const).filter(([n]) => n !== REPEATED_PAGE))(
+    'page %i: content streams',
+    (n, g) => {
+      expect(pages[n - 1]!.streams).toEqual(g.streams);
+    },
+  );
+
+  it('page 4 (a repeat of page 1): only its own content, none of page 1’s marks', () => {
+    const sourceContent = golden[0]!.streams[1]!; // page 1's original content, before marks
+    expect(pages[REPEATED_PAGE - 1]!.streams).toEqual([sourceContent]);
+  });
+});
+
+describe('a page used twice (Duplicate)', () => {
+  /* v1 bug: when a source page already had content, pdf-lib handed both copies
+     the same content list, so a mark on one copy printed on both. */
+  it('keeps each copy’s marks on that copy only', async () => {
+    const src = await PDFLib.PDFDocument.create();
+    const f = await src.embedFont(PDFLib.StandardFonts.Helvetica);
+    src.addPage([595.28, 841.89]).drawText('Existing content', { x: 60, y: 780, size: 18, font: f });
+    const source = { id: 'dup', bytes: await src.save() };
+    const box = { t: 'rect', a: [300, 500], b: [400, 560], c: '#E2483D', w: 1 } as const;
+
+    const items: PageItem[] = [
+      { src: source, num: 1, rot: 0, shapes: [] },
+      { src: source, num: 1, rot: 0, shapes: [{ ...box, a: [300, 500], b: [400, 560] }] },
+    ];
+    const [original, copy] = (await digest(
+      PDFLib,
+      await buildPdf(items, null, {}, { measure }),
+    )) as PageDigest[];
+    const boxAt = '1 0 0 1 300 500 cm';
+    expect(copy!.streams.join('')).toContain(boxAt);
+    expect(original!.streams.join('')).not.toContain(boxAt);
   });
 });
