@@ -20,110 +20,28 @@
 
   X.on('ready', function () {
     const S = X.S, $ = X.$, SVGNS = X.SVGNS, PDFLib = X.PDFLib;
+    /* geometry, readings and the PDF painters live in the engine */
+    const E = window.ADDPDFEngine;
 
     /* ---------------- geometry ---------------- */
 
-    function box(s) {
-      return {
-        x1: Math.min(s.a[0], s.b[0]), y1: Math.min(s.a[1], s.b[1]),
-        x2: Math.max(s.a[0], s.b[0]), y2: Math.max(s.a[1], s.b[1])
-      };
-    }
+    function box(s) { return E.boxOf(s); }
 
     /** An ellipse as a ring of points, in PDF space, turned by s.r. */
-    function ellipsePts(s, steps) {
-      const b = box(s);
-      const cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2;
-      const rx = (b.x2 - b.x1) / 2, ry = (b.y2 - b.y1) / 2;
-      const out = [];
-      for (let i = 0; i <= steps; i++) {
-        const t = (i / steps) * Math.PI * 2;
-        const p = [cx + rx * Math.cos(t), cy + ry * Math.sin(t)];
-        out.push(s.r ? X.rotPt(p, [cx, cy], s.r) : p);
-      }
-      return out;
-    }
+    function ellipsePts(s, steps) { return E.ellipsePts(s, steps); }
 
     /**
      * A circular arc through a and b, bulging by `bulge` of the chord length.
      * Returned as points so the screen and the PDF draw the identical curve.
      */
-    function arcPts(s, steps) {
-      const ax = s.a[0], ay = s.a[1], bx = s.b[0], by = s.b[1];
-      const dx = bx - ax, dy = by - ay;
-      const chord = Math.hypot(dx, dy);
-      const k = s.bulge == null ? 0.25 : s.bulge;
-      const h = chord * k;                       /* sagitta */
-      if (chord < 0.01) return [[ax, ay], [bx, by]];
-      if (Math.abs(h) < 0.01) return [[ax, ay], [bx, by]];
-
-      /* unit normal to the chord — which side it bulges */
-      const nx = -dy / chord, ny = dx / chord;
-      const mx = (ax + bx) / 2, my = (ay + by) / 2;
-      const peak = [mx + nx * h, my + ny * h];
-
-      /* circle through a, peak, b: R from chord and sagitta */
-      const R = (Math.abs(h) / 2) + (chord * chord) / (8 * Math.abs(h));
-      const sign = h >= 0 ? 1 : -1;
-      const cxc = mx + nx * (h - sign * R);
-      const cyc = my + ny * (h - sign * R);
-
-      let a0 = Math.atan2(ay - cyc, ax - cxc);
-      let a1 = Math.atan2(by - cyc, bx - cxc);
-      const ap = Math.atan2(peak[1] - cyc, peak[0] - cxc);
-
-      /* walk the way round that actually passes through the peak */
-      const norm = function (t) { while (t < 0) t += Math.PI * 2; while (t >= Math.PI * 2) t -= Math.PI * 2; return t; };
-      let sweep = norm(a1 - a0);
-      const toPeak = norm(ap - a0);
-      if (toPeak > sweep) sweep -= Math.PI * 2;
-
-      const out = [];
-      for (let i = 0; i <= steps; i++) {
-        const t = a0 + sweep * (i / steps);
-        out.push([cxc + R * Math.cos(t), cyc + R * Math.sin(t)]);
-      }
-      return out;
-    }
+    function arcPts(s, steps) { return E.arcPts(s, steps); }
 
     /**
      * A revision cloud: the box perimeter walked with semicircular bumps
      * pushed outward. The scallop size is kept honest across a long edge by
      * dividing the edge evenly rather than leaving a stub at the end.
      */
-    function cloudPts(s, perBump) {
-      const b = box(s);
-      const r = Math.max(4, s.arc == null ? 9 : s.arc);
-      const corners = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
-      const cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2;
-      const out = [];
-
-      for (let e = 0; e < 4; e++) {
-        const p0 = corners[e], p1 = corners[(e + 1) % 4];
-        const len = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
-        const n = Math.max(1, Math.round(len / (r * 2)));
-        const ux = (p1[0] - p0[0]) / len, uy = (p1[1] - p0[1]) / len;
-        /* outward normal: the edges run clockwise, so this points away */
-        const nx = uy, ny = -ux;
-        const step = len / n;
-
-        for (let i = 0; i < n; i++) {
-          const s0 = [p0[0] + ux * step * i, p0[1] + uy * step * i];
-          const mx = s0[0] + ux * step / 2, my = s0[1] + uy * step / 2;
-          const rad = step / 2;
-          const peak = [mx + nx * rad, my + ny * rad];
-          /* a half turn from s0 to s1, bulging through peak */
-          const base = Math.atan2(s0[1] - my, s0[0] - mx);
-          const dir = ((peak[0] - mx) * -Math.sin(base) + (peak[1] - my) * Math.cos(base)) >= 0 ? 1 : -1;
-          for (let k = 0; k <= perBump; k++) {
-            const t = base + dir * Math.PI * (k / perBump);
-            out.push([mx + rad * Math.cos(t), my + rad * Math.sin(t)]);
-          }
-        }
-      }
-      out.push(out[0]);
-      return s.r ? out.map(function (p) { return X.rotPt(p, [cx, cy], s.r); }) : out;
-    }
+    function cloudPts(s, perBump) { return E.cloudPts(s, perBump); }
 
     /* ---------------- measuring ---------------- */
 
@@ -131,88 +49,41 @@
        calibration is for: measure something you know, say what it really is,
        and every dimension after that reads in those units. */
     /* How much of this unit one PDF point covers at 1:1. A point is 1/72in. */
-    const UNITS = {
-      mm: { label: 'mm', per: 25.4 / 72,   dp: 0 },
-      cm: { label: 'cm', per: 2.54 / 72,   dp: 1 },
-      m:  { label: 'm',  per: 0.0254 / 72, dp: 3 },
-      in: { label: 'in', per: 1 / 72,      dp: 2 },
-      pt: { label: 'pt', per: 1,           dp: 0 }
-    };
+    const UNITS = E.UNITS;
 
     /* Drawing scales. A plan issued at 1:50 draws a 50mm wall as 1mm of paper,
        so a paper measurement is multiplied by the denominator to read back as
        the real thing. */
-    const SCALES = [1, 2, 5, 10, 20, 25, 50, 100, 200, 500];
+    const SCALES = E.SCALES;
 
     /* `denom` is the drawing scale and `unit` what to print. `custom` holds a
        points-to-unit factor worked out by calibrating, which overrides both. */
     let scale = { unit: 'mm', denom: 1, custom: null };
 
-    function perPoint() {
-      if (scale.custom) return scale.custom;
-      return (UNITS[scale.unit] || UNITS.pt).per * scale.denom;
-    }
+    function perPoint() { return E.perPoint(scale); }
 
     function measure(s) {
       return measureLen(Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]));
     }
 
     /** A length in PDF points, as the reading for the current scale and unit. */
-    function measureLen(d) {
-      const v = d * perPoint();
-      const u = UNITS[scale.unit] || UNITS.pt;
-      /* a calibrated reading has no tidy unit behind it, so take the precision
-         from the size of the number instead */
-      const dp = scale.custom ? (v < 10 ? 2 : v < 100 ? 1 : 0) : u.dp;
-      return v.toFixed(dp) + ' ' + u.label;
-    }
+    function measureLen(d) { return E.formatLength(d, scale); }
 
-    function dimLabel(s) {
-      if (s.label != null && s.label !== '') return s.label;
-      if (s.t === 'dimr') return 'R' + measureLen(s.rad);
-      if (s.t === 'dimd') return 'Ø' + measureLen(s.rad * 2);
-      if (s.t === 'dima') {
-        const deg = Math.abs(angGeom(s).sweep) * 180 / Math.PI;
-        return (Math.abs(deg - Math.round(deg)) < 0.05 ? String(Math.round(deg)) : deg.toFixed(1)) + '°';
-      }
-      return measure(s);
-    }
+    function dimLabel(s) { return E.dimLabel(s, scale); }
 
     /* ---- radius, diameter and angle geometry, all in PDF points ---- */
 
     /** a: centre, rad: radius, b: where the reading sits. */
-    function radGeom(s) {
-      const dx = s.b[0] - s.a[0], dy = s.b[1] - s.a[1];
-      const d = Math.hypot(dx, dy);
-      const u = d > 0.01 ? [dx / d, dy / d] : [1, 0];
-      return {
-        u: u,
-        near: [s.a[0] + u[0] * s.rad, s.a[1] + u[1] * s.rad],
-        far: [s.a[0] - u[0] * s.rad, s.a[1] - u[1] * s.rad],
-        outside: d > s.rad + 0.5
-      };
-    }
+    function radGeom(s) { return E.radGeom(s); }
 
-    function normAng(v) { const T = Math.PI * 2; return ((v % T) + T) % T; }
+    function normAng(v) { return E.normAng(v); }
 
     /** a: vertex, a1/a2: the two arms' directions, l1/l2: how far along each
         the picks were, b: a point on the arc. The arc takes whichever side of
         the arms b is on — so the same corner can read 60° or 300°. */
-    function angGeom(s) {
-      const r = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
-      const pa = Math.atan2(s.b[1] - s.a[1], s.b[0] - s.a[0]);
-      const d = normAng(s.a2 - s.a1);
-      return normAng(pa - s.a1) <= d
-        ? { r: r, start: s.a1, sweep: d }
-        : { r: r, start: s.a2, sweep: Math.PI * 2 - d };
-    }
-    function angPt(s, ang, r) { return [s.a[0] + Math.cos(ang) * r, s.a[1] + Math.sin(ang) * r]; }
-    function arcPtsOf(s, g) {
-      const n = Math.max(12, Math.ceil(Math.abs(g.sweep) * 24));
-      const out = [];
-      for (let i = 0; i <= n; i++) out.push(angPt(s, g.start + g.sweep * i / n, g.r));
-      return out;
-    }
+    function angGeom(s) { return E.angGeom(s); }
+    function angPt(s, ang, r) { return E.angPt(s, ang, r); }
+    function arcPtsOf(s, g) { return E.arcPtsOf(s, g); }
 
     /** The circle through three points, or null if they are (near enough) in a line. */
     function circle3(p, q, r) {
@@ -660,7 +531,7 @@
     };
 
     /** The reading's size on paper, in points — shared by screen and PDF. */
-    function dimTextPt(s) { return Math.max(10, Math.min(14, s.w * 4 + 6)); }   /* thin lines keep a readable 10pt reading */
+    function dimTextPt(s) { return E.dimTextPt(s); }
 
     /* core draws the grips; tell it which style each mark wants */
     X.handleKind.ellipse = 'rect';
@@ -670,122 +541,9 @@
 
     /* ---------------- writing into the PDF ---------------- */
 
-    X.fontNeeds.dim = function () { return 'HelveticaBold'; };
-
-    function paintPts(p, pts, s, solid) {
-      const col = X.hexRgb(s.c), th = s.w;
-      const op = X.shOp(s);
-      const da = solid ? null : X.dashOf(s, th);
-      const cap = [PDFLib.LineCapStyle.Butt, PDFLib.LineCapStyle.Round,
-                   PDFLib.LineCapStyle.Projecting][X.shCap(s)];
-      for (let i = 1; i < pts.length; i++) {
-        const line = {
-          start: { x: pts[i - 1][0], y: pts[i - 1][1] },
-          end:   { x: pts[i][0],     y: pts[i][1] },
-          thickness: th, color: col, opacity: op, lineCap: cap
-        };
-        if (da) { line.dashArray = da; line.dashPhase = 0; }
-        p.drawLine(line);
-      }
-    }
-
-    X.shapePainters.ellipse = function (p, s) {
-      /* a filled ellipse is one operator and hairline-accurate, so use the
-         native call whenever there is no dash pattern to honour */
-      const b = box(s);
-      if (!s.dash && !s.r) {
-        const opts = {
-          x: (b.x1 + b.x2) / 2, y: (b.y1 + b.y2) / 2,
-          xScale: (b.x2 - b.x1) / 2, yScale: (b.y2 - b.y1) / 2,
-          borderColor: X.hexRgb(s.c), borderWidth: s.w, borderOpacity: X.shOp(s)
-        };
-        if (s.fill) { opts.color = X.hexRgb(s.fill); opts.opacity = X.shOp(s); }
-        p.drawEllipse(opts);
-        return;
-      }
-      paintPts(p, ellipsePts(s, 96), s);
-    };
-
-    X.shapePainters.cloud = function (p, s) { paintPts(p, cloudPts(s, 8), s, true); };
-    X.shapePainters.arc   = function (p, s) { paintPts(p, arcPts(s, 64), s); };
-
-    X.shapePainters.dim = function (p, s, ctx) {
-      const col = X.hexRgb(s.c), th = s.w, op = X.shOp(s);
-      const st = s.ds || 'arrow';
-      const A = { x: s.a[0], y: s.a[1] }, B = { x: s.b[0], y: s.b[1] };
-      p.drawLine({ start: A, end: B, thickness: th, color: col, opacity: op });
-
-      const dx = B.x - A.x, dy = B.y - A.y;
-      const len = Math.hypot(dx, dy) || 1;
-      const ux = dx / len, uy = dy / len;
-      const tick = st === 'arrow' ? 4 + th : 6 + th;
-      const nx = -uy * tick, ny = ux * tick;
-      [A, B].forEach(function (e) {
-        p.drawLine({
-          start: { x: e.x - nx, y: e.y - ny }, end: { x: e.x + nx, y: e.y + ny },
-          thickness: th, color: col, opacity: op
-        });
-      });
-      if (st === 'tick') {
-        /* the 45° slash; page space runs y up, so this is the screen's
-           slash seen the right way round */
-        const h = 3.5 + th * 1.2;
-        const tx = (ux - uy) / Math.SQRT2 * h, ty = (uy + ux) / Math.SQRT2 * h;
-        [A, B].forEach(function (e) {
-          p.drawLine({
-            start: { x: e.x - tx, y: e.y - ty }, end: { x: e.x + tx, y: e.y + ty },
-            thickness: th * 1.8, color: col, opacity: op
-          });
-        });
-      } else if (st === 'dot') {
-        const r = 1.6 + th * 0.9;
-        [A, B].forEach(function (e) {
-          p.drawCircle({ x: e.x, y: e.y, size: r, color: col, opacity: op, borderWidth: 0 });
-        });
-      } else {
-        [[B, A], [A, B]].forEach(function (pair) {
-          const h = X.arrowHead(pair[1].x, pair[1].y, pair[0].x, pair[0].y, th * 1.1);
-          h.forEach(function (q) {
-            p.drawLine({
-              start: { x: q[0], y: q[1] }, end: { x: pair[0].x, y: pair[0].y },
-              thickness: th, color: col, opacity: op
-            });
-          });
-        });
-      }
-
-      const font = ctx.fonts.HelveticaBold;
-      if (!font) return;
-      const text = dimLabel(s);
-      const size = dimTextPt(s);
-      const tw = font.widthOfTextAtSize(text, size);
-      let ang = Math.atan2(dy, dx) * 180 / Math.PI;
-      if (ang > 90 || ang < -90) ang += 180;
-      const t = ang * Math.PI / 180;
-
-      /* step back half the string along the baseline and lift it clear of the
-         line, then turn — pdf-lib rotates text about its own origin */
-      const mx = (A.x + B.x) / 2, my = (A.y + B.y) / 2;
-      /* ticks and dots: the whole reading clear above the line, as on screen
-         (its middle half a size up, and a capital's middle is ~0.36 size
-         above the baseline) */
-      const lift = st === 'arrow' ? th + 2 : th + 2 + size * 0.14;
-      const ox = mx - Math.cos(t) * tw / 2 - Math.sin(t) * lift;
-      const oy = my - Math.sin(t) * tw / 2 + Math.cos(t) * lift;
-
-      /* a pale plate behind it, so the reading survives a busy drawing */
-      if (st === 'arrow') p.drawRectangle({
-        x: ox - Math.cos(t) * 2 + Math.sin(t) * 1.5,
-        y: oy - Math.sin(t) * 2 - Math.cos(t) * 1.5,
-        width: tw + 4, height: size + 3,
-        rotate: PDFLib.degrees(ang),
-        color: PDFLib.rgb(1, 1, 1), opacity: 0.8, borderWidth: 0
-      });
-      p.drawText(text, {
-        x: ox, y: oy, size: size, font: font, color: col,
-        rotate: PDFLib.degrees(ang)
-      });
-    };
+    /* read at save time, so the readings match what the editor shows */
+    Object.assign(X.shapePainters, E.drawPainters(function () { return scale; }));
+    Object.assign(X.fontNeeds, E.drawFontNeeds);
 
     /* ---------------- the tools ---------------- */
 
@@ -977,23 +735,7 @@
       el.style.strokeDasharray = 'none';
       g.appendChild(el);
     }
-    /* The same end, written into the PDF (y runs up there). */
-    function endPaint(p, P, u, s) {
-      const col = X.hexRgb(s.c), th = s.w, op = X.shOp(s), st = s.ds || 'arrow';
-      if (st === 'tick') {
-        const h = 3.5 + th * 1.2;
-        const tx = (u[0] - u[1]) / Math.SQRT2 * h, ty = (u[1] + u[0]) / Math.SQRT2 * h;
-        p.drawLine({ start: { x: P[0] - tx, y: P[1] - ty }, end: { x: P[0] + tx, y: P[1] + ty },
-          thickness: th * 1.8, color: col, opacity: op });
-      } else if (st === 'dot') {
-        p.drawCircle({ x: P[0], y: P[1], size: 1.6 + th * 0.9, color: col, opacity: op, borderWidth: 0 });
-      } else {
-        X.arrowHead(P[0] - u[0] * 10, P[1] - u[1] * 10, P[0], P[1], th * 1.1).forEach(function (q) {
-          p.drawLine({ start: { x: q[0], y: q[1] }, end: { x: P[0], y: P[1] },
-            thickness: th, color: col, opacity: op });
-        });
-      }
-    }
+
     function lineEl(p, q) {
       const l = document.createElementNS(SVGNS, 'line');
       l.setAttribute('x1', p[0]); l.setAttribute('y1', p[1]);
@@ -1043,50 +785,11 @@
     X.shapeRenderers.dimr = radialRender;
     X.shapeRenderers.dimd = radialRender;
 
-    function radialPaint(p, s, ctx) {
-      const col = X.hexRgb(s.c), th = s.w, op = X.shOp(s), G = radGeom(s);
-      const from = s.t === 'dimd' ? G.far : s.a, to = G.outside ? s.b : G.near;
-      p.drawLine({ start: { x: from[0], y: from[1] }, end: { x: to[0], y: to[1] },
-        thickness: th, color: col, opacity: op });
-      endPaint(p, G.near, G.u, s);
-      if (s.t === 'dimd') endPaint(p, G.far, [-G.u[0], -G.u[1]], s);
-
-      const font = ctx.fonts.HelveticaBold;
-      if (!font) return;
-      const text = dimLabel(s), size = dimTextPt(s);
-      const tw = font.widthOfTextAtSize(text, size);
-      const y = s.b[1] + th + 2;
-      if (G.outside) {
-        const dir = s.b[0] >= s.a[0] ? 1 : -1;
-        p.drawLine({ start: { x: s.b[0], y: s.b[1] }, end: { x: s.b[0] + dir * (tw + 4), y: s.b[1] },
-          thickness: th, color: col, opacity: op });
-        p.drawText(text, { x: dir > 0 ? s.b[0] + 2 : s.b[0] - 2 - tw, y: y, size: size, font: font, color: col });
-      } else {
-        p.drawText(text, { x: s.b[0] - tw / 2, y: y, size: size, font: font, color: col });
-      }
-    }
-    X.shapePainters.dimr = radialPaint;
-    X.shapePainters.dimd = radialPaint;
-
     /* --- angular: an arc between the arms, with extension lines out to it
        when it sits beyond where the arms were picked --- */
-    function armExtensions(s, g) {
-      const out = [];
-      [[s.a1, s.l1], [s.a2, s.l2]].forEach(function (arm) {
-        if (g.r > arm[1] + 3) out.push([angPt(s, arm[0], arm[1] + 2), angPt(s, arm[0], g.r + 3)]);
-      });
-      return out;
-    }
-    function angEnds(s, g) {
-      const e = g.start + g.sweep;
-      return [
-        { p: angPt(s, g.start, g.r), u: [Math.sin(g.start), -Math.cos(g.start)] },
-        { p: angPt(s, e, g.r), u: [-Math.sin(e), Math.cos(e)] }
-      ];
-    }
-    function angLabelPt(s, g, size) {
-      return angPt(s, g.start + g.sweep / 2, g.r + 3 + size * 0.75);
-    }
+    function armExtensions(s, g) { return E.armExtensions(s, g); }
+    function angEnds(s, g) { return E.angEnds(s, g); }
+    function angLabelPt(s, g, size) { return E.angLabelPt(s, g, size); }
 
     X.shapeRenderers.dima = function (it, s, vp, idx) {
       const g = document.createElementNS(SVGNS, 'g');
@@ -1106,21 +809,6 @@
       const L = P(angLabelPt(s, G, size));
       g.appendChild(textEl(dimLabel(s), L[0], L[1], 'middle', Math.max(7, size * k), s, true));
       return g;
-    };
-
-    X.shapePainters.dima = function (p, s, ctx) {
-      const col = X.hexRgb(s.c), th = s.w, op = X.shOp(s), G = angGeom(s);
-      paintPts(p, arcPtsOf(s, G), s);
-      armExtensions(s, G).forEach(function (seg) {
-        p.drawLine({ start: { x: seg[0][0], y: seg[0][1] }, end: { x: seg[1][0], y: seg[1][1] },
-          thickness: th, color: col, opacity: op });
-      });
-      angEnds(s, G).forEach(function (e) { endPaint(p, e.p, e.u, s); });
-      const font = ctx.fonts.HelveticaBold;
-      if (!font) return;
-      const text = dimLabel(s), size = dimTextPt(s);
-      const L = angLabelPt(s, G, size), tw = font.widthOfTextAtSize(text, size);
-      p.drawText(text, { x: L[0] - tw / 2, y: L[1] - size * 0.36, size: size, font: font, color: col });
     };
 
     ['dimr', 'dimd', 'dima'].forEach(function (t) {

@@ -138,41 +138,12 @@
 
     /* rotate a box corner about the box's own centre for export, the same
        way core.js rotates a text patch about its anchor */
-    function exportCorner(s) {
-      const bx = X.boxOf(s), mid = X.shapeMid(s);
-      return s.r ? X.rotPt([bx.x1, bx.y1], mid, s.r) : [bx.x1, bx.y1];
-    }
-    function paintBorder(p, s) {
-      if (!s.w) return;
-      const bx = X.boxOf(s), o0 = exportCorner(s);
-      p.drawRectangle({
-        x: o0[0], y: o0[1], width: bx.x2 - bx.x1, height: bx.y2 - bx.y1,
-        rotate: PDFLib.degrees(s.r || 0), borderColor: X.hexRgb(s.c), borderWidth: s.w
-      });
-    }
 
     /* ================= shared image cache (image + video poster) ================= */
-    X.prepare.push(async function (out, items, extra) {
-      extra.insImgs = extra.insImgs || {};
-      for (const it of items) {
-        for (const s of it.shapes) {
-          if ((s.t !== 'image' && s.t !== 'video') || !s.url || extra.insImgs[s.url]) continue;
-          try { extra.insImgs[s.url] = await out.embedPng(s.url); }
-          catch (e) { try { extra.insImgs[s.url] = await out.embedJpg(s.url); } catch (e2) { /* unreadable image, skip */ } }
-        }
-      }
-    });
-
-    function paintImageLike(p, s, ctx) {
-      const img = ctx.extra.insImgs && ctx.extra.insImgs[s.url];
-      if (img) {
-        const bx = X.boxOf(s), o0 = exportCorner(s);
-        p.drawImage(img, {
-          x: o0[0], y: o0[1], width: bx.x2 - bx.x1, height: bx.y2 - bx.y1, rotate: PDFLib.degrees(s.r || 0)
-        });
-      }
-      paintBorder(p, s);
-    }
+    /* pictures, video posters and the link and table fonts are embedded,
+       and all four marks painted, by the engine */
+    X.prepare.push(window.ADDPDFEngine.prepareInsert);
+    Object.assign(X.shapePainters, window.ADDPDFEngine.insertPainters);
 
     /* ================= IMAGE ================= */
     X.handleKind.image = 'rect';
@@ -193,7 +164,6 @@
       moveAndClick(g, it, idx, null);
       return g;
     };
-    X.shapePainters.image = paintImageLike;
 
     function placeImage(url, iw, ih, it, center) {
       it = it || currentItem();
@@ -424,17 +394,6 @@
       moveAndClick(g, it, idx, function () { playVideo(s); });
       return g;
     };
-    X.shapePainters.video = function (p, s, ctx) {
-      paintImageLike(p, s, ctx);
-      if (s.src && /^https?:\/\//i.test(s.src)) {
-        const bx = X.boxOf(s);
-        const annot = ctx.doc.context.obj({
-          Type: 'Annot', Subtype: 'Link', Rect: [bx.x1, bx.y1, bx.x2, bx.y2], Border: [0, 0, 0],
-          A: { Type: 'Action', S: 'URI', URI: PDFLib.PDFString.of(s.src) }
-        });
-        p.node.addAnnot(ctx.doc.context.register(annot));
-      }
-    };
 
     function playVideo(s) {
       if (!s.src) { X.toast('No video source for this mark'); return; }
@@ -567,36 +526,6 @@
       tip.textContent = s.url;
       g.appendChild(tip);
       return g;
-    };
-    X.prepare.push(async function (out, items, extra) {
-      const needed = items.some(function (it) { return it.shapes.some(function (s) { return s.t === 'link' && s.style !== 'icon'; }); });
-      if (needed && !extra.linkFont) extra.linkFont = await out.embedFont(PDFLib.StandardFonts.HelveticaBold);
-    });
-    X.shapePainters.link = function (p, s, ctx) {
-      const bx = X.boxOf(s);
-      const w = bx.x2 - bx.x1, h = bx.y2 - bx.y1;
-      const cx = (bx.x1 + bx.x2) / 2, cy = (bx.y1 + bx.y2) / 2;
-      const col = X.hexRgb(s.c || LINK_COLOR);
-      const font = ctx.extra.linkFont;
-      const fs = Math.max(8, Math.min(16, h * 0.55));
-      if (s.style === 'underline' && font) {
-        const label = linkLabel(s);
-        p.drawText(label, { x: bx.x1, y: cy - fs * 0.35, size: fs, font: font, color: col });
-        const lw = font.widthOfTextAtSize(label, fs);
-        p.drawLine({ start: { x: bx.x1, y: cy - fs * 0.42 }, end: { x: bx.x1 + lw, y: cy - fs * 0.42 }, thickness: Math.max(0.5, fs * 0.06), color: col });
-      } else if (s.style === 'button' && font) {
-        p.drawRectangle({ x: bx.x1, y: bx.y1, width: w, height: h, color: col, borderWidth: 0 });
-        const label = linkLabel(s);
-        const lw = font.widthOfTextAtSize(label, fs);
-        p.drawText(label, { x: cx - lw / 2, y: cy - fs * 0.35, size: fs, font: font, color: PDFLib.rgb(1, 1, 1) });
-      } else {
-        p.drawCircle({ x: cx, y: cy, size: Math.min(w, h) / 2, color: col });
-      }
-      const annot = ctx.doc.context.obj({
-        Type: 'Annot', Subtype: 'Link', Rect: [bx.x1, bx.y1, bx.x2, bx.y2], Border: [0, 0, 0],
-        A: { Type: 'Action', S: 'URI', URI: PDFLib.PDFString.of(s.url) }
-      });
-      p.node.addAnnot(ctx.doc.context.register(annot));
     };
 
     function placeLink(url, style, label, it, center) {
@@ -769,43 +698,6 @@
         }
       }
       return g;
-    };
-
-    X.prepare.push(async function (out, items, extra) {
-      const needed = items.some(function (it) { return it.shapes.some(function (s) { return s.t === 'table'; }); });
-      if (needed && !extra.tableFont) extra.tableFont = await out.embedFont(PDFLib.StandardFonts.Helvetica);
-    });
-    X.shapePainters.table = function (p, s, ctx) {
-      const bx = X.boxOf(s), rows = s.rows, cols = s.cols;
-      const bw = bx.x2 - bx.x1, bh = bx.y2 - bx.y1;
-      const colXs = cumFracs(colFracs(s)).map(function (f) { return bx.x1 + f * bw; });
-      const rowYs = cumFracs(rowFracs(s)).map(function (f) { return bx.y2 - f * bh; });   /* row 0 at the top */
-      const mid = X.shapeMid(s), col = X.hexRgb(s.c || TABLE_LINE);
-      function ptAt(x, y) { return s.r ? X.rotPt([x, y], mid, s.r) : [x, y]; }
-      rowYs.forEach(function (y) {
-        const a = ptAt(bx.x1, y), b = ptAt(bx.x2, y);
-        p.drawLine({ start: { x: a[0], y: a[1] }, end: { x: b[0], y: b[1] }, thickness: Math.max(0.4, s.w || 1) * 0.6, color: col });
-      });
-      colXs.forEach(function (x) {
-        const a = ptAt(x, bx.y1), b = ptAt(x, bx.y2);
-        p.drawLine({ start: { x: a[0], y: a[1] }, end: { x: b[0], y: b[1] }, thickness: Math.max(0.4, s.w || 1) * 0.6, color: col });
-      });
-      const font = ctx.extra.tableFont;
-      if (!font) return;
-      const minRowH = bh / rows;
-      const fs = Math.max(6.5, Math.min(10.5, minRowH * 0.34));
-      for (let r = 0; r < rows; r++) {
-        for (let c = 0; c < cols; c++) {
-          const txt = (s.cells[r] && s.cells[r][c]) || '';
-          if (!txt.trim()) continue;
-          const cw = colXs[c + 1] - colXs[c], rh = rowYs[r] - rowYs[r + 1];
-          const x = colXs[c] + 3, y = rowYs[r + 1] + rh * 0.32;
-          const o = ptAt(x, y);
-          p.drawText(X.fitText ? X.fitText(font, txt, fs, cw - 6) : txt.slice(0, 24), {
-            x: o[0], y: o[1], size: fs, font: font, color: X.hexRgb('#1C1F24'), rotate: PDFLib.degrees(s.r || 0)
-          });
-        }
-      }
     };
 
     function placeTable(rows, cols, it, center) {

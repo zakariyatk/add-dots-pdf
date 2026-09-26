@@ -518,28 +518,8 @@
     };
 
     /* embedding is async, so it happens in the prepare pass */
-    X.prepare.push(async function (out, items, extra) {
-      extra.sigs = {};
-      for (const it of items) {
-        for (const s of it.shapes) {
-          if (s.t !== 'sig' || extra.sigs[s.url]) continue;
-          try { extra.sigs[s.url] = await out.embedPng(s.url); }
-          catch (e) { /* a JPEG that slipped through */
-            try { extra.sigs[s.url] = await out.embedJpg(s.url); } catch (e2) {}
-          }
-        }
-      }
-    });
-
-    X.shapePainters.sig = function (p, s, ctx) {
-      const img = ctx.extra.sigs && ctx.extra.sigs[s.url];
-      if (!img) return;
-      p.drawImage(img, {
-        x: Math.min(s.a[0], s.b[0]), y: Math.min(s.a[1], s.b[1]),
-        width: Math.abs(s.b[0] - s.a[0]), height: Math.abs(s.b[1] - s.a[1])
-      });
-    };
-
+    X.prepare.push(window.ADDPDFEngine.prepareSignatures);
+    X.shapePainters.sig = window.ADDPDFEngine.formsPainters.sig;
     /* ---------------- writing the filled values into the PDF ---------------- */
 
     /* Values are painted onto the rebuilt page. Core already turned each page

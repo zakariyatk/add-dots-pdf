@@ -4,7 +4,7 @@ import * as PDFLib from 'pdf-lib';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { buildPdf, createTextMeasurer, type MeasureText, type PageItem } from '../src';
 // @ts-expect-error plain JS fixture shared with the browser
-import { digest, makeFixture } from './fixtures/marks.fixture.js';
+import { digest, makeFixture, roundNums } from './fixtures/marks.fixture.js';
 
 /* marks.v1.json was recorded from the v1 app's own buildPdf, in the browser,
    before core.js was switched over (see apps/web/vite.config.ts, /__golden/).
@@ -46,7 +46,7 @@ describe('buildPdf matches v1 (golden)', () => {
   it.each(golden.map((g, i) => [i + 1, g] as const).filter(([n]) => n !== REPEATED_PAGE))(
     'page %i: content streams',
     (n, g) => {
-      expect(pages[n - 1]!.streams).toEqual(g.streams);
+      expect(pages[n - 1]!.streams.map(roundNums)).toEqual(g.streams.map(roundNums));
     },
   );
 

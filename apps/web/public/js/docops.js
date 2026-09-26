@@ -429,14 +429,7 @@
 
     /* Until they are applied, redactions still save as solid black boxes, so a
        file saved halfway through is covered — just not yet scrubbed. */
-    X.shapePainters.redact = function (p, s) {
-      p.drawRectangle({
-        x: Math.min(s.a[0], s.b[0]), y: Math.min(s.a[1], s.b[1]),
-        width: Math.abs(s.b[0] - s.a[0]), height: Math.abs(s.b[1] - s.a[1]),
-        color: PDFLib.rgb(0, 0, 0), borderWidth: 0
-      });
-    };
-
+    /* (the redact painter is in the engine, with the other document marks) */
     function redactCount() {
       return S.items.reduce(function (n, it) {
         return n + it.shapes.filter(function (s) { return s.t === 'redact'; }).length;
@@ -534,71 +527,12 @@
 
     /* ---------------- painters for the running marks ---------------- */
 
-    X.fontNeeds.wm = function () { return 'HelveticaBold'; };
-    X.fontNeeds.hf = function () { return 'Helvetica'; };
-    X.fontNeeds.bates = function () { return 'Helvetica'; };
-
-    X.shapePainters.wm = function (p, s, ctx) {
-      const font = ctx.fonts.HelveticaBold;
-      if (!font) return;
-      const { width: W, height: H } = p.getSize();
-      const col = X.hexRgb(s.c);
-      const draw = function (cxp, cyp) {
-        const w = font.widthOfTextAtSize(s.text, s.size);
-        const t = (s.r || 0) * Math.PI / 180;
-        /* pdf-lib turns text about its origin, so step back along the baseline
-           by half the string to leave the middle of the text on (cx, cy) */
-        p.drawText(s.text, {
-          x: cxp - Math.cos(t) * w / 2 + Math.sin(t) * s.size * 0.35,
-          y: cyp - Math.sin(t) * w / 2 - Math.cos(t) * s.size * 0.35,
-          size: s.size, font: font, color: col, opacity: s.o,
-          rotate: PDFLib.degrees(s.r || 0)
-        });
-      };
-      if (s.tile) {
-        const stepX = Math.max(90, font.widthOfTextAtSize(s.text, s.size) * 1.35);
-        const stepY = Math.max(70, s.size * 3.4);
-        for (let y = stepY / 2; y < H + stepY; y += stepY) {
-          for (let x = stepX / 2; x < W + stepX; x += stepX) draw(x, y);
-        }
-      } else {
-        draw(W / 2, H / 2);
-      }
-    };
-
-    X.shapePainters.hf = function (p, s, ctx) {
-      const font = ctx.fonts.Helvetica;
-      if (!font) return;
-      const { width: W, height: H } = p.getSize();
-      const col = X.hexRgb(s.c), m = s.margin, size = s.size;
-      const total = S.items.length;
-      const fill = function (t) {
-        return String(t || '')
-          .replace(/\{page\}/g, String(ctx.index + 1))
-          .replace(/\{pages\}/g, String(total))
-          .replace(/\{date\}/g, new Date().toLocaleDateString())
-          .replace(/\{file\}/g, S.baseName);
-      };
-      const put = function (raw, align, y) {
-        const t = fill(raw);
-        if (!t.trim()) return;
-        const w = font.widthOfTextAtSize(t, size);
-        const x = align === 'l' ? m : align === 'r' ? W - m - w : (W - w) / 2;
-        p.drawText(t, { x: x, y: y, size: size, font: font, color: col });
-      };
-      put(s.cfg.hl, 'l', H - m); put(s.cfg.hc, 'c', H - m); put(s.cfg.hr, 'r', H - m);
-      put(s.cfg.fl, 'l', m - size); put(s.cfg.fc, 'c', m - size); put(s.cfg.fr, 'r', m - size);
-    };
-
-    X.shapePainters.bates = function (p, s, ctx) {
-      const font = ctx.fonts.Helvetica;
-      if (!font) return;
-      const { width: W, height: H } = p.getSize();
-      const w = font.widthOfTextAtSize(s.label, s.size), m = 26;
-      const x = /r$/.test(s.pos) ? W - m - w : /l$/.test(s.pos) ? m : (W - w) / 2;
-      const y = s.pos.charAt(0) === 't' ? H - m : m - s.size;
-      p.drawText(s.label, { x: x, y: y, size: s.size, font: font, color: X.hexRgb(s.c) });
-    };
+    Object.assign(X.fontNeeds, window.ADDPDFEngine.docopsFontNeeds);
+    Object.assign(X.shapePainters, window.ADDPDFEngine.docopsPainters({
+      totalPages: function () { return S.items.length; },
+      fileName: function () { return S.baseName; },
+      today: function () { return new Date().toLocaleDateString(); }
+    }));
 
     /* ---------------- the same marks, on screen ---------------- */
 

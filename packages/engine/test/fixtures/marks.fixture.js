@@ -95,6 +95,13 @@ export async function makeFixture(PDFLib) {
   return items;
 }
 
+/** Content-stream numbers rounded to 8 decimal places. Browsers and Node can
+    differ in the last binary digit of Math.sin/cos (seen: Chrome 152 vs Node
+    24), which is a hundred-millionth of a point, never a real difference. */
+export function roundNums(stream) {
+  return stream.replace(/-?\d+\.\d{9,}/g, (n) => String(+(+n).toFixed(8)));
+}
+
 /** What a saved PDF looks like, page by page, independent of timestamps and of
     the random suffixes pdf-lib gives resource names. */
 export async function digest(PDFLib, bytes) {
@@ -110,11 +117,29 @@ export async function digest(PDFLib, bytes) {
       const raw = PDFLib.decodePDFRawStream(s).decode();
       return latin1(raw).replace(/\/([A-Za-z][A-Za-z-]*?)-\d+(?=[\s/[\]<>()]|$)/g, '/$1-#');
     });
-    return {
+    const out = {
       mediaBox: box(p.getMediaBox()),
       cropBox: box(p.getCropBox()),
       rotation: p.getRotation().angle,
       streams,
     };
+    /* link annotations (links, videos), only on pages that have them */
+    const annots = p.node.Annots();
+    if (annots) {
+      out.annots = annots.asArray().map((ref) => {
+        const a = doc.context.lookup(ref);
+        const act = a.lookup(PDFLib.PDFName.of('A'));
+        const uri = act && act.lookup(PDFLib.PDFName.of('URI'));
+        return {
+          subtype: String(a.get(PDFLib.PDFName.of('Subtype'))),
+          rect: a
+            .lookup(PDFLib.PDFName.of('Rect'))
+            .asArray()
+            .map((n) => +n.asNumber().toFixed(4)),
+          uri: uri ? uri.decodeText() : null,
+        };
+      });
+    }
+    return out;
   });
 }

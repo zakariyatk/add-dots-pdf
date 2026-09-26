@@ -257,28 +257,7 @@
       }
       return g;
     };
-    X.shapePainters.leader = function (p, s) {
-      const col = X.hexRgb(s.c);
-      const th = Math.max(0.4, s.w || 1.2);
-      p.drawLine({ start: { x: s.a[0], y: s.a[1] }, end: { x: s.m[0], y: s.m[1] }, thickness: th, color: col });
-      p.drawLine({ start: { x: s.m[0], y: s.m[1] }, end: { x: s.b[0], y: s.b[1] }, thickness: th, color: col });
-      if (s.head === 'dot') {
-        p.drawCircle({ x: s.a[0], y: s.a[1], size: Math.max(1.2, th * 1.6), color: col, borderWidth: 0 });
-      } else {
-        const wing = X.arrowHead(s.m[0], s.m[1], s.a[0], s.a[1], th);
-        p.drawSvgPath ? p.drawSvgPath(
-          'M ' + wing[0][0] + ' ' + wing[0][1] + ' L ' + s.a[0] + ' ' + s.a[1] + ' L ' + wing[1][0] + ' ' + wing[1][1] + ' Z',
-          { color: col, borderWidth: 0 }
-        ) : (function () {
-          /* no drawSvgPath in this pdf-lib build: three thick joined strokes
-             approximate the same solid triangle closely enough at this size */
-          [[wing[0], s.a], [s.a, wing[1]], [wing[1], wing[0]]].forEach(function (seg) {
-            p.drawLine({ start: { x: seg[0][0], y: seg[0][1] }, end: { x: seg[1][0], y: seg[1][1] }, thickness: th * 2.2, color: col });
-          });
-        })();
-      }
-    };
-
+    X.shapePainters.leader = window.ADDPDFEngine.leaderPainters.leader;
     function leaderGhost(a, m, b) { return { t: 'leader', a: a, m: m, b: b, c: S.color, w: S.width, head: leaderHead }; }
     function commitLeader(it, a, m, b) {
       X.snapshot();
