@@ -11,6 +11,7 @@ import {
   type PDFFont,
   type PDFImage,
 } from 'pdf-lib';
+import { fitText } from '../fonts';
 import { boxOf, rotPt, shapeMid } from '../geometry';
 import type { Mark, PageItem, Pt } from '../model';
 import { hexRgb, type Extra } from '../save';
@@ -218,12 +219,15 @@ const table: Painter = (p, s: TableMark, ctx) => {
     for (let c = 0; c < cols; c++) {
       const txt = (s.cells[r] && s.cells[r]![c]) || '';
       if (!txt.trim()) continue;
-      const rh = rowYs[r]! - rowYs[r + 1]!;
+      const cw = colXs[c + 1]! - colXs[c]!,
+        rh = rowYs[r]! - rowYs[r + 1]!;
       const x = colXs[c]! + 3,
         y = rowYs[r + 1]! + rh * 0.32;
       const o = ptAt(x, y);
-      /* v1 behaviour: cut at 24 characters, not fitted to the cell width */
-      p.drawText(txt.slice(0, 24), {
+      /* fitted to the cell, and safe for the standard font. v1 called an
+         X.fitText that was never defined, so it cut at 24 characters and a
+         character the font cannot encode failed the whole save. */
+      p.drawText(fitText(font, txt, fs, cw - 6), {
         x: o[0],
         y: o[1],
         size: fs,

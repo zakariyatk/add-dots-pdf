@@ -11,7 +11,7 @@ import { formatLength, type Scale } from '../measure';
 import type { Mark, Pt } from '../model';
 import { hexRgb } from '../save';
 import { shOp } from '../style';
-import { paintPts, type FontNeed, type Painter } from './common';
+import { fillPolygon, paintPts, type FontNeed, type Painter } from './common';
 
 /* ---------------- geometry ---------------- */
 
@@ -282,8 +282,6 @@ function endPaint(p: PDFPage, P: Pt, u: Pt, s: DimMark): void {
 
 export interface EllipseMark extends Mark {
   t: 'ellipse';
-  /** Never set by the editor; see the note in the ellipse painter. */
-  dash?: unknown;
 }
 
 /** The painters for circle, cloud, arc and the dimensions. getScale is read at
@@ -291,9 +289,10 @@ export interface EllipseMark extends Mark {
 export function drawPainters(getScale: () => Scale): Record<string, Painter> {
   const ellipse: Painter = (p, s: EllipseMark) => {
     /* a filled ellipse is one operator and hairline-accurate, so use the
-       native call whenever there is no dash pattern to honour */
+       native call whenever there is no dash pattern to honour and no turn.
+       (v1 tested s.dash, which nothing sets; the dash style is s.d.) */
     const b = boxOf(s);
-    if (!s.dash && !s.r) {
+    if (!s.d && !s.r) {
       const opts: Parameters<PDFPage['drawEllipse']>[0] = {
         x: (b.x1 + b.x2) / 2,
         y: (b.y1 + b.y2) / 2,
@@ -310,7 +309,11 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
       p.drawEllipse(opts);
       return;
     }
-    paintPts(p, ellipsePts(s, 96), s);
+    /* dashed or turned: the same ring of points as the screen, filled first so
+       the outline sits on top */
+    const ring = ellipsePts(s, 96);
+    if (s.fill) fillPolygon(p, ring, hexRgb(s.fill), shOp(s));
+    paintPts(p, ring, s);
   };
 
   const cloud: Painter = (p, s: CloudMark) => paintPts(p, cloudPts(s, 8), s, true);

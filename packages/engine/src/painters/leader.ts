@@ -4,7 +4,7 @@
 import type { Mark, Pt } from '../model';
 import { arrowHead } from '../geometry';
 import { hexRgb } from '../save';
-import type { Painter } from './common';
+import { fillPolygon, type Painter } from './common';
 
 export interface LeaderMark extends Mark {
   t: 'leader';
@@ -21,22 +21,7 @@ const leader: Painter = (p, s: LeaderMark) => {
     p.drawCircle({ x: s.a[0], y: s.a[1], size: Math.max(1.2, th * 1.6), color: col, borderWidth: 0 });
   } else {
     const wing = arrowHead(s.m[0], s.m[1], s.a[0], s.a[1], th);
-    p.drawSvgPath(
-      'M ' +
-        wing[0][0] +
-        ' ' +
-        wing[0][1] +
-        ' L ' +
-        s.a[0] +
-        ' ' +
-        s.a[1] +
-        ' L ' +
-        wing[1][0] +
-        ' ' +
-        wing[1][1] +
-        ' Z',
-      { color: col, borderWidth: 0 },
-    );
+    fillPolygon(p, [wing[0], s.a, wing[1]], col);
   }
 };
 
