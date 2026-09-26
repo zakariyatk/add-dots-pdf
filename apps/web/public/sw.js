@@ -42,6 +42,8 @@ const SHELL = [
   'js/draw.js',
   'js/organize.js',
   'js/forms.js',
+  'js/insert.js',
+  'js/enhance.js',
   'js/docops.js',
   'js/convert.js',
   'js/books.js',

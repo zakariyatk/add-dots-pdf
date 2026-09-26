@@ -1655,7 +1655,7 @@
       return {
         colors: true, widths: true,
         down: function () { /* a click tool: everything happens on release */ },
-        move: function (it, at) {
+        move: function (it, at, e) {
           if (!it.vp) return;
           const p = it.vp.convertToPdfPoint(at[0], at[1]);
           if (!pick) {
