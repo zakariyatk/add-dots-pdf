@@ -11,3 +11,4 @@ export * from './painters/docops';
 export * from './painters/leader';
 export * from './painters/insert';
 export * from './pages';
+export * from './pins';

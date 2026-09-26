@@ -108,6 +108,7 @@ export async function digest(PDFLib, bytes) {
   const doc = await PDFLib.PDFDocument.load(bytes);
   const latin1 = (u8) => Array.from(u8, (c) => String.fromCharCode(c)).join('');
   const box = (r) => [r.x, r.y, r.width, r.height].map((n) => +n.toFixed(4));
+  const pageRefs = doc.getPages().map((p) => p.ref);
   return doc.getPages().map((p) => {
     let contents = p.node.Contents();
     const refs =
@@ -130,7 +131,7 @@ export async function digest(PDFLib, bytes) {
         const a = doc.context.lookup(ref);
         const act = a.lookup(PDFLib.PDFName.of('A'));
         const uri = act && act.lookup(PDFLib.PDFName.of('URI'));
-        return {
+        const link = {
           subtype: String(a.get(PDFLib.PDFName.of('Subtype'))),
           rect: a
             .lookup(PDFLib.PDFName.of('Rect'))
@@ -138,6 +139,13 @@ export async function digest(PDFLib, bytes) {
             .map((n) => +n.asNumber().toFixed(4)),
           uri: uri ? uri.decodeText() : null,
         };
+        /* a jump inside the document: which page (0-based) and how it fits */
+        const dest = a.lookup(PDFLib.PDFName.of('Dest'));
+        if (dest) {
+          const d = dest.asArray();
+          link.dest = [pageRefs.findIndex((r) => r === d[0]), String(d[1])];
+        }
+        return link;
       });
     }
     return out;

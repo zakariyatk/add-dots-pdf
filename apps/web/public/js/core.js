@@ -4059,157 +4059,10 @@
     toast('Placed <b>' + locs.length + '</b> pins (' + np + ' photos) on page ' + S.current + warn);
   }
 
-  /* ---- pins in the saved PDF ---- */
-  const WIN_CH = /[ -~ -ÿ€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]/;
-  function pdfSafe(s) {
-    let o = '';
-    for (const ch of String(s == null ? '' : s)) o += /\s/.test(ch) ? ' ' : (WIN_CH.test(ch) ? ch : '?');
-    return o;
-  }
-  function fitText(font, str, size, maxW) {
-    let s = pdfSafe(str);
-    if (font.widthOfTextAtSize(s, size) <= maxW) return s;
-    while (s.length > 1 && font.widthOfTextAtSize(s + '…', size) > maxW) s = s.slice(0, -1);
-    return s + '…';
-  }
-  function dataUrlBytes(u) {
-    const str = String(u), i = str.indexOf(',');
-    const b = atob(str.slice(i + 1)), a = new Uint8Array(b.length);
-    for (let k = 0; k < b.length; k++) a[k] = b.charCodeAt(k);
-    return a;
-  }
-  function addLink(doc, page, rect, destPage) {
-    const annot = doc.context.obj({
-      Type: 'Annot', Subtype: 'Link', Rect: rect, Border: [0, 0, 0],
-      Dest: [destPage.ref, PDFLib.PDFName.of('Fit')]
-    });
-    page.node.addAnnot(doc.context.register(annot));
-  }
-
-  /* numbered disc on a page, kept upright however the page is turned */
-  function drawPin(p, s, L, rotation, fontB) {
-    const red = hexRgb(PIN_COLOR), white = PDFLib.rgb(1, 1, 1);
-    const cx = s.a[0], cy = s.a[1];
-    p.drawCircle({ x: cx, y: cy, size: PIN_R + 1.4, color: white });
-    p.drawCircle({ x: cx, y: cy, size: PIN_R, color: red });
-    const label = pdfSafe(L.n);
-    if (!label) return;
-    const size = label.length <= 2 ? PIN_R * 1.05 : PIN_R * 2.1 / label.length;
-    const tw = fontB.widthOfTextAtSize(label, size);
-    const ox = -tw / 2, oy = -size * 0.36;
-    const rad = rotation * Math.PI / 180, co = Math.cos(rad), si = Math.sin(rad);
-    p.drawText(label, {
-      x: cx + ox * co - oy * si, y: cy + ox * si + oy * co,
-      size: size, font: fontB, color: white, rotate: PDFLib.degrees(rotation)
-    });
-  }
-
-  /* appendix: an index of locations, then each location's photos four to a page */
-  async function addPhotoPages(out, pinsOut, font, fontB) {
-    const AW = 595, AH = 842, M = 36;
-    const ink = PDFLib.rgb(0.1, 0.12, 0.14), dim = PDFLib.rgb(0.35, 0.42, 0.5);
-    const faint = PDFLib.rgb(0.55, 0.6, 0.65), rule = PDFLib.rgb(0.8, 0.84, 0.88);
-    const blue = PDFLib.rgb(0.04, 0.47, 0.82), amber = PDFLib.rgb(0.72, 0.45, 0.1);
-    const red = hexRgb(PIN_COLOR), white = PDFLib.rgb(1, 1, 1);
-
-    /* one entry per location, in the order the pins appear */
-    const seen = {}, locs = [];
-    pinsOut.forEach(function (q) {
-      if (seen[q.L.id]) return;
-      seen[q.L.id] = 1;
-      locs.push({ L: q.L, pin: q, pages: [] });
-    });
-
-    const perIdx = 30, idxPages = [];
-    for (let i = 0; i < Math.ceil(locs.length / perIdx); i++) idxPages.push(out.addPage([AW, AH]));
-    locs.forEach(function (e) {
-      const n = e.L.photos.length;
-      if (!n) e.pages.push({ page: out.addPage([AW, AH]), from: 0, to: 0 });
-      for (let i = 0; i < n; i += 4) e.pages.push({ page: out.addPage([AW, AH]), from: i, to: Math.min(n, i + 4) });
-    });
-    const total = locs.reduce(function (a, e) { return a + e.pages.length; }, 0);
-
-    function disc(page, x, y, r, label, size) {
-      page.drawCircle({ x: x, y: y, size: r, color: red });
-      const t = pdfSafe(label);
-      if (t) page.drawText(t, { x: x - fontB.widthOfTextAtSize(t, size) / 2, y: y - size * 0.36, size: size, font: fontB, color: white });
-    }
-
-    idxPages.forEach(function (pg, pi) {
-      pg.drawText('Site photo locations', { x: M, y: AH - 52, size: 15, font: fontB, color: ink });
-      pg.drawText(fitText(font, S.baseName + '  ·  ' + locs.length + ' locations', 9, AW - 2 * M), { x: M, y: AH - 68, size: 9, font: font, color: dim });
-      pg.drawLine({ start: { x: M, y: AH - 80 }, end: { x: AW - M, y: AH - 80 }, thickness: 0.7, color: rule });
-      let y = AH - 104;
-      locs.slice(pi * perIdx, (pi + 1) * perIdx).forEach(function (e) {
-        const L = e.L;
-        disc(pg, M + 8, y + 3, 8, L.n, 8);
-        pg.drawText(fitText(fontB, L.ref || '(no reference)', 10.5, 130), { x: M + 26, y: y, size: 10.5, font: fontB, color: ink });
-        pg.drawText(fitText(font, [L.desc, L.boq ? 'BOQ ' + L.boq : ''].filter(Boolean).join('  ·  '), 9.5, 230),
-                    { x: M + 162, y: y, size: 9.5, font: font, color: dim });
-        const c = 'p.' + e.pin.pageNo + '  ·  ' + L.photos.length + (L.photos.length === 1 ? ' photo' : ' photos');
-        pg.drawText(c, { x: AW - M - font.widthOfTextAtSize(c, 9), y: y, size: 9, font: font, color: faint });
-        addLink(out, pg, [M, y - 5, AW - M, y + 13], e.pages[0].page);
-        y -= 22;
-      });
-      pg.drawText('Index ' + (pi + 1) + ' of ' + idxPages.length, { x: M, y: 28, size: 8, font: font, color: faint });
-    });
-
-    let seq = 0;
-    for (const e of locs) {
-      const L = e.L;
-      for (const g of e.pages) {
-        seq++;
-        const pg = g.page, n = g.to - g.from;
-        const head = L.n + '. ' + (L.ref || 'Location') + (L.desc ? ' — ' + L.desc : '');
-        pg.drawText(fitText(fontB, head, 13.5, AW - 2 * M - 110), { x: M, y: AH - 50, size: 13.5, font: fontB, color: ink });
-        const sub = [L.boq ? 'BOQ ' + L.boq : '', 'drawing page ' + e.pin.pageNo,
-                     L.photos.length > 4 ? (n === 1 ? 'photo ' + g.to : 'photos ' + (g.from + 1) + '–' + g.to) +
-                       ' of ' + L.photos.length : '']
-                     .filter(Boolean).join('   ·   ');
-        pg.drawText(fitText(font, sub, 9, AW - 2 * M), { x: M, y: AH - 64, size: 9, font: font, color: dim });
-        if (L.note) pg.drawText(fitText(font, L.note, 8.5, AW - 2 * M), { x: M, y: AH - 76, size: 8.5, font: font, color: amber });
-        const back = 'Back to page ' + e.pin.pageNo;
-        const bw = font.widthOfTextAtSize(back, 9);
-        pg.drawText(back, { x: AW - M - bw, y: AH - 50, size: 9, font: font, color: blue });
-        addLink(out, pg, [AW - M - bw - 4, AH - 54, AW - M, AH - 40], e.pin.outPage);
-        const ly = AH - (L.note ? 88 : 82);
-        pg.drawLine({ start: { x: M, y: ly }, end: { x: AW - M, y: ly }, thickness: 0.7, color: rule });
-
-        const aX = M, aY = 58, aW = AW - 2 * M, aH = ly - 12 - aY;
-        if (!n) pg.drawText('No photos recorded for this location.', { x: M, y: aY + aH - 20, size: 10, font: font, color: faint });
-        const cols = n <= 1 ? 1 : 2, rows = Math.ceil(n / cols), gx = 14, gy = 20;
-        const cw = (aW - (cols - 1) * gx) / cols, ch = (aH - (rows - 1) * gy) / rows;
-        for (let k = 0; k < n; k++) {
-          const ph = L.photos[g.from + k];
-          let img;
-          try {
-            const bytes = dataUrlBytes(ph.src);
-            img = /^data:image\/png/i.test(ph.src) ? await out.embedPng(bytes) : await out.embedJpg(bytes);
-          } catch (err) { continue; }
-          const r = Math.floor(k / cols), c = k % cols;
-          const x0 = aX + c * (cw + gx), yTop = aY + aH - r * (ch + gy);
-          const sc = Math.min(cw / img.width, (ch - 13) / img.height);
-          const w = img.width * sc, h = img.height * sc, x = x0 + (cw - w) / 2;
-          const y = n === 1 ? aY + 13 + (aH - 13 - h) / 2 : yTop - h;
-          pg.drawImage(img, { x: x, y: y, width: w, height: h });
-          pg.drawRectangle({ x: x, y: y, width: w, height: h, borderColor: rule, borderWidth: 0.6 });
-          if (ph.cap) {
-            const cap = fitText(font, ph.cap, 8, cw);
-            pg.drawText(cap, { x: x0 + (cw - font.widthOfTextAtSize(cap, 8)) / 2, y: y - 9.5, size: 8, font: font, color: faint });
-          }
-        }
-        pg.drawText('Photo page ' + seq + ' of ' + total, { x: M, y: 28, size: 8, font: font, color: faint });
-        await breathe();
-      }
-    }
-    /* each pin on the drawing jumps to its first photo page */
-    pinsOut.forEach(function (q) {
-      const e = locs.find(function (x) { return x.L.id === q.L.id; });
-      const r = PIN_R + 2;
-      addLink(out, q.outPage, [q.s.a[0] - r, q.s.a[1] - r, q.s.a[0] + r, q.s.a[1] + r], e.pages[0].page);
-    });
-    return total + idxPages.length;
-  }
+  /* ---- pins in the saved PDF ----
+     The discs, the photo appendix and their links are drawn by the engine
+     (packages/engine/src/pins.ts); see buildPdf. */
+  function dataUrlBytes(u) { return E.dataUrlBytes(u); }
 
   /* ---------------- text editing ---------------- */
 
@@ -4590,7 +4443,7 @@
       shapePainters: EXT.shapePainters,
       prepare: EXT.prepare,
       finish: EXT.finish,
-      pins: { locs: S.locs, draw: drawPin, addPhotoPages: addPhotoPages }
+      pins: E.pinHooks(S.locs, { docName: function () { return S.baseName; }, breathe: breathe })
     });
   }
 
