@@ -24,6 +24,7 @@ import {
 import { digest, roundNums } from './fixtures/marks.fixture.js';
 // @ts-expect-error plain JS fixture shared with the browser
 import { FILE_NAME, SCALE, makeModulesFixture } from './fixtures/modules.fixture.js';
+import { unicodeSource } from './support/unicode';
 
 /* modules.v1.json was recorded from the v1 app in the browser, with its own
    module painters (annotate, draw, docops, enhance, insert, forms), before any
@@ -46,6 +47,7 @@ beforeAll(async () => {
   const items = (await makeModulesFixture(PDFLib)) as PageItem[];
   const hooks: SaveHooks = {
     measure: await createTextMeasurer(),
+    unicode: unicodeSource, // as in the app; the fixture is all WinAnsi
     shapePainters: {
       ...annotatePainters,
       ...drawPainters(() => SCALE as Scale),

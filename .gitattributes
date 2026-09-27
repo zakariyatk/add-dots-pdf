@@ -3,6 +3,7 @@
 *.jpg binary
 *.pdf binary
 *.ico binary
+*.ttf binary
 # vendored minified libraries: don't diff or count them
 apps/web/public/js/vendor/** -diff linguist-vendored
 design/support.js -diff linguist-vendored

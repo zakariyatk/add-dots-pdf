@@ -56,6 +56,9 @@ const SHELL = [
   'js/vendor/pdf.min.js',
   'js/vendor/pdf.worker.min.js',
   'js/vendor/pdf-lib.min.js',
+  /* loaded on the first save that needs the Unicode font (see core.js) */
+  'js/vendor/fontkit.umd.min.js',
+  'assets/fonts/DejaVuSans.ttf',
   'assets/icons/icon.svg',
   'assets/icons/icon-192.png',
   'assets/icons/icon-512.png',

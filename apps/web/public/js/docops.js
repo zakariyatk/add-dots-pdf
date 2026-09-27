@@ -307,6 +307,7 @@
       try { info = (await src.doc.getMetadata()).info || {}; } catch (e) {}
       const it = S.items[S.current - 1];
       await X.ensurePage(it);
+      await X.ensureAllPages();         /* the page sizes below count every page */
       const v = it.page.view;
       const sizes = {};
       S.items.forEach(function (x) {
@@ -528,11 +529,14 @@
     /* ---------------- painters for the running marks ---------------- */
 
     Object.assign(X.fontNeeds, window.ADDPDFEngine.docopsFontNeeds);
-    Object.assign(X.shapePainters, window.ADDPDFEngine.docopsPainters({
+    const docEnv = {
       totalPages: function () { return S.items.length; },
       fileName: function () { return S.baseName; },
       today: function () { return new Date().toLocaleDateString(); }
-    }));
+    };
+    Object.assign(X.shapePainters, window.ADDPDFEngine.docopsPainters(docEnv));
+    /* the file name or date may need the Unicode font; it is embedded up front */
+    X.prepare.push(window.ADDPDFEngine.docopsPrepare(docEnv));
 
     /* ---------------- the same marks, on screen ---------------- */
 

@@ -15,6 +15,11 @@
   /* Vendored locally: the worker used to come from a CDN, which quietly broke
      the "nothing leaves this device" promise and the offline story. */
   pdfjsLib.GlobalWorkerOptions.workerSrc = 'js/vendor/pdf.worker.min.js';
+  /* One pdf.js worker for every document. Without a port pdf.js starts a new
+     worker thread per document, and the app opens documents for merges,
+     blank pages and each redacted page, none of which ever went away. */
+  try { pdfjsLib.GlobalWorkerOptions.workerPort = new Worker('js/vendor/pdf.worker.min.js'); }
+  catch (e) { /* no workers here: pdf.js falls back to its own */ }
 
   const stage = $('stage'), rail = $('rail');
   const DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -208,14 +213,28 @@
     };
   }
 
-  function hardReset() {
+  function hardReset(keepDoc) {
     EXT.emit('reset');
     S.items.forEach(function (it) { if (it.task) { try { it.task.cancel(); } catch (e) {} } });
+    LIVE.clear(); TLIVE.clear(); MOUNTED.clear(); TMOUNTED.clear();
+    RQ.gen++; RQ.busy = 0; RQ.want.clear();
+    TQ.gen++; TQ.busy = false; TQ.want.clear(); TQ.task = null; TQ.it = null; TQ.slow = false;
+    RQ.idle.splice(0).forEach(function (res) { res(); });
+    resizeQ.clear();
+    jumpHold = null;
+    loadEpoch++;
     TR.epoch++; TR.stop = false;
+    /* the documents being closed: free them in the worker too */
+    S.sources.forEach(function (src) {
+      if (src.doc && src.doc !== keepDoc) { try { src.doc.destroy(); } catch (e) {} }
+    });
     S.sources = []; S.items = []; S.undo = []; S.textCache = new Map();
     S.hits = []; S.hitIndex = -1; S.query = ''; S.current = 1; S.fit = 'width'; S.sel = null;
     S.locs = {}; pinSel = null; closeLb();
     stage.innerHTML = ''; $('railPages').innerHTML = '';
+    /* stop a smooth scroll still gliding through the old document (a search
+       hit, a jump): left running, it carries on into the new one */
+    stage.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     $('hitList').innerHTML = ''; $('hitCount').textContent = ''; $('findIn').value = '';
     setUndoState();
   }
@@ -258,10 +277,17 @@
     if (it.box) return;
     const box = document.createElement('div');
     box.className = 'pagebox' + (it.added ? ' added' : '');
+    box._it = it;
 
+    /* Everything in the page lives in `content`, a display:contents wrapper,
+       so it lays out exactly as if it sat in the box. A page far from the
+       screen takes its content out of the document (mountPage below): the
+       elements stay in memory and every module keeps its references, but the
+       browser has only one sized box per page to lay out. */
+    const content = document.createElement('div'); content.className = 'pagebody';
     const tick = document.createElement('div'); tick.className = 'tick';
     const cflag = document.createElement('div'); cflag.className = 'cropflag'; cflag.textContent = 'CROP';
-    box.appendChild(tick); box.appendChild(cflag);
+    content.appendChild(tick); content.appendChild(cflag);
 
     const wrap = document.createElement('div'); wrap.className = 'page';
     const inner = document.createElement('div'); inner.className = 'inner';
@@ -273,9 +299,47 @@
 
     const cap = document.createElement('div'); cap.className = 'capture';
     wrap.appendChild(cap);
-    box.appendChild(wrap);
+    content.appendChild(wrap);
 
-    /* facing panel that holds the translation of this page */
+    it.box = box; it.wrap = wrap; it.inner = inner; it.canvas = canvas;
+    it.tl = tl; it.anno = anno; it.capture = cap; it.tick = tick;
+    it.content = content; it.mounted = false;
+    /* The hover tools and the translation pane are made when first needed:
+       with thousands of pages they were most of the document's elements. */
+    if (TR.on) ensurePane(it);
+    box.addEventListener('pointerenter', function () { ensurePageTools(it); });
+    box.addEventListener('focusin', function () { ensurePageTools(it); });
+
+    bindDraw(it);
+
+    /* thumbnail: like the page, its content leaves the rail while far from
+       view (mountThumb), and the .thumb holds its height meanwhile */
+    const th = document.createElement('div'); th.className = 'thumb';
+    const tbody = document.createElement('div'); tbody.className = 'thumbbody';
+    const hit = document.createElement('button'); hit.className = 'hitbox';
+    const shell = document.createElement('div'); shell.className = 'shell';
+    const tc = document.createElement('canvas'); shell.appendChild(tc);
+    const no = document.createElement('div'); no.className = 'no';
+    hit.appendChild(shell); hit.appendChild(no);
+    hit.addEventListener('click', function () {
+      goTo(S.items.indexOf(it) + 1);
+      if (isMobile()) setRail(false);
+    });
+    tbody.appendChild(hit);
+    th.addEventListener('pointerenter', function () { ensureThumbTools(it); });
+    th.addEventListener('focusin', function () { ensureThumbTools(it); });
+
+    if (it.added) {
+      const badge = document.createElement('div'); badge.className = 'badge'; badge.textContent = 'NEW';
+      tbody.appendChild(badge);
+    }
+    it.thumb = th; it.thumbCanvas = tc; it.thumbShell = shell; it.thumbNo = no;
+    it.thumbContent = tbody; it.thumbMounted = false;
+  }
+
+  /* facing panel that holds the translation of this page */
+  function ensurePane(it) {
+    if (it.trPane || !it.box) return;
     const pane = document.createElement('div'); pane.className = 'trpane';
     const phead = document.createElement('div'); phead.className = 'trhead';
     const plang = document.createElement('span'); plang.className = 'lang';
@@ -287,9 +351,13 @@
     pane.appendChild(phead); pane.appendChild(pbody);
     pcopy.addEventListener('click', function () { copyTranslation(it); });
     predo.addEventListener('click', function () { translatePage(it, true); });
-    box.appendChild(pane);
+    it.wrap.after(pane);
     it.trPane = pane; it.trBody = pbody; it.trLang = plang;
+  }
 
+  /* rotate, crop, insert and remove, over the page's corner */
+  function ensurePageTools(it) {
+    if (it.ptools || !it.box) return;
     const tools = document.createElement('div'); tools.className = 'ptools';
     tools.innerHTML =
       '<button data-a="rotl" title="Rotate left">' + icon(ICON.rotL) + '</button>' +
@@ -307,26 +375,15 @@
       if (b.dataset.a === 'crop') setTool('crop');
       if (b.dataset.a === 'add') openPop('addPop', $('btnAdd'));
     });
-    box.appendChild(tools);
+    it.content.appendChild(tools);
+    it.ptools = tools;
 
-    it.box = box; it.wrap = wrap; it.inner = inner; it.canvas = canvas;
-    it.tl = tl; it.anno = anno; it.capture = cap; it.tick = tick;
+  }
 
-    bindDraw(it);
-
-    /* thumbnail */
-    const th = document.createElement('div'); th.className = 'thumb';
-    const hit = document.createElement('button'); hit.className = 'hitbox';
-    const shell = document.createElement('div'); shell.className = 'shell';
-    const tc = document.createElement('canvas'); shell.appendChild(tc);
-    const no = document.createElement('div'); no.className = 'no';
-    hit.appendChild(shell); hit.appendChild(no);
-    hit.addEventListener('click', function () {
-      goTo(S.items.indexOf(it) + 1);
-      if (isMobile()) setRail(false);
-    });
-    th.appendChild(hit);
-
+  /* move and remove, and the tick for extracting, over the thumbnail */
+  function ensureThumbTools(it) {
+    if (it.thumbTools || !it.thumb) return;
+    const th = it.thumbContent;
     const tt = document.createElement('div'); tt.className = 'tools';
     tt.innerHTML =
       '<button data-a="up" title="Move up">' + icon(ICON.up) + '</button>' +
@@ -340,6 +397,7 @@
       if (b.dataset.a === 'del') removeItem(i);
     });
     th.appendChild(tt);
+    it.thumbTools = tt;
 
     const tick2 = document.createElement('button');
     tick2.className = 'tickbox'; tick2.type = 'button';
@@ -353,17 +411,85 @@
     });
     th.appendChild(tick2);
     it.tickbox = tick2;
-
-    if (it.added) {
-      const badge = document.createElement('div'); badge.className = 'badge'; badge.textContent = 'NEW';
-      th.appendChild(badge);
-    }
-    it.thumb = th; it.thumbCanvas = tc; it.thumbShell = shell; it.thumbNo = no;
+    tick2.classList.toggle('on', !!it.pick);
+    tick2.setAttribute('aria-pressed', it.pick ? 'true' : 'false');
   }
 
   async function ensurePage(it) {
-    if (!it.page) it.page = await it.src.doc.getPage(it.num);
+    if (!it.page) {
+      it.page = await it.src.doc.getPage(it.num);
+      /* laid out at a guessed size until now: put in the real one */
+      if (it.estimated) queueResize(it);
+    }
     return it.page;
+  }
+
+  /* Every page loaded, for the few operations that measure them all (crop
+     every page, the document's page sizes). A few requests at a time, so the
+     pdf.js worker can still answer the page being drawn. */
+  async function ensureAllPages() {
+    const todo = S.items.filter(function (it) { return !it.page; });
+    for (let i = 0; i < todo.length; i += 16) {
+      await Promise.all(todo.slice(i, i + 16).map(function (it) { return ensurePage(it).catch(function () {}); }));
+    }
+  }
+
+  /* Opening does not wait for every page: page 1 is loaded, the rest are laid
+     out at its size and drawn as they come near, and meanwhile the remaining
+     pages load in the background, whenever nothing is being drawn. */
+  let loadEpoch = 0;
+  async function loadRestPages() {
+    const epoch = ++loadEpoch;
+    for (let i = 0; i < S.items.length; i++) {
+      const it = S.items[i];
+      if (!it || it.page) continue;
+      await renderIdle();
+      if (epoch !== loadEpoch) return;
+      try { await ensurePage(it); } catch (e) {}
+      if (epoch !== loadEpoch) return;
+    }
+  }
+
+  /* Pages that just learned their real size are resized together once a
+     frame, holding still whatever is under the middle of the screen. */
+  const resizeQ = new Set();
+  let resizeRaf = 0;
+  /* The page a jump went to, held in view while the pages above it take their
+     real size (flushResizes); let go by the reader or a zoom (goTo, zoomTo). */
+  let jumpHold = null;
+  function queueResize(it) {
+    resizeQ.add(it);
+    if (!resizeRaf) resizeRaf = requestAnimationFrame(flushResizes);
+  }
+  /* notes where the page under the middle of the screen starts; the function
+     it returns scrolls by however far that page has since moved */
+  function holdMiddle() {
+    const at = S.items[Math.min(S.items.length - 1, firstBoxAt(stage.scrollTop + stage.clientHeight / 2))];
+    if (!at || !at.box) return function () {};
+    const before = at.box.offsetTop, top = stage.scrollTop;
+    return function () {
+      const moved = at.box.offsetTop - before;
+      if (moved) stage.scrollTop = top + moved;
+    };
+  }
+  function flushResizes() {
+    resizeRaf = 0;
+    const list = Array.from(resizeQ);
+    resizeQ.clear();
+    if (!list.length || !S.items.length) return;
+    /* the page under the middle of the screen stays where it is: note where it
+       starts, resize, then scroll by however far it moved. After a jump, the
+       page jumped to is what stays: pages above it were laid out at a guessed
+       size, and holding the middle instead left the reader pages short. */
+    const target = jumpHold && jumpHold.box && jumpHold.box.isConnected ? jumpHold : null;
+    const hold = target ? function () { stage.scrollTop = target.box.offsetTop - 14; } : holdMiddle();
+    list.forEach(function (it) {
+      if (!it.estimated || !it.page || !it.inner || !it.box || !it.box.isConnected) return;
+      it.estimated = false;
+      sizeItem(it, false);
+    });
+    hold();
+    renderVisible();
   }
 
   async function syncAll() {
@@ -381,6 +507,7 @@
     EXT.emit('pages');
     await relayout();
     setCurrent(Math.min(S.current, S.items.length) || 1);
+    loadRestPages();
   }
 
   function updateMeta() {
@@ -431,54 +558,100 @@
     }
     return it.base;
   }
+  function estSize(it) {
+    const p0 = S.items[0] && S.items[0].page;
+    const v = p0 ? p0.view : [0, 0, 612, 792];
+    let w = v[2] - v[0], h = v[3] - v[1];
+    if ((((p0 ? p0.rotate : 0) + it.rot) % 180 + 180) % 180 === 90) { const t = w; w = h; h = t; }
+    return { w: w, h: h };
+  }
+  /* a page not loaded yet takes the guessed size, and the real one on arrival */
+  function sizeEstimated(it) {
+    const e = estSize(it), s = S.scale;
+    const w = Math.floor(e.w * s), h = Math.floor(e.h * s);
+    it.estimated = true;
+    it.inner.style.width = w + 'px';
+    it.inner.style.height = h + 'px';
+    it.inner.style.left = '0px';
+    it.inner.style.top = '0px';
+    if (it.canvas) { it.canvas.style.width = w + 'px'; it.canvas.style.height = h + 'px'; }
+    it.anno.setAttribute('width', w);
+    it.anno.setAttribute('height', h);
+    it.off = { left: 0, top: 0 };
+    it.wrap.style.width = w + 'px';
+    it.wrap.style.height = h + 'px';
+    boxToWrap(it);
+    sizeThumb(it, e.w, e.h);
+  }
   function applySizes(live) {
+    if (!live) { S.items.forEach(function (it) { sizeItem(it, false); }); return; }
+    /* Mid-gesture only the pages around the screen follow the zoom. Resizing
+       all of them made the browser lay out the whole document every frame;
+       the rest catch up when the gesture settles (relayout). */
+    const top = stage.scrollTop - stage.clientHeight, bot = stage.scrollTop + stage.clientHeight * 2;
+    const list = [];
+    for (let i = firstBoxAt(top); i < S.items.length; i++) {
+      const it = S.items[i];
+      if (it.box && it.box.offsetTop > bot) break;
+      list.push(it);
+    }
+    list.forEach(function (it) { sizeItem(it, true); });
+  }
+  function sizeItem(it, live) {
     const s = S.scale;
-    S.items.forEach(function (it) {
-      if (!it.page || !it.inner) return;          /* not built yet, relayout will size it */
-      const b = baseSize(it);
-      let w = b.w * s, h = b.h * s;
-      let c = b.c ? { left: b.c.left * s, top: b.c.top * s, width: b.c.width * s, height: b.c.height * s } : null;
-      if (!live) {
-        const v = it.page.getViewport({ scale: s, rotation: it.page.rotate + it.rot });
-        it.vp = v; w = v.width; h = v.height;
-        c = cropRectIn(v, it.crop);
-      }
-      it.inner.style.width = Math.floor(w) + 'px';
-      it.inner.style.height = Math.floor(h) + 'px';
-      /* the old bitmap is stretched to the new size and stays up until the
-         sharp one replaces it, so the page never goes blank */
-      if (it.canvas) {
-        it.canvas.style.width = Math.floor(w) + 'px';
-        it.canvas.style.height = Math.floor(h) + 'px';
-      }
-      it.anno.setAttribute('width', w);
-      it.anno.setAttribute('height', h);
-      /* Mid-gesture the viewBox is left where it was: the SVG then scales its own
-         marks to the new size for free, so no page has to rebuild its overlay. */
-      if (!live) it.anno.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+    if (!it.inner) return;                      /* not built yet, relayout will size it */
+    if (!it.page) { sizeEstimated(it); return; }
+    it.estimated = false;
+    const b = baseSize(it);
+    let w = b.w * s, h = b.h * s;
+    let c = b.c ? { left: b.c.left * s, top: b.c.top * s, width: b.c.width * s, height: b.c.height * s } : null;
+    if (!live) {
+      const v = it.page.getViewport({ scale: s, rotation: it.page.rotate + it.rot });
+      it.vp = v; w = v.width; h = v.height;
+      c = cropRectIn(v, it.crop);
+    }
+    it.inner.style.width = Math.floor(w) + 'px';
+    it.inner.style.height = Math.floor(h) + 'px';
+    /* the old bitmap is stretched to the new size and stays up until the
+       sharp one replaces it, so the page never goes blank */
+    if (it.canvas) {
+      it.canvas.style.width = Math.floor(w) + 'px';
+      it.canvas.style.height = Math.floor(h) + 'px';
+    }
+    it.anno.setAttribute('width', w);
+    it.anno.setAttribute('height', h);
+    /* Mid-gesture the viewBox is left where it was: the SVG then scales its own
+       marks to the new size for free, so no page has to rebuild its overlay. */
+    if (!live) it.anno.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
 
-      it.off = c ? { left: c.left, top: c.top } : { left: 0, top: 0 };
-      it.wrap.style.width = Math.floor(c ? c.width : w) + 'px';
-      it.wrap.style.height = Math.floor(c ? c.height : h) + 'px';
-      it.inner.style.left = (-it.off.left) + 'px';
-      it.inner.style.top = (-it.off.top) + 'px';
+    it.off = c ? { left: c.left, top: c.top } : { left: 0, top: 0 };
+    it.wrap.style.width = Math.floor(c ? c.width : w) + 'px';
+    it.wrap.style.height = Math.floor(c ? c.height : h) + 'px';
+    it.inner.style.left = (-it.off.left) + 'px';
+    it.inner.style.top = (-it.off.top) + 'px';
+    boxToWrap(it);
+    if (!live) sizeThumb(it, b.c ? b.c.width : b.w, b.c ? b.c.height : b.h);
 
-      if (it.trPane) {
-        it.trPane.style.width = Math.floor(c ? c.width : w) + 'px';
-        it.trPane.style.minHeight = trSideBySide() ? Math.floor(c ? c.height : h) + 'px' : '0';
-        if (!live && TR.on) paintPane(it);
-      }
-      if (!live) drawShapes(it);
-    });
+    if (it.trPane) {
+      it.trPane.style.width = Math.floor(c ? c.width : w) + 'px';
+      it.trPane.style.minHeight = trSideBySide() ? Math.floor(c ? c.height : h) + 'px' : '0';
+      if (!live && TR.on) paintPane(it);
+    }
+    if (!live) drawShapes(it);
   }
 
-  async function relayout() {
+  async function relayout(opts) {
     if (!S.items.length) return;
     if (S.editing) closeEditor(true);
-    for (let i = 0; i < S.items.length; i++) { if (!S.items[i].page) await ensurePage(S.items[i]); }
+    /* page 1 sets the fit; the others arrive in the background (loadRestPages) */
+    await ensurePage(S.items[0]);
     computeFit();
     $('zoomVal').textContent = Math.round(S.scale * 100) + '%';
+    /* after a zoom, the pages away from the screen take their new size now:
+       keep the page being read where it is */
+    const hold = opts && opts.hold ? holdMiddle() : null;
     applySizes();
+    if (hold) hold();
     S.items.forEach(function (it) {
       if (!it.canvas) return;
       if (it.task) { try { it.task.cancel(); } catch (e) {} it.task = null; }
@@ -540,6 +713,7 @@
     if (Math.abs(next - S.scale) < 0.0005) return;
     if (S.editing) closeEditor(true);
     S.fit = null;
+    jumpHold = null;
     const r = stage.getBoundingClientRect();
     const anchor = grabAnchor(cx == null ? r.left + r.width / 2 : cx,
                               cy == null ? r.top + r.height / 2 : cy);
@@ -554,7 +728,7 @@
     zoomTimer = setTimeout(function () {
       document.body.classList.remove('zooming');
       anchorBox = pinch ? anchorBox : null;
-      relayout();
+      relayout({ hold: true });
     }, delay == null ? 170 : delay);
   }
 
@@ -604,8 +778,8 @@
     io = new IntersectionObserver(function (ents) {
       ents.forEach(function (en) {
         if (!en.isIntersecting) return;
-        const it = S.items.find(function (x) { return x.box === en.target; });
-        if (it) { renderItem(it); if (TR.on) translatePage(it); }
+        const it = en.target._it;
+        if (it && it.box === en.target) { renderItem(it); if (TR.on) translatePage(it); }
       });
     }, { root: stage, rootMargin: '700px 0px' });
     S.items.forEach(function (it) { io.observe(it.box); });
@@ -617,23 +791,130 @@
     const y = it.box.offsetTop, h = it.box.offsetHeight;
     return y + h < top ? top - (y + h) : (y > bot ? y - bot : 0);
   }
+  /* The first page whose box reaches down to y, by bisection: the boxes stand
+     in reading order, so a scroll frame reads a dozen positions, not one per
+     page. */
+  function firstBoxAt(y) {
+    let lo = 0, hi = S.items.length - 1, ans = S.items.length;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1, box = S.items[mid].box;
+      if (box && box.offsetTop + box.offsetHeight >= y) { ans = mid; hi = mid - 1; } else lo = mid + 1;
+    }
+    return ans;
+  }
+
+  /* Pages whose content is in the document (see ensureEls). */
+  const MOUNTED = new Set();
+  function mountPage(it) {
+    if (!it || it.mounted || !it.box) return;
+    it.box.style.width = it.box.style.height = '';
+    it.box.appendChild(it.content);
+    it.mounted = true;
+    MOUNTED.add(it);
+    /* a text layer built while away could not measure its words */
+    if (it.tlFit) fitTextLayer(it);
+  }
+  /* A page keeps its content while it is being worked on: the one selected,
+     one being retyped, one holding the focus, and every page side by side
+     with its translation (whose height depends on the text). */
+  function canUnmount(it) {
+    if (TR.on) return false;
+    if (S.sel && S.sel.it === it) return false;
+    if (S.editing && S.editing.it === it) return false;
+    const a = document.activeElement;
+    return !(a && it.content.contains(a));
+  }
+  function unmountPage(it) {
+    if (!it.mounted) return;
+    it.box.style.width = it.wrap.style.width;
+    it.box.style.height = it.wrap.style.height;
+    it.content.remove();
+    it.mounted = false;
+    MOUNTED.delete(it);
+  }
+  /* A thumbnail is 176 points wide and as tall as its page's proportions,
+     drawn or not, so the rail's layout is right before any is drawn. The
+     rest of its height (the border, the page number) is measured once. */
+  let thumbChrome = 0;
+  function sizeThumb(it, w, h) {
+    if (!it.thumbShell || !(w > 0)) return;
+    const sh = Math.floor((176 * h) / w);
+    if (!it.thumbDone) it.thumbShell.style.height = sh + 'px';
+    if (!it.thumbMounted) it.thumb.style.height = (sh + (thumbChrome || 20)) + 'px';
+  }
+  function mountThumb(it) {
+    if (!it.thumb || it.thumbMounted) return;
+    it.thumb.style.height = '';
+    it.thumb.appendChild(it.thumbContent);
+    it.thumbMounted = true;
+    TMOUNTED.add(it);
+  }
+  function unmountThumb(it, height) {
+    if (!it.thumbMounted) return;
+    it.thumb.style.height = height + 'px';
+    it.thumbContent.remove();
+    it.thumbMounted = false;
+    TMOUNTED.delete(it);
+  }
+  const TMOUNTED = new Set();
+
+  /* an unmounted box holds the page's size itself */
+  function boxToWrap(it) {
+    if (it.mounted || !it.box) return;
+    it.box.style.width = it.wrap.style.width;
+    it.box.style.height = it.wrap.style.height;
+  }
+
+  /* Pages holding a bitmap. Only these can be released, so a scroll frame
+     looks at a handful of pages rather than every page in the document. */
+  const LIVE = new Set();
+  function releaseBitmap(it) {
+    if (it.task) { try { it.task.cancel(); } catch (e) {} it.task = null; }
+    it.rendered = false;
+    if (it.canvas) it.canvas.width = it.canvas.height = 1;
+    if (it.tl) it.tl.innerHTML = '';
+    LIVE.delete(it);
+    /* and what pdf.js holds for it: the drawing instructions and decoded
+       images. pdf.js declines while the page is still being drawn (a
+       thumbnail, say), which is fine: it is released next time. */
+    if (it.page) { try { it.page.cleanup(); } catch (e) {} }
+  }
+
+  /* which way the reader is going: pages ahead are drawn from further off */
+  let lastTop = 0, heading = 1;
   function renderVisible() {
-    const near = 700;
+    if (!S.items.length) return;
+    const st = stage.scrollTop;
+    if (st !== lastTop) { heading = st > lastTop ? 1 : -1; lastTop = st; }
+    const ahead = 1400, behind = 300;
+    const nearTop = heading > 0 ? behind : ahead, nearBot = heading > 0 ? ahead : behind;
     /* A page long scrolled past gives its bitmap back, so a long document
        costs the memory of a few screens, not of every page ever looked at. */
     const keep = Math.max(3000, stage.clientHeight * 4);
-    S.items.forEach(function (it) {
-      if (!it.box) return;
-      const gap = screenGap(it);
-      if (gap <= near) {
-        renderItem(it);
-        if (TR.on) translatePage(it);
-      } else if (gap > keep && it.canvas && it.canvas.width > 1) {
-        if (it.task) { try { it.task.cancel(); } catch (e) {} it.task = null; }
-        it.rendered = false;
-        it.canvas.width = it.canvas.height = 1;
-        if (it.tl) it.tl.innerHTML = '';
-      }
+    const top = stage.scrollTop, bot = top + stage.clientHeight;
+    /* Every position is read before anything is written: a write between two
+       reads makes the browser lay the whole document out again, and with
+       thousands of pages that is what stalled scrolling. */
+    const want = [];
+    for (let i = firstBoxAt(top - nearTop); i < S.items.length; i++) {
+      const it = S.items[i];
+      if (!it.box) continue;
+      if (it.box.offsetTop > bot + nearBot) break;
+      want.push(it);
+    }
+    const drop = [], away = [];
+    LIVE.forEach(function (it) {
+      if (!it.box || !it.box.isConnected || screenGap(it) > keep) drop.push(it);
+    });
+    MOUNTED.forEach(function (it) {
+      if (!it.box || !it.box.isConnected) MOUNTED.delete(it);
+      else if (screenGap(it) > keep && canUnmount(it)) away.push(it);
+    });
+    drop.forEach(releaseBitmap);
+    away.forEach(unmountPage);
+    want.forEach(function (it) {
+      renderItem(it);
+      if (TR.on) translatePage(it);
     });
   }
 
@@ -641,9 +922,19 @@
      Pages are painted nearest to the screen first and only two at a time, so
      the page being read is sharp soonest, and a quick scroll does not leave a
      backlog of pages it has already gone past. */
-  const RQ = { want: new Set(), busy: 0 };
+  /* gen: a document closed mid-draw can leave its promises unsettled, so each
+     document gets a generation and the old one's work no longer counts */
+  const RQ = { want: new Set(), busy: 0, idle: [], gen: 0 };
+  /* resolves once no page is being drawn or waiting to be */
+  function renderIdle() {
+    if (!RQ.busy && !RQ.want.size) return Promise.resolve();
+    return new Promise(function (res) { RQ.idle.push(res); });
+  }
   function renderItem(it) {
-    if (!it || it.rendered || it.task) return;
+    if (!it) return;
+    mountPage(it);
+    ensurePageTools(it);
+    if (it.rendered || it.task) return;
     RQ.want.add(it);
     pumpRender();
   }
@@ -651,20 +942,33 @@
     while (RQ.busy < 2 && RQ.want.size) {
       let best = null, bestGap = Infinity;
       RQ.want.forEach(function (it) {
-        if (!it.box || !it.box.isConnected || it.rendered || it.task || S.items.indexOf(it) < 0) {
+        if (!it.box || !it.box.isConnected || it.rendered || it.task) {
           RQ.want.delete(it); return;
         }
         const gap = screenGap(it);
         if (gap > 1400) { RQ.want.delete(it); return; }   /* gone by — scrolling back asks again */
         if (gap < bestGap) { bestGap = gap; best = it; }
       });
-      if (!best) return;
+      if (!best) break;
       RQ.want.delete(best);
       RQ.busy++;
-      paintItem(best).catch(function () {}).then(function () { RQ.busy--; pumpRender(); });
+      const gen = RQ.gen;
+      paintItem(best).catch(function () {}).then(function () {
+        if (gen !== RQ.gen) return;
+        RQ.busy--;
+        pumpRender();
+      });
+    }
+    if (!RQ.busy && !RQ.want.size) {
+      if (RQ.idle.length) RQ.idle.splice(0).forEach(function (res) { res(); });
+      pumpThumbs();
     }
   }
 
+  function sameView(a, b) {
+    return a === b || (!!a && !!b && a.scale === b.scale && a.rotation === b.rotation &&
+      a.width === b.width && a.height === b.height);
+  }
   async function paintItem(it) {
     await ensurePage(it);
     if (it.rendered || it.task) return;
@@ -694,7 +998,7 @@
       fresh.width = fresh.height = 0;
       return;
     }
-    if (it.task !== task || v !== (it.vp || v)) { fresh.width = fresh.height = 0; return; }
+    if (it.task !== task || !sameView(v, it.vp || v)) { fresh.width = fresh.height = 0; return; }
     it.task = null;
     const old = it.canvas;
     fresh.style.width = Math.floor(v.width) + 'px';
@@ -705,6 +1009,7 @@
     }
     it.canvas = fresh;
     it.rendered = true;
+    LIVE.add(it);
     if (it.src.synthetic && !it.blankMark) {
       it.blankMark = document.createElement('div');
       it.blankMark.className = 'blankmark';
@@ -719,8 +1024,8 @@
     const gen = it.tlGen = (it.tlGen || 0) + 1;
     let tc;
     try { tc = await it.page.getTextContent(); } catch (e) { return; }
-    if (gen !== it.tlGen || viewport !== it.vp && it.vp) return;   /* zoomed again meanwhile */
-    const frag = document.createDocumentFragment(), spans = [], targets = [];
+    if (gen !== it.tlGen || (it.vp && !sameView(viewport, it.vp))) return;   /* zoomed again meanwhile */
+    const frag = document.createDocumentFragment();
     tc.items.forEach(function (item) {
       if (!item.str || !item.str.trim()) return;
       const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
@@ -736,31 +1041,149 @@
       el.style.fontSize = fh + 'px';
       el.style.fontFamily = (st && st.fontFamily) || 'sans-serif';
       el.dataset.asc = asc; el.dataset.fh = fh;
-      frag.appendChild(el); spans.push(el); targets.push(item.width * viewport.scale);
+      el.dataset.tw = item.width * viewport.scale;
+      frag.appendChild(el);
     });
     it.tl.innerHTML = '';
     it.tl.appendChild(frag);
     it.tl.style.visibility = '';
+    /* the words are stretched to their width on the page; that needs them
+       measured, so a page out of the document fits them when it comes back */
+    if (it.mounted) fitTextLayer(it); else it.tlFit = true;
+  }
+  function fitTextLayer(it) {
+    it.tlFit = false;
+    const spans = Array.from(it.tl.children);
     const ws = spans.map(function (el) { return el.getBoundingClientRect().width; });
     spans.forEach(function (el, i) {
-      if (ws[i] > 0 && targets[i] > 0) el.style.transform = 'scaleX(' + (targets[i] / ws[i]) + ')';
+      const target = +el.dataset.tw;
+      if (ws[i] > 0 && target > 0) el.style.transform = 'scaleX(' + (target / ws[i]) + ')';
     });
   }
 
-  /* ---------------- thumbnails ---------------- */
+  /* ---------------- thumbnails ----------------
+     Drawn only while no page is being drawn, one at a time, nearest the
+     visible part of the rail first, so they never hold up the page being
+     read. A page already on screen is copied from its own bitmap, which costs
+     pdf.js nothing; the rest are rendered small. Far off ones give their
+     bitmap back. */
+  const TQ = { want: new Set(), busy: false, gen: 0, task: null, it: null, timer: 0, lastScroll: 0, hold: 0, slow: false };
+  /* A reader scrolling the pages comes first: thumbnails wait until the page
+     has been still a moment, and one being drawn is called off. */
+  function thumbsYield() {
+    TQ.lastScroll = performance.now();
+    if (TQ.task) {
+      try { TQ.task.cancel(); } catch (e) {}
+      if (TQ.it) TQ.want.add(TQ.it);
+    }
+  }
+  /* Saving and searching come first too: no thumbnail starts while they run.
+     Pages of heavy drawings take a second or more each, even small. */
+  function thumbsPause() { TQ.hold++; thumbsYield(); }
+  function thumbsResume() { TQ.hold = Math.max(0, TQ.hold - 1); TQ.lastScroll = performance.now(); pumpThumbs(); }
+  const TLIVE = new Set();
+  function firstThumbAt(y) {
+    let lo = 0, hi = S.items.length - 1, ans = S.items.length;
+    while (lo <= hi) {
+      const mid = (lo + hi) >> 1, th = S.items[mid].thumb;
+      if (th && th.offsetTop + th.offsetHeight >= y) { ans = mid; hi = mid - 1; } else lo = mid + 1;
+    }
+    return ans;
+  }
   function drawVisibleThumbs() {
-    if (rail.hidden) return;
+    if (rail.hidden || !S.items.length) return;
     const host = $('railPages');
     const top = host.scrollTop - 500, bot = host.scrollTop + host.clientHeight + 500;
-    S.items.forEach(function (it) {
-      if (!it.thumb) return;
-      const y = it.thumb.offsetTop;
-      if (y + 170 > top && y < bot) drawThumb(it);
+    const keepTop = host.scrollTop - 4000, keepBot = host.scrollTop + host.clientHeight + 4000;
+    /* read every position first, then write */
+    let chrome = 0;
+    if (!thumbChrome) {
+      TMOUNTED.forEach(function (it) {
+        if (!chrome && it.thumb.isConnected && it.thumbShell.style.height) {
+          chrome = it.thumb.offsetHeight - parseFloat(it.thumbShell.style.height);
+        }
+      });
+    }
+    const near = [];
+    for (let i = firstThumbAt(top); i < S.items.length; i++) {
+      const it = S.items[i];
+      if (!it.thumb) continue;
+      if (it.thumb.offsetTop > bot) break;
+      near.push(it);
+    }
+    const drop = [], away = [];
+    TLIVE.forEach(function (it) {
+      const th = it.thumb;
+      if (!th || !th.isConnected || th.offsetTop + th.offsetHeight < keepTop || th.offsetTop > keepBot) drop.push(it);
     });
+    TMOUNTED.forEach(function (it) {
+      const th = it.thumb;
+      if (!th || !th.isConnected) { TMOUNTED.delete(it); return; }
+      if (th.offsetTop + th.offsetHeight < keepTop || th.offsetTop > keepBot) away.push([it, th.offsetHeight]);
+    });
+    /* the measured chrome replaces the guess on every thumbnail still held */
+    if (chrome > 0 && chrome !== thumbChrome) {
+      thumbChrome = chrome;
+      S.items.forEach(function (it) {
+        if (!it.thumbMounted && it.thumbShell && it.thumbShell.style.height) {
+          it.thumb.style.height = (parseFloat(it.thumbShell.style.height) + chrome) + 'px';
+        }
+      });
+    }
+    drop.forEach(function (it) {
+      it.thumbCanvas.width = it.thumbCanvas.height = 1;
+      it.thumbDone = false;
+      TLIVE.delete(it);
+    });
+    away.forEach(function (x) { unmountThumb(x[0], x[1]); });
+    near.forEach(function (it) {
+      mountThumb(it);
+      ensureThumbTools(it);
+      if (!it.thumbDone) TQ.want.add(it);
+    });
+    /* first thumbnails in: measure their chrome next frame */
+    if (!thumbChrome && near.length) requestAnimationFrame(drawVisibleThumbs);
+    pumpThumbs();
   }
   $('railPages').addEventListener('scroll', drawVisibleThumbs);
 
-  async function drawThumb(it) {
+  /* asks for a page's thumbnail; it is drawn when its turn comes */
+  function drawThumb(it) {
+    if (!it || it.thumbDone || !it.thumb) return;
+    TQ.want.add(it);
+    pumpThumbs();
+  }
+  function pumpThumbs() {
+    if (TQ.busy || !TQ.want.size || rail.hidden) return;
+    if (RQ.busy || RQ.want.size || TQ.hold) return;  /* pages first: pumpRender calls back when idle */
+    /* a document whose thumbnails are slow to draw waits for a longer pause */
+    const quiet = TQ.slow ? 1500 : 400;
+    const still = performance.now() - TQ.lastScroll;
+    if (still < quiet) {
+      clearTimeout(TQ.timer);
+      TQ.timer = setTimeout(pumpThumbs, quiet + 20 - still);
+      return;
+    }
+    const host = $('railPages');
+    const mid = host.scrollTop + host.clientHeight / 2;
+    let best = null, bestGap = Infinity;
+    TQ.want.forEach(function (it) {
+      if (!it.thumb || !it.thumb.isConnected || it.thumbDone) { TQ.want.delete(it); return; }
+      const gap = Math.abs(it.thumb.offsetTop - mid);
+      if (gap < bestGap) { bestGap = gap; best = it; }
+    });
+    if (!best) return;
+    TQ.want.delete(best);
+    TQ.busy = true;
+    const gen = TQ.gen;
+    paintThumb(best).catch(function () {}).then(function () {
+      if (gen !== TQ.gen) return;
+      TQ.busy = false;
+      pumpThumbs();
+    });
+  }
+
+  async function paintThumb(it) {
     if (it.thumbDone) return;
     it.thumbDone = true;
     await ensurePage(it);
@@ -778,9 +1201,24 @@
     it.thumbCanvas.style.left = (c ? -c.left : 0) + 'px';
     it.thumbCanvas.style.top = (c ? -c.top : 0) + 'px';
     it.thumbShell.style.height = Math.floor(c ? c.height : v.height) + 'px';
+    const ctx = it.thumbCanvas.getContext('2d');
+    /* the page is on screen, sharp and turned the same way: shrink its bitmap */
+    if (it.rendered && !it.task && it.canvas && it.canvas.width > 1 && it.vp &&
+        it.vp.rotation === v.rotation) {
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(it.canvas, 0, 0, it.thumbCanvas.width, it.thumbCanvas.height);
+      TLIVE.add(it);
+      return;
+    }
+    const task = it.page.render({ canvasContext: ctx, viewport: v });
+    TQ.task = task; TQ.it = it;
+    const t0 = performance.now();
     try {
-      await it.page.render({ canvasContext: it.thumbCanvas.getContext('2d'), viewport: v }).promise;
+      await task.promise;
+      TLIVE.add(it);
+      if (performance.now() - t0 > 300) TQ.slow = true;
     } catch (e) { it.thumbDone = false; }
+    finally { if (TQ.task === task) { TQ.task = null; TQ.it = null; } }
   }
 
   /* ---------------- shapes ---------------- */
@@ -4273,9 +4711,10 @@
   }
 
   /* ---------------- crop ---------------- */
-  function applyCrop(it, rect, all) {
+  async function applyCrop(it, rect, all) {
     snapshot();
     if (all) {
+      await ensureAllPages();
       /* same crop insets on every page, measured from each page's own box */
       const ref = it.page.view;
       const dl = rect.x - ref[0], db = rect.y - ref[1];
@@ -4436,9 +4875,55 @@
   /* rebuilds the given items into a fresh PDF, carrying rotation, crop, marks and
      text. The work is in the engine; core supplies what only it knows: the
      modules' painters and hooks, and how photo pins are drawn. */
+  /* Characters the standard PDF fonts cannot draw (✓ →, Greek, Cyrillic…) are
+     saved in DejaVu Sans, and emoji in Noto Emoji, each embedded as a subset.
+     They and fontkit, which pdf-lib needs to embed them, load the first time a
+     save needs them. The service worker installs fontkit and DejaVu Sans with
+     the app (1.5 MB); Noto Emoji (1.9 MB) is cached the first time it is used. */
+  let unicodeFont = null;
+  function loadUnicodeFont() {
+    if (!unicodeFont) {
+      const kit = window.fontkit ? Promise.resolve(window.fontkit) : new Promise(function (ok, fail) {
+        const sc = document.createElement('script');
+        sc.src = 'js/vendor/fontkit.umd.min.js';
+        sc.onload = function () { window.fontkit ? ok(window.fontkit) : fail(new Error('fontkit missing')); };
+        sc.onerror = function () { sc.remove(); fail(new Error('fontkit did not load')); };
+        document.head.appendChild(sc);
+      });
+      const font = fetch('assets/fonts/DejaVuSans.ttf').then(function (r) {
+        if (!r.ok) throw new Error('font: HTTP ' + r.status);
+        return r.arrayBuffer();
+      });
+      unicodeFont = Promise.all([kit, font]).then(function (got) {
+        return { fontkit: got[0], bytes: new Uint8Array(got[1]) };
+      });
+      /* a failed load (offline before it was ever cached) is tried again next save */
+      unicodeFont.catch(function () { unicodeFont = null; });
+    }
+    return unicodeFont;
+  }
+
+  let emojiFont = null;
+  function loadEmojiFont() {
+    if (!emojiFont) {
+      emojiFont = fetch('assets/fonts/NotoEmoji.ttf').then(function (r) {
+        if (!r.ok) throw new Error('emoji font: HTTP ' + r.status);
+        return r.arrayBuffer();
+      }).then(function (buf) { return new Uint8Array(buf); });
+      emojiFont.catch(function () { emojiFont = null; });
+    }
+    return emojiFont;
+  }
+
   async function buildPdf(items, cache, opts) {
+    thumbsPause();
+    try { return await buildPdfNow(items, cache, opts); }
+    finally { thumbsResume(); }
+  }
+  function buildPdfNow(items, cache, opts) {
     return E.buildPdf(items, cache, opts, {
       measure: textWidth,
+      unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont },
       fontNeeds: EXT.fontNeeds,
       shapePainters: EXT.shapePainters,
       prepare: EXT.prepare,
@@ -4780,24 +5265,38 @@
   }
 
   /* ---------------- navigation ---------------- */
+  /* a jump holds its page in view while pages load (see jumpHold); the
+     reader scrolling, touching, clicking or typing in the pages lets go */
+  ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (type) {
+    stage.addEventListener(type, function () { jumpHold = null; }, { passive: true });
+  });
+
   function goTo(n) {
     n = Math.max(1, Math.min(S.items.length, n));
     const it = S.items[n - 1]; if (!it) return;
     S.jumping = true;
     stage.scrollTop = it.box.offsetTop - 14;
+    jumpHold = it;
+    mountPage(it);
     setCurrent(n);
     setTimeout(function () { S.jumping = false; }, 320);
   }
 
+  let curMarked = null;
   function setCurrent(n) {
     S.current = Math.max(1, Math.min(S.items.length, n));
     $('pageIn').value = String(S.current);
-    S.items.forEach(function (it, i) {
-      const on = i + 1 === S.current;
-      it.thumb && it.thumb.classList.toggle('active', on);
-      it.box && it.box.classList.toggle('cur', on);
-    });
     const it = S.items[S.current - 1];
+    /* only the page that stops being current and the one that starts */
+    if (curMarked && curMarked !== it) {
+      curMarked.thumb && curMarked.thumb.classList.remove('active');
+      curMarked.box && curMarked.box.classList.remove('cur');
+    }
+    if (it) {
+      it.thumb && it.thumb.classList.add('active');
+      it.box && it.box.classList.add('cur');
+    }
+    curMarked = it || null;
     if (it && it.thumb && !rail.hidden) {
       const host = $('railPages'), t = it.thumb.offsetTop;
       if (t < host.scrollTop || t > host.scrollTop + host.clientHeight - 70) host.scrollTop = t - 40;
@@ -4806,15 +5305,19 @@
 
   let rafPending = false;
   stage.addEventListener('scroll', function () {
-    if (!S.items.length || rafPending) return;
+    if (!S.items.length) return;
+    thumbsYield();
+    if (rafPending) return;
     rafPending = true;
     requestAnimationFrame(function () {
       rafPending = false;
       if (!S.jumping) {
+        /* the last page starting above the reading line, by bisection */
         const mid = stage.scrollTop + stage.clientHeight * .35;
-        let best = 1;
-        for (let i = 0; i < S.items.length; i++) {
-          if (S.items[i].box.offsetTop <= mid) best = i + 1; else break;
+        let lo = 0, hi = S.items.length - 1, best = 1;
+        while (lo <= hi) {
+          const m = (lo + hi) >> 1;
+          if (S.items[m].box.offsetTop <= mid) { best = m + 1; lo = m + 1; } else hi = m - 1;
         }
         if (best !== S.current) setCurrent(best);
       }
@@ -4828,7 +5331,8 @@
   async function textOf(it) {
     const key = it.src.id + ':' + it.num;
     if (S.textCache.has(key)) return S.textCache.get(key);
-    await ensurePage(it);
+    /* a page pdf.js cannot load reads as empty, and is tried again next time */
+    try { await ensurePage(it); } catch (e) { return ''; }
     let s = '';
     try {
       const tc = await it.page.getTextContent();
@@ -4847,21 +5351,33 @@
   });
 
   async function runSearch() {
+    thumbsPause();
+    try { await searchNow(); }
+    finally { thumbsResume(); }
+  }
+  async function searchNow() {
     const q = $('findIn').value.trim();
     S.query = q; S.hits = []; S.hitIndex = -1;
     $('hitList').innerHTML = ''; clearMarks();
     if (q.length < 2) { $('hitCount').textContent = q ? 'Type at least two characters' : ''; return; }
     $('hitCount').textContent = 'Reading text…';
     const needle = q.toLowerCase();
-    for (let i = 0; i < S.items.length; i++) {
-      const t = await textOf(S.items[i]), hay = t.toLowerCase();
-      let from = 0, idx;
-      while ((idx = hay.indexOf(needle, from)) !== -1) {
-        S.hits.push({ page: i + 1, snippet: snippetOf(t, idx, q.length) });
-        from = idx + needle.length;
-        if (S.hits.length > 400) break;
-      }
+    /* pages are read a few at a time, so the pdf.js worker always has the next
+       one to work on, and looked through in order */
+    const items = S.items.slice(), total = items.length, BATCH = 8;
+    for (let at = 0; at < total; at += BATCH) {
+      const texts = await Promise.all(items.slice(at, at + BATCH).map(textOf));
       if (S.query !== q) return;
+      for (let k = 0; k < texts.length; k++) {
+        const t = texts[k], hay = t.toLowerCase();
+        let from = 0, idx;
+        while ((idx = hay.indexOf(needle, from)) !== -1) {
+          S.hits.push({ page: at + k + 1, snippet: snippetOf(t, idx, q.length) });
+          from = idx + needle.length;
+          if (S.hits.length > 400) break;
+        }
+      }
+      if (total > 40) $('hitCount').textContent = 'Reading text… ' + Math.min(total, at + BATCH) + ' of ' + total + ' pages';
     }
     $('hitCount').textContent = S.hits.length
       ? S.hits.length + (S.hits.length === 1 ? ' match' : ' matches') + ' · Enter to step through'
@@ -5444,6 +5960,7 @@
   }
 
   function paintPane(it) {
+    ensurePane(it);
     if (!it.trPane) return;
     it.trLang.textContent = trPair();
     const b = it.trBody;
@@ -5588,6 +6105,7 @@
   function setParallel(on) {
     if (TR.on === on) return;
     TR.on = on;
+    if (on) S.items.forEach(function (it) { mountPage(it); ensurePane(it); });
     document.body.classList.toggle('parallel', on);
     $('btnTr').classList.toggle('on', on);
     $('btnTr').dataset.label = on ? 'Translation on' : 'Translate';
@@ -6501,7 +7019,8 @@
     removeItem: removeItem, moveItem: moveItem, rotateItem: rotateItem,
     newItem: newItem, ensureEls: ensureEls,
     buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource,
-    insertBlank: insertBlank, ensurePage: ensurePage, pdfjsLib: pdfjsLib, PDFLib: PDFLib,
+    insertBlank: insertBlank, ensurePage: ensurePage, ensureAllPages: ensureAllPages, renderIdle: renderIdle,
+    pdfjsLib: pdfjsLib, PDFLib: PDFLib,
     hexRgb: hexRgb, rotPt: rotPt, boxOf: boxOf, shapeMid: shapeMid,
     beginDrag: beginDrag, rectCorners: rectCorners, arrowHead: arrowHead,
     dashOf: dashOf, CAP_CSS: CAP_CSS, JOIN_CSS: JOIN_CSS,

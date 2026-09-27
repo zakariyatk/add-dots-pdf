@@ -11,10 +11,10 @@ import {
   type PDFFont,
   type PDFImage,
 } from 'pdf-lib';
-import { fitText } from '../fonts';
 import { boxOf, rotPt, shapeMid } from '../geometry';
 import type { Mark, PageItem, Pt } from '../model';
 import { hexRgb, type Extra } from '../save';
+import { drawLine, fitLine, textWidth, type Face } from '../text';
 import type { Painter } from './common';
 
 export interface ImageMark extends Mark {
@@ -167,22 +167,23 @@ const link: Painter = (p, s: LinkMark, ctx) => {
     cy = (bx.y1 + bx.y2) / 2;
   const col = hexRgb(s.c || LINK_COLOR);
   const font = ctx.extra.linkFont as PDFFont | undefined;
+  const face: Face | null = font ? { font, fallback: ctx.extra.fallback } : null;
   const fs = Math.max(8, Math.min(16, h * 0.55));
-  if (s.style === 'underline' && font) {
+  if (s.style === 'underline' && face) {
     const label = linkLabel(s);
-    p.drawText(label, { x: bx.x1, y: cy - fs * 0.35, size: fs, font, color: col });
-    const lw = font.widthOfTextAtSize(label, fs);
+    drawLine(p, label, face, { x: bx.x1, y: cy - fs * 0.35, size: fs, color: col });
+    const lw = textWidth(label, fs, face);
     p.drawLine({
       start: { x: bx.x1, y: cy - fs * 0.42 },
       end: { x: bx.x1 + lw, y: cy - fs * 0.42 },
       thickness: Math.max(0.5, fs * 0.06),
       color: col,
     });
-  } else if (s.style === 'button' && font) {
+  } else if (s.style === 'button' && face) {
     p.drawRectangle({ x: bx.x1, y: bx.y1, width: w, height: h, color: col, borderWidth: 0 });
     const label = linkLabel(s);
-    const lw = font.widthOfTextAtSize(label, fs);
-    p.drawText(label, { x: cx - lw / 2, y: cy - fs * 0.35, size: fs, font, color: rgb(1, 1, 1) });
+    const lw = textWidth(label, fs, face);
+    drawLine(p, label, face, { x: cx - lw / 2, y: cy - fs * 0.35, size: fs, color: rgb(1, 1, 1) });
   } else {
     p.drawCircle({ x: cx, y: cy, size: Math.min(w, h) / 2, color: col });
   }
@@ -213,6 +214,7 @@ const table: Painter = (p, s: TableMark, ctx) => {
   });
   const font = ctx.extra.tableFont as PDFFont | undefined;
   if (!font) return;
+  const face: Face = { font, fallback: ctx.extra.fallback };
   const minRowH = bh / rows;
   const fs = Math.max(6.5, Math.min(10.5, minRowH * 0.34));
   for (let r = 0; r < rows; r++) {
@@ -224,14 +226,13 @@ const table: Painter = (p, s: TableMark, ctx) => {
       const x = colXs[c]! + 3,
         y = rowYs[r + 1]! + rh * 0.32;
       const o = ptAt(x, y);
-      /* fitted to the cell, and safe for the standard font. v1 called an
-         X.fitText that was never defined, so it cut at 24 characters and a
-         character the font cannot encode failed the whole save. */
-      p.drawText(fitText(font, txt, fs, cw - 6), {
+      /* fitted to the cell, with the fallback font for what Helvetica cannot
+         draw. v1 called an X.fitText that was never defined, so it cut at 24
+         characters and a character the font cannot encode failed the save. */
+      drawLine(p, fitLine(face, txt, fs, cw - 6), face, {
         x: o[0],
         y: o[1],
         size: fs,
-        font,
         color: hexRgb('#1C1F24'),
         rotate: degrees(s.r || 0),
       });

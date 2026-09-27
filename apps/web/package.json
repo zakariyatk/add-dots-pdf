@@ -7,9 +7,14 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "bench": "node bench/run.mjs",
+    "smoke": "node bench/smoke.mjs"
   },
   "dependencies": {
     "@adddots/engine": "*"
+  },
+  "devDependencies": {
+    "playwright-core": "1.56.1"
   }
 }
