@@ -102,6 +102,17 @@
       return it.fields;
     }
 
+    /* The scan reads every page's widgets through the pdf.js worker, so it
+       waits until the pages on screen are drawn: a long form must not hold up
+       the first page. Saving waits for it (below), so a value the file already
+       held is always written out. */
+    let scanning = Promise.resolve(0);
+    function scanSoon() {
+      scanning = X.renderIdle().then(scanAll);
+      return scanning;
+    }
+    X.prepare.push(function () { return scanning; });
+
     async function scanAll() {
       let n = 0;
       for (const it of S.items) { n += (await readFields(it)).length; }
@@ -557,7 +568,7 @@
     };
 
     X.on('pages', function () {
-      scanAll().then(repaintSoon);
+      scanSoon().then(repaintSoon);
     });
     X.on('reset', function () {
       values = {};

@@ -59,3 +59,39 @@ Linux container, 4 CPUs, headless Chromium, medians of 3 runs.
 | large-text-2000p   | 2000  | 2228          | 4226    | 1508     | 133           | 5           | 3404        | 6028    | 8617      | 2716    | 1143       | 127530    |
 | cad-a1-8sheets     | 8     | 13460         | 13481   | 12444    | 17            | 0           | 3638        | 2869    | 975       | 250     | 558        | 3190      |
 | scans-40p          | 40    | 556           | 1967    | 12       | 17            | 0           | 1637        | 797     | 137       | 556     | 972        | 4276      |
+
+### After Stage B (`results/stage-b.json`), baseline → stage-b
+
+| file               | first page ms | open TBT     | scroll p95 ms | jump end ms | zoom ms     | search ms   | save ms     | browser MB | DOM nodes      |
+| ------------------ | ------------- | ------------ | ------------- | ----------- | ----------- | ----------- | ----------- | ---------- | -------------- |
+| small-text-12p     | 352 → 198     | 22 → 0       | 17 → 17       | 722 → 734   | 768 → 749   | 137 → 153   | 451 → 665   | 461 → 520  | 3329 → 3245    |
+| medium-report-300p | 770 → 367     | 222 → 21     | 17 → 17       | 1070 → 857  | 1323 → 877  | 1210 → 1203 | 1250 → 1127 | 605 → 590  | 22874 → 12832  |
+| large-text-2000p   | 2228 → 1272   | 1508 → 607   | 133 → 17      | 3404 → 1218 | 6028 → 1478 | 8617 → 8950 | 2716 → 2726 | 1143 → 971 | 127530 → 42810 |
+| cad-a1-8sheets     | 13460 → 2745  | 12444 → 2215 | 17 → 17       | 3638 → 3990 | 2869 → 2853 | 975 → 2205  | 250 → 236   | 558 → 549  | 3190 → 3469    |
+| scans-40p          | 556 → 378     | 12 → 0       | 17 → 17       | 1637 → 920  | 797 → 729   | 137 → 144   | 556 → 566   | 972 → 651  | 4276 → 3870    |
+
+What changed: page 1 no longer waits for every page to load (the rest load
+in the background and take their real size as they arrive); scrolling reads
+page positions by bisection and never interleaves reads with writes; zooming
+resizes only the pages near the screen until it settles; thumbnails draw one
+at a time, only when no page is being drawn, nobody is scrolling, saving or
+searching, and are copied from the page's own bitmap when it has one; pages
+far off screen release their bitmap and pdf.js data; one pdf.js worker serves
+every document, and a closed document is freed; the hover tools and
+translation panes are made when first needed.
+
+Known limits, for the next stages:
+
+- CAD sheets still block the main thread for about 2 s while page 1 draws:
+  pdf.js 3.11 rasterises on the main thread, and one stroke of 40,000
+  segments cannot be split. Drawing in a worker (Stage D) is the fix.
+- Search on the CAD file measures 2.2 s here against 1 s before. Searched
+  on an idle document it is unchanged (about 1 s in both); in the benchmark a
+  sheet's thumbnail is being drawn when the search starts, work that v1 did
+  during its 13-second open instead.
+- The 2,000-page file still builds 43,000 DOM nodes and takes 1.3 s to page
+  1, most of it the browser laying out every page's box: a virtualized page
+  list (Stage C) removes it.
+- pdf-lib is parsed at start-up although only saving uses it: about 65 ms,
+  or 300 ms on a 4x slower CPU. Loading it on demand needs the engine bundle
+  and four modules rewired, which belongs with the move to ES modules.

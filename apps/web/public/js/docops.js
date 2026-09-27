@@ -307,6 +307,7 @@
       try { info = (await src.doc.getMetadata()).info || {}; } catch (e) {}
       const it = S.items[S.current - 1];
       await X.ensurePage(it);
+      await X.ensureAllPages();         /* the page sizes below count every page */
       const v = it.page.view;
       const sizes = {};
       S.items.forEach(function (x) {

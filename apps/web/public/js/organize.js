@@ -344,8 +344,9 @@
         cell.dataset.i = i;
         const shell = document.createElement('div');
         shell.className = 'orgshell';
-        /* reuse the thumbnail core already painted rather than rendering twice */
-        if (it.thumbCanvas && it.thumbCanvas.width) {
+        /* reuse the thumbnail core already painted rather than rendering twice
+           (one far from view has given its bitmap back, and shows as pending) */
+        if (it.thumbDone && it.thumbCanvas && it.thumbCanvas.width > 1) {
           const img = document.createElement('img');
           try { img.src = it.thumbCanvas.toDataURL('image/png'); } catch (e) {}
           shell.appendChild(img);
