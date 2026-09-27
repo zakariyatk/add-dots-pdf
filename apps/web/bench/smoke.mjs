@@ -163,6 +163,7 @@ try {
     check('after zooming, the page being read is still on screen', Math.abs(cur - 30) <= 1, { current: cur });
 
     /* ---- a second file: the first is closed on the shared worker ---- */
+    const workersBefore = page.workers().length;
     await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
     check(
       'a second file opens at page 1',
@@ -176,9 +177,15 @@ try {
       'the second file draws after the first was closed',
       await page.evaluate(() => window.ADDPDF.S.items[149].rendered),
     );
-    check('one pdf.js worker for both files', page.workers().length === 1, {
-      workers: page.workers().length,
-    });
+    /* pdf.js's parser, the render worker and the render worker's own parser */
+    check(
+      'no new workers for the second file',
+      page.workers().length === workersBefore && workersBefore <= 3,
+      {
+        before: workersBefore,
+        after: page.workers().map((w) => w.url().replace(/^.*\//, '')),
+      },
+    );
     await page.click('#btnSave');
     const [dl] = await Promise.all([
       page.waitForEvent('download', { timeout: 60000 }),
@@ -349,6 +356,55 @@ try {
       .join('');
     const want = Buffer.from('Prefilled on page 400').toString('hex').toUpperCase();
     check('a value the file already held is saved, even saving at once', text.includes(want));
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- a heavy drawing is drawn off the main thread, and looks the same ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await page
+      .waitForFunction(() => window.ADDPDF.renderWorker() === 'on', null, { timeout: 10000 })
+      .catch(() => {});
+    check('the render worker starts', (await page.evaluate(() => window.ADDPDF.renderWorker())) === 'on');
+    await page.evaluate(() => {
+      window.__long = [];
+      new PerformanceObserver((l) => l.getEntries().forEach((e) => window.__long.push(e.duration))).observe({
+        type: 'longtask',
+      });
+    });
+    /* 8 A1 sheets of 40,000 lines each: over a second a sheet to draw */
+    await open(page, join(CORPUS_DIR, 'cad-a1-8sheets.pdf'));
+    await page.evaluate(() => window.ADDPDF.goTo(2));
+    await page.waitForFunction(() => window.ADDPDF.S.items[1].rendered, null, { timeout: 30000 });
+    await page.waitForTimeout(300);
+    const longest = await page.evaluate(() => Math.round(Math.max(0, ...window.__long)));
+    check('drawing two CAD sheets never freezes the page for more than 250 ms', longest < 250, {
+      longestTaskMs: longest,
+    });
+    /* the same page drawn here by pdf.js, against the worker's bitmap */
+    const diff = await page.evaluate(async () => {
+      const it = window.ADDPDF.S.items[1];
+      const a = it.canvas;
+      const b = document.createElement('canvas');
+      b.width = a.width;
+      b.height = a.height;
+      const rs = a.width / Math.floor(it.vp.width);
+      await it.page.render({
+        canvasContext: b.getContext('2d', { alpha: false }),
+        viewport: it.vp,
+        transform: Math.abs(rs - 1) > 0.01 ? [rs, 0, 0, rs, 0, 0] : null,
+      }).promise;
+      const pa = a.getContext('2d').getImageData(0, 0, a.width, a.height).data;
+      const pb = b.getContext('2d').getImageData(0, 0, b.width, b.height).data;
+      let off = 0;
+      for (let i = 0; i < pa.length; i += 4) {
+        if (Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2]) > 48)
+          off++;
+      }
+      return { w: a.width, h: a.height, percentOff: +((100 * off) / (pa.length / 4)).toFixed(3) };
+    });
+    check("the worker's picture matches pdf.js drawing it here", diff.percentOff < 0.5, diff);
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }

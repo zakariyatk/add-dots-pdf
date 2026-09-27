@@ -21,6 +21,129 @@
   try { pdfjsLib.GlobalWorkerOptions.workerPort = new Worker('js/vendor/pdf.worker.min.js'); }
   catch (e) { /* no workers here: pdf.js falls back to its own */ }
 
+  /* Pages are drawn in a worker of their own (js/render-worker.js) and come
+     back as finished bitmaps, so a page that takes seconds to draw never
+     freezes the app. The worker opens its own copy of each document the first
+     time one of its pages is drawn. Where it cannot run (no OffscreenCanvas,
+     a page it fails on), pages are drawn here as before.
+
+     A file being opened is sent to it as soon as it is read (open()), so it
+     parses alongside the main thread's copy and page 1 does not wait for it.
+
+     render() returns what pdf.js's page.render() does, { promise, cancel },
+     so every caller that waits on or cancels a page's drawing is unchanged.
+     The promise gives an ImageBitmap; it rejects with a
+     RenderingCancelledException when cancelled and a RenderWorkerError when
+     the worker could not draw the page. */
+  const RW = (function () {
+    let worker = null, rid = 0, nextKey = 0;
+    const waiting = new Map();      /* rid -> { res, rej, key } */
+    const keys = new WeakMap();     /* a source's bytes -> its document's key in the worker */
+    const failed = new Set();       /* keys the worker could not open */
+    const api = { state: 'off', ready: Promise.resolve(false) };
+    function err(name, message) { const e = new Error(message); e.name = name; return e; }
+    function stop() {
+      api.state = 'off';
+      if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
+      waiting.forEach(function (w) { w.rej(err('RenderWorkerError', 'render worker stopped')); });
+      waiting.clear();
+    }
+    try {
+      if (typeof OffscreenCanvas !== 'undefined' && typeof createImageBitmap === 'function') {
+        worker = new Worker('js/render-worker.js');
+        api.state = 'wait';
+        api.ready = new Promise(function (res) {
+          /* a worker that has not answered in a few seconds is not coming */
+          const timer = setTimeout(function () { stop(); res(false); }, 4000);
+          worker.onmessage = function (e) {
+            const m = e.data;
+            if (m.op === 'hello') {
+              clearTimeout(timer);
+              if (m.ok) api.state = 'on'; else stop();
+              res(api.state === 'on');
+              return;
+            }
+            const w = waiting.get(m.rid);
+            if (!w) { if (m.bitmap) m.bitmap.close(); return; }
+            waiting.delete(m.rid);
+            if (m.bitmap) w.res(m.bitmap);
+            else if (m.cancelled) w.rej(err('RenderingCancelledException', 'cancelled'));
+            else {
+              if (/^open failed/.test(m.error || '')) failed.add(w.key);
+              w.rej(err('RenderWorkerError', m.error || 'render failed'));
+            }
+          };
+          worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop(); res(false); };
+          worker.postMessage({ op: 'hello' });
+        });
+      }
+    } catch (e) { stop(); }
+
+    /* opens (or, with a password now known, reopens) these bytes in the
+       worker; given the file they were read from, the worker reads that
+       itself rather than this thread copying them across */
+    api.open = function (bytes, password, file) {
+      if (api.state !== 'on' || !bytes) return;
+      let key = keys.get(bytes);
+      if (key == null) { key = ++nextKey; keys.set(bytes, key); }
+      failed.delete(key);
+      if (file) {
+        worker.postMessage({ op: 'open', key: key, file: file, password: password || null });
+        return;
+      }
+      const copy = bytes.slice(0);
+      worker.postMessage({ op: 'open', key: key, bytes: copy, password: password || null }, [copy.buffer]);
+    };
+    function keyFor(src) {
+      if (keys.get(src.bytes) == null) api.open(src.bytes, src.password);
+      return keys.get(src.bytes);
+    }
+    /* can the worker draw this page? Not while it is still starting: a file
+       opened the moment the app loads is drawn here rather than kept waiting */
+    api.usable = function (it) {
+      if (api.state !== 'on' || !it.src.bytes || !it.src.doc) return false;
+      const key = keys.get(it.src.bytes);
+      return key == null || !failed.has(key);
+    };
+    /* the page at viewport v into a w x h bitmap, v shifted/scaled by
+       transform; drop frees what the worker holds for the page once drawn;
+       intent is pdf.js's ('print' for file bytes rather than screen pixels) */
+    api.render = function (it, v, w, h, transform, drop, intent) {
+      const key = keyFor(it.src), id = ++rid;
+      const promise = new Promise(function (res, rej) {
+        waiting.set(id, { res: res, rej: rej, key: key });
+      });
+      worker.postMessage({
+        op: 'render', rid: id, key: key, num: it.num,
+        scale: v.scale, rotation: v.rotation, w: w, h: h, transform: transform || null, drop: !!drop,
+        intent: intent || null
+      });
+      return {
+        promise: promise,
+        cancel: function () {
+          const wt = waiting.get(id);
+          if (!wt) return;
+          waiting.delete(id);
+          if (worker) worker.postMessage({ op: 'cancel', rid: id });
+          wt.rej(err('RenderingCancelledException', 'cancelled'));
+        }
+      };
+    };
+    /* what the worker holds for one page, or for a whole document */
+    api.release = function (it) {
+      const key = it.src.bytes ? keys.get(it.src.bytes) : null;
+      if (key != null && worker) worker.postMessage({ op: 'release', key: key, num: it.num });
+    };
+    api.close = function (bytes) {
+      const key = bytes ? keys.get(bytes) : null;
+      if (key == null) return;
+      keys.delete(bytes);
+      failed.delete(key);
+      if (worker) worker.postMessage({ op: 'close', key: key });
+    };
+    return api;
+  })();
+
   const stage = $('stage'), rail = $('rail');
   const DPR = Math.min(window.devicePixelRatio || 1, 2);
   /* what one page canvas is allowed to cost: a side a mobile GPU will still
@@ -155,12 +278,15 @@
   function isPdf(f) { return f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')); }
   async function readBytes(f) { return new Uint8Array(await f.arrayBuffer()); }
 
+  let lastPassword = null;
   async function loadWithPassword(bytes) {
+    lastPassword = null;
     const task = pdfjsLib.getDocument({ data: bytes.slice(0) });
     task.onPassword = function (cb, reason) {
       $('pwRow').classList.add('show');
       if (reason === pdfjsLib.PasswordResponses.INCORRECT_PASSWORD) showError('That password did not work. Try again.');
-      const go = function () { if ($('pwIn').value) cb($('pwIn').value); };
+      /* the one that works is kept: the render worker opens the file too */
+      const go = function () { if ($('pwIn').value) cb(lastPassword = $('pwIn').value); };
       $('pwBtn').onclick = go;
       $('pwIn').onkeydown = function (e) { if (e.key === 'Enter') go(); };
       $('pwIn').focus();
@@ -174,12 +300,18 @@
     let bytes, doc;
     try { bytes = await readBytes(file); }
     catch (e) { showError('The file could not be read from disk. Try again.'); return false; }
+    RW.open(bytes, null, file);
     try { doc = await loadWithPassword(bytes); }
-    catch (e) { showError('This file could not be opened. It may be damaged or not a real PDF.'); return false; }
+    catch (e) {
+      RW.close(bytes);
+      showError('This file could not be opened. It may be damaged or not a real PDF.'); return false;
+    }
+    if (lastPassword) RW.open(bytes, lastPassword, file);
 
     hardReset();
     if (S.tool !== 'select') setTool('select');
     const src = { id: ++srcId, name: file.name, bytes: bytes, doc: doc };
+    if (lastPassword) src.password = lastPassword;
     S.sources.push(src);
     for (let i = 1; i <= doc.numPages; i++) S.items.push(newItem(src, i, 0, false));
 
@@ -226,7 +358,7 @@
     TR.epoch++; TR.stop = false;
     /* the documents being closed: free them in the worker too */
     S.sources.forEach(function (src) {
-      if (src.doc && src.doc !== keepDoc) { try { src.doc.destroy(); } catch (e) {} }
+      if (src.doc && src.doc !== keepDoc) { RW.close(src.bytes); try { src.doc.destroy(); } catch (e) {} }
     });
     S.sources = []; S.items = []; S.undo = []; S.textCache = new Map();
     S.hits = []; S.hitIndex = -1; S.query = ''; S.current = 1; S.fit = 'width'; S.sel = null;
@@ -878,6 +1010,7 @@
        images. pdf.js declines while the page is still being drawn (a
        thumbnail, say), which is fine: it is released next time. */
     if (it.page) { try { it.page.cleanup(); } catch (e) {} }
+    RW.release(it);
   }
 
   /* which way the reader is going: pages ahead are drawn from further off */
@@ -926,6 +1059,32 @@
      document gets a generation and the old one's work no longer counts */
   const RQ = { want: new Set(), busy: 0, idle: [], gen: 0 };
   /* resolves once no page is being drawn or waiting to be */
+  /* A page drawn into a 2d canvas at viewport vp, for an export that wants
+     its pixels (JPG, redaction, compression): in the render worker when it
+     can, so a heavy page does not freeze the app, and here otherwise. A very
+     large one is drawn here too, since the worker's copy would briefly double
+     it. opts: transform, intent. */
+  const WORKER_EXPORT_PX = 36e6;
+  async function drawPageInto(it, vp, ctx, opts) {
+    opts = opts || {};
+    await ensurePage(it);
+    const w = ctx.canvas.width, h = ctx.canvas.height;
+    if (RW.usable(it) && w * h <= WORKER_EXPORT_PX) {
+      try {
+        const bitmap = await RW.render(it, vp, w, h, opts.transform, !it.rendered, opts.intent).promise;
+        ctx.drawImage(bitmap, 0, 0);
+        bitmap.close();
+        return;
+      } catch (e) {
+        if (!e || e.name !== 'RenderWorkerError') throw e;
+      }
+    }
+    await it.page.render({
+      canvasContext: ctx, viewport: vp, intent: opts.intent || 'display',
+      transform: opts.transform || null, background: opts.background
+    }).promise;
+  }
+
   function renderIdle() {
     if (!RQ.busy && !RQ.want.size) return Promise.resolve();
     return new Promise(function (res) { RQ.idle.push(res); });
@@ -986,19 +1145,42 @@
     const fresh = document.createElement('canvas');
     fresh.width = Math.max(1, Math.floor(v.width * rs));
     fresh.height = Math.max(1, Math.floor(v.height * rs));
-    const task = it.page.render({
-      canvasContext: fresh.getContext('2d', { alpha: false }),
-      viewport: v, transform: rs !== 1 ? [rs, 0, 0, rs, 0, 0] : null
-    });
-    it.task = task;
-    try { await task.promise; }
-    catch (e) {
-      /* cancelled for a newer zoom — and only clear the slot if it is still ours */
-      if (it.task === task) it.task = null;
-      fresh.width = fresh.height = 0;
-      return;
+    const transform = rs !== 1 ? [rs, 0, 0, rs, 0, 0] : null;
+    let inWorker = RW.usable(it);
+    for (;;) {
+      const task = inWorker
+        ? RW.render(it, v, fresh.width, fresh.height, transform)
+        : it.page.render({
+          canvasContext: fresh.getContext('2d', { alpha: false }),
+          viewport: v, transform: transform
+        });
+      it.task = task;
+      let bitmap = null;
+      try { bitmap = await task.promise; }
+      catch (e) {
+        if (it.task === task) it.task = null;
+        /* the worker could not draw it: draw it here, unless it was
+           called off meanwhile */
+        if (inWorker && e && e.name === 'RenderWorkerError' && !it.rendered && !it.task &&
+            sameView(v, it.vp || v) && it.box && it.box.isConnected) {
+          inWorker = false;
+          continue;
+        }
+        /* cancelled for a newer zoom — and only clear the slot if it is still ours */
+        fresh.width = fresh.height = 0;
+        return;
+      }
+      if (it.task !== task || !sameView(v, it.vp || v)) {
+        if (bitmap) bitmap.close();
+        fresh.width = fresh.height = 0;
+        return;
+      }
+      if (bitmap) {
+        fresh.getContext('2d', { alpha: false }).drawImage(bitmap, 0, 0);
+        bitmap.close();
+      }
+      break;
     }
-    if (it.task !== task || !sameView(v, it.vp || v)) { fresh.width = fresh.height = 0; return; }
     it.task = null;
     const old = it.canvas;
     fresh.style.width = Math.floor(v.width) + 'px';
@@ -1210,15 +1392,26 @@
       TLIVE.add(it);
       return;
     }
-    const task = it.page.render({ canvasContext: ctx, viewport: v });
-    TQ.task = task; TQ.it = it;
+    let inWorker = RW.usable(it);
     const t0 = performance.now();
-    try {
-      await task.promise;
-      TLIVE.add(it);
-      if (performance.now() - t0 > 300) TQ.slow = true;
-    } catch (e) { it.thumbDone = false; }
-    finally { if (TQ.task === task) { TQ.task = null; TQ.it = null; } }
+    for (;;) {
+      const task = inWorker
+        /* a page not on screen will not be drawn again soon: free it after */
+        ? RW.render(it, v, it.thumbCanvas.width, it.thumbCanvas.height, null, !it.rendered)
+        : it.page.render({ canvasContext: ctx, viewport: v });
+      TQ.task = task; TQ.it = it;
+      try {
+        const bitmap = await task.promise;
+        if (bitmap) { ctx.drawImage(bitmap, 0, 0); bitmap.close(); }
+        TLIVE.add(it);
+        if (performance.now() - t0 > 300) TQ.slow = true;
+      } catch (e) {
+        /* the worker could not draw it: draw it here */
+        if (inWorker && e && e.name === 'RenderWorkerError' && TQ.task === task) { inWorker = false; continue; }
+        it.thumbDone = false;
+      } finally { if (TQ.task === task) { TQ.task = null; TQ.it = null; } }
+      break;
+    }
   }
 
   /* ---------------- shapes ---------------- */
@@ -4951,6 +5144,11 @@
   }
 
   function download(bytes, name, type) {
+    /* the browser is copying the file out and writing it to disk: thumbnails,
+       drawn in a worker alongside, wait until that is done rather than
+       compete with it */
+    thumbsPause();
+    setTimeout(thumbsResume, 1500);
     const url = URL.createObjectURL(new Blob([bytes], { type: type || 'application/pdf' }));
     try {
       const a = document.createElement('a');
@@ -5169,10 +5367,9 @@
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, cv.width, cv.height);
     const ox = c ? -c.left : 0, oy = c ? -c.top : 0;
-    await it.page.render({
-      canvasContext: ctx, viewport: vp, background: '#FFFFFF',
-      transform: (ox || oy) ? [1, 0, 0, 1, ox, oy] : null
-    }).promise;
+    await drawPageInto(it, vp, ctx, {
+      background: '#FFFFFF', transform: (ox || oy) ? [1, 0, 0, 1, ox, oy] : null
+    });
     const svg = annoSvg(it, vp, noPins);
     if (svg) {
       const img = await svgImage(svg);
@@ -7020,6 +7217,9 @@
     newItem: newItem, ensureEls: ensureEls,
     buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource,
     insertBlank: insertBlank, ensurePage: ensurePage, ensureAllPages: ensureAllPages, renderIdle: renderIdle,
+    drawPageInto: drawPageInto,
+    /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */
+    renderWorker: function () { return RW.state; },
     pdfjsLib: pdfjsLib, PDFLib: PDFLib,
     hexRgb: hexRgb, rotPt: rotPt, boxOf: boxOf, shapeMid: shapeMid,
     beginDrag: beginDrag, rectCorners: rectCorners, arrowHead: arrowHead,

@@ -57,4 +57,8 @@ export default tseslint.config(
     files: ['apps/web/public/sw.js'],
     languageOptions: { globals: { ...globals.serviceworker } },
   },
+  {
+    files: ['apps/web/public/js/render-worker.js'],
+    languageOptions: { globals: { ...globals.worker } },
+  },
 );
