@@ -184,9 +184,20 @@ export function oneLine(s: unknown): string {
 export function fitLine(face: PDFFont | Face, str: unknown, size: number, maxW: number): string {
   const s = oneLine(str);
   if (textWidth(s, size, face) <= maxW) return s;
+  /* The longest run of whole characters that fits with the ellipsis, found by
+     bisection: text never gets wider as characters come off its end, so this
+     is the same answer as dropping one at a time, in a dozen measurements
+     rather than one per character (3,000 characters took over 20 s). */
   const chars = clusters(s);
-  while (chars.length > 1 && textWidth(chars.join('') + '…', size, face) > maxW) chars.pop();
-  return chars.join('') + '…';
+  const fits = (k: number) => textWidth(chars.slice(0, k).join('') + '…', size, face) <= maxW;
+  let lo = 1,
+    hi = chars.length;
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1;
+    if (fits(mid)) lo = mid;
+    else hi = mid - 1;
+  }
+  return chars.slice(0, lo).join('') + '…';
 }
 
 /** Draws one line, run by run. `opts` are pdf-lib's drawText options (x, y,

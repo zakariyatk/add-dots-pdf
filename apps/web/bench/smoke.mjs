@@ -190,6 +190,40 @@ try {
     await ctx.close();
   }
 
+  /* ---- a jump made before the pages have loaded lands on its page ---- */
+  for (const how of ['goTo', 'the page number box']) {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, MIXED);
+    const loaded = await page.evaluate(() => window.ADDPDF.S.items.filter((i) => i.page).length);
+    if (how === 'goTo') await page.evaluate(() => window.ADDPDF.goTo(55));
+    else {
+      await page.fill('#pageIn', '55');
+      await page.press('#pageIn', 'Enter');
+    }
+    await allLoaded(page);
+    await page.waitForTimeout(1500);
+    const r = await page.evaluate(() => {
+      const st = document.getElementById('stage'),
+        it = window.ADDPDF.S.items[54];
+      const top = it.box.offsetTop - st.scrollTop;
+      return {
+        current: window.ADDPDF.S.current,
+        onScreen: top < st.clientHeight && top + it.box.offsetHeight > 0,
+        top,
+      };
+    });
+    check(
+      'a jump by ' + how + ' made while pages load lands on page 55 (mixed sizes)',
+      r.current === 55 && r.onScreen,
+      {
+        ...r,
+        loadedWhenJumped: loaded,
+      },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- pages far from the screen leave the document, and come back whole ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
@@ -315,6 +349,61 @@ try {
       .join('');
     const want = Buffer.from('Prefilled on page 400').toString('hex').toUpperCase();
     check('a value the file already held is saved, even saving at once', text.includes(want));
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- a page pdf.js cannot load must not stop search or saving ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    /* page 150 of the file fails to load, as a damaged page would */
+    await page.evaluate(() => {
+      const watch = () => {
+        const src = window.ADDPDF.S.sources[0];
+        if (src && src.doc && !src.doc.__bad) {
+          const get = src.doc.getPage.bind(src.doc);
+          src.doc.getPage = (n) => (n === 150 ? Promise.reject(new Error('damaged page')) : get(n));
+          src.doc.__bad = true;
+        } else if (!src) setTimeout(watch, 0);
+      };
+      watch();
+    });
+    await open(page, PREFILLED);
+    check(
+      'a file with an unloadable page opens',
+      await page.evaluate(() => window.ADDPDF.S.items.length === 400),
+    );
+    await page.waitForTimeout(4000);
+    await page.click('#btnFind');
+    await page.fill('#findIn', 'nothing here');
+    const done = await page
+      .waitForFunction(
+        () => /matches|No matches/.test(document.getElementById('hitCount').textContent),
+        null,
+        {
+          timeout: 30000,
+        },
+      )
+      .then(() => true)
+      .catch(() => false);
+    check('search over it completes', done, await page.textContent('#hitCount'));
+    await page.click('#btnSave');
+    const dl = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.click('#saveGo')])
+      .then((r) => r[0])
+      .catch(() => null);
+    check('it still saves', !!dl, await page.textContent('#saveNote'));
+    if (dl) {
+      const out = await PDFDocument.load(readFileSync(await dl.path()));
+      const c = out.getPage(399).node.Contents();
+      const refs = c instanceof PDFArray ? c.asArray() : [c];
+      const text = refs
+        .map((r) => Buffer.from(decodePDFRawStream(out.context.lookup(r)).decode()).toString('latin1'))
+        .join('');
+      check(
+        'fields after the bad page are still read: page 400 is saved filled in',
+        text.includes(Buffer.from('Prefilled on page 400').toString('hex').toUpperCase()),
+      );
+    }
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }

@@ -69,7 +69,9 @@
        kind it is, and the HTML control we floated over it. */
     async function readFields(it) {
       if (it.fields) return it.fields;
-      await X.ensurePage(it);
+      /* a page pdf.js cannot load has no fields to offer; left unscanned, so
+         a later scan tries it again, and the pages after it are still read */
+      try { await X.ensurePage(it); } catch (e) { return []; }
       let annots = [];
       try { annots = await it.page.getAnnotations({ intent: 'display' }); }
       catch (e) { annots = []; }
@@ -108,7 +110,8 @@
        held is always written out. */
     let scanning = Promise.resolve(0);
     function scanSoon() {
-      scanning = X.renderIdle().then(scanAll);
+      /* never rejects: saving waits on it */
+      scanning = X.renderIdle().then(scanAll).catch(function () { return 0; });
       return scanning;
     }
     X.prepare.push(function () { return scanning; });

@@ -577,3 +577,48 @@ describe('emoji: drawn in Noto Emoji, read back unchanged', () => {
     expect(fitted.slice(0, -1)).toMatch(/^(👨‍👩‍👧)+$/u);
   });
 });
+
+/* v1's shortening, kept here as the reference: drop one character at a time */
+function fitLineOneByOne(face: Face, str: string, size: number, maxW: number): string {
+  const s = str.replace(/\s/g, ' ');
+  if (textWidth(s, size, face) <= maxW) return s;
+  const chars = Array.from(
+    new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(s),
+    (g) => g.segment,
+  );
+  while (chars.length > 1 && textWidth(chars.join('') + '…', size, face) > maxW) chars.pop();
+  return chars.join('') + '…';
+}
+
+describe('shortening long text with an ellipsis', () => {
+  it('gives the same result as dropping one character at a time', async () => {
+    const { face } = await faces();
+    const words = ['Door', 'Ωμέγα', '✓', '→', 'Кириллица', 'engineer', '•', '€12', 'Ünïcödé', 'A1'];
+    let seed = 7;
+    const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+    for (let n = 0; n < 60; n++) {
+      const text = Array.from(
+        { length: 1 + Math.floor(rnd() * 14) },
+        () => words[Math.floor(rnd() * words.length)],
+      ).join(' ');
+      const size = 6 + rnd() * 10,
+        maxW = 5 + rnd() * 160;
+      expect(fitLine(face, text, size, maxW), text + ' @ ' + maxW).toBe(
+        fitLineOneByOne(face, text, size, maxW),
+      );
+    }
+  });
+
+  /* dropping one character at a time re-measured the whole string each time:
+     3,000 characters took over 20 s, all of it on the main thread while saving */
+  it('stays fast on long text the standard fonts cannot draw', async () => {
+    const { face } = await faces();
+    const long = 'Ωμέγα '.repeat(500); /* 3,000 characters */
+    const t0 = performance.now();
+    const fitted = fitLine(face, long, 10, 120);
+    const ms = performance.now() - t0;
+    expect(fitted.endsWith('…')).toBe(true);
+    expect(textWidth(fitted, 10, face)).toBeLessThanOrEqual(120);
+    expect(ms).toBeLessThan(1500);
+  });
+});

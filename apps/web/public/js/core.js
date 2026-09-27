@@ -221,6 +221,7 @@
     TQ.gen++; TQ.busy = false; TQ.want.clear(); TQ.task = null; TQ.it = null; TQ.slow = false;
     RQ.idle.splice(0).forEach(function (res) { res(); });
     resizeQ.clear();
+    jumpHold = null;
     loadEpoch++;
     TR.epoch++; TR.stop = false;
     /* the documents being closed: free them in the worker too */
@@ -453,6 +454,9 @@
      frame, holding still whatever is under the middle of the screen. */
   const resizeQ = new Set();
   let resizeRaf = 0;
+  /* The page a jump went to, held in view while the pages above it take their
+     real size (flushResizes); let go by the reader or a zoom (goTo, zoomTo). */
+  let jumpHold = null;
   function queueResize(it) {
     resizeQ.add(it);
     if (!resizeRaf) resizeRaf = requestAnimationFrame(flushResizes);
@@ -474,8 +478,11 @@
     resizeQ.clear();
     if (!list.length || !S.items.length) return;
     /* the page under the middle of the screen stays where it is: note where it
-       starts, resize, then scroll by however far it moved */
-    const hold = holdMiddle();
+       starts, resize, then scroll by however far it moved. After a jump, the
+       page jumped to is what stays: pages above it were laid out at a guessed
+       size, and holding the middle instead left the reader pages short. */
+    const target = jumpHold && jumpHold.box && jumpHold.box.isConnected ? jumpHold : null;
+    const hold = target ? function () { stage.scrollTop = target.box.offsetTop - 14; } : holdMiddle();
     list.forEach(function (it) {
       if (!it.estimated || !it.page || !it.inner || !it.box || !it.box.isConnected) return;
       it.estimated = false;
@@ -706,6 +713,7 @@
     if (Math.abs(next - S.scale) < 0.0005) return;
     if (S.editing) closeEditor(true);
     S.fit = null;
+    jumpHold = null;
     const r = stage.getBoundingClientRect();
     const anchor = grabAnchor(cx == null ? r.left + r.width / 2 : cx,
                               cy == null ? r.top + r.height / 2 : cy);
@@ -5257,11 +5265,18 @@
   }
 
   /* ---------------- navigation ---------------- */
+  /* a jump holds its page in view while pages load (see jumpHold); the
+     reader scrolling, touching, clicking or typing in the pages lets go */
+  ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (type) {
+    stage.addEventListener(type, function () { jumpHold = null; }, { passive: true });
+  });
+
   function goTo(n) {
     n = Math.max(1, Math.min(S.items.length, n));
     const it = S.items[n - 1]; if (!it) return;
     S.jumping = true;
     stage.scrollTop = it.box.offsetTop - 14;
+    jumpHold = it;
     mountPage(it);
     setCurrent(n);
     setTimeout(function () { S.jumping = false; }, 320);
@@ -5316,7 +5331,8 @@
   async function textOf(it) {
     const key = it.src.id + ':' + it.num;
     if (S.textCache.has(key)) return S.textCache.get(key);
-    await ensurePage(it);
+    /* a page pdf.js cannot load reads as empty, and is tried again next time */
+    try { await ensurePage(it); } catch (e) { return ''; }
     let s = '';
     try {
       const tc = await it.page.getTextContent();
