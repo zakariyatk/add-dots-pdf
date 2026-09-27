@@ -66,7 +66,7 @@
             const w = waiting.get(m.rid);
             if (!w) { if (m.bitmap) m.bitmap.close(); return; }
             waiting.delete(m.rid);
-            if (m.bitmap) w.res(m.bitmap);
+            if (m.bitmap) { if (w.task) w.task.engine = m.engine; w.res(m.bitmap); }
             else if (m.cancelled) w.rej(err('RenderingCancelledException', 'cancelled'));
             else {
               if (/^open failed/.test(m.error || '')) failed.add(w.key);
@@ -107,8 +107,10 @@
     };
     /* the page at viewport v into a w x h bitmap, v shifted/scaled by
        transform; drop frees what the worker holds for the page once drawn;
-       intent is pdf.js's ('print' for file bytes rather than screen pixels) */
-    api.render = function (it, v, w, h, transform, drop, intent) {
+       intent is pdf.js's ('print' for file bytes rather than screen pixels);
+       fast: a part of a page, which the worker may draw with PDFium (the
+       task's engine says which drew it) */
+    api.render = function (it, v, w, h, transform, drop, intent, fast) {
       const key = keyFor(it.src), id = ++rid;
       const promise = new Promise(function (res, rej) {
         waiting.set(id, { res: res, rej: rej, key: key });
@@ -116,9 +118,10 @@
       worker.postMessage({
         op: 'render', rid: id, key: key, num: it.num,
         scale: v.scale, rotation: v.rotation, w: w, h: h, transform: transform || null, drop: !!drop,
-        intent: intent || null
+        intent: intent || null, fast: !!fast
       });
-      return {
+      const task = {
+        engine: null,
         promise: promise,
         cancel: function () {
           const wt = waiting.get(id);
@@ -128,6 +131,8 @@
           wt.rej(err('RenderingCancelledException', 'cancelled'));
         }
       };
+      waiting.get(id).task = task;
+      return task;
     };
     /* what the worker holds for one page, or for a whole document */
     api.release = function (it) {
@@ -348,6 +353,7 @@
   function hardReset(keepDoc) {
     EXT.emit('reset');
     S.items.forEach(function (it) { if (it.task) { try { it.task.cancel(); } catch (e) {} } });
+    DETAILED.forEach(dropDetail);
     LIVE.clear(); TLIVE.clear(); MOUNTED.clear(); TMOUNTED.clear();
     RQ.gen++; RQ.busy = 0; RQ.want.clear();
     TQ.gen++; TQ.busy = false; TQ.want.clear(); TQ.task = null; TQ.it = null; TQ.slow = false;
@@ -784,6 +790,7 @@
     const hold = opts && opts.hold ? holdMiddle() : null;
     applySizes();
     if (hold) hold();
+    DETAILED.forEach(dropDetail);
     S.items.forEach(function (it) {
       if (!it.canvas) return;
       if (it.task) { try { it.task.cancel(); } catch (e) {} it.task = null; }
@@ -793,6 +800,7 @@
       if (it.tl) it.tl.style.visibility = 'hidden';
     });
     renderVisible(); drawVisibleThumbs();
+    detailSoon(0);
   }
 
   /* ---------------- smooth zooming ----------------
@@ -1005,6 +1013,7 @@
     it.rendered = false;
     if (it.canvas) it.canvas.width = it.canvas.height = 1;
     if (it.tl) it.tl.innerHTML = '';
+    dropDetail(it);
     LIVE.delete(it);
     /* and what pdf.js holds for it: the drawing instructions and decoded
        images. pdf.js declines while the page is still being drawn (a
@@ -1058,7 +1067,6 @@
   /* gen: a document closed mid-draw can leave its promises unsettled, so each
      document gets a generation and the old one's work no longer counts */
   const RQ = { want: new Set(), busy: 0, idle: [], gen: 0 };
-  /* resolves once no page is being drawn or waiting to be */
   /* A page drawn into a 2d canvas at viewport vp, for an export that wants
      its pixels (JPG, redaction, compression): in the render worker when it
      can, so a heavy page does not freeze the app, and here otherwise. A very
@@ -1085,6 +1093,7 @@
     }).promise;
   }
 
+  /* resolves once no page is being drawn or waiting to be */
   function renderIdle() {
     if (!RQ.busy && !RQ.want.size) return Promise.resolve();
     return new Promise(function (res) { RQ.idle.push(res); });
@@ -1128,6 +1137,12 @@
     return a === b || (!!a && !!b && a.scale === b.scale && a.rotation === b.rotation &&
       a.width === b.width && a.height === b.height);
   }
+  /* how much of full resolution one page bitmap may have at viewport v */
+  function bitmapCap(v) {
+    return Math.min(1,
+      MAX_CANVAS_SIDE / Math.max(v.width * DPR, v.height * DPR),
+      Math.sqrt(MAX_CANVAS_PX / Math.max(1, v.width * DPR * v.height * DPR)));
+  }
   async function paintItem(it) {
     await ensurePage(it);
     if (it.rendered || it.task) return;
@@ -1136,15 +1151,34 @@
        (phones commonly stop at 4096) and costs a fortune to composite. Cap the
        bitmap and let CSS stretch the last bit — far past screen resolution
        anyway, and it keeps panning and pinching on a phone at full speed. */
-    const k = Math.min(1,
-      MAX_CANVAS_SIDE / Math.max(v.width * DPR, v.height * DPR),
-      Math.sqrt(MAX_CANVAS_PX / Math.max(1, v.width * DPR * v.height * DPR)));
+    let k = bitmapCap(v);
+    /* past the cap, the detail layer draws what is on screen sharp: the page's
+       own bitmap only fills the edges for a moment while scrolling, so it is
+       kept small. A big one cost 90 MB and froze scrolling for 0.4 s while
+       the browser stretched it over a page 14,000 pixels wide. */
+    if (k < 1 && RW.usable(it)) {
+      k = Math.min(k, Math.sqrt(BASE_PX_UNDER_DETAIL / Math.max(1, v.width * DPR * v.height * DPR)));
+    }
     const rs = DPR * k;
     /* Painted off screen and swapped in whole: the stretched old picture stays
        up until then, so zooming never flashes white. */
+    const fw = Math.max(1, Math.floor(v.width * rs)), fh = Math.max(1, Math.floor(v.height * rs));
+    /* Zooming on past the cap would draw the same bitmap again: the whole
+       page at the most pixels allowed. Keep it, stretched to the new size;
+       the detail layer makes the part on screen sharp. */
+    if (k < 1 && it.canvas && it.canvas.width === fw && it.canvas.height === fh &&
+        it.baseRot === v.rotation && it.canvas.isConnected) {
+      it.canvas.style.width = Math.floor(v.width) + 'px';
+      it.canvas.style.height = Math.floor(v.height) + 'px';
+      it.rendered = true;
+      LIVE.add(it);
+      buildTextLayer(it, v).then(function () { if (S.query) markItem(it); });
+      detailSoon(0);
+      return;
+    }
     const fresh = document.createElement('canvas');
-    fresh.width = Math.max(1, Math.floor(v.width * rs));
-    fresh.height = Math.max(1, Math.floor(v.height * rs));
+    fresh.width = fw;
+    fresh.height = fh;
     const transform = rs !== 1 ? [rs, 0, 0, rs, 0, 0] : null;
     let inWorker = RW.usable(it);
     for (;;) {
@@ -1190,6 +1224,7 @@
       old.width = old.height = 0;                  /* hand the old bitmap back now */
     }
     it.canvas = fresh;
+    it.baseRot = v.rotation;
     it.rendered = true;
     LIVE.add(it);
     if (it.src.synthetic && !it.blankMark) {
@@ -1200,6 +1235,104 @@
     }
     /* the words come after the picture and do not hold up the next page */
     buildTextLayer(it, v).then(function () { if (S.query) markItem(it); });
+    /* zoomed past what one bitmap holds: the part on screen, sharp */
+    if (k < 1) detailSoon(0);
+  }
+
+  /* ---------------- the detail layer ----------------
+     Zoomed right in, a page's bitmap is capped (MAX_CANVAS_SIDE / _PX) and
+     CSS stretches it: fine lines go soft. Once scrolling or zooming settles,
+     each page on screen whose bitmap is capped gets a second canvas over it,
+     drawn sharp for just the part on screen (and a margin round it). It is
+     drawn in the render worker; without the worker there is none, and the
+     stretched bitmap stays as before. */
+  const DETAIL_MARGIN = 0.25;         /* of the screen, each side */
+  const BASE_PX_UNDER_DETAIL = 4e6;   /* a page's own bitmap, once a detail covers it */
+  let detailTimer = 0;
+  function detailSoon(delay) {
+    clearTimeout(detailTimer);
+    detailTimer = setTimeout(updateDetails, delay == null ? 160 : delay);
+  }
+  function dropDetail(it) {
+    if (it.detailTask) { try { it.detailTask.cancel(); } catch (e) {} it.detailTask = null; }
+    if (it.detail) {
+      it.detail.width = it.detail.height = 0;
+      if (it.detail.parentNode) it.detail.parentNode.removeChild(it.detail);
+      it.detail = null;
+    }
+    it.detailKey = '';
+    DETAILED.delete(it);
+  }
+  const DETAILED = new Set();         /* pages with a detail canvas or one on the way */
+  /* a bigger window shows more of the page than the detail covers */
+  window.addEventListener('resize', function () { detailSoon(); });
+  function updateDetails() {
+    if (!S.items.length || document.body.classList.contains('zooming')) return;
+    const sr = stage.getBoundingClientRect();
+    const mx = sr.width * DETAIL_MARGIN, my = sr.height * DETAIL_MARGIN;
+    const view = { l: sr.left - mx, t: sr.top - my, r: sr.right + mx, b: sr.bottom + my };
+    /* read every position first, then write */
+    const plan = [];
+    /* not waiting for the page's own bitmap: after a zoom the old one stays
+       up, stretched, while it is redrawn, and the detail can land first */
+    LIVE.forEach(function (it) {
+      if (!it.vp || !it.mounted || !it.inner || !RW.usable(it)) return;
+      const v = it.vp;
+      if (bitmapCap(v) >= 1) return;                   /* its bitmap will be sharp */
+      const ir = it.inner.getBoundingClientRect();
+      const wr = it.wrap.getBoundingClientRect();        /* the part shown, after a crop */
+      const l = Math.max(view.l, wr.left, ir.left), t = Math.max(view.t, wr.top, ir.top);
+      const r = Math.min(view.r, wr.right, ir.right), b = Math.min(view.b, wr.bottom, ir.bottom);
+      if (r - l < 2 || b - t < 2) return;
+      /* in the page's own CSS pixels, where the canvas sits */
+      const x = Math.floor(l - ir.left), y = Math.floor(t - ir.top);
+      const w = Math.ceil(r - ir.left) - x, h = Math.ceil(b - ir.top) - y;
+      /* on screen now, without the margin: redrawn only once that leaves
+         what the current detail covers */
+      const sx = Math.max(sr.left, wr.left) - ir.left, sy = Math.max(sr.top, wr.top) - ir.top;
+      const ex = Math.min(sr.right, wr.right) - ir.left, ey = Math.min(sr.bottom, wr.bottom) - ir.top;
+      plan.push({ it: it, x: x, y: y, w: w, h: h, sx: sx, sy: sy, ex: ex, ey: ey });
+    });
+    const keep = new Set();
+    plan.forEach(function (p) {
+      const it = p.it, v = it.vp;
+      keep.add(it);
+      const key = v.scale + '/' + v.rotation;
+      const d = it.detailRect;
+      if (it.detailKey === key && d && p.sx >= d.x && p.sy >= d.y && p.ex <= d.x + d.w && p.ey <= d.y + d.h) return;
+      drawDetail(it, v, key, p);
+    });
+    DETAILED.forEach(function (it) { if (!keep.has(it)) dropDetail(it); });
+  }
+  function drawDetail(it, v, key, p) {
+    if (it.detailTask) { try { it.detailTask.cancel(); } catch (e) {} }
+    const pw = Math.max(1, Math.round(p.w * DPR)), ph = Math.max(1, Math.round(p.h * DPR));
+    const task = RW.render(it, v, pw, ph, [DPR, 0, 0, DPR, -p.x * DPR, -p.y * DPR], false, null, true);
+    it.detailTask = task;
+    DETAILED.add(it);
+    task.promise.then(function (bitmap) {
+      if (it.detailTask !== task) { bitmap.close(); return; }
+      it.detailTask = null;
+      /* the zoom or the page changed while it was drawn */
+      if (!it.vp || !LIVE.has(it) || it.vp.scale + '/' + it.vp.rotation !== key) { bitmap.close(); return; }
+      let c = it.detail;
+      if (!c) {
+        c = document.createElement('canvas');
+        c.className = 'detail';
+        it.detail = c;
+      }
+      c.width = pw; c.height = ph;
+      c.getContext('2d', { alpha: false }).drawImage(bitmap, 0, 0);
+      bitmap.close();
+      c.style.left = p.x + 'px'; c.style.top = p.y + 'px';
+      c.style.width = p.w + 'px'; c.style.height = p.h + 'px';
+      if (c.parentNode !== it.inner) it.inner.insertBefore(c, it.tl);
+      it.detailKey = key;
+      it.detailRect = { x: p.x, y: p.y, w: p.w, h: p.h };
+      it.detailEngine = task.engine;
+    }, function () {
+      if (it.detailTask === task) it.detailTask = null;
+    });
   }
 
   async function buildTextLayer(it, viewport) {
@@ -5519,6 +5652,7 @@
         if (best !== S.current) setCurrent(best);
       }
       renderVisible();
+      detailSoon();
     });
   });
 
@@ -7220,6 +7354,8 @@
     drawPageInto: drawPageInto,
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */
     renderWorker: function () { return RW.state; },
+    /* zoomed past the bitmap cap, the part on screen is drawn sharp (Stage D2) */
+    hasDetail: true,
     pdfjsLib: pdfjsLib, PDFLib: PDFLib,
     hexRgb: hexRgb, rotPt: rotPt, boxOf: boxOf, shapeMid: shapeMid,
     beginDrag: beginDrag, rectCorners: rectCorners, arrowHead: arrowHead,

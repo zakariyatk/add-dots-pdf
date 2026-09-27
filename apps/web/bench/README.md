@@ -155,6 +155,65 @@ Some timings vary widely between benchmark runs: the small file's save measured
 305, 352 and 708 ms in three runs of this build, and the CAD file's jump 4.0 to
 5.2 s.
 
+### Stage D2: sharp at high zoom (`results/stage-d2.json`)
+
+Two new columns measure it: **deep zoom ms**, zooming in to 600% until the
+page being read is sharp; and **deep step ms**, one step back out (500%) until
+it is sharp again. For builds before this one, which only stretch a capped
+bitmap, "sharp" means "drawn". The Stage D1 build, measured again the same day
+for these columns, is `results/d1-deep.json`.
+
+| file               | deep zoom ms       | deep step ms | zoom ms     | browser MB |
+| ------------------ | ------------------ | ------------ | ----------- | ---------- |
+| small-text-12p     | 454 → 483          | 774 → 787    | 711 → 741   | 499 → 499  |
+| medium-report-300p | 496 → 707          | 622 → 582    | 710 → 764   | 573 → 572  |
+| large-text-2000p   | 1384 → 1274        | 1154 → 1061  | 1050 → 1058 | 847 → 818  |
+| cad-a1-8sheets     | 1876 (soft) → 1568 | 2170 → 638   | 2747 → 3805 | 551 → 606  |
+| scans-40p          | 516 → 658          | 1681 → 1930  | 745 → 690   | 786 → 751  |
+
+What changed:
+
+- **Detail layer.** Past 8,192 pixels a side (4,096 on phones), or 22 million
+  pixels (5.5 million on phones), a page's bitmap is capped and was stretched
+  by CSS, so an A1 sheet at 600% (14,304 pixels wide) showed its lines soft.
+  Now, once scrolling or zooming settles, each such page on screen gets a
+  second canvas over it: just the part on screen, and a quarter screen round
+  it, drawn at full resolution in the render worker. It follows scrolling and
+  is dropped when the page leaves the screen.
+- **PDFium for heavy pages.** pdf.js runs all of a page's drawing commands
+  for any part of it, so a part of a CAD sheet cost as much as the sheet
+  (about 1.2 s). A page that took pdf.js over 250 ms has its parts drawn by
+  PDFium (`@embedpdf/pdfium`, vendored in `js/vendor/pdfium/`), in about 0.1
+  to 0.2 s. It loads, 2.2 MB compressed, only when a page proves heavy, and
+  not at all for other documents. Pages with form fields stay with pdf.js,
+  which leaves the fields to the app's own controls. PDFium's parts differ
+  from pdf.js's in 0.5–1.2% of pixels (edge smoothing), checked on pages
+  turned by the file (90°, 270°), turned by the reader (90°, 180°), with an
+  offset crop box, and on a 2× screen. If PDFium cannot load, pdf.js draws
+  the parts.
+- **A small bitmap under the detail.** With a detail over it, the page's own
+  bitmap only fills the edges for a moment while scrolling, so past the cap it
+  is at most 4 million pixels. At 22 million pixels, scrolling the A1 sheet at
+  600% froze the page for about 0.4 s (in this headless, GPU-less browser)
+  while it was stretched over a page 14,000 pixels wide; now it does not
+  freeze at all. It is also kept, rather than drawn again, for further zoom
+  steps past the cap: that is the CAD file's deep step, 2.2 s → 0.6 s.
+- **The render worker reads messages while it draws.** pdf.js went from one
+  15 ms chunk of drawing to the next as a microtask, so the worker read
+  nothing (a cancel, a detail wanted now) until a whole page was done. It now
+  gives way to its message queue between chunks.
+
+What it costs:
+
+- the CAD file holds 55 MB more: PDFium and its copy of the file;
+- the CAD file's zoom (three steps from fit width) measured 3.8 s in every run
+  of this build, and 2.7 or 3.8 s in runs of the build without the
+  between-chunks change. Traced step by step, the pages zoomed were drawn in
+  the same time with and without it; what else was being drawn when the zoom
+  started decides the rest.
+
+The other differences are within the run-to-run variation of this machine.
+
 ### Choosing the drawing engine (Stage D0)
 
 Before moving drawing off the main thread, three engines were compared in
@@ -172,8 +231,7 @@ at 1400 px wide:
 - PDFium draws CAD sheets 4–5× faster, and a zoomed-in tile about 15× faster,
   because it draws only the tile while pdf.js runs the whole page for every
   tile. It also drew a radial gradient under a multiply blend correctly, which
-  pdf.js 3.11 draws pink; pdf.js 6.3 fixes most of that. It is the candidate
-  for sharp tiles on large drawings (Stage D2), loaded only when a document
-  needs it, behind the same worker messages.
+  pdf.js 3.11 draws pink; pdf.js 6.3 fixes most of that. Stage D2 uses it for
+  the zoomed-in parts of heavy pages, loaded only when a document needs it.
 - pdf.js 6.x needs `Map.prototype.getOrInsertComputed` (Chrome 145 and later)
   unless its legacy build is used.

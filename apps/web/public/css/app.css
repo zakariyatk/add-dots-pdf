@@ -213,6 +213,9 @@
         box-shadow:0 1px 2px rgba(0,0,0,.4),0 8px 26px rgba(0,0,0,.28)}
   .inner{position:absolute;left:0;top:0}
   .inner canvas{display:block;width:100%;height:100%}
+  /* the sharp part on screen, over the stretched bitmap (core.js, the detail layer) */
+  .inner canvas.detail{position:absolute;pointer-events:none}
+  body.zooming .inner canvas.detail{visibility:hidden}
   .tick{position:absolute;top:0;left:-36px;font-family:var(--mono);font-size:10px;color:var(--text-dim)}
   .pagebox.cur .tick{color:var(--marker)}
   .cropflag{position:absolute;top:14px;left:-36px;font-family:var(--mono);font-size:9px;color:var(--marker);display:none}

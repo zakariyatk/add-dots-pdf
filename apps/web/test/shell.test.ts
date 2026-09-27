@@ -43,6 +43,31 @@ describe('web app shell', () => {
   });
 });
 
+/* PDFium draws the zoomed-in parts of heavy pages (js/render-worker.js). The
+   render worker loads it the first time a page proves heavy, so it is not in
+   the offline cache: without it, pdf.js draws those parts. */
+describe('vendored PDFium', () => {
+  /* the package's exports map hides dist/: found beside its main entry */
+  const dist = dirname(createRequire(join(app, 'package.json')).resolve('@embedpdf/pdfium'));
+  it.each([
+    ['js/vendor/pdfium/pdfium.esm.js', 'index.browser.js'],
+    ['js/vendor/pdfium/pdfium.wasm', 'pdfium.wasm'],
+  ])('%s is identical to @embedpdf/pdfium/dist/%s', (file, name) => {
+    const ours = readFileSync(join(app, 'public', file));
+    expect(ours.equals(readFileSync(join(dist, name)))).toBe(true);
+  });
+  it('ships its licences', () => {
+    const dir = join(app, 'public', 'js', 'vendor', 'pdfium');
+    expect(readFileSync(join(dir, 'LICENSE'), 'utf8')).toContain('MIT');
+    expect(readFileSync(join(dir, 'LICENSE.pdfium'), 'utf8')).toContain('Apache License');
+  });
+  it('is loaded by the render worker from where it is vendored', () => {
+    const worker = readFileSync(join(app, 'public', 'js', 'render-worker.js'), 'utf8');
+    expect(worker).toContain("import('./vendor/pdfium/pdfium.esm.js')");
+    expect(worker).toContain("fetch('vendor/pdfium/pdfium.wasm')");
+  });
+});
+
 /* Loaded by core.js the first time a save needs a character the standard PDF
    fonts lack. Both are copies of the versions pinned in packages/engine, where
    the tests use them, so the app saves what the tests check. */
