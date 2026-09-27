@@ -105,9 +105,10 @@
     }
 
     /* The scan reads every page's widgets through the pdf.js worker, so it
-       waits until the pages on screen are drawn: a long form must not hold up
-       the first page. Saving waits for it (below), so a value the file already
-       held is always written out. */
+       gives way to the pages being drawn, before each page it reads: a long
+       form must not hold up the first page, which is drawn in another worker
+       and so no longer queues behind it. Saving waits for it (below), so a
+       value the file already held is always written out. */
     let scanning = Promise.resolve(0);
     function scanSoon() {
       /* never rejects: saving waits on it */
@@ -118,7 +119,10 @@
 
     async function scanAll() {
       let n = 0;
-      for (const it of S.items) { n += (await readFields(it)).length; }
+      for (const it of S.items) {
+        if (!it.fields) await X.renderIdle();
+        n += (await readFields(it)).length;
+      }
       const c = $('fieldCount');
       c.textContent = n ? String(n) : '';
       c.hidden = !n;

@@ -508,7 +508,7 @@
          screen pixels. pdf.js then steps the render off a promise instead of
          requestAnimationFrame, so redacting and compressing still finish when
          the tab is in the background or the window is minimised. */
-      await it.page.render({ canvasContext: ctx, viewport: vp, intent: 'print' }).promise;
+      await X.drawPageInto(it, vp, ctx, { intent: 'print' });
 
       if (withRedactions) {
         ctx.fillStyle = '#000000';
