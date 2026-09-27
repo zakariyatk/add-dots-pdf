@@ -27,6 +27,9 @@
      time one of its pages is drawn. Where it cannot run (no OffscreenCanvas,
      a page it fails on), pages are drawn here as before.
 
+     A file being opened is sent to it as soon as it is read (open()), so it
+     parses alongside the main thread's copy and page 1 does not wait for it.
+
      render() returns what pdf.js's page.render() does, { promise, cancel },
      so every caller that waits on or cancels a page's drawing is unchanged.
      The promise gives an ImageBitmap; it rejects with a
@@ -35,7 +38,7 @@
   const RW = (function () {
     let worker = null, rid = 0, nextKey = 0;
     const waiting = new Map();      /* rid -> { res, rej, key } */
-    const keys = new WeakMap();     /* pdf.js document -> its key in the worker */
+    const keys = new WeakMap();     /* a source's bytes -> its document's key in the worker */
     const failed = new Set();       /* keys the worker could not open */
     const api = { state: 'off', ready: Promise.resolve(false) };
     function err(name, message) { const e = new Error(message); e.name = name; return e; }
@@ -76,21 +79,30 @@
       }
     } catch (e) { stop(); }
 
-    function keyFor(src) {
-      let key = keys.get(src.doc);
-      if (key == null) {
-        key = ++nextKey;
-        keys.set(src.doc, key);
-        const copy = src.bytes.slice(0);
-        worker.postMessage({ op: 'open', key: key, bytes: copy, password: src.password || null }, [copy.buffer]);
+    /* opens (or, with a password now known, reopens) these bytes in the
+       worker; given the file they were read from, the worker reads that
+       itself rather than this thread copying them across */
+    api.open = function (bytes, password, file) {
+      if (api.state !== 'on' || !bytes) return;
+      let key = keys.get(bytes);
+      if (key == null) { key = ++nextKey; keys.set(bytes, key); }
+      failed.delete(key);
+      if (file) {
+        worker.postMessage({ op: 'open', key: key, file: file, password: password || null });
+        return;
       }
-      return key;
+      const copy = bytes.slice(0);
+      worker.postMessage({ op: 'open', key: key, bytes: copy, password: password || null }, [copy.buffer]);
+    };
+    function keyFor(src) {
+      if (keys.get(src.bytes) == null) api.open(src.bytes, src.password);
+      return keys.get(src.bytes);
     }
     /* can the worker draw this page? Not while it is still starting: a file
        opened the moment the app loads is drawn here rather than kept waiting */
     api.usable = function (it) {
       if (api.state !== 'on' || !it.src.bytes || !it.src.doc) return false;
-      const key = keys.get(it.src.doc);
+      const key = keys.get(it.src.bytes);
       return key == null || !failed.has(key);
     };
     /* the page at viewport v into a w x h bitmap, v shifted/scaled by
@@ -119,13 +131,13 @@
     };
     /* what the worker holds for one page, or for a whole document */
     api.release = function (it) {
-      const key = it.src.doc ? keys.get(it.src.doc) : null;
+      const key = it.src.bytes ? keys.get(it.src.bytes) : null;
       if (key != null && worker) worker.postMessage({ op: 'release', key: key, num: it.num });
     };
-    api.close = function (doc) {
-      const key = keys.get(doc);
+    api.close = function (bytes) {
+      const key = bytes ? keys.get(bytes) : null;
       if (key == null) return;
-      keys.delete(doc);
+      keys.delete(bytes);
       failed.delete(key);
       if (worker) worker.postMessage({ op: 'close', key: key });
     };
@@ -288,8 +300,13 @@
     let bytes, doc;
     try { bytes = await readBytes(file); }
     catch (e) { showError('The file could not be read from disk. Try again.'); return false; }
+    RW.open(bytes, null, file);
     try { doc = await loadWithPassword(bytes); }
-    catch (e) { showError('This file could not be opened. It may be damaged or not a real PDF.'); return false; }
+    catch (e) {
+      RW.close(bytes);
+      showError('This file could not be opened. It may be damaged or not a real PDF.'); return false;
+    }
+    if (lastPassword) RW.open(bytes, lastPassword, file);
 
     hardReset();
     if (S.tool !== 'select') setTool('select');
@@ -341,7 +358,7 @@
     TR.epoch++; TR.stop = false;
     /* the documents being closed: free them in the worker too */
     S.sources.forEach(function (src) {
-      if (src.doc && src.doc !== keepDoc) { RW.close(src.doc); try { src.doc.destroy(); } catch (e) {} }
+      if (src.doc && src.doc !== keepDoc) { RW.close(src.bytes); try { src.doc.destroy(); } catch (e) {} }
     });
     S.sources = []; S.items = []; S.undo = []; S.textCache = new Map();
     S.hits = []; S.hitIndex = -1; S.query = ''; S.current = 1; S.fit = 'width'; S.sel = null;
@@ -5127,6 +5144,11 @@
   }
 
   function download(bytes, name, type) {
+    /* the browser is copying the file out and writing it to disk: thumbnails,
+       drawn in a worker alongside, wait until that is done rather than
+       compete with it */
+    thumbsPause();
+    setTimeout(thumbsResume, 1500);
     const url = URL.createObjectURL(new Blob([bytes], { type: type || 'application/pdf' }));
     try {
       const a = document.createElement('a');

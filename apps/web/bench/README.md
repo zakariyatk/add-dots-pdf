@@ -12,7 +12,8 @@ node apps/web/bench/run.mjs --dist <dir>        # measure another build (e.g. a 
 
 The first run generates the PDFs into `bench/.corpus/` (about 100 MB, gitignored,
 about a minute). It uses Playwright's Chromium; to use an installed browser
-instead, set `BENCH_CHANNEL=chrome` or `BENCH_CHANNEL=msedge`.
+instead, set `BENCH_CHANNEL=chrome` or `BENCH_CHANNEL=msedge`. To measure with pages
+drawn on the main thread, as before Stage D, set `BENCH_NO_WORKER=1`.
 
 ## The files
 
@@ -119,3 +120,60 @@ document, since its height depends on the text.
 About 7,000 of the 2,000-page file's remaining nodes are the list of 2,376
 search results, which is not virtualized yet. The small file measures the
 same before and after (5 runs each: 243 ms and 252 ms to page 1).
+
+### Stage D1: drawing in a worker (`results/stage-d1.json`), stage-c → stage-d1
+
+| file               | first page ms | open TBT  | zoom TBT | search ms   | save ms     | browser MB |
+| ------------------ | ------------- | --------- | -------- | ----------- | ----------- | ---------- |
+| small-text-12p     | 267 → 277     | 23 → 0    | 13 → 0   | 136 → 154   | 502 → 708   | 488 → 539  |
+| medium-report-300p | 336 → 398     | 6 → 0     | 0 → 0    | 1176 → 1151 | 1044 → 1170 | 467 → 572  |
+| large-text-2000p   | 916 → 907     | 147 → 118 | 32 → 17  | 6976 → 7055 | 2462 → 2519 | 790 → 823  |
+| cad-a1-8sheets     | 2752 → 2888   | 2203 → 0  | 2214 → 0 | 2260 → 1091 | 243 → 287   | 552 → 568  |
+| scans-40p          | 403 → 509     | 0 → 0     | 0 → 0    | 144 → 149   | 566 → 571   | 672 → 771  |
+
+What changed: pages and thumbnails are drawn by pdf.js in `js/render-worker.js`,
+on an OffscreenCanvas, and come back as finished bitmaps. A CAD sheet still takes
+over a second to draw, but the app no longer freezes while it does: opening and
+zooming the CAD file used to block the main thread for 2.2 s each, and now do
+not block it at all. JPG export and the rasterising behind redaction and
+compression draw there too. The worker opens its own copy of each document,
+reading the file itself as soon as it is chosen, so it parses alongside the main
+thread's copy. Until it has started, and for any page it cannot draw, pages are
+drawn on the main thread as before; its pictures match the main thread's pixel
+for pixel (checked by the smoke test).
+
+What it costs:
+
+- memory: a second pdf.js parser with its own copy of each open file. Measured
+  here, +16 to +105 MB (the 85 MB scans: +99 MB);
+- page 1 of the medium and scanned files: 60–100 ms later, likely because both
+  parsers work at once while the file opens;
+- thumbnails now pause while a saved file is written out: drawn alongside, they
+  slowed the write down (the scans' save took 1.9 s before this was changed).
+
+Some timings vary widely between benchmark runs: the small file's save measured
+305, 352 and 708 ms in three runs of this build, and the CAD file's jump 4.0 to
+5.2 s.
+
+### Choosing the drawing engine (Stage D0)
+
+Before moving drawing off the main thread, three engines were compared in
+headless Chromium on the benchmark files and two real-world PDFs, drawing page 1
+at 1400 px wide:
+
+| engine                    | CAD sheet | CAD, one 1024 px tile at 4× | text page | scanned page | download (gzip) |
+| ------------------------- | --------- | --------------------------- | --------- | ------------ | --------------- |
+| pdf.js 3.11 (in use)      | 1.4 s     | 1.17 s                      | 30–60 ms  | 80–120 ms    | 380 KB          |
+| pdf.js 6.3                | 1.3 s     | not measured                | 25–70 ms  | 50–75 ms     | 540 KB          |
+| PDFium (@embedpdf/pdfium) | 0.3 s     | 0.08 s                      | 45–115 ms | 130–300 ms   | 2.2 MB          |
+
+- pdf.js 3.11 in a worker draws exactly what it draws on the main thread, so it
+  went first.
+- PDFium draws CAD sheets 4–5× faster, and a zoomed-in tile about 15× faster,
+  because it draws only the tile while pdf.js runs the whole page for every
+  tile. It also drew a radial gradient under a multiply blend correctly, which
+  pdf.js 3.11 draws pink; pdf.js 6.3 fixes most of that. It is the candidate
+  for sharp tiles on large drawings (Stage D2), loaded only when a document
+  needs it, behind the same worker messages.
+- pdf.js 6.x needs `Map.prototype.getOrInsertComputed` (Chrome 145 and later)
+  unless its legacy build is used.

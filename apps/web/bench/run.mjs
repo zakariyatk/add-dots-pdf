@@ -166,6 +166,8 @@ async function measure(browser, file) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(instrument);
+  /* BENCH_NO_WORKER=1: pages drawn on the main thread, as before Stage D */
+  if (process.env.BENCH_NO_WORKER) await page.addInitScript(() => delete window.OffscreenCanvas);
   await page.goto('http://localhost:' + PORT + '/');
   await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc, null, { timeout: 30000 });
   await page.evaluate(HELPERS);

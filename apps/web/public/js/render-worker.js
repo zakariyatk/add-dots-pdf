@@ -8,7 +8,7 @@
 
    Messages in:
      { op: 'hello' }                                    -> { op: 'hello', ok }
-     { op: 'open', key, bytes, password }               opens a document
+     { op: 'open', key, bytes | file, password }        opens a document (again)
      { op: 'close', key }                               frees it
      { op: 'render', rid, key, num, scale, rotation, w, h, transform, intent, drop }
                                                         -> { rid, bitmap } | { rid, cancelled } | { rid, error }
@@ -54,17 +54,31 @@ const docs = new Map();      /* key -> { task, promise } */
 const renders = new Map();   /* rid -> pdf.js RenderTask, or null while it starts */
 
 function openDoc(m) {
-  const task = pdfjsLib.getDocument({
-    data: m.bytes,
+  /* the same key again: reopened, say now with its password */
+  const old = docs.get(m.key);
+  if (old && old.task) old.task.destroy().catch(function () {});
+  /* a file is read here; bytes arrive already read */
+  const data = m.file ? m.file.arrayBuffer().then(function (b) { return new Uint8Array(b); })
+    : Promise.resolve(m.bytes);
+  const entry = { task: null, promise: null };
+  entry.promise = data.then(function (bytes) {
+    if (docs.get(m.key) !== entry) throw new Error('closed');
+    entry.task = openTask(m, bytes);
+    return entry.task.promise;
+  });
+  /* a rejected open is reported by the render that waits on it */
+  entry.promise.catch(function () {});
+  docs.set(m.key, entry);
+}
+
+function openTask(m, bytes) {
+  return pdfjsLib.getDocument({
+    data: bytes,
     password: m.password || undefined,
     ownerDocument: docShim,
     /* without a font set, pdf.js draws each glyph as a path itself */
     disableFontFace: !self.fonts
   });
-  const entry = { task: task, promise: task.promise };
-  /* a rejected open is reported by the render that waits on it */
-  entry.promise.catch(function () {});
-  docs.set(m.key, entry);
 }
 
 async function render(m) {
@@ -104,7 +118,7 @@ self.onmessage = function (e) {
   if (m.op === 'close') {
     const entry = docs.get(m.key);
     docs.delete(m.key);
-    if (entry) entry.task.destroy().catch(function () {});
+    if (entry && entry.task) entry.task.destroy().catch(function () {});
     return;
   }
   if (m.op === 'cancel') {
