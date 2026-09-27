@@ -91,7 +91,31 @@ Known limits, for the next stages:
   during its 13-second open instead.
 - The 2,000-page file still builds 43,000 DOM nodes and takes 1.3 s to page
   1, most of it the browser laying out every page's box: a virtualized page
-  list (Stage C) removes it.
+  list (Stage C) removes it. (Done: see below.)
 - pdf-lib is parsed at start-up although only saving uses it: about 65 ms,
   or 300 ms on a 4x slower CPU. Loading it on demand needs the engine bundle
   and four modules rewired, which belongs with the move to ES modules.
+
+### After Stage C (`results/stage-c.json`), stage-b → stage-c
+
+| file               | first page ms | open TBT    | jump end ms | zoom ms     | search ms   | browser MB | DOM nodes     |
+| ------------------ | ------------- | ----------- | ----------- | ----------- | ----------- | ---------- | ------------- |
+| small-text-12p     | 198 → 267     | 0 → 23      | 734 → 713   | 749 → 745   | 153 → 136   | 520 → 488  | 3245 → 2949   |
+| medium-report-300p | 367 → 336     | 21 → 6      | 857 → 848   | 877 → 747   | 1203 → 1176 | 590 → 467  | 12832 → 5022  |
+| large-text-2000p   | 1272 → 916    | 607 → 147   | 1218 → 911  | 1478 → 1033 | 8950 → 6976 | 971 → 790  | 42810 → 13434 |
+| cad-a1-8sheets     | 2745 → 2752   | 2215 → 2203 | 3990 → 4041 | 2853 → 2884 | 2205 → 2260 | 549 → 552  | 3469 → 2958   |
+| scans-40p          | 378 → 403     | 0 → 0       | 920 → 940   | 729 → 704   | 144 → 144   | 651 → 672  | 3870 → 2420   |
+
+What changed: a page's content (the canvas, text layer, marks and tools)
+sits in a `display: contents` wrapper that leaves the document while the page
+is far off screen; the page's box stays, holding its size, so positions,
+jumps and scrolling are unchanged, and every module keeps its references to
+the elements. Thumbnails do the same in the rail, and are sized to their
+page's proportions before they are drawn, so the rail no longer shifts as
+they draw. Pages ahead of the scroll are drawn from 1,400 px off, pages
+behind from 300 px. Side by side with a translation, every page stays in the
+document, since its height depends on the text.
+
+About 7,000 of the 2,000-page file's remaining nodes are the list of 2,376
+search results, which is not virtualized yet. The small file measures the
+same before and after (5 runs each: 243 ms and 252 ms to page 1).

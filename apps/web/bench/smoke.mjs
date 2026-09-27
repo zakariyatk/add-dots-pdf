@@ -88,8 +88,8 @@ const misSized = (page) =>
       .map((it, i) => {
         const v = it.page.getViewport({ scale: S.scale, rotation: it.page.rotate + it.rot });
         const off =
-          Math.abs(it.wrap.offsetWidth - Math.floor(v.width)) > 1 ||
-          Math.abs(it.wrap.offsetHeight - Math.floor(v.height)) > 1;
+          Math.abs(it.box.offsetWidth - Math.floor(v.width)) > 1 ||
+          Math.abs(it.box.offsetHeight - Math.floor(v.height)) > 1;
         return off ? i + 1 : 0;
       })
       .filter(Boolean);
@@ -190,6 +190,91 @@ try {
     await ctx.close();
   }
 
+  /* ---- pages far from the screen leave the document, and come back whole ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+    await allLoaded(page);
+    await page.waitForTimeout(800);
+    /* draw a box on page 1 with the mouse */
+    await page.evaluate(() => window.ADDPDF.setTool('rect'));
+    const r = await page.evaluate(() => {
+      const b = window.ADDPDF.S.items[0].box.getBoundingClientRect();
+      return { x: b.left, y: b.top, w: b.width };
+    });
+    await page.mouse.move(r.x + 80, r.y + 120);
+    await page.mouse.down();
+    await page.mouse.move(r.x + 260, r.y + 260, { steps: 6 });
+    await page.mouse.up();
+    await page.evaluate(() => window.ADDPDF.setTool('select'));
+    const marks = await page.evaluate(() => window.ADDPDF.S.items[0].shapes.length);
+    check('a box drawn with the mouse lands on page 1', marks === 1, { marks });
+    const nodes = await page.evaluate(
+      () => document.getElementById('stage').getElementsByTagName('*').length,
+    );
+    check('only the pages near the screen are in the document', nodes < 1500, { stageNodes: nodes });
+    /* far away and back */
+    await page.evaluate(() => window.ADDPDF.goTo(200));
+    await page.waitForTimeout(1500);
+    const away = await page.evaluate(() => window.ADDPDF.S.items[0].mounted);
+    check('page 1 leaves the document when far away', away === false);
+    await page.evaluate(() => window.ADDPDF.goTo(1));
+    await page
+      .waitForFunction(() => window.ADDPDF.S.items[0].rendered, null, { timeout: 10000 })
+      .catch(() => {});
+    await page.waitForTimeout(800);
+    const back = await page.evaluate(() => {
+      const it = window.ADDPDF.S.items[0];
+      const spans = Array.from(it.tl.children);
+      return {
+        mounted: it.mounted,
+        drawn: it.rendered,
+        marksShown: it.anno.querySelectorAll('rect, path, polygon, line').length,
+        spans: spans.length,
+        fitted: spans.filter((sp) => /scaleX/.test(sp.style.transform)).length,
+      };
+    });
+    check(
+      'back on screen, page 1 is whole: drawn, its box shown',
+      back.mounted && back.drawn && back.marksShown > 0,
+      back,
+    );
+    check('its words are fitted for selecting', back.spans > 0 && back.fitted > back.spans * 0.8, back);
+
+    /* turn, remove, undo: sizes and order hold */
+    await page.evaluate(() => window.ADDPDF.rotateItem(2, 90));
+    await page.waitForTimeout(600);
+    await page.evaluate(() => window.ADDPDF.removeItem(4));
+    await page.waitForTimeout(600);
+    check(
+      'after turning and removing, every page is at its size',
+      (await misSized(page)).length === 0,
+      await misSized(page),
+    );
+    await page.click('#btnUndo');
+    await page.waitForTimeout(800);
+    await page.click('#btnUndo');
+    await page.waitForTimeout(800);
+    const n = await page.evaluate(() => window.ADDPDF.S.items.length);
+    check('undo brings the page back', n === 300, { pages: n });
+    check('after undo, every page is at its size', (await misSized(page)).length === 0, await misSized(page));
+    const order = await page.evaluate(() =>
+      window.ADDPDF.S.items.every(
+        (it, i, a) => i === 0 || it.box.offsetTop >= a[i - 1].box.offsetTop + a[i - 1].box.offsetHeight - 1,
+      ),
+    );
+    check('and in order', order);
+
+    /* the organizer shows the pages */
+    await page.evaluate(() => window.ADDPDF.organize.open());
+    await page.waitForTimeout(500);
+    const cells = await page.evaluate(() => document.getElementById('orgGrid').children.length);
+    check('the organizer opens with every page', cells === 300, { cells });
+    await page.evaluate(() => window.ADDPDF.organize.close());
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- operations on every page, before they are all loaded ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
@@ -197,7 +282,7 @@ try {
     const loaded = await page.evaluate(() => window.ADDPDF.S.items.filter((i) => i.page).length);
     await page.evaluate(() => window.ADDPDF.setTool('crop'));
     const box = await page.evaluate(() => {
-      const r = window.ADDPDF.S.items[0].wrap.getBoundingClientRect();
+      const r = window.ADDPDF.S.items[0].box.getBoundingClientRect();
       return { x: r.left, y: r.top, w: r.width, h: r.height };
     });
     await page.keyboard.down('Shift');

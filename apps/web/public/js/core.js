@@ -216,7 +216,7 @@
   function hardReset(keepDoc) {
     EXT.emit('reset');
     S.items.forEach(function (it) { if (it.task) { try { it.task.cancel(); } catch (e) {} } });
-    LIVE.clear(); TLIVE.clear();
+    LIVE.clear(); TLIVE.clear(); MOUNTED.clear(); TMOUNTED.clear();
     RQ.gen++; RQ.busy = 0; RQ.want.clear();
     TQ.gen++; TQ.busy = false; TQ.want.clear(); TQ.task = null; TQ.it = null; TQ.slow = false;
     RQ.idle.splice(0).forEach(function (res) { res(); });
@@ -278,9 +278,15 @@
     box.className = 'pagebox' + (it.added ? ' added' : '');
     box._it = it;
 
+    /* Everything in the page lives in `content`, a display:contents wrapper,
+       so it lays out exactly as if it sat in the box. A page far from the
+       screen takes its content out of the document (mountPage below): the
+       elements stay in memory and every module keeps its references, but the
+       browser has only one sized box per page to lay out. */
+    const content = document.createElement('div'); content.className = 'pagebody';
     const tick = document.createElement('div'); tick.className = 'tick';
     const cflag = document.createElement('div'); cflag.className = 'cropflag'; cflag.textContent = 'CROP';
-    box.appendChild(tick); box.appendChild(cflag);
+    content.appendChild(tick); content.appendChild(cflag);
 
     const wrap = document.createElement('div'); wrap.className = 'page';
     const inner = document.createElement('div'); inner.className = 'inner';
@@ -292,10 +298,11 @@
 
     const cap = document.createElement('div'); cap.className = 'capture';
     wrap.appendChild(cap);
-    box.appendChild(wrap);
+    content.appendChild(wrap);
 
     it.box = box; it.wrap = wrap; it.inner = inner; it.canvas = canvas;
     it.tl = tl; it.anno = anno; it.capture = cap; it.tick = tick;
+    it.content = content; it.mounted = false;
     /* The hover tools and the translation pane are made when first needed:
        with thousands of pages they were most of the document's elements. */
     if (TR.on) ensurePane(it);
@@ -304,8 +311,10 @@
 
     bindDraw(it);
 
-    /* thumbnail */
+    /* thumbnail: like the page, its content leaves the rail while far from
+       view (mountThumb), and the .thumb holds its height meanwhile */
     const th = document.createElement('div'); th.className = 'thumb';
+    const tbody = document.createElement('div'); tbody.className = 'thumbbody';
     const hit = document.createElement('button'); hit.className = 'hitbox';
     const shell = document.createElement('div'); shell.className = 'shell';
     const tc = document.createElement('canvas'); shell.appendChild(tc);
@@ -315,15 +324,16 @@
       goTo(S.items.indexOf(it) + 1);
       if (isMobile()) setRail(false);
     });
-    th.appendChild(hit);
+    tbody.appendChild(hit);
     th.addEventListener('pointerenter', function () { ensureThumbTools(it); });
     th.addEventListener('focusin', function () { ensureThumbTools(it); });
 
     if (it.added) {
       const badge = document.createElement('div'); badge.className = 'badge'; badge.textContent = 'NEW';
-      th.appendChild(badge);
+      tbody.appendChild(badge);
     }
     it.thumb = th; it.thumbCanvas = tc; it.thumbShell = shell; it.thumbNo = no;
+    it.thumbContent = tbody; it.thumbMounted = false;
   }
 
   /* facing panel that holds the translation of this page */
@@ -364,7 +374,7 @@
       if (b.dataset.a === 'crop') setTool('crop');
       if (b.dataset.a === 'add') openPop('addPop', $('btnAdd'));
     });
-    it.box.appendChild(tools);
+    it.content.appendChild(tools);
     it.ptools = tools;
 
   }
@@ -372,7 +382,7 @@
   /* move and remove, and the tick for extracting, over the thumbnail */
   function ensureThumbTools(it) {
     if (it.thumbTools || !it.thumb) return;
-    const th = it.thumb;
+    const th = it.thumbContent;
     const tt = document.createElement('div'); tt.className = 'tools';
     tt.innerHTML =
       '<button data-a="up" title="Move up">' + icon(ICON.up) + '</button>' +
@@ -563,6 +573,8 @@
     it.off = { left: 0, top: 0 };
     it.wrap.style.width = w + 'px';
     it.wrap.style.height = h + 'px';
+    boxToWrap(it);
+    sizeThumb(it, e.w, e.h);
   }
   function applySizes(live) {
     if (!live) { S.items.forEach(function (it) { sizeItem(it, false); }); return; }
@@ -610,6 +622,8 @@
     it.wrap.style.height = Math.floor(c ? c.height : h) + 'px';
     it.inner.style.left = (-it.off.left) + 'px';
     it.inner.style.top = (-it.off.top) + 'px';
+    boxToWrap(it);
+    if (!live) sizeThumb(it, b.c ? b.c.width : b.w, b.c ? b.c.height : b.h);
 
     if (it.trPane) {
       it.trPane.style.width = Math.floor(c ? c.width : w) + 'px';
@@ -781,6 +795,68 @@
     return ans;
   }
 
+  /* Pages whose content is in the document (see ensureEls). */
+  const MOUNTED = new Set();
+  function mountPage(it) {
+    if (!it || it.mounted || !it.box) return;
+    it.box.style.width = it.box.style.height = '';
+    it.box.appendChild(it.content);
+    it.mounted = true;
+    MOUNTED.add(it);
+    /* a text layer built while away could not measure its words */
+    if (it.tlFit) fitTextLayer(it);
+  }
+  /* A page keeps its content while it is being worked on: the one selected,
+     one being retyped, one holding the focus, and every page side by side
+     with its translation (whose height depends on the text). */
+  function canUnmount(it) {
+    if (TR.on) return false;
+    if (S.sel && S.sel.it === it) return false;
+    if (S.editing && S.editing.it === it) return false;
+    const a = document.activeElement;
+    return !(a && it.content.contains(a));
+  }
+  function unmountPage(it) {
+    if (!it.mounted) return;
+    it.box.style.width = it.wrap.style.width;
+    it.box.style.height = it.wrap.style.height;
+    it.content.remove();
+    it.mounted = false;
+    MOUNTED.delete(it);
+  }
+  /* A thumbnail is 176 points wide and as tall as its page's proportions,
+     drawn or not, so the rail's layout is right before any is drawn. The
+     rest of its height (the border, the page number) is measured once. */
+  let thumbChrome = 0;
+  function sizeThumb(it, w, h) {
+    if (!it.thumbShell || !(w > 0)) return;
+    const sh = Math.floor((176 * h) / w);
+    if (!it.thumbDone) it.thumbShell.style.height = sh + 'px';
+    if (!it.thumbMounted) it.thumb.style.height = (sh + (thumbChrome || 20)) + 'px';
+  }
+  function mountThumb(it) {
+    if (!it.thumb || it.thumbMounted) return;
+    it.thumb.style.height = '';
+    it.thumb.appendChild(it.thumbContent);
+    it.thumbMounted = true;
+    TMOUNTED.add(it);
+  }
+  function unmountThumb(it, height) {
+    if (!it.thumbMounted) return;
+    it.thumb.style.height = height + 'px';
+    it.thumbContent.remove();
+    it.thumbMounted = false;
+    TMOUNTED.delete(it);
+  }
+  const TMOUNTED = new Set();
+
+  /* an unmounted box holds the page's size itself */
+  function boxToWrap(it) {
+    if (it.mounted || !it.box) return;
+    it.box.style.width = it.wrap.style.width;
+    it.box.style.height = it.wrap.style.height;
+  }
+
   /* Pages holding a bitmap. Only these can be released, so a scroll frame
      looks at a handful of pages rather than every page in the document. */
   const LIVE = new Set();
@@ -796,9 +872,14 @@
     if (it.page) { try { it.page.cleanup(); } catch (e) {} }
   }
 
+  /* which way the reader is going: pages ahead are drawn from further off */
+  let lastTop = 0, heading = 1;
   function renderVisible() {
     if (!S.items.length) return;
-    const near = 700;
+    const st = stage.scrollTop;
+    if (st !== lastTop) { heading = st > lastTop ? 1 : -1; lastTop = st; }
+    const ahead = 1400, behind = 300;
+    const nearTop = heading > 0 ? behind : ahead, nearBot = heading > 0 ? ahead : behind;
     /* A page long scrolled past gives its bitmap back, so a long document
        costs the memory of a few screens, not of every page ever looked at. */
     const keep = Math.max(3000, stage.clientHeight * 4);
@@ -807,17 +888,22 @@
        reads makes the browser lay the whole document out again, and with
        thousands of pages that is what stalled scrolling. */
     const want = [];
-    for (let i = firstBoxAt(top - near); i < S.items.length; i++) {
+    for (let i = firstBoxAt(top - nearTop); i < S.items.length; i++) {
       const it = S.items[i];
       if (!it.box) continue;
-      if (it.box.offsetTop > bot + near) break;
+      if (it.box.offsetTop > bot + nearBot) break;
       want.push(it);
     }
-    const drop = [];
+    const drop = [], away = [];
     LIVE.forEach(function (it) {
       if (!it.box || !it.box.isConnected || screenGap(it) > keep) drop.push(it);
     });
+    MOUNTED.forEach(function (it) {
+      if (!it.box || !it.box.isConnected) MOUNTED.delete(it);
+      else if (screenGap(it) > keep && canUnmount(it)) away.push(it);
+    });
     drop.forEach(releaseBitmap);
+    away.forEach(unmountPage);
     want.forEach(function (it) {
       renderItem(it);
       if (TR.on) translatePage(it);
@@ -838,6 +924,7 @@
   }
   function renderItem(it) {
     if (!it) return;
+    mountPage(it);
     ensurePageTools(it);
     if (it.rendered || it.task) return;
     RQ.want.add(it);
@@ -929,8 +1016,8 @@
     const gen = it.tlGen = (it.tlGen || 0) + 1;
     let tc;
     try { tc = await it.page.getTextContent(); } catch (e) { return; }
-    if (gen !== it.tlGen || viewport !== it.vp && it.vp) return;   /* zoomed again meanwhile */
-    const frag = document.createDocumentFragment(), spans = [], targets = [];
+    if (gen !== it.tlGen || (it.vp && !sameView(viewport, it.vp))) return;   /* zoomed again meanwhile */
+    const frag = document.createDocumentFragment();
     tc.items.forEach(function (item) {
       if (!item.str || !item.str.trim()) return;
       const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
@@ -946,14 +1033,23 @@
       el.style.fontSize = fh + 'px';
       el.style.fontFamily = (st && st.fontFamily) || 'sans-serif';
       el.dataset.asc = asc; el.dataset.fh = fh;
-      frag.appendChild(el); spans.push(el); targets.push(item.width * viewport.scale);
+      el.dataset.tw = item.width * viewport.scale;
+      frag.appendChild(el);
     });
     it.tl.innerHTML = '';
     it.tl.appendChild(frag);
     it.tl.style.visibility = '';
+    /* the words are stretched to their width on the page; that needs them
+       measured, so a page out of the document fits them when it comes back */
+    if (it.mounted) fitTextLayer(it); else it.tlFit = true;
+  }
+  function fitTextLayer(it) {
+    it.tlFit = false;
+    const spans = Array.from(it.tl.children);
     const ws = spans.map(function (el) { return el.getBoundingClientRect().width; });
     spans.forEach(function (el, i) {
-      if (ws[i] > 0 && targets[i] > 0) el.style.transform = 'scaleX(' + (targets[i] / ws[i]) + ')';
+      const target = +el.dataset.tw;
+      if (ws[i] > 0 && target > 0) el.style.transform = 'scaleX(' + (target / ws[i]) + ')';
     });
   }
 
@@ -992,29 +1088,53 @@
     const top = host.scrollTop - 500, bot = host.scrollTop + host.clientHeight + 500;
     const keepTop = host.scrollTop - 4000, keepBot = host.scrollTop + host.clientHeight + 4000;
     /* read every position first, then write */
-    const want = [];
+    let chrome = 0;
+    if (!thumbChrome) {
+      TMOUNTED.forEach(function (it) {
+        if (!chrome && it.thumb.isConnected && it.thumbShell.style.height) {
+          chrome = it.thumb.offsetHeight - parseFloat(it.thumbShell.style.height);
+        }
+      });
+    }
+    const near = [];
     for (let i = firstThumbAt(top); i < S.items.length; i++) {
       const it = S.items[i];
       if (!it.thumb) continue;
       if (it.thumb.offsetTop > bot) break;
-      if (!it.thumbDone) want.push(it);
+      near.push(it);
     }
-    const drop = [];
+    const drop = [], away = [];
     TLIVE.forEach(function (it) {
       const th = it.thumb;
       if (!th || !th.isConnected || th.offsetTop + th.offsetHeight < keepTop || th.offsetTop > keepBot) drop.push(it);
     });
+    TMOUNTED.forEach(function (it) {
+      const th = it.thumb;
+      if (!th || !th.isConnected) { TMOUNTED.delete(it); return; }
+      if (th.offsetTop + th.offsetHeight < keepTop || th.offsetTop > keepBot) away.push([it, th.offsetHeight]);
+    });
+    /* the measured chrome replaces the guess on every thumbnail still held */
+    if (chrome > 0 && chrome !== thumbChrome) {
+      thumbChrome = chrome;
+      S.items.forEach(function (it) {
+        if (!it.thumbMounted && it.thumbShell && it.thumbShell.style.height) {
+          it.thumb.style.height = (parseFloat(it.thumbShell.style.height) + chrome) + 'px';
+        }
+      });
+    }
     drop.forEach(function (it) {
       it.thumbCanvas.width = it.thumbCanvas.height = 1;
       it.thumbDone = false;
       TLIVE.delete(it);
     });
-    want.forEach(function (it) { TQ.want.add(it); });
-    for (let i = firstThumbAt(top); i < S.items.length; i++) {
-      const it = S.items[i];
-      if (!it.thumb || it.thumb.offsetTop > bot) break;
+    away.forEach(function (x) { unmountThumb(x[0], x[1]); });
+    near.forEach(function (it) {
+      mountThumb(it);
       ensureThumbTools(it);
-    }
+      if (!it.thumbDone) TQ.want.add(it);
+    });
+    /* first thumbnails in: measure their chrome next frame */
+    if (!thumbChrome && near.length) requestAnimationFrame(drawVisibleThumbs);
     pumpThumbs();
   }
   $('railPages').addEventListener('scroll', drawVisibleThumbs);
@@ -5142,6 +5262,7 @@
     const it = S.items[n - 1]; if (!it) return;
     S.jumping = true;
     stage.scrollTop = it.box.offsetTop - 14;
+    mountPage(it);
     setCurrent(n);
     setTimeout(function () { S.jumping = false; }, 320);
   }
@@ -5968,7 +6089,7 @@
   function setParallel(on) {
     if (TR.on === on) return;
     TR.on = on;
-    if (on) S.items.forEach(ensurePane);
+    if (on) S.items.forEach(function (it) { mountPage(it); ensurePane(it); });
     document.body.classList.toggle('parallel', on);
     $('btnTr').classList.toggle('on', on);
     $('btnTr').dataset.label = on ? 'Translation on' : 'Translate';
