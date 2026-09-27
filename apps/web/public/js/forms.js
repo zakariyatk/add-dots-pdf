@@ -18,7 +18,8 @@
   if (!X) { console.error('[forms] core bridge missing'); return; }
 
   X.on('ready', function () {
-    const S = X.S, $ = X.$, PDFLib = X.PDFLib;
+    const S = X.S, $ = X.$;
+    const E = window.ADDPDFEngine;
 
     /* fieldName -> value. Kept per document, cleared when a new file opens. */
     let values = {};
@@ -190,12 +191,7 @@
       });
     }
 
-    function isOn(v, exportValue) {
-      if (v == null) return false;
-      if (typeof v === 'boolean') return v;
-      const s = String(v);
-      return s !== 'Off' && s !== '' && (exportValue ? s === exportValue : true);
-    }
+    const isOn = E.isOn;
 
     function paintAll() { S.items.forEach(paintFields); }
 
@@ -518,86 +514,15 @@
     };
 
     /* embedding is async, so it happens in the prepare pass */
-    X.prepare.push(window.ADDPDFEngine.prepareSignatures);
-    X.shapePainters.sig = window.ADDPDFEngine.formsPainters.sig;
+    X.prepare.push(E.prepareSignatures);
+    X.shapePainters.sig = E.formsPainters.sig;
     /* ---------------- writing the filled values into the PDF ---------------- */
 
-    /* Values are painted onto the rebuilt page. Core already turned each page
-       by it.rot after we run, and a widget rect is in the un-turned page space,
-       so drawing here lands correctly whatever the page rotation. */
-    X.finish.push(async function (out, items, slots, extra) {
-      const any = items.some(function (it) {
-        return (it.fields || []).some(function (f) { return hasValue(f); });
-      });
-      if (!any) return;
-      const helv = await out.embedFont(PDFLib.StandardFonts.Helvetica);
+    /* Values are painted onto the rebuilt page by the engine
+       (packages/engine/src/painters/fields.ts), read at save time. */
+    X.finish.push(E.fieldsFinish(function () { return values; }));
 
-      items.forEach(function (it, i) {
-        const p = slots[i];
-        if (!p || !it.fields) return;
-        it.fields.forEach(function (f) {
-          if (!hasValue(f)) return;
-          const x1 = Math.min(f.rect[0], f.rect[2]), x2 = Math.max(f.rect[0], f.rect[2]);
-          const y1 = Math.min(f.rect[1], f.rect[3]), y2 = Math.max(f.rect[1], f.rect[3]);
-          const w = x2 - x1, h = y2 - y1;
-          const v = values[f.name];
-
-          if (f.type === 'Btn') {
-            if (!isOn(v, f.exportValue)) return;
-            /* Two strokes rather than a Dingbats glyph: the tick then renders
-               in every viewer without depending on a font's encoding. */
-            const m = Math.min(w, h), cxp = x1 + w / 2, cyp = y1 + h / 2;
-            const th = Math.max(0.8, m * 0.14);
-            const ink = X.hexRgb('#1B2A4A');
-            p.drawLine({ start: { x: cxp - m * 0.30, y: cyp + m * 0.02 },
-                         end:   { x: cxp - m * 0.07, y: cyp - m * 0.24 },
-                         thickness: th, color: ink, lineCap: PDFLib.LineCapStyle.Round });
-            p.drawLine({ start: { x: cxp - m * 0.07, y: cyp - m * 0.24 },
-                         end:   { x: cxp + m * 0.32, y: cyp + m * 0.28 },
-                         thickness: th, color: ink, lineCap: PDFLib.LineCapStyle.Round });
-            return;
-          }
-
-          const text = String(v);
-          if (!text.trim()) return;
-          const size = f.fontSize > 0 ? f.fontSize : Math.min(11, Math.max(6, h * 0.62));
-          if (f.multiline) {
-            wrap(text, helv, size, w - 4).forEach(function (line, li) {
-              const ly = y2 - size - 2 - li * size * 1.22;
-              if (ly < y1 - size) return;
-              p.drawText(line, { x: x1 + 2, y: ly, size: size, font: helv, color: X.hexRgb('#0B0B0B') });
-            });
-          } else {
-            p.drawText(text, {
-              x: x1 + 2, y: y1 + (h - size) / 2 + size * 0.2,
-              size: size, font: helv, color: X.hexRgb('#0B0B0B'),
-              maxWidth: w - 4
-            });
-          }
-        });
-      });
-    });
-
-    function hasValue(f) {
-      const v = values[f.name];
-      if (v == null || v === '') return false;
-      if (f.type === 'Btn') return isOn(v, f.exportValue);
-      return String(v).trim().length > 0;
-    }
-
-    function wrap(text, font, size, max) {
-      const out = [];
-      String(text).split('\n').forEach(function (para) {
-        let line = '';
-        para.split(/\s+/).forEach(function (word) {
-          const probe = line ? line + ' ' + word : word;
-          if (font.widthOfTextAtSize(probe, size) <= max || !line) line = probe;
-          else { out.push(line); line = word; }
-        });
-        out.push(line);
-      });
-      return out;
-    }
+    function hasValue(f) { return E.hasValue(f, values); }
 
     /* ---------------- flatten ---------------- */
 
