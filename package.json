@@ -13,6 +13,7 @@
   "scripts": {
     "dev": "turbo run dev --filter=@adddots/web...",
     "build": "turbo run build",
+    "bench": "turbo run build --filter=@adddots/web... && npm run bench -w @adddots/web --",
     "test": "turbo run test",
     "typecheck": "turbo run typecheck",
     "lint": "eslint .",
