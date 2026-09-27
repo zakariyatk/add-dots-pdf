@@ -27,9 +27,36 @@ describe('filled form fields match v1 (golden)', () => {
     expect(pages.map((p) => [p.mediaBox, p.rotation])).toEqual(golden.map((p) => [p.mediaBox, p.rotation]));
   });
 
-  it('every page draws the same', () => {
-    pages.forEach((p, i) =>
-      expect(p.streams.map(roundNums), 'page ' + (i + 1)).toEqual(golden[i]!.streams.map(roundNums)),
-    );
+  it('the turned page draws the same', () => {
+    expect(pages[1]!.streams.map(roundNums)).toEqual(golden[1]!.streams.map(roundNums));
+  });
+
+  /* The long one-line answer is the one deliberate difference (see
+     fields.fixes.test): v1 wrapped it onto a second line below its box. Each
+     field is drawn in its own q..Q block, so compare page 1 block by block. */
+  it('page 1: every field but the long one-line answer draws the same', () => {
+    const LONG = '<5468697320616E73776572'; // "This answer…"
+    const now = blocks(roundNums(pages[0]!.streams.join('')));
+    const was = blocks(roundNums(golden[0]!.streams.join('')));
+    expect(now.filter((b) => !b.includes(LONG))).toEqual(was.filter((b) => !b.includes(LONG)));
+    expect(was.filter((b) => b.includes(LONG))[0]!.match(/ Tj/g)).toHaveLength(2);
+    expect(now.filter((b) => b.includes(LONG))[0]!.match(/ Tj/g)).toHaveLength(1);
   });
 });
+
+function blocks(s: string): string[] {
+  const out: string[] = [];
+  let depth = 0,
+    cur = '';
+  for (const line of s.split('\n')) {
+    if (!line) continue;
+    cur += line + '\n';
+    if (line === 'q') depth++;
+    else if (line === 'Q' && --depth === 0) {
+      out.push(cur);
+      cur = '';
+    }
+  }
+  if (cur) out.push(cur);
+  return out;
+}

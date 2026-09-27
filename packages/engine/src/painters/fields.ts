@@ -7,6 +7,7 @@
    space, so this lands correctly whatever the rotation. */
 
 import { LineCapStyle, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib';
+import { fitText, pdfSafe } from '../fonts';
 import type { PageItem } from '../model';
 import { hexRgb, type SaveHooks } from '../save';
 
@@ -32,6 +33,8 @@ type FinishHook = NonNullable<SaveHooks['finish']>[number];
 
 const TICK = '#1B2A4A';
 const INK = '#0B0B0B';
+/** The smallest size a one-line answer is shrunk to before it is shortened. */
+const MIN_SIZE = 6;
 
 export function isOn(v: unknown, exportValue?: string): boolean {
   if (v == null) return false;
@@ -47,11 +50,13 @@ export function hasValue(f: FormField, values: FieldValues): boolean {
   return String(v).trim().length > 0;
 }
 
-/** Word-wraps text to a width; explicit line breaks are kept. */
+/** Word-wraps text to a width; explicit line breaks are kept. Characters the
+    standard font cannot encode become '?' (see pdfSafe). */
 export function wrapText(text: string, font: PDFFont, size: number, max: number): string[] {
   const out: string[] = [];
   String(text)
     .split('\n')
+    .map(pdfSafe)
     .forEach((para) => {
       let line = '';
       para.split(/\s+/).forEach((word) => {
@@ -111,13 +116,20 @@ function paintField(p: PDFPage, f: FormField, v: unknown, helv: PDFFont): void {
       p.drawText(line, { x: x1 + 2, y: ly, size, font: helv, color: hexRgb(INK) });
     });
   } else {
-    p.drawText(text, {
+    /* One line, kept inside the box: shrunk towards 6pt, then shortened with
+       an ellipsis. v1 passed maxWidth, which made pdf-lib wrap a long answer
+       onto a second line below the box, and an unencodable character (an
+       emoji, an arrow) failed the whole save. */
+    const safe = pdfSafe(text);
+    const room = w - 4;
+    const width = helv.widthOfTextAtSize(safe, size);
+    const fit = width > room ? Math.max(Math.min(size, MIN_SIZE), (size * room) / width) : size;
+    p.drawText(fitText(helv, safe, fit, room), {
       x: x1 + 2,
-      y: y1 + (h - size) / 2 + size * 0.2,
-      size,
+      y: y1 + (h - fit) / 2 + fit * 0.2,
+      size: fit,
       font: helv,
       color: hexRgb(INK),
-      maxWidth: w - 4,
     });
   }
 }
