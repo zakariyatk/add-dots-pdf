@@ -1,6 +1,7 @@
 import * as PDFLib from 'pdf-lib';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
+  clusters,
   buildPdf,
   createTextMeasurer,
   docopsFontNeeds,
@@ -320,6 +321,26 @@ describe('oversized words in multi-line fields', () => {
     const lines = wrapText(word, face, 10, ROOM);
     expect(lines.join('')).toBe(word);
     for (const l of lines) expect(textWidth(l, 10, face)).toBeLessThanOrEqual(ROOM);
+  });
+
+  it('a word is broken between whole characters: never inside an accented letter or a joined emoji', async () => {
+    const { face } = await faces();
+    /* e and a with combining accents (two code points each), and a family
+       emoji: man, ZWJ, woman, ZWJ, girl (five code points, one character) */
+    const word =
+      'e\u0301a\u0300'.repeat(6) + '\u{1F468}\u200D\u{1F469}\u200D\u{1F467}'.repeat(4) + 'o\u0302'.repeat(6);
+    const lines = wrapText(word, face, 10, 30);
+    expect(lines.length).toBeGreaterThan(2);
+    expect(lines.join('')).toBe(word);
+    /* every break falls where one character ends and the next begins */
+    const ends = new Set<number>();
+    let at = 0;
+    for (const c of clusters(word)) ends.add((at += c.length));
+    let pos = 0;
+    for (const l of lines.slice(0, -1)) {
+      pos += l.length;
+      expect(ends.has(pos), 'break inside a character after ' + JSON.stringify(l)).toBe(true);
+    }
   });
 
   it('words either side keep their places, and words that fit are not broken', async () => {

@@ -373,7 +373,7 @@
     /* stop a smooth scroll still gliding through the old document (a search
        hit, a jump): left running, it carries on into the new one */
     stage.scrollTo({ top: 0, left: 0, behavior: 'instant' });
-    $('hitList').innerHTML = ''; $('hitCount').textContent = ''; $('findIn').value = '';
+    $('hitList').innerHTML = ''; hitsShown = 0; $('hitCount').textContent = ''; $('findIn').value = '';
     setUndoState();
   }
 
@@ -4352,7 +4352,7 @@
       download(await buildPdf(S.items, null, { photos: true }), name);
       toast('Exported <b>' + esc(name) + '</b> · pins link to their photo pages');
     } catch (err) {
-      toast('This PDF could not be rebuilt — encrypted files cannot be re-saved');
+      toast(esc(saveError(err, 'The report could not be built')));
     } finally {
       btn.disabled = false; btn.textContent = 'Export Report';
     }
@@ -5258,6 +5258,21 @@
     });
   }
 
+  /* What went wrong in building a PDF, for the reader: an encrypted source
+     (the engine refuses it, since its pages would come out blank) or
+     anything else, with the error's own words. Plain text; esc() it for
+     HTML. */
+  function saveError(err, what) {
+    const doing = what || 'This PDF could not be built';
+    if (err && err.name === 'EncryptedSourceError') {
+      return doing + ': the original is password-protected (encrypted), and its pages would come ' +
+        'out blank. Save an unprotected copy of it in the app that made it, then open that.';
+    }
+    const why = err && err.message ? String(err.message).slice(0, 160) : 'an unexpected error';
+    return doing + ' (' + why + '). Nothing is lost: the document is still open. Try again; if it ' +
+      'keeps failing, the original file may be damaged.';
+  }
+
   async function saveAs(name) {
     const btn = $('saveGo');
     btn.disabled = true; btn.textContent = 'Building…';
@@ -5269,8 +5284,7 @@
       toast('Saved <b>' + esc(name) + '</b>');
       S.baseCount = S.items.length;
     } catch (e) {
-      $('saveNote').innerHTML = '<span style="color:var(--danger)">This PDF could not be rebuilt — ' +
-        'encrypted files cannot be re-saved. Remove the password in the original, then try again.</span>';
+      $('saveNote').innerHTML = '<span style="color:var(--danger)">' + esc(saveError(e)) + '</span>';
     } finally {
       btn.disabled = false; btn.textContent = 'Save PDF';
     }
@@ -5410,8 +5424,8 @@
       exBusy = false;
       closePops(true);
     } catch (err) {
-      note.innerHTML = '<span style="color:var(--danger)">These pages could not be rebuilt \u2014 ' +
-        'encrypted files cannot be re-saved. Remove the password in the original, then try again.</span>';
+      note.innerHTML = '<span style="color:var(--danger)">' +
+        esc(saveError(err, 'These pages could not be extracted')) + '</span>';
     } finally {
       exBusy = false;
       $('exAll').disabled = false;
@@ -5657,7 +5671,7 @@
   });
 
   /* ---------------- search ---------------- */
-  function invalidateSearch() { S.hits = []; S.hitIndex = -1; $('hitList').innerHTML = ''; if (S.query) runSearch(); }
+  function invalidateSearch() { S.hits = []; S.hitIndex = -1; $('hitList').innerHTML = ''; hitsShown = 0; if (S.query) runSearch(); }
 
   async function textOf(it) {
     const key = it.src.id + ':' + it.num;
@@ -5689,7 +5703,7 @@
   async function searchNow() {
     const q = $('findIn').value.trim();
     S.query = q; S.hits = []; S.hitIndex = -1;
-    $('hitList').innerHTML = ''; clearMarks();
+    $('hitList').innerHTML = ''; hitsShown = 0; clearMarks();
     if (q.length < 2) { $('hitCount').textContent = q ? 'Type at least two characters' : ''; return; }
     $('hitCount').textContent = 'Reading text…';
     const needle = q.toLowerCase();
@@ -5713,21 +5727,46 @@
     $('hitCount').textContent = S.hits.length
       ? S.hits.length + (S.hits.length === 1 ? ' match' : ' matches') + ' · Enter to step through'
       : 'No matches';
-    const frag = document.createDocumentFragment();
-    S.hits.forEach(function (h, i) {
-      const b = document.createElement('button');
-      b.className = 'hit-item';
-      b.innerHTML = '<span class="pg">Page ' + h.page + '</span>' + h.snippet;
-      b.addEventListener('click', function () {
-        activateHit(i);
-        if (isMobile()) setRail(false);
-      });
-      frag.appendChild(b);
-    });
-    $('hitList').appendChild(frag);
+    hitsShown = 0;
+    showHits(HIT_CHUNK);
     S.items.forEach(function (it) { if (it.rendered) markItem(it); });
     if (S.hits.length) activateHit(0);
   }
+
+  /* The list of results is written a chunk at a time: the first ones, and
+     more as it is scrolled near its end or a step reaches past them. A word
+     found thousands of times made thousands of rows (7,000 elements for
+     2,376 matches), most of them never looked at. */
+  const HIT_CHUNK = 150;
+  let hitsShown = 0;
+  function showHits(upTo) {
+    const n = Math.min(S.hits.length, upTo);
+    if (n <= hitsShown) return;
+    const frag = document.createDocumentFragment();
+    for (let i = hitsShown; i < n; i++) {
+      const h = S.hits[i];
+      const b = document.createElement('button');
+      b.className = 'hit-item';
+      b.dataset.i = i;
+      if (i === S.hitIndex) b.classList.add('active');
+      b.innerHTML = '<span class="pg">Page ' + h.page + '</span>' + h.snippet;
+      frag.appendChild(b);
+    }
+    $('hitList').appendChild(frag);
+    hitsShown = n;
+  }
+  $('hitList').addEventListener('click', function (e) {
+    const b = e.target.closest('.hit-item');
+    if (!b) return;
+    activateHit(+b.dataset.i);
+    if (isMobile()) setRail(false);
+  });
+  $('railFind').addEventListener('scroll', function () {
+    const r = $('railFind');
+    if (hitsShown < S.hits.length && r.scrollTop + r.clientHeight > r.scrollHeight - 600) {
+      showHits(hitsShown + HIT_CHUNK);
+    }
+  }, { passive: true });
 
   function snippetOf(t, at, len) {
     const a = Math.max(0, at - 42), b = Math.min(t.length, at + len + 52);
@@ -5737,9 +5776,12 @@
 
   function activateHit(i) {
     if (!S.hits[i]) return;
+    const was = $('hitList').children[S.hitIndex];
+    if (was) was.classList.remove('active');
     S.hitIndex = i;
-    Array.prototype.forEach.call($('hitList').children, function (el, k) { el.classList.toggle('active', k === i); });
+    showHits(i + 1);                              /* a step past the rows written so far */
     const el = $('hitList').children[i];
+    if (el) el.classList.add('active');
     if (el) el.scrollIntoView({ block: 'nearest' });
     const hit = S.hits[i];
     goTo(hit.page);
@@ -7349,7 +7391,7 @@
     setRail: setRail, openSheet: openSheet,
     removeItem: removeItem, moveItem: moveItem, rotateItem: rotateItem,
     newItem: newItem, ensureEls: ensureEls,
-    buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource,
+    buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource, saveError: saveError,
     insertBlank: insertBlank, ensurePage: ensurePage, ensureAllPages: ensureAllPages, renderIdle: renderIdle,
     drawPageInto: drawPageInto,
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */

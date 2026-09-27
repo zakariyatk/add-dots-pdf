@@ -237,6 +237,46 @@ try {
     ]);
     const saved = await PDFDocument.load(readFileSync(await dl.path()));
     check('saving the second file keeps all 300 pages', saved.getPageCount() === 300, saved.getPageCount());
+
+    /* a word found hundreds of times: the list is written a chunk at a time */
+    await page.keyboard.press('Escape');
+    await page.click('#btnFind');
+    await page.fill('#findIn', 'engineer');
+    await page.waitForFunction(() => /matches/.test(document.getElementById('hitCount').textContent), null, {
+      timeout: 60000,
+    });
+    const found = await page.evaluate(() => ({
+      matches: window.ADDPDF.S.hits.length,
+      rows: document.querySelectorAll('#hitList .hit-item').length,
+    }));
+    check(
+      'hundreds of matches: the list starts with the first 150 rows',
+      found.matches > 300 && found.rows === 150,
+      found,
+    );
+    await page.evaluate(() => {
+      const r = document.getElementById('railFind');
+      r.scrollTop = r.scrollHeight;
+    });
+    await page.waitForTimeout(300);
+    const more = await page.evaluate(() => document.querySelectorAll('#hitList .hit-item').length);
+    check('scrolled to its end, the list writes more rows', more > 150, { rows: more });
+    await page.focus('#findIn');
+    for (let i = 0; i < 320; i++) await page.keyboard.press('Enter');
+    const stepped = await page.evaluate(() => {
+      const i = window.ADDPDF.S.hitIndex,
+        el = document.querySelectorAll('#hitList .hit-item')[i];
+      return {
+        hitIndex: i,
+        active: !!el && el.classList.contains('active'),
+        actives: document.querySelectorAll('#hitList .active').length,
+      };
+    });
+    check(
+      'stepping past the rows written shows the match stepped to, and only it, as active',
+      stepped.hitIndex === 320 && stepped.active && stepped.actives === 1,
+      stepped,
+    );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }
@@ -578,6 +618,93 @@ try {
       'on a page turned 90° by the file and 90° more by the reader, the detail lines up',
       ok && diff.engine === 'pdfium' && diff.percentOff < 3,
       diff,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- encrypted files: drawn in the worker with their password, and
+     saving says why it cannot, rather than writing blank pages ---- */
+  {
+    const FIX = join(
+      dirname(fileURLToPath(import.meta.url)),
+      '..',
+      '..',
+      '..',
+      'packages',
+      'engine',
+      'test',
+      'fixtures',
+    );
+    const { ctx, page, errors } = await fresh(browser);
+    await page
+      .waitForFunction(() => window.ADDPDF.renderWorker() === 'on', null, { timeout: 10000 })
+      .catch(() => {});
+    /* the one that needs a password: typed in, the page is drawn by the worker */
+    await page.setInputFiles('#fileIn', join(FIX, 'encrypted-password.pdf'));
+    await page.waitForSelector('#pwRow.show', { timeout: 10000 });
+    await page.fill('#pwIn', 'secret');
+    await page.click('#pwBtn');
+    const drawn = await page
+      .waitForFunction(() => window.ADDPDF.S.items[0] && window.ADDPDF.S.items[0].rendered, null, {
+        timeout: 15000,
+      })
+      .then(() => true)
+      .catch(() => false);
+    /* the worker's picture has the page's text in it, not a blank page */
+    const ink = drawn
+      ? await page.evaluate(() => {
+          const c = window.ADDPDF.S.items[0].canvas;
+          const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+          let n = 0;
+          for (let i = 0; i < d.length; i += 4) if (d[i] < 128) n++;
+          return n;
+        })
+      : 0;
+    check(
+      'a password-protected file opens with its password and is drawn by the worker',
+      drawn && ink > 200,
+      {
+        darkPixels: ink,
+        worker: await page.evaluate(() => window.ADDPDF.renderWorker()),
+      },
+    );
+    await page.click('#btnSave');
+    let dl = null;
+    page.once('download', (d) => (dl = d));
+    await page.click('#saveGo');
+    await page
+      .waitForFunction(
+        () => /password-protected/.test(document.getElementById('saveNote').textContent),
+        null,
+        {
+          timeout: 15000,
+        },
+      )
+      .catch(() => {});
+    check(
+      'saving it says the original is password-protected, and saves nothing',
+      /password-protected/.test(await page.textContent('#saveNote')) && !dl,
+      await page.textContent('#saveNote'),
+    );
+    await page.keyboard.press('Escape');
+    /* the one that opens without a password but is still encrypted */
+    await open(page, join(FIX, 'encrypted-open.pdf'));
+    await page.click('#btnSave');
+    await page.click('#saveGo');
+    await page
+      .waitForFunction(
+        () => /password-protected/.test(document.getElementById('saveNote').textContent),
+        null,
+        {
+          timeout: 15000,
+        },
+      )
+      .catch(() => {});
+    check(
+      'an encrypted file that opens without a password is not saved blank either',
+      /password-protected/.test(await page.textContent('#saveNote')) && !dl,
+      await page.textContent('#saveNote'),
     );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();

@@ -9,7 +9,7 @@
 import { LineCapStyle, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib';
 import type { PageItem } from '../model';
 import { hexRgb, type SaveHooks } from '../save';
-import { drawLine, fitLine, needsUnicode, oneLine, textWidth, type Face } from '../text';
+import { clusters, drawLine, fitLine, needsUnicode, oneLine, textWidth, type Face } from '../text';
 
 /** One widget, as forms.js reads it from pdf.js. */
 export interface FormField {
@@ -52,7 +52,8 @@ export function hasValue(f: FormField, values: FieldValues): boolean {
 
 /** Word-wraps text to a width; explicit line breaks are kept. A word wider
     than the width on its own is broken between characters, as a textarea
-    shows it; v1 let it run out of the box. */
+    shows it; v1 let it run out of the box. Characters as a reader sees them
+    (grapheme clusters): an accent stays on its letter, a joined emoji whole. */
 export function wrapText(text: string, face: PDFFont | Face, size: number, max: number): string[] {
   const width = (t: string) => textWidth(t, size, face);
   const out: string[] = [];
@@ -69,7 +70,7 @@ export function wrapText(text: string, face: PDFFont | Face, size: number, max: 
         }
         if (line) out.push(line);
         line = '';
-        for (const ch of word) {
+        for (const ch of clusters(word)) {
           if (line && width(line + ch) > max) {
             out.push(line);
             line = ch;

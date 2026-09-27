@@ -246,7 +246,9 @@
         X.toast('This document is on your server');
       } catch (e) {
         err.hidden = false;
-        err.innerHTML = X.esc(e.message || 'The upload failed.');
+        err.innerHTML = X.esc(e && e.name === 'EncryptedSourceError'
+          ? X.saveError(e, 'This document could not be shared')
+          : (e.message || 'The upload failed.'));
       } finally {
         go.disabled = false; go.textContent = 'Put on the server';
       }

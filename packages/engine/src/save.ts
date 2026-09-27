@@ -112,9 +112,20 @@ export interface SaveHooks {
     by page does not re-parse the same original once for every page it produces. */
 export type SourceCache = Map<Source['id'], PDFDocument>;
 
+/** A source is encrypted. pdf-lib cannot decrypt, and pages copied from an
+    encrypted file keep their encrypted contents without the key to read
+    them: the saved pages would come out blank. So building stops instead. */
+export class EncryptedSourceError extends Error {
+  constructor(name?: string) {
+    super((name ? name + ' is' : 'A source is') + ' encrypted: its pages cannot be rebuilt');
+    this.name = 'EncryptedSourceError';
+  }
+}
+
 export async function loadSrc(s: Source, cache?: SourceCache | null): Promise<PDFDocument> {
   if (cache && cache.has(s.id)) return cache.get(s.id)!;
   const d = await PDFDocument.load(s.bytes, { ignoreEncryption: true });
+  if (d.isEncrypted) throw new EncryptedSourceError(s.name);
   if (cache) cache.set(s.id, d);
   return d;
 }

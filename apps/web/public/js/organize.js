@@ -195,8 +195,8 @@
         X.closePops(true);
         X.toast('Split into <b>' + groups.length + '</b> file' + (groups.length === 1 ? '' : 's'));
       } catch (err) {
-        $('splitNote').innerHTML = '<span style="color:var(--danger)">Could not split this file — ' +
-          'encrypted PDFs cannot be rebuilt.</span>';
+        $('splitNote').innerHTML = '<span style="color:var(--danger)">' +
+          X.esc(X.saveError(err, 'This file could not be split')) + '</span>';
       } finally {
         btn.disabled = false; btn.textContent = 'Split';
       }
@@ -503,7 +503,7 @@
         X.download(bytes, S.baseName + ' — pages ' + tag + '.pdf');
         X.toast('Extracted <b>' + sel.length + '</b> page' + (sel.length === 1 ? '' : 's'));
       } catch (e) {
-        X.toast('Could not extract — encrypted PDFs cannot be rebuilt');
+        X.toast(X.esc(X.saveError(e, 'These pages could not be extracted')));
       } finally {
         btn.disabled = false; btn.textContent = 'Extract';
       }
