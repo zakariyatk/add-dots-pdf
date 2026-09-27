@@ -311,6 +311,42 @@ async function measure(browser, file) {
   );
   await dl.delete();
 
+  /* deep zoom: in to the most (600%), then one step back out. Sharp means
+     the page being read is drawn at this zoom and, where its bitmap is
+     capped, its detail layer covers the screen (Stage D2; earlier builds
+     only stretch the capped bitmap, so for them it means drawn) */
+  const sharp = () => {
+    const S = window.ADDPDF.S,
+      it = S.items[S.current - 1];
+    if (!it || !it.rendered || !it.vp || document.body.classList.contains('zooming')) return false;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    if (it.canvas.width >= Math.floor(it.vp.width * dpr) * 0.98) return true;
+    /* a build without the detail layer (before Stage D2): drawn is all it does */
+    if (!window.ADDPDF.hasDetail) return true;
+    return !!(it.detail && it.detail.isConnected && it.detailKey === it.vp.scale + '/' + it.vp.rotation);
+  };
+  let dz0 = 0;
+  for (let i = 0; i < 20; i++) {
+    if ((await page.evaluate(() => window.ADDPDF.S.scale)) >= 5.99) break;
+    dz0 = await page.evaluate(() => performance.now());
+    await page.click('#btnIn');
+  }
+  await page.waitForFunction(sharp, null, { timeout: 120000, polling: 20 });
+  r.deepZoomMs = await page.evaluate((t0) => Math.round(performance.now() - t0), dz0);
+  const ds0 = await page.evaluate(() => performance.now());
+  await page.click('#btnOut');
+  await page
+    .waitForFunction(() => document.body.classList.contains('zooming'), null, { timeout: 5000 })
+    .catch(() => {});
+  await page.waitForFunction(sharp, null, { timeout: 120000, polling: 20 });
+  Object.assign(
+    r,
+    await page.evaluate((t0) => {
+      const b = window.__blocking(t0, performance.now());
+      return { deepStepMs: Math.round(performance.now() - t0), deepTBT: b.tbt };
+    }, ds0),
+  );
+
   r.errors = errors;
   await ctx.close();
   return r;
@@ -348,6 +384,8 @@ const COLS = [
   ['search ms', (r) => r.searchMs],
   ['save ms', (r) => r.saveMs],
   ['save max task', (r) => r.saveMaxTask],
+  ['deep zoom ms', (r) => r.deepZoomMs],
+  ['deep step ms', (r) => r.deepStepMs],
   ['browser MB', (r) => r.memAfterUse.browserMB],
   ['JS heap MB', (r) => r.memAfterUse.jsHeapMB],
   ['canvas MB', (r) => r.memAfterUse.canvasMB],

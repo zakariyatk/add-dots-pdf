@@ -57,6 +57,43 @@ async function prefilledPdf() {
   return d.save();
 }
 
+/* in the page: page 1's detail against pdf.js drawing the same part there,
+   as the share of pixels that differ clearly */
+async function detailDiff() {
+  const it = window.ADDPDF.S.items[0],
+    d = it.detail;
+  const dpr = d.width / parseFloat(d.style.width);
+  const x = parseFloat(d.style.left),
+    y = parseFloat(d.style.top);
+  const ref = document.createElement('canvas');
+  ref.width = d.width;
+  ref.height = d.height;
+  await it.page.render({
+    canvasContext: ref.getContext('2d', { alpha: false }),
+    viewport: it.vp,
+    transform: [dpr, 0, 0, dpr, -x * dpr, -y * dpr],
+  }).promise;
+  const pa = d.getContext('2d').getImageData(0, 0, d.width, d.height).data;
+  const pb = ref.getContext('2d').getImageData(0, 0, d.width, d.height).data;
+  let off = 0;
+  for (let i = 0; i < pa.length; i += 4) {
+    if (Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2]) > 48)
+      off++;
+  }
+  return { engine: it.detailEngine, percentOff: +((100 * off) / (pa.length / 4)).toFixed(3) };
+}
+
+/* in the page: page 1 is drawn at this zoom and its detail covers the screen */
+function detailSharp() {
+  const it = window.ADDPDF.S.items[0];
+  return (
+    !document.body.classList.contains('zooming') &&
+    !!it.detail &&
+    it.detail.isConnected &&
+    it.detailKey === it.vp.scale + '/' + it.vp.rotation
+  );
+}
+
 async function fresh(browser) {
   const ctx = await browser.newContext({
     viewport: { width: 1440, height: 900 },
@@ -100,6 +137,13 @@ const MIXED = join(CORPUS_DIR, 'smoke-mixed-60p.pdf');
 const PREFILLED = join(CORPUS_DIR, 'smoke-prefilled-400p.pdf');
 writeFileSync(MIXED, await mixedPdf());
 writeFileSync(PREFILLED, await prefilledPdf());
+/* the CAD sheets, the first turned a quarter by the file itself (/Rotate) */
+const TURNED = join(CORPUS_DIR, 'smoke-cad-turned.pdf');
+{
+  const d = await PDFDocument.load(readFileSync(join(CORPUS_DIR, 'cad-a1-8sheets.pdf')));
+  d.getPage(0).setRotation(degrees(90));
+  writeFileSync(TURNED, await d.save());
+}
 
 const server = await serve(join(dirname(fileURLToPath(import.meta.url)), '..', 'dist'), PORT);
 const browser = await chromium.launch({ channel: process.env.BENCH_CHANNEL || undefined });
@@ -405,6 +449,136 @@ try {
       return { w: a.width, h: a.height, percentOff: +((100 * off) / (pa.length / 4)).toFixed(3) };
     });
     check("the worker's picture matches pdf.js drawing it here", diff.percentOff < 0.5, diff);
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- zoomed right in, the part on screen is sharp (Stage D2) ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await page
+      .waitForFunction(() => window.ADDPDF.renderWorker() === 'on', null, { timeout: 10000 })
+      .catch(() => {});
+    await open(page, join(CORPUS_DIR, 'cad-a1-8sheets.pdf'));
+    await page.waitForTimeout(2500); /* the sheet proves heavy; PDFium loads */
+    await page.evaluate(() => {
+      window.__long = [];
+      new PerformanceObserver((l) => l.getEntries().forEach((e) => window.__long.push(e.duration))).observe({
+        type: 'longtask',
+      });
+    });
+    const sharp = detailSharp;
+    for (let i = 0; i < 20; i++) {
+      if ((await page.evaluate(() => window.ADDPDF.S.scale)) >= 5.99) break;
+      await page.click('#btnIn');
+    }
+    const ok = await page
+      .waitForFunction(sharp, null, { timeout: 15000, polling: 20 })
+      .then(() => true)
+      .catch(() => false);
+    const at600 = await page.evaluate(() => {
+      const it = window.ADDPDF.S.items[0];
+      return {
+        scale: window.ADDPDF.S.scale,
+        bitmap: it.canvas.width,
+        pageWidth: Math.round(it.vp.width),
+        engine: it.detailEngine,
+        detailPx: it.detail ? it.detail.width : 0,
+        detailCss: it.detail ? parseFloat(it.detail.style.width) : 0,
+      };
+    });
+    check(
+      'at 600% the capped page gets a sharp detail of the part on screen, drawn by PDFium',
+      ok && at600.bitmap < at600.pageWidth && at600.detailPx >= at600.detailCss && at600.engine === 'pdfium',
+      at600,
+    );
+    const longestZoom = await page.evaluate(() => Math.round(Math.max(0, ...window.__long)));
+    /* PDFium's picture against pdf.js drawing the same part here (on this
+       thread, so left out of the freeze measured below): they differ only
+       in how edges are smoothed */
+    const diff = await page.evaluate(detailDiff);
+    check('the detail lines up with what pdf.js draws there', diff.percentOff < 3, diff);
+    await page.evaluate(() => {
+      window.__long = [];
+    });
+
+    /* one step back out, still past the cap: the page's bitmap is kept, only
+       the detail is drawn again */
+    await page.evaluate(() => {
+      window.__base = window.ADDPDF.S.items[0].canvas;
+    });
+    await page.click('#btnOut');
+    await page
+      .waitForFunction(() => document.body.classList.contains('zooming'), null, { timeout: 5000 })
+      .catch(() => {});
+    const stepOk = await page
+      .waitForFunction(sharp, null, { timeout: 15000, polling: 20 })
+      .then(() => true)
+      .catch(() => false);
+    check(
+      'a zoom step past the cap keeps the page bitmap and redraws only the detail',
+      stepOk && (await page.evaluate(() => window.ADDPDF.S.items[0].canvas === window.__base)),
+    );
+
+    /* the detail follows the reader across the sheet */
+    await page.evaluate(() => {
+      const st = document.getElementById('stage');
+      st.scrollLeft += st.clientWidth;
+      st.scrollTop += st.clientHeight;
+    });
+    await page.waitForTimeout(200);
+    const covers = await page
+      .waitForFunction(
+        () => {
+          const d = window.ADDPDF.S.items[0].detail;
+          if (!d || !d.isConnected) return false;
+          const a = d.getBoundingClientRect(),
+            s = document.getElementById('stage').getBoundingClientRect();
+          return (
+            a.left <= s.left + 1 && a.top <= s.top + 1 && a.right >= s.right - 20 && a.bottom >= s.bottom - 20
+          );
+        },
+        null,
+        { timeout: 15000, polling: 50 },
+      )
+      .then(() => true)
+      .catch(() => false);
+    check('after scrolling, the detail covers the new part on screen', covers);
+    const longest = Math.max(
+      longestZoom,
+      await page.evaluate(() => Math.round(Math.max(0, ...window.__long))),
+    );
+    check('zooming in and scrolling the sheet never freezes the page for more than 250 ms', longest < 250, {
+      longestTaskMs: longest,
+    });
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- the detail lines up on a page turned by the file and by the reader ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await page
+      .waitForFunction(() => window.ADDPDF.renderWorker() === 'on', null, { timeout: 10000 })
+      .catch(() => {});
+    await open(page, TURNED);
+    await page.waitForTimeout(2500);
+    await page.evaluate(() => window.ADDPDF.rotateItem(0, 90));
+    await page.waitForFunction(() => window.ADDPDF.S.items[0].rendered, null, { timeout: 30000 });
+    for (let i = 0; i < 20; i++) {
+      if ((await page.evaluate(() => window.ADDPDF.S.scale)) >= 5.99) break;
+      await page.click('#btnIn');
+    }
+    const ok = await page
+      .waitForFunction(detailSharp, null, { timeout: 15000, polling: 20 })
+      .then(() => true)
+      .catch(() => false);
+    const diff = ok ? await page.evaluate(detailDiff) : null;
+    check(
+      'on a page turned 90° by the file and 90° more by the reader, the detail lines up',
+      ok && diff.engine === 'pdfium' && diff.percentOff < 3,
+      diff,
+    );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }
