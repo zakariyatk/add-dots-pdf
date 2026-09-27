@@ -150,9 +150,12 @@ export function fieldsFinish(values: () => FieldValues): FinishHook {
     const answered = items.flatMap((it) => fieldsOf(it).filter((f) => hasValue(f, vals)));
     if (!answered.length) return;
     const font = await out.embedFont(StandardFonts.Helvetica);
-    /* the fallback font, for answers Helvetica cannot draw (✓, →, Greek…) */
-    const needs = answered.some((f) => f.type !== 'Btn' && needsUnicode(vals[f.name]));
-    const fallback = extra.fallback || (needs && extra.unicode ? await extra.unicode() : null);
+    /* the fallback fonts, for answers Helvetica cannot draw (✓ →, Greek, 🙂…) */
+    const text = answered
+      .filter((f) => f.type !== 'Btn')
+      .map((f) => String(vals[f.name]))
+      .join('\n');
+    const fallback = needsUnicode(text) && extra.unicode ? await extra.unicode(text) : extra.fallback;
     const face: Face = { font, fallback };
     items.forEach((it, i) => {
       const p = slots[i];

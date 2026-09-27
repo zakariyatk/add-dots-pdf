@@ -3,14 +3,23 @@
 
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
+import { fileURLToPath } from 'node:url';
 import fontkit from '@pdf-lib/fontkit';
 import type { UnicodeFontSource } from '../../src';
 
 const require = createRequire(import.meta.url);
 
 export const FONT_PATH = require.resolve('dejavu-fonts-ttf/ttf/DejaVuSans.ttf');
+/* Noto Emoji has no npm package; the tests use the app's pinned copy (see
+   apps/web/public/assets/fonts/README.md) */
+export const EMOJI_PATH = fileURLToPath(
+  new URL('../../../../apps/web/public/assets/fonts/NotoEmoji.ttf', import.meta.url),
+);
 
-export const unicodeSource: UnicodeFontSource = { load: () => ({ fontkit, bytes: readFileSync(FONT_PATH) }) };
+export const unicodeSource: UnicodeFontSource = {
+  load: () => ({ fontkit, bytes: readFileSync(FONT_PATH) }),
+  loadEmoji: () => readFileSync(EMOJI_PATH),
+};
 
 type TextItem = { str: string; hasEOL?: boolean };
 type PdfJs = {

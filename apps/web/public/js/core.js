@@ -4437,9 +4437,10 @@
      text. The work is in the engine; core supplies what only it knows: the
      modules' painters and hooks, and how photo pins are drawn. */
   /* Characters the standard PDF fonts cannot draw (✓ →, Greek, Cyrillic…) are
-     saved in DejaVu Sans, embedded as a subset. It and fontkit, which pdf-lib
-     needs to embed it, are about 1.5 MB, so they load the first time a save
-     needs them; the service worker keeps them for offline use. */
+     saved in DejaVu Sans, and emoji in Noto Emoji, each embedded as a subset.
+     They and fontkit, which pdf-lib needs to embed them, load the first time a
+     save needs them. The service worker installs fontkit and DejaVu Sans with
+     the app (1.5 MB); Noto Emoji (1.9 MB) is cached the first time it is used. */
   let unicodeFont = null;
   function loadUnicodeFont() {
     if (!unicodeFont) {
@@ -4463,10 +4464,22 @@
     return unicodeFont;
   }
 
+  let emojiFont = null;
+  function loadEmojiFont() {
+    if (!emojiFont) {
+      emojiFont = fetch('assets/fonts/NotoEmoji.ttf').then(function (r) {
+        if (!r.ok) throw new Error('emoji font: HTTP ' + r.status);
+        return r.arrayBuffer();
+      }).then(function (buf) { return new Uint8Array(buf); });
+      emojiFont.catch(function () { emojiFont = null; });
+    }
+    return emojiFont;
+  }
+
   async function buildPdf(items, cache, opts) {
     return E.buildPdf(items, cache, opts, {
       measure: textWidth,
-      unicode: { load: loadUnicodeFont },
+      unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont },
       fontNeeds: EXT.fontNeeds,
       shapePainters: EXT.shapePainters,
       prepare: EXT.prepare,

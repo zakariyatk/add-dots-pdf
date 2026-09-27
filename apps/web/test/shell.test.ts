@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
@@ -56,9 +57,44 @@ describe('vendored Unicode font support', () => {
     expect(shell).toContain(file);
   });
 
-  it('ships the font licence', () => {
+  /* Noto Emoji has no npm package. The app's copy is built by
+     scripts/fonts/build-noto-emoji.py (fontTools 4.60.1, deterministic) from
+     google/fonts' ofl/notoemoji/NotoEmoji[wght].ttf at commit
+     23e54b51ddffbc7713c583748e3bd86f62b1fa4a; see assets/fonts/README.md */
+  it('assets/fonts/NotoEmoji.ttf is the build of the pinned google/fonts file', () => {
+    const sha = createHash('sha256')
+      .update(readFileSync(join(app, 'public/assets/fonts/NotoEmoji.ttf')))
+      .digest('hex');
+    expect(sha).toBe('ac16e452857b827d5d331f90b12cd39fa2b5284d6ec816a5f1618d580dfcf089');
+  });
+
+  /* fontkit writes a subset's glyph offsets halved (the short loca format)
+     but copies glyphs unpadded, so one odd-length glyph shifts every glyph
+     after it and they print blank. Every font the app embeds must have even
+     glyph lengths. */
+  it.each(['DejaVuSans.ttf', 'NotoEmoji.ttf'])('%s: every glyph has an even length', (name) => {
+    const b = readFileSync(join(app, 'public/assets/fonts', name));
+    const tables: Record<string, number> = {};
+    for (let i = 0, n = b.readUInt16BE(4); i < n; i++) {
+      const at = 12 + i * 16;
+      tables[b.toString('latin1', at, at + 4)] = b.readUInt32BE(at + 8);
+    }
+    const longLoca = b.readInt16BE(tables['head']! + 50) === 1;
+    const numGlyphs = b.readUInt16BE(tables['maxp']! + 4);
+    const at = (i: number) =>
+      longLoca ? b.readUInt32BE(tables['loca']! + i * 4) : b.readUInt16BE(tables['loca']! + i * 2) * 2;
+    let odd = 0;
+    for (let i = 0; i < numGlyphs; i++) odd += (at(i + 1) - at(i)) % 2;
+    expect(numGlyphs).toBeGreaterThan(1000);
+    expect(odd).toBe(0);
+  });
+
+  it('ships the font licences', () => {
     expect(readFileSync(join(app, 'public/assets/fonts/DejaVuSans-LICENSE.txt'), 'utf8')).toMatch(
       /Bitstream Vera/,
+    );
+    expect(readFileSync(join(app, 'public/assets/fonts/NotoEmoji-LICENSE.txt'), 'utf8')).toMatch(
+      /SIL Open Font License/,
     );
   });
 
@@ -66,5 +102,6 @@ describe('vendored Unicode font support', () => {
     const core = readFileSync(join(app, 'public/js/core.js'), 'utf8');
     expect(core).toContain("'js/vendor/fontkit.umd.min.js'");
     expect(core).toContain("'assets/fonts/DejaVuSans.ttf'");
+    expect(core).toContain("'assets/fonts/NotoEmoji.ttf'");
   });
 });

@@ -28,14 +28,7 @@ import { FONTS, fontIdx } from './fonts';
 import { arrowHead, boxOf, lineOrigin, rotPt, textRect, type MeasureText } from './geometry';
 import { isText, type AnyMark, type Mark, type PageItem, type Source, type TextMark } from './model';
 import { dashOf, hexToRgb01, shCap, shJoin, shOp } from './style';
-import {
-  anyNeedsUnicode,
-  drawLine,
-  embedUnicodeFont,
-  needsUnicode,
-  textWidth,
-  type UnicodeFontSource,
-} from './text';
+import { drawLine, embedFallbacks, needsUnicode, textIn, textWidth, type UnicodeFontSource } from './text';
 
 const PDF_CAP = [LineCapStyle.Butt, LineCapStyle.Round, LineCapStyle.Projecting];
 const PDF_JOIN = [LineJoinStyle.Miter, LineJoinStyle.Round, LineJoinStyle.Bevel];
@@ -56,13 +49,14 @@ export interface PaintContext {
 }
 
 /** What prepare, painters and finish hooks share during one save. buildPdf
-    sets two entries: `unicode`, which embeds the Unicode fallback font on
-    first call (async hooks call it when their text needs it), and `fallback`,
-    that font, already embedded when some mark's text needed it before
-    painting (painters are synchronous, so they read this one). */
+    sets two entries: `unicode(text)`, which embeds the fallback fonts that
+    text needs and resolves to all embedded so far (async hooks call it for
+    their own text), and `fallback`, those fonts, embedded before painting for
+    the marks' text (painters are synchronous, so they read this one). A
+    prepare hook with text of its own updates it. */
 export type Extra = Record<string, unknown> & {
-  unicode?: () => Promise<PDFFont | null>;
-  fallback?: PDFFont | null;
+  unicode?: (text?: string) => Promise<PDFFont[]>;
+  fallback?: PDFFont[] | null;
 };
 export type BuildOptions = { photos?: boolean } & Record<string, unknown>;
 
@@ -76,8 +70,8 @@ export interface PinOut {
 export interface SaveHooks {
   /** Text-width measurer (see createTextMeasurer). */
   measure: MeasureText;
-  /** The font for characters the standard fonts cannot draw (see text.ts).
-      Without it, such characters save as '?'. */
+  /** The fonts for characters the standard fonts cannot draw (see text.ts).
+      Without them, such characters save as '?'. */
   unicode?: UnicodeFontSource | null;
   /** Module marks that need a standard font: type -> font name. */
   fontNeeds?: Record<string, (s: AnyMark) => string | null | undefined>;
@@ -102,14 +96,14 @@ export interface SaveHooks {
       L: unknown,
       rotation: number,
       fontB: PDFFont | null,
-      fallback?: PDFFont | null,
+      fallback?: readonly PDFFont[] | null,
     ) => void;
     addPhotoPages: (
       out: PDFDocument,
       pinsOut: PinOut[],
       font: PDFFont | null,
       fontB: PDFFont | null,
-      unicode?: () => Promise<PDFFont | null>,
+      unicode?: (text?: string) => Promise<PDFFont[]>,
     ) => Promise<void>;
   };
 }
@@ -161,20 +155,19 @@ export async function buildPdf(
   }
   const fontFor = (s: TextMark) => embedded[s.f + fontIdx(s.b, s.i)] || null;
 
-  /* The Unicode fallback font, embedded only when some text needs it: now, if
-     any mark's text does (painters cannot wait), or later on a hook's call. */
+  /* The fallback fonts, embedded only when some text needs them: now, for
+     the marks' text (painters cannot wait), or later on a hook's call. */
   const extra: Extra = {};
-  extra.unicode = () => embedUnicodeFont(out, hooks.unicode);
+  extra.unicode = (text) => embedFallbacks(out, hooks.unicode, text);
   const pinLocs = hasPins
     ? items.flatMap((it) => it.shapes.map((s) => (s.t === 'pin' ? locs[s.id as string] : null)))
     : [];
-  if (anyNeedsUnicode(items.map((it) => it.shapes)) || anyNeedsUnicode(pinLocs))
-    extra.fallback = await extra.unicode();
-  const fallback = extra.fallback || null;
+  const markText = textIn(items.map((it) => it.shapes)) + '\n' + textIn(pinLocs);
+  if (needsUnicode(markText)) extra.fallback = await extra.unicode(markText);
   /* a line with characters the standard font lacks is measured as drawn */
   const measureT: MeasureText = (s, line) => {
     const f = needsUnicode(line) ? fontFor(s) : null;
-    return f ? textWidth(line, s.size, { font: f, fallback }) : measure(s, line);
+    return f ? textWidth(line, s.size, { font: f, fallback: extra.fallback }) : measure(s, line);
   };
 
   const groups = new Map<Source['id'], { src: Source; idxs: number[]; slots: number[] }>();
@@ -258,7 +251,7 @@ export async function buildPdf(
         drawLine(
           p,
           line,
-          { font: f, fallback },
+          { font: f, fallback: extra.fallback },
           {
             x: lo[0],
             y: lo[1],
@@ -372,7 +365,7 @@ export async function buildPdf(
       it.shapes.forEach((s) => {
         const L = s.t === 'pin' ? locs[s.id as string] : undefined;
         if (!L) return;
-        pins.draw(p, s, L, (turned + 360) % 360, pinFontB, fallback);
+        pins.draw(p, s, L, (turned + 360) % 360, pinFontB, extra.fallback);
         pinsOut.push({ s, L, outPage: p, pageNo: i + 1 });
       });
     }

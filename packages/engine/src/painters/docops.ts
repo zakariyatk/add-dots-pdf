@@ -133,9 +133,9 @@ export function docopsPainters(env: DocEnv): Record<string, Painter> {
     in Greek, a date in Arabic digits). Marks' own text is seen by buildPdf. */
 export function docopsPrepare(env: DocEnv) {
   return async (_out: PDFDocument, items: PageItem[], extra: Extra): Promise<void> => {
-    if (extra.fallback || !extra.unicode) return;
-    if (!items.some((it) => it.shapes.some((s) => s.t === 'hf'))) return;
-    if (needsUnicode(env.fileName()) || needsUnicode(env.today())) extra.fallback = await extra.unicode();
+    if (!extra.unicode || !items.some((it) => it.shapes.some((s) => s.t === 'hf'))) return;
+    const text = env.fileName() + '\n' + env.today();
+    if (needsUnicode(text)) extra.fallback = await extra.unicode(text);
   };
 }
 

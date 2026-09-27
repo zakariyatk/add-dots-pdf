@@ -8,7 +8,7 @@
 import { PDFName, degrees, rgb, type PDFDocument, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
 import type { AnyMark } from './model';
 import { hexRgb, type PinOut, type SaveHooks } from './save';
-import { anyNeedsUnicode, drawLine, fitLine, needsUnicode, oneLine, textWidth, type Face } from './text';
+import { drawLine, fitLine, needsUnicode, oneLine, textIn, textWidth, type Face } from './text';
 
 /** Pin radius in PDF points, and its colour. */
 export const PIN_R = 8;
@@ -60,7 +60,7 @@ export function drawPin(
   L: PinLocation,
   rotation: number,
   fontB: PDFFont | null,
-  fallback?: PDFFont | null,
+  fallback?: readonly PDFFont[] | null,
 ): void {
   const red = hexRgb(PIN_COLOR),
     white = rgb(1, 1, 1);
@@ -103,7 +103,7 @@ export async function addPhotoPages(
   font: PDFFont,
   fontB: PDFFont,
   env: PhotoPagesEnv,
-  unicode?: () => Promise<PDFFont | null>,
+  unicode?: (text?: string) => Promise<PDFFont[]>,
 ): Promise<number> {
   const AW = 595,
     AH = 842,
@@ -139,9 +139,9 @@ export async function addPhotoPages(
   });
   const total = locs.reduce((a, e) => a + e.pages.length, 0);
 
-  /* the fallback font, if a location or the document's name needs it */
-  const needs = anyNeedsUnicode(locs.map((e) => e.L)) || needsUnicode(env.docName());
-  const fallback = needs && unicode ? await unicode() : null;
+  /* the fallback fonts, if a location or the document's name needs them */
+  const text = textIn(locs.map((e) => e.L)) + '\n' + env.docName();
+  const fallback = needsUnicode(text) && unicode ? await unicode(text) : null;
   const F: Face = { font, fallback },
     FB: Face = { font: fontB, fallback };
 
