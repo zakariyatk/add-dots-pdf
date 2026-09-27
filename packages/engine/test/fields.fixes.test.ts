@@ -4,7 +4,7 @@ import { buildPdf, createTextMeasurer, fieldsFinish, type FieldValues, type Form
 // @ts-expect-error plain JS fixture shared with the browser
 import { digest } from './fixtures/marks.fixture.js';
 
-/* Two save bugs in v1's filled form fields. Each test here fails on v1's
+/* Save bugs in v1's filled form fields. Each test here fails on v1's
    painter and passes on the fixed one. */
 
 const BOX: FormField['rect'] = [60, 700, 200, 716]; // 140 x 16: text 9.92pt, 136pt of room
@@ -40,6 +40,8 @@ const tx = (name: string, more: Partial<FormField> = {}): FormField => ({
 });
 
 describe('filled form fields: fixes to v1', () => {
+  /* With the fallback font (see unicode.test) such characters are kept. This
+     is the last resort when that font cannot be had: the save still completes. */
   it('a character the standard font cannot encode no longer fails the save', async () => {
     const s = await save([tx('one'), tx('many', { rect: [60, 500, 300, 600], multiline: true })], {
       one: 'Done ✓ → next',

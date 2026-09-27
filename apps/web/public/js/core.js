@@ -4436,9 +4436,37 @@
   /* rebuilds the given items into a fresh PDF, carrying rotation, crop, marks and
      text. The work is in the engine; core supplies what only it knows: the
      modules' painters and hooks, and how photo pins are drawn. */
+  /* Characters the standard PDF fonts cannot draw (✓ →, Greek, Cyrillic…) are
+     saved in DejaVu Sans, embedded as a subset. It and fontkit, which pdf-lib
+     needs to embed it, are about 1.5 MB, so they load the first time a save
+     needs them; the service worker keeps them for offline use. */
+  let unicodeFont = null;
+  function loadUnicodeFont() {
+    if (!unicodeFont) {
+      const kit = window.fontkit ? Promise.resolve(window.fontkit) : new Promise(function (ok, fail) {
+        const sc = document.createElement('script');
+        sc.src = 'js/vendor/fontkit.umd.min.js';
+        sc.onload = function () { window.fontkit ? ok(window.fontkit) : fail(new Error('fontkit missing')); };
+        sc.onerror = function () { sc.remove(); fail(new Error('fontkit did not load')); };
+        document.head.appendChild(sc);
+      });
+      const font = fetch('assets/fonts/DejaVuSans.ttf').then(function (r) {
+        if (!r.ok) throw new Error('font: HTTP ' + r.status);
+        return r.arrayBuffer();
+      });
+      unicodeFont = Promise.all([kit, font]).then(function (got) {
+        return { fontkit: got[0], bytes: new Uint8Array(got[1]) };
+      });
+      /* a failed load (offline before it was ever cached) is tried again next save */
+      unicodeFont.catch(function () { unicodeFont = null; });
+    }
+    return unicodeFont;
+  }
+
   async function buildPdf(items, cache, opts) {
     return E.buildPdf(items, cache, opts, {
       measure: textWidth,
+      unicode: { load: loadUnicodeFont },
       fontNeeds: EXT.fontNeeds,
       shapePainters: EXT.shapePainters,
       prepare: EXT.prepare,

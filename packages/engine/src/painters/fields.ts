@@ -7,9 +7,9 @@
    space, so this lands correctly whatever the rotation. */
 
 import { LineCapStyle, StandardFonts, type PDFFont, type PDFPage } from 'pdf-lib';
-import { fitText, pdfSafe } from '../fonts';
 import type { PageItem } from '../model';
 import { hexRgb, type SaveHooks } from '../save';
+import { drawLine, fitLine, needsUnicode, oneLine, textWidth, type Face } from '../text';
 
 /** One widget, as forms.js reads it from pdf.js. */
 export interface FormField {
@@ -50,21 +50,30 @@ export function hasValue(f: FormField, values: FieldValues): boolean {
   return String(v).trim().length > 0;
 }
 
-/** Word-wraps text to a width; explicit line breaks are kept. Characters the
-    standard font cannot encode become '?' (see pdfSafe). */
-export function wrapText(text: string, font: PDFFont, size: number, max: number): string[] {
+/** Word-wraps text to a width; explicit line breaks are kept. A word wider
+    than the width on its own is broken between characters, as a textarea
+    shows it; v1 let it run out of the box. */
+export function wrapText(text: string, face: PDFFont | Face, size: number, max: number): string[] {
+  const width = (t: string) => textWidth(t, size, face);
   const out: string[] = [];
   String(text)
     .split('\n')
-    .map(pdfSafe)
+    .map(oneLine)
     .forEach((para) => {
       let line = '';
       para.split(/\s+/).forEach((word) => {
         const probe = line ? line + ' ' + word : word;
-        if (font.widthOfTextAtSize(probe, size) <= max || !line) line = probe;
-        else {
-          out.push(line);
-          line = word;
+        if (width(probe) <= max) {
+          line = probe;
+          return;
+        }
+        if (line) out.push(line);
+        line = '';
+        for (const ch of word) {
+          if (line && width(line + ch) > max) {
+            out.push(line);
+            line = ch;
+          } else line += ch;
         }
       });
       out.push(line);
@@ -72,7 +81,7 @@ export function wrapText(text: string, font: PDFFont, size: number, max: number)
   return out;
 }
 
-function paintField(p: PDFPage, f: FormField, v: unknown, helv: PDFFont): void {
+function paintField(p: PDFPage, f: FormField, v: unknown, face: Face): void {
   const x1 = Math.min(f.rect[0], f.rect[2]),
     x2 = Math.max(f.rect[0], f.rect[2]);
   const y1 = Math.min(f.rect[1], f.rect[3]),
@@ -110,25 +119,23 @@ function paintField(p: PDFPage, f: FormField, v: unknown, helv: PDFFont): void {
   if (!text.trim()) return;
   const size = f.fontSize && f.fontSize > 0 ? f.fontSize : Math.min(11, Math.max(6, h * 0.62));
   if (f.multiline) {
-    wrapText(text, helv, size, w - 4).forEach((line, li) => {
+    wrapText(text, face, size, w - 4).forEach((line, li) => {
       const ly = y2 - size - 2 - li * size * 1.22;
       if (ly < y1 - size) return;
-      p.drawText(line, { x: x1 + 2, y: ly, size, font: helv, color: hexRgb(INK) });
+      drawLine(p, line, face, { x: x1 + 2, y: ly, size, color: hexRgb(INK) });
     });
   } else {
     /* One line, kept inside the box: shrunk towards 6pt, then shortened with
        an ellipsis. v1 passed maxWidth, which made pdf-lib wrap a long answer
-       onto a second line below the box, and an unencodable character (an
-       emoji, an arrow) failed the whole save. */
-    const safe = pdfSafe(text);
+       onto a second line below the box. */
+    const line = oneLine(text);
     const room = w - 4;
-    const width = helv.widthOfTextAtSize(safe, size);
+    const width = textWidth(line, size, face);
     const fit = width > room ? Math.max(Math.min(size, MIN_SIZE), (size * room) / width) : size;
-    p.drawText(fitText(helv, safe, fit, room), {
+    drawLine(p, fitLine(face, line, fit, room), face, {
       x: x1 + 2,
       y: y1 + (h - fit) / 2 + fit * 0.2,
       size: fit,
-      font: helv,
       color: hexRgb(INK),
     });
   }
@@ -137,16 +144,21 @@ function paintField(p: PDFPage, f: FormField, v: unknown, helv: PDFFont): void {
 /** The finish hook that paints every answered field. `values` is read at save
     time, so the editor can keep changing its answers. */
 export function fieldsFinish(values: () => FieldValues): FinishHook {
-  return async (out, items: PageItem[], slots) => {
+  return async (out, items: PageItem[], slots, extra) => {
     const vals = values();
     const fieldsOf = (it: PageItem) => (it.fields as FormField[] | null | undefined) || [];
-    if (!items.some((it) => fieldsOf(it).some((f) => hasValue(f, vals)))) return;
-    const helv = await out.embedFont(StandardFonts.Helvetica);
+    const answered = items.flatMap((it) => fieldsOf(it).filter((f) => hasValue(f, vals)));
+    if (!answered.length) return;
+    const font = await out.embedFont(StandardFonts.Helvetica);
+    /* the fallback font, for answers Helvetica cannot draw (✓, →, Greek…) */
+    const needs = answered.some((f) => f.type !== 'Btn' && needsUnicode(vals[f.name]));
+    const fallback = extra.fallback || (needs && extra.unicode ? await extra.unicode() : null);
+    const face: Face = { font, fallback };
     items.forEach((it, i) => {
       const p = slots[i];
       if (!p) return;
       fieldsOf(it).forEach((f) => {
-        if (hasValue(f, vals)) paintField(p, f, vals[f.name], helv);
+        if (hasValue(f, vals)) paintField(p, f, vals[f.name], face);
       });
     });
   };

@@ -7,6 +7,7 @@ import { buildPdf, createTextMeasurer, fieldsFinish, type FieldValues, type Page
 import { digest, roundNums } from './fixtures/marks.fixture.js';
 // @ts-expect-error plain JS fixture shared with the browser
 import { makeFormsFixture } from './fixtures/forms.fixture.js';
+import { unicodeSource } from './support/unicode';
 
 /* forms.v1.json was recorded from v1's own forms.js in the browser: its save
    hook, with the Form panel's answers set to the fixture's values. */
@@ -18,7 +19,13 @@ const golden = JSON.parse(
 let pages: PageDigest[];
 beforeAll(async () => {
   const { items, values } = (await makeFormsFixture(PDFLib)) as { items: PageItem[]; values: FieldValues };
-  const hooks = { measure: await createTextMeasurer(), finish: [fieldsFinish(() => values)] };
+  /* with the Unicode fallback on, as in the app: the fixture is all WinAnsi,
+     so the font is never loaded and nothing changes */
+  const hooks = {
+    measure: await createTextMeasurer(),
+    unicode: unicodeSource,
+    finish: [fieldsFinish(() => values)],
+  };
   pages = await digest(PDFLib, await buildPdf(items, null, {}, hooks));
 });
 

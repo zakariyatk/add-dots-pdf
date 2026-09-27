@@ -1,9 +1,10 @@
 /* Redaction boxes and the running marks: watermark, header and footer, Bates
    numbers. Moved from docops.js. */
 
-import { degrees, rgb } from 'pdf-lib';
-import type { Mark } from '../model';
-import { hexRgb } from '../save';
+import { degrees, rgb, type PDFDocument } from 'pdf-lib';
+import type { Mark, PageItem } from '../model';
+import { hexRgb, type Extra } from '../save';
+import { drawLine, needsUnicode, textWidth, type Face } from '../text';
 import type { FontNeed, Painter } from './common';
 
 export interface WatermarkMark extends Mark {
@@ -54,25 +55,25 @@ const redact: Painter = (p, s: Mark) => {
 const wm: Painter = (p, s: WatermarkMark, ctx) => {
   const font = ctx.fonts.HelveticaBold;
   if (!font) return;
+  const face: Face = { font, fallback: ctx.extra.fallback };
   const { width: W, height: H } = p.getSize();
   const col = hexRgb(s.c);
   const draw = (cxp: number, cyp: number) => {
-    const w = font.widthOfTextAtSize(s.text, s.size);
+    const w = textWidth(s.text, s.size, face);
     const t = ((s.r || 0) * Math.PI) / 180;
     /* pdf-lib turns text about its origin, so step back along the baseline by
        half the string to leave the middle of the text on (cx, cy) */
-    p.drawText(s.text, {
+    drawLine(p, s.text, face, {
       x: cxp - (Math.cos(t) * w) / 2 + Math.sin(t) * s.size * 0.35,
       y: cyp - (Math.sin(t) * w) / 2 - Math.cos(t) * s.size * 0.35,
       size: s.size,
-      font,
       color: col,
       opacity: s.o,
       rotate: degrees(s.r || 0),
     });
   };
   if (s.tile) {
-    const stepX = Math.max(90, font.widthOfTextAtSize(s.text, s.size) * 1.35);
+    const stepX = Math.max(90, textWidth(s.text, s.size, face) * 1.35);
     const stepY = Math.max(70, s.size * 3.4);
     for (let y = stepY / 2; y < H + stepY; y += stepY) {
       for (let x = stepX / 2; x < W + stepX; x += stepX) draw(x, y);
@@ -85,18 +86,20 @@ const wm: Painter = (p, s: WatermarkMark, ctx) => {
 const bates: Painter = (p, s: BatesMark, ctx) => {
   const font = ctx.fonts.Helvetica;
   if (!font) return;
+  const face: Face = { font, fallback: ctx.extra.fallback };
   const { width: W, height: H } = p.getSize();
-  const w = font.widthOfTextAtSize(s.label, s.size),
+  const w = textWidth(s.label, s.size, face),
     m = 26;
   const x = /r$/.test(s.pos) ? W - m - w : /l$/.test(s.pos) ? m : (W - w) / 2;
   const y = s.pos.charAt(0) === 't' ? H - m : m - s.size;
-  p.drawText(s.label, { x, y, size: s.size, font, color: hexRgb(s.c) });
+  drawLine(p, s.label, face, { x, y, size: s.size, color: hexRgb(s.c) });
 };
 
 export function docopsPainters(env: DocEnv): Record<string, Painter> {
   const hf: Painter = (p, s: HeaderFooterMark, ctx) => {
     const font = ctx.fonts.Helvetica;
     if (!font) return;
+    const face: Face = { font, fallback: ctx.extra.fallback };
     const { width: W, height: H } = p.getSize();
     const col = hexRgb(s.c),
       m = s.margin,
@@ -111,9 +114,9 @@ export function docopsPainters(env: DocEnv): Record<string, Painter> {
     const put = (raw: string | undefined, align: 'l' | 'c' | 'r', y: number) => {
       const t = fill(raw);
       if (!t.trim()) return;
-      const w = font.widthOfTextAtSize(t, size);
+      const w = textWidth(t, size, face);
       const x = align === 'l' ? m : align === 'r' ? W - m - w : (W - w) / 2;
-      p.drawText(t, { x, y, size, font, color: col });
+      drawLine(p, t, face, { x, y, size, color: col });
     };
     put(s.cfg.hl, 'l', H - m);
     put(s.cfg.hc, 'c', H - m);
@@ -123,6 +126,17 @@ export function docopsPainters(env: DocEnv): Record<string, Painter> {
     put(s.cfg.fr, 'r', m - size);
   };
   return { redact, wm, hf, bates };
+}
+
+/** The header and footer fill in the file name and the date as they paint, so
+    the fallback font is embedded beforehand when either needs it (a file named
+    in Greek, a date in Arabic digits). Marks' own text is seen by buildPdf. */
+export function docopsPrepare(env: DocEnv) {
+  return async (_out: PDFDocument, items: PageItem[], extra: Extra): Promise<void> => {
+    if (extra.fallback || !extra.unicode) return;
+    if (!items.some((it) => it.shapes.some((s) => s.t === 'hf'))) return;
+    if (needsUnicode(env.fileName()) || needsUnicode(env.today())) extra.fallback = await extra.unicode();
+  };
 }
 
 export const docopsFontNeeds: Record<string, FontNeed> = {

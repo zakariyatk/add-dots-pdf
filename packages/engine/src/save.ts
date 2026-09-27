@@ -28,6 +28,14 @@ import { FONTS, fontIdx } from './fonts';
 import { arrowHead, boxOf, lineOrigin, rotPt, textRect, type MeasureText } from './geometry';
 import { isText, type AnyMark, type Mark, type PageItem, type Source, type TextMark } from './model';
 import { dashOf, hexToRgb01, shCap, shJoin, shOp } from './style';
+import {
+  anyNeedsUnicode,
+  drawLine,
+  embedUnicodeFont,
+  needsUnicode,
+  textWidth,
+  type UnicodeFontSource,
+} from './text';
 
 const PDF_CAP = [LineCapStyle.Butt, LineCapStyle.Round, LineCapStyle.Projecting];
 const PDF_JOIN = [LineJoinStyle.Miter, LineJoinStyle.Round, LineJoinStyle.Bevel];
@@ -44,10 +52,18 @@ export interface PaintContext {
   it: PageItem;
   index: number;
   fonts: Record<string, PDFFont>;
-  extra: Record<string, unknown>;
+  extra: Extra;
 }
 
-export type Extra = Record<string, unknown>;
+/** What prepare, painters and finish hooks share during one save. buildPdf
+    sets two entries: `unicode`, which embeds the Unicode fallback font on
+    first call (async hooks call it when their text needs it), and `fallback`,
+    that font, already embedded when some mark's text needed it before
+    painting (painters are synchronous, so they read this one). */
+export type Extra = Record<string, unknown> & {
+  unicode?: () => Promise<PDFFont | null>;
+  fallback?: PDFFont | null;
+};
 export type BuildOptions = { photos?: boolean } & Record<string, unknown>;
 
 export interface PinOut {
@@ -60,6 +76,9 @@ export interface PinOut {
 export interface SaveHooks {
   /** Text-width measurer (see createTextMeasurer). */
   measure: MeasureText;
+  /** The font for characters the standard fonts cannot draw (see text.ts).
+      Without it, such characters save as '?'. */
+  unicode?: UnicodeFontSource | null;
   /** Module marks that need a standard font: type -> font name. */
   fontNeeds?: Record<string, (s: AnyMark) => string | null | undefined>;
   /** Module marks drawn into the PDF: type -> painter. */
@@ -77,12 +96,20 @@ export interface SaveHooks {
   /** Photo pins. Without this, pin marks are left out of the saved PDF. */
   pins?: {
     locs: Record<string, unknown>;
-    draw: (page: PDFPage, s: AnyMark, L: unknown, rotation: number, fontB: PDFFont | null) => void;
+    draw: (
+      page: PDFPage,
+      s: AnyMark,
+      L: unknown,
+      rotation: number,
+      fontB: PDFFont | null,
+      fallback?: PDFFont | null,
+    ) => void;
     addPhotoPages: (
       out: PDFDocument,
       pinsOut: PinOut[],
       font: PDFFont | null,
       fontB: PDFFont | null,
+      unicode?: () => Promise<PDFFont | null>,
     ) => Promise<void>;
   };
 }
@@ -134,6 +161,22 @@ export async function buildPdf(
   }
   const fontFor = (s: TextMark) => embedded[s.f + fontIdx(s.b, s.i)] || null;
 
+  /* The Unicode fallback font, embedded only when some text needs it: now, if
+     any mark's text does (painters cannot wait), or later on a hook's call. */
+  const extra: Extra = {};
+  extra.unicode = () => embedUnicodeFont(out, hooks.unicode);
+  const pinLocs = hasPins
+    ? items.flatMap((it) => it.shapes.map((s) => (s.t === 'pin' ? locs[s.id as string] : null)))
+    : [];
+  if (anyNeedsUnicode(items.map((it) => it.shapes)) || anyNeedsUnicode(pinLocs))
+    extra.fallback = await extra.unicode();
+  const fallback = extra.fallback || null;
+  /* a line with characters the standard font lacks is measured as drawn */
+  const measureT: MeasureText = (s, line) => {
+    const f = needsUnicode(line) ? fontFor(s) : null;
+    return f ? textWidth(line, s.size, { font: f, fallback }) : measure(s, line);
+  };
+
   const groups = new Map<Source['id'], { src: Source; idxs: number[]; slots: number[] }>();
   items.forEach((it, i) => {
     if (!groups.has(it.src.id)) groups.set(it.src.id, { src: it.src, idxs: [], slots: [] });
@@ -144,7 +187,6 @@ export async function buildPdf(
 
   /* modules that need to embed something (a signature image, a logo) do it
      here, while we can still await, and stash the result in `extra` */
-  const extra: Extra = {};
   for (const fn of hooks.prepare || []) await fn(out, items, extra);
 
   const slots: PDFPage[] = new Array(items.length);
@@ -178,7 +220,7 @@ export async function buildPdf(
     it.shapes.forEach((s) => {
       if (!isText(s)) return;
       if (s.bg) {
-        const r = textRect(s, measure);
+        const r = textRect(s, measureT);
         const bo = s.r ? rotPt([r.x, r.y], [s.a[0], s.a[1]], s.r) : [r.x, r.y];
         p.drawRectangle({
           x: bo[0],
@@ -211,17 +253,21 @@ export async function buildPdf(
       if (!f) return;
       txt.split('\n').forEach((line, li) => {
         if (!line) return;
-        const lineW = measure(s, line) || 0;
-        const lo = lineOrigin(s, li, lineW, measure);
-        p.drawText(line, {
-          x: lo[0],
-          y: lo[1],
-          rotate: degrees(s.r || 0),
-          size: s.size,
-          font: f,
-          color: hexRgb(s.c),
-          opacity: shOp(s),
-        });
+        const lineW = measureT(s, line) || 0;
+        const lo = lineOrigin(s, li, lineW, measureT);
+        drawLine(
+          p,
+          line,
+          { font: f, fallback },
+          {
+            x: lo[0],
+            y: lo[1],
+            rotate: degrees(s.r || 0),
+            size: s.size,
+            color: hexRgb(s.c),
+            opacity: shOp(s),
+          },
+        );
         /* standard PDF fonts carry no underline/strike glyphs, so draw the line
            ourselves, pivoted about the same baseline point as the text so it
            turns with it */
@@ -326,7 +372,7 @@ export async function buildPdf(
       it.shapes.forEach((s) => {
         const L = s.t === 'pin' ? locs[s.id as string] : undefined;
         if (!L) return;
-        pins.draw(p, s, L, (turned + 360) % 360, pinFontB);
+        pins.draw(p, s, L, (turned + 360) % 360, pinFontB, fallback);
         pinsOut.push({ s, L, outPage: p, pageNo: i + 1 });
       });
     }
@@ -338,7 +384,7 @@ export async function buildPdf(
   });
 
   if (opts && opts.photos && pinsOut.length && hooks.pins)
-    await hooks.pins.addPhotoPages(out, pinsOut, pinFont, pinFontB);
+    await hooks.pins.addPhotoPages(out, pinsOut, pinFont, pinFontB, extra.unicode);
 
   for (const fn of hooks.finish || []) await fn(out, items, slots, extra, opts);
 

@@ -6,9 +6,9 @@
    there too, and every photo page links back to the drawing. */
 
 import { PDFName, degrees, rgb, type PDFDocument, type PDFFont, type PDFImage, type PDFPage } from 'pdf-lib';
-import { fitText, pdfSafe } from './fonts';
 import type { AnyMark } from './model';
 import { hexRgb, type PinOut, type SaveHooks } from './save';
+import { anyNeedsUnicode, drawLine, fitLine, needsUnicode, oneLine, textWidth, type Face } from './text';
 
 /** Pin radius in PDF points, and its colour. */
 export const PIN_R = 8;
@@ -60,6 +60,7 @@ export function drawPin(
   L: PinLocation,
   rotation: number,
   fontB: PDFFont | null,
+  fallback?: PDFFont | null,
 ): void {
   const red = hexRgb(PIN_COLOR),
     white = rgb(1, 1, 1);
@@ -67,20 +68,21 @@ export function drawPin(
     cy = s.a[1];
   p.drawCircle({ x: cx, y: cy, size: PIN_R + 1.4, color: white });
   p.drawCircle({ x: cx, y: cy, size: PIN_R, color: red });
-  const label = pdfSafe(L.n);
+  const label = oneLine(L.n);
   if (!label || !fontB) return;
-  const size = label.length <= 2 ? PIN_R * 1.05 : (PIN_R * 2.1) / label.length;
-  const tw = fontB.widthOfTextAtSize(label, size);
+  const face: Face = { font: fontB, fallback };
+  const len = Array.from(label).length;
+  const size = len <= 2 ? PIN_R * 1.05 : (PIN_R * 2.1) / len;
+  const tw = textWidth(label, size, face);
   const ox = -tw / 2,
     oy = -size * 0.36;
   const rad = (rotation * Math.PI) / 180,
     co = Math.cos(rad),
     si = Math.sin(rad);
-  p.drawText(label, {
+  drawLine(p, label, face, {
     x: cx + ox * co - oy * si,
     y: cy + ox * si + oy * co,
     size,
-    font: fontB,
     color: white,
     rotate: degrees(rotation),
   });
@@ -101,6 +103,7 @@ export async function addPhotoPages(
   font: PDFFont,
   fontB: PDFFont,
   env: PhotoPagesEnv,
+  unicode?: () => Promise<PDFFont | null>,
 ): Promise<number> {
   const AW = 595,
     AH = 842,
@@ -136,26 +139,30 @@ export async function addPhotoPages(
   });
   const total = locs.reduce((a, e) => a + e.pages.length, 0);
 
+  /* the fallback font, if a location or the document's name needs it */
+  const needs = anyNeedsUnicode(locs.map((e) => e.L)) || needsUnicode(env.docName());
+  const fallback = needs && unicode ? await unicode() : null;
+  const F: Face = { font, fallback },
+    FB: Face = { font: fontB, fallback };
+
   const disc = (page: PDFPage, x: number, y: number, r: number, label: unknown, size: number) => {
     page.drawCircle({ x, y, size: r, color: red });
-    const t = pdfSafe(label);
+    const t = oneLine(label);
     if (t)
-      page.drawText(t, {
-        x: x - fontB.widthOfTextAtSize(t, size) / 2,
+      drawLine(page, t, FB, {
+        x: x - textWidth(t, size, FB) / 2,
         y: y - size * 0.36,
         size,
-        font: fontB,
         color: white,
       });
   };
 
   idxPages.forEach((pg, pi) => {
     pg.drawText('Site photo locations', { x: M, y: AH - 52, size: 15, font: fontB, color: ink });
-    pg.drawText(fitText(font, env.docName() + '  ·  ' + locs.length + ' locations', 9, AW - 2 * M), {
+    drawLine(pg, fitLine(F, env.docName() + '  ·  ' + locs.length + ' locations', 9, AW - 2 * M), F, {
       x: M,
       y: AH - 68,
       size: 9,
-      font,
       color: dim,
     });
     pg.drawLine({ start: { x: M, y: AH - 80 }, end: { x: AW - M, y: AH - 80 }, thickness: 0.7, color: rule });
@@ -163,20 +170,20 @@ export async function addPhotoPages(
     locs.slice(pi * perIdx, (pi + 1) * perIdx).forEach((e) => {
       const L = e.L;
       disc(pg, M + 8, y + 3, 8, L.n, 8);
-      pg.drawText(fitText(fontB, L.ref || '(no reference)', 10.5, 130), {
+      drawLine(pg, fitLine(FB, L.ref || '(no reference)', 10.5, 130), FB, {
         x: M + 26,
         y,
         size: 10.5,
-        font: fontB,
         color: ink,
       });
-      pg.drawText(
-        fitText(font, [L.desc, L.boq ? 'BOQ ' + L.boq : ''].filter(Boolean).join('  ·  '), 9.5, 230),
+      drawLine(
+        pg,
+        fitLine(F, [L.desc, L.boq ? 'BOQ ' + L.boq : ''].filter(Boolean).join('  ·  '), 9.5, 230),
+        F,
         {
           x: M + 162,
           y,
           size: 9.5,
-          font,
           color: dim,
         },
       );
@@ -197,11 +204,10 @@ export async function addPhotoPages(
       const pg = g.page,
         n = g.to - g.from;
       const head = L.n + '. ' + (L.ref || 'Location') + (L.desc ? ' — ' + L.desc : '');
-      pg.drawText(fitText(fontB, head, 13.5, AW - 2 * M - 110), {
+      drawLine(pg, fitLine(FB, head, 13.5, AW - 2 * M - 110), FB, {
         x: M,
         y: AH - 50,
         size: 13.5,
-        font: fontB,
         color: ink,
       });
       const sub = [
@@ -213,13 +219,12 @@ export async function addPhotoPages(
       ]
         .filter(Boolean)
         .join('   ·   ');
-      pg.drawText(fitText(font, sub, 9, AW - 2 * M), { x: M, y: AH - 64, size: 9, font, color: dim });
+      drawLine(pg, fitLine(F, sub, 9, AW - 2 * M), F, { x: M, y: AH - 64, size: 9, color: dim });
       if (L.note)
-        pg.drawText(fitText(font, L.note, 8.5, AW - 2 * M), {
+        drawLine(pg, fitLine(F, L.note, 8.5, AW - 2 * M), F, {
           x: M,
           y: AH - 76,
           size: 8.5,
-          font,
           color: amber,
         });
       const back = 'Back to page ' + e.pin.pageNo;
@@ -268,12 +273,11 @@ export async function addPhotoPages(
         pg.drawImage(img, { x, y, width: w, height: h });
         pg.drawRectangle({ x, y, width: w, height: h, borderColor: rule, borderWidth: 0.6 });
         if (ph.cap) {
-          const cap = fitText(font, ph.cap, 8, cw);
-          pg.drawText(cap, {
-            x: x0 + (cw - font.widthOfTextAtSize(cap, 8)) / 2,
+          const cap = fitLine(F, ph.cap, 8, cw);
+          drawLine(pg, cap, F, {
+            x: x0 + (cw - textWidth(cap, 8, F)) / 2,
             y: y - 9.5,
             size: 8,
-            font,
             color: faint,
           });
         }
@@ -298,9 +302,9 @@ export function pinHooks(
 ): NonNullable<SaveHooks['pins']> {
   return {
     locs,
-    draw: (p, s, L, rotation, fontB) => drawPin(p, s, L as PinLocation, rotation, fontB),
-    addPhotoPages: async (out, pinsOut, font, fontB) => {
-      await addPhotoPages(out, pinsOut, font!, fontB!, env);
+    draw: (p, s, L, rotation, fontB, fallback) => drawPin(p, s, L as PinLocation, rotation, fontB, fallback),
+    addPhotoPages: async (out, pinsOut, font, fontB, unicode) => {
+      await addPhotoPages(out, pinsOut, font!, fontB!, env, unicode);
     },
   };
 }
