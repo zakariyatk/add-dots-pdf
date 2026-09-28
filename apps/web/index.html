@@ -459,6 +459,7 @@
       <input id="aSuPw" name="password" type="password" autocomplete="new-password" minlength="8" required aria-describedby="aSuHint">
       <p class="authhint" id="aSuHint">At least 8 characters.</p>
       <button class="authgo" type="submit">Create account</button>
+      <p class="authhint">By creating an account you agree to the <a href="privacy.html" data-go="privacy">privacy policy</a>.</p>
       <div class="authlinks"><span>Have an account?</span><a href="#" data-go="signin">Sign in</a></div>
     </form>
 
@@ -489,7 +490,21 @@
     <form data-view="account" novalidate hidden="">
       <p class="authnote">Your documents stay on this device. Your account is the same on the web, Windows, Android and iOS.</p>
       <button class="authgo" type="submit">Sign out</button>
+      <div class="authlinks"><a href="privacy.html" data-go="privacy">Privacy policy</a><a href="#" data-go="delete">Delete account…</a></div>
     </form>
+
+    <form data-view="delete" novalidate hidden="">
+      <p class="authnote">This deletes your ADD DOTS account and your sign-in on every device, at once. It cannot be undone. Documents on your devices are not touched.</p>
+      <label for="aDePw">Password</label>
+      <input id="aDePw" name="password" type="password" autocomplete="current-password" required>
+      <button class="authgo authdanger" type="submit">Delete my account</button>
+      <div class="authlinks"><a href="#" data-go="account">Keep my account</a></div>
+    </form>
+
+    <div data-view="privacy" hidden="">
+      <div class="authpolicy" id="authPolicy" tabindex="0" role="region" aria-label="Privacy policy"></div>
+      <div class="authlinks"><a href="#" data-back="">Back</a></div>
+    </div>
   </div>
 </div>
 

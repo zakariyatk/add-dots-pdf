@@ -7,5 +7,8 @@
 window.ADDDOTS_CONFIG = window.ADDDOTS_CONFIG || {
   /* Supabase project "add-dots-pdf" (organisation adddots, Mumbai) */
   supabaseUrl: 'https://jrdbuifhcxwyjxgyaowz.supabase.co',
-  supabaseKey: 'sb_publishable_LD1GNGGp9Q9aHwcws71gRQ_C76ri7J9'
+  supabaseKey: 'sb_publishable_LD1GNGGp9Q9aHwcws71gRQ_C76ri7J9',
+  /* the privacy policy's contact address (privacy.html); empty until the
+     support address exists */
+  contactEmail: ''
 };

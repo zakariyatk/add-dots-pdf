@@ -1074,6 +1074,15 @@
   .authlinks span{color:var(--text-dim)}
   .authlinks a{color:var(--marker-ink);text-decoration:none;font-weight:600}
   .authlinks a:hover{text-decoration:underline}
+  .authhint a{color:var(--marker-ink);font-weight:600}
+  .authdanger{background:none;border:1.5px solid var(--danger);color:var(--text)}
+  .authpolicy{max-height:min(52vh,460px);overflow:auto;padding:2px 4px 2px 0;font-size:13.5px;line-height:1.55}
+  .authpolicy:focus-visible{outline:2px solid var(--marker);outline-offset:2px}
+  .authpolicy h1,.authpolicy .dim:first-of-type{display:none}
+  .authpolicy h2{font-size:14.5px;margin:16px 0 4px}
+  .authpolicy h2:first-of-type{margin-top:0}
+  .authpolicy p,.authpolicy ul{margin:0 0 8px}
+  .authpolicy ul{padding-left:18px}
   @media (max-width:560px){
     .authdlg{align-items:flex-end;padding:0}
     .authcard{width:100%;border-radius:16px 16px 0 0;padding:24px 20px calc(20px + env(safe-area-inset-bottom))}

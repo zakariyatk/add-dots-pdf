@@ -956,6 +956,26 @@ try {
         body: r.body === null ? '' : JSON.stringify(r.body),
       });
     });
+    /* the account deleting itself (delete_my_account): whoever the token names */
+    await ctx.route(SB + '/rest/v1/rpc/delete_my_account', async (route) => {
+      const req = route.request();
+      calls.push(req.method() + ' /rpc/delete_my_account');
+      const token = (req.headers()['authorization'] || '').replace(/^Bearer /, '');
+      let sub = null;
+      try {
+        sub = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).sub;
+      } catch {
+        /* the publishable key, not a user's token */
+      }
+      const u = [...users.values()].find((x) => x.id === sub);
+      if (u) users.delete(u.email);
+      await route.fulfill({
+        status: u ? 204 : 401,
+        headers: { 'access-control-allow-origin': '*' },
+        contentType: 'application/json',
+        body: u ? '' : JSON.stringify({ code: '42501', message: 'not signed in' }),
+      });
+    });
     const page = await ctx.newPage();
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
@@ -1123,6 +1143,80 @@ try {
     await page.keyboard.press('Escape');
     const closed = await state();
     check('accounts: Escape closes the dialog', !closed.open, closed);
+
+    /* the privacy policy, from Create account, inside the dialog */
+    await page.click('#hAcctBtn');
+    await page.click('#authDlg [data-go="signup"]');
+    await page.fill('#aSuEmail', 'kept@example.com');
+    await page.click('#authDlg form[data-view="signup"] [data-go="privacy"]');
+    await page
+      .waitForFunction(
+        () => /Deleting your account/.test(document.getElementById('authPolicy').textContent),
+        null,
+        {
+          timeout: 10000,
+        },
+      )
+      .catch(() => {});
+    const pol = await page.evaluate(() => ({
+      title: document.getElementById('authTitle').textContent,
+      text: document.getElementById('authPolicy').textContent,
+      url: location.href,
+    }));
+    await page.click('#authDlg [data-view="privacy"] [data-back]');
+    const polBack = await page.evaluate(() => ({
+      title: document.getElementById('authTitle').textContent,
+      email: document.getElementById('aSuEmail').value,
+    }));
+    check(
+      'accounts: the privacy policy opens in the dialog, and Back returns to the form as it was',
+      pol.title === 'Privacy policy' &&
+        /stay on your device/.test(pol.text) &&
+        /Deleting your account/.test(pol.text) &&
+        pol.url === URL &&
+        polBack.title === 'Create your account' &&
+        polBack.email === 'kept@example.com',
+      { title: pol.title, policy: pol.text.slice(0, 60), back: polBack },
+    );
+    await page.keyboard.press('Escape');
+
+    /* delete the account: the password first, then it is gone for good */
+    await page.click('#hAcctBtn');
+    await page.fill('#aSiEmail', 'zak@example.com');
+    await page.fill('#aSiPw', 'new battery staple');
+    await submit('signin');
+    await page.click('#hAcctBtn');
+    await page.click('#authDlg [data-go="delete"]');
+    const del = await state();
+    await page.fill('#aDePw', 'not it');
+    await submit('delete');
+    const delBad = await state();
+    const kept = users.has('zak@example.com');
+    await page.fill('#aDePw', 'new battery staple');
+    await submit('delete');
+    const deleted = await state();
+    await boot();
+    const delAfter = await state();
+    await page.click('#hAcctBtn');
+    await page.fill('#aSiEmail', 'zak@example.com');
+    await page.fill('#aSiPw', 'new battery staple');
+    await submit('signin');
+    const gone = await state();
+    await page.keyboard.press('Escape');
+    check(
+      'accounts: Delete account asks for the password; a wrong one keeps the account, the right one deletes it and signs out',
+      del.title === 'Delete your account' &&
+        /do not match/.test(delBad.msg) &&
+        kept &&
+        !users.has('zak@example.com') &&
+        calls.includes('POST /rpc/delete_my_account') &&
+        !deleted.user &&
+        !deleted.open &&
+        !delAfter.user &&
+        delAfter.home === 'Sign in' &&
+        /do not match/.test(gone.msg),
+      { del: del.title, delBad: delBad.msg, kept, deleted, delAfter: delAfter.home, gone: gone.msg },
+    );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }

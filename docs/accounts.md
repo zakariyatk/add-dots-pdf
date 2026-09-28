@@ -18,6 +18,15 @@ styles at the end of `css/app.css`:
 - **Forgot password**: a code by email, then a new password; the account is
   signed in.
 - **Sign out**: this device only; other devices stay signed in.
+- **Delete account** (Your account > Delete account…): the password again,
+  then the account is deleted for good, with its sign-ins on every device;
+  documents on the devices are not touched. The App Store and Google Play
+  both require this in any app that lets people create an account.
+- **Privacy policy**: `apps/web/public/privacy.html`, a page of its own (the
+  address to give the App Store and Google Play), also shown inside the
+  dialog from Create account and Your account, so reading it never leaves
+  the open document. Its contact line uses `contactEmail` in `js/config.js`
+  once a support address exists.
 - **Staying signed in**: Supabase keeps the session in the app's own storage
   (`adpdf.auth`) and renews it, in the browser and in the Windows and phone
   apps alike; the next start picks it up.
@@ -37,6 +46,17 @@ adddots, region Mumbai (ap-south-1), free plan. Its address and publishable
 key are in `apps/web/public/js/config.js`. Steps 2 to 4 below are still to be
 done in the Supabase dashboard; until step 2 is done, sign-up emails carry a
 link instead of the code the app asks for.
+
+## Deleting an account: the database function
+
+Supabase does not let an app delete its own users with the publishable key.
+`supabase/migrations/20260928200000_delete_my_account.sql` adds
+`public.delete_my_account()`: callable only by a signed-in user (not the
+anonymous key), it deletes that user's own row in `auth.users`
+(`auth.uid()`), and Supabase removes their sessions and identities with it.
+It is applied to the project. Supabase's security advisor lists it as a
+"security definer function signed-in users can call": that is its purpose,
+and it can only ever reach the caller's own account.
 
 ## Setting up the Supabase project
 
@@ -76,7 +96,10 @@ against a fake Supabase Auth served by the test itself: sign up with the
 code (a wrong code refused), still signed in after a restart, sign out (still
 out after a restart), a wrong password refused and the right one accepted,
 forgot password with a code and a new password, an unconfirmed account sent a
-new code, and nothing at all when no project is configured.
+new code, the privacy policy in the dialog (Back returns to the form as it
+was), Delete account (a wrong password keeps the account; the right one
+deletes it, signs out, and it cannot sign in again), and nothing at all when
+no project is configured.
 
 ## Later
 
