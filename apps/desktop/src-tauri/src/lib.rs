@@ -159,9 +159,14 @@ fn main_window(app: &tauri::App) -> tauri::Result<()> {
     let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
     #[cfg(windows)]
     if let Some(port) = std::env::var("ADDDOTS_DEVTOOLS_PORT").ok().and_then(|p| p.parse::<u16>().ok()) {
-        // wry's own defaults, which setting any arguments replaces
+        // wry's own defaults, which setting any arguments replaces; and, as
+        // a test runs on a machine with no one looking, no pausing of a
+        // window Windows thinks hidden (drawing stopped, timers slowed to
+        // once a minute: no page was ever drawn in CI)
         builder = builder.additional_browser_args(&format!(
-            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port}"
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection,CalculateNativeWinOcclusion \
+             --disable-backgrounding-occluded-windows --disable-renderer-backgrounding \
+             --disable-background-timer-throttling --remote-debugging-port={port}"
         ));
     }
     builder.build()?;
