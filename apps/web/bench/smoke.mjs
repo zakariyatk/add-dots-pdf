@@ -533,6 +533,92 @@ try {
     await ctx.close();
   }
 
+  /* ---- unsaved work comes back after the tab closes (crash recovery) ---- */
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: 'block',
+      acceptDownloads: true,
+    });
+    const errors = [];
+    const first = await ctx.newPage();
+    first.on('pageerror', (e) => errors.push(e.message));
+    await first.goto(URL);
+    await first.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await open(first, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+    await first.evaluate(async () => {
+      const S = window.ADDPDF.S;
+      S.items[1].shapes.push({ t: 'rect', a: [60, 60], b: [200, 140], c: '#E2483D', w: 2, id: 'rec1' });
+      S.items[2].rot = 90;
+      await window.ADDPDF.recoverNow();
+    });
+    /* the tab goes, unsaved */
+    await first.close({ runBeforeUnload: false });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await page
+      .waitForFunction(() => !document.getElementById('hRecover').hidden, null, { timeout: 5000 })
+      .catch(() => {});
+    const offered = await page.evaluate(() => ({
+      shown: !document.getElementById('hRecover').hidden,
+      rows: document.querySelectorAll('#recoverList .rrow').length,
+      text: document.getElementById('recoverList').textContent,
+    }));
+    check(
+      'after the tab closes with unsaved work, the next start offers it back',
+      offered.shown && offered.rows === 1 && /300 pages · 1 mark/.test(offered.text),
+      offered,
+    );
+    await page.click('#recoverList .rrow .btn.primary');
+    await page.waitForFunction(
+      () => window.ADDPDF.S.items.length === 300 && window.ADDPDF.S.items[0].rendered,
+      null,
+      {
+        timeout: 60000,
+      },
+    );
+    const back = await page.evaluate(() => {
+      const S = window.ADDPDF.S;
+      return {
+        pages: S.items.length,
+        marks: S.items[1].shapes.length,
+        mark: S.items[1].shapes[0]?.id,
+        rot: S.items[2].rot,
+      };
+    });
+    check(
+      'Restore brings back every page, the mark and the turn',
+      back.pages === 300 && back.marks === 1 && back.mark === 'rec1' && back.rot === 90,
+      back,
+    );
+    /* saved: nothing is kept any more */
+    await page.evaluate(() => window.ADDPDF.recoverNow());
+    await page.click('#btnSave');
+    const [dl] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }),
+      page.click('#saveGo'),
+    ]);
+    await dl.delete();
+    await page.waitForTimeout(500);
+    const left = await page.evaluate(
+      () =>
+        new Promise((res) => {
+          const r = indexedDB.open('adddots-pdf');
+          r.onsuccess = () => {
+            const tx = r.result.transaction(['recovery', 'recoverySrc'], 'readonly');
+            const a = tx.objectStore('recovery').count(),
+              b = tx.objectStore('recoverySrc').count();
+            tx.oncomplete = () => res({ records: a.result, files: b.result });
+          };
+        }),
+    );
+    check('once saved, no unsaved work is kept', left.records === 0 && left.files === 0, left);
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- saving in the worker writes the same file the page would ---- */
   {
     /* every module's marks (annotate, draw, leader, docops, insert,
