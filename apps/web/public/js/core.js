@@ -42,7 +42,9 @@
     const failed = new Set();       /* keys the worker could not open */
     const api = { state: 'off', ready: Promise.resolve(false) };
     function err(name, message) { const e = new Error(message); e.name = name; return e; }
-    function stop() {
+    function stop(why) {
+      /* pages are drawn here from now on: worth knowing in a report */
+      if (why && window.ADDPDF_HEALTH) window.ADDPDF_HEALTH.log('render worker', why);
       api.state = 'off';
       if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
       waiting.forEach(function (w) { w.rej(err('RenderWorkerError', 'render worker stopped')); });
@@ -54,12 +56,12 @@
         api.state = 'wait';
         api.ready = new Promise(function (res) {
           /* a worker that has not answered in a few seconds is not coming */
-          const timer = setTimeout(function () { stop(); res(false); }, 4000);
+          const timer = setTimeout(function () { stop('did not answer'); res(false); }, 4000);
           worker.onmessage = function (e) {
             const m = e.data;
             if (m.op === 'hello') {
               clearTimeout(timer);
-              if (m.ok) api.state = 'on'; else stop();
+              if (m.ok) api.state = 'on'; else stop('could not start: ' + (m.why || 'unknown'));
               res(api.state === 'on');
               return;
             }
@@ -70,14 +72,15 @@
             else if (m.cancelled) w.rej(err('RenderingCancelledException', 'cancelled'));
             else {
               if (/^open failed/.test(m.error || '')) failed.add(w.key);
+              if (window.ADDPDF_HEALTH) window.ADDPDF_HEALTH.log('render worker', m.error || 'render failed');
               w.rej(err('RenderWorkerError', m.error || 'render failed'));
             }
           };
-          worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop(); res(false); };
+          worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop('failed: ' + (e.message || 'error')); res(false); };
           worker.postMessage({ op: 'hello' });
         });
       }
-    } catch (e) { stop(); }
+    } catch (e) { stop('could not be made: ' + e.message); }
 
     /* opens (or, with a password now known, reopens) these bytes in the
        worker; given the file they were read from, the worker reads that
@@ -5459,6 +5462,7 @@
       return e;
     }
     function stop(why) {
+      if (why && window.ADDPDF_HEALTH) window.ADDPDF_HEALTH.log('save worker', why);
       if (worker) { try { worker.terminate(); } catch (e) {} }
       worker = null; sent.clear();
       waiting.forEach(function (w) { w.rej(unavailable(why)); });
@@ -5482,7 +5486,7 @@
             w.rej(err);
           } else w.res(m);
         };
-        worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop('it failed'); res(false); };
+        worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop('failed: ' + (e.message || 'error')); res(false); };
         worker.postMessage({ op: 'hello' });
       });
       return starting;
@@ -5543,6 +5547,9 @@
      HTML. */
   function saveError(err, what) {
     const doing = what || 'This PDF could not be built';
+    if (window.ADDPDF_HEALTH) {
+      window.ADDPDF_HEALTH.log('save', (err && err.name ? err.name + ': ' : '') + (err && err.message || err), err && err.stack);
+    }
     if (err && err.name === 'EncryptedSourceError') {
       return doing + ': the original is password-protected (encrypted), and its pages would come ' +
         'out blank. Save an unprotected copy of it in the app that made it, then open that.';
@@ -7332,6 +7339,7 @@
     if (sheetOpen) closeSheet(true);
     $('hResume').hidden = !S.items.length;
     $('hResumeName').textContent = docName();
+    renderHealth();
     $('openPanel').hidden = false;
     $('hMain').scrollTop = 0;
     navOn('hTop');
@@ -7722,6 +7730,39 @@
   $('btnTheme').dataset.label = 'Reading theme · Paper';
   applyLayout();
   renderRecent();
+
+  /* ---- "Something not working?": the errors kept in this browser (js/health.js) ---- */
+  function renderHealth() {
+    const H = window.ADDPDF_HEALTH, note = $('diagNote');
+    if (!H || !note) return;
+    const n = H.errors().length;
+    note.textContent = n
+      ? n + (n === 1 ? ' error' : ' errors') + ' recorded in this browser. Copy the diagnostics and paste them into your report.'
+      : 'No errors recorded in this browser. If something goes wrong, copy the diagnostics into your report.';
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+    return new Promise(function (res, rej) {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      ok ? res() : rej(new Error('copy refused'));
+    });
+  }
+  $('diagCopy').addEventListener('click', function () {
+    const H = window.ADDPDF_HEALTH;
+    if (!H) return;
+    const text = H.diagnostics({
+      'Render worker': RW.state,
+      'Document open': S.items.length ? S.items.length + ' pages' : 'none'
+    });
+    EXT.lastDiagnostics = text;
+    copyText(text).then(function () { toast('Diagnostics copied: paste them into your report'); },
+      function () { toast('Could not copy: your browser blocked it'); });
+  });
+  renderHealth();
 
   /* ---- hand the feature modules what they need, and nothing more ---- */
   Object.assign(EXT, {

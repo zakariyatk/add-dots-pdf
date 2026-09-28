@@ -495,6 +495,44 @@ try {
     await ctx.close();
   }
 
+  /* ---- errors are kept in this browser, for a report (js/health.js) ---- */
+  {
+    const { ctx, page } = await fresh(browser);
+    await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.evaluate(() => {
+      setTimeout(() => {
+        throw new Error('smoke boom in C:/jobs/secret-plan.pdf');
+      }, 0);
+      Promise.reject(new Error('smoke promise left rejected'));
+    });
+    await page.waitForTimeout(300);
+    const kept = await page.evaluate(() => window.ADDPDF_HEALTH.errors().map((e) => e.where + ': ' + e.msg));
+    check(
+      'an uncaught error and a rejected promise are kept, file names hidden',
+      kept.some((m) => /page: .*smoke boom in C:\/jobs\/<file>\.pdf/.test(m)) &&
+        kept.some((m) => /page \(promise\): smoke promise left rejected/.test(m)) &&
+        !kept.join().includes('secret-plan'),
+      kept,
+    );
+    /* still there after a reload, and copied for a report from the home screen */
+    await page.reload();
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await page.click('#diagCopy');
+    await page.waitForTimeout(200);
+    const report = await page.evaluate(() => window.ADDPDF.lastDiagnostics || '');
+    const note = await page.textContent('#diagNote');
+    check(
+      '"Copy diagnostics" gives the browser, the memory and the errors kept, after a reload too',
+      /Browser: /.test(report) &&
+        /Errors \(\d+/.test(report) &&
+        report.includes('smoke boom') &&
+        !report.includes('secret-plan') &&
+        /2 errors recorded/.test(note),
+      { note, lines: report.split('\n').length },
+    );
+    await ctx.close();
+  }
+
   /* ---- saving in the worker writes the same file the page would ---- */
   {
     /* every module's marks (annotate, draw, leader, docops, insert,
