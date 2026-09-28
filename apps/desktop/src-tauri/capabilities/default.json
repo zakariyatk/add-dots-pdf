@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "What the app's window may ask of the desktop side: the files it was opened with, and events",
+  "windows": ["main"],
+  "permissions": ["core:default"]
+}

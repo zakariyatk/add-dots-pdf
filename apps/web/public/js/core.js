@@ -5593,9 +5593,11 @@
          what a rebuild drops (bookmarks, links) kept; markups as PDF
          comments, editable in a reader, unless flattened */
       const annots = !$('saveFlat').checked;
-      download(await buildPdf(S.items, null, { photos: photos, append: true, annots: annots }, 'blob'), name);
+      const done = await download(await buildPdf(S.items, null, { photos: photos, append: true, annots: annots }, 'blob'), name);
+      /* the Save dialog cancelled: still unsaved, and the popover stays */
+      if (done === false) return;
       closePops();
-      toast('Saved <b>' + esc(name) + '</b>');
+      toast('Saved <b>' + esc(typeof done === 'string' ? done : name) + '</b>');
       S.baseCount = S.items.length;
       clearRecovery();
     } catch (e) {
@@ -5605,12 +5607,16 @@
     }
   }
 
+  /* Resolves false only when the reader turned the save down (the desktop
+     app's Save dialog, cancelled); a browser download cannot say. */
   function download(bytes, name, type) {
     /* the browser is copying the file out and writing it to disk: thumbnails,
        drawn in a worker alongside, wait until that is done rather than
        compete with it */
     thumbsPause();
     setTimeout(thumbsResume, 1500);
+    /* the desktop app asks where, and writes it there (js/desktop.js) */
+    if (EXT.saveFile) return EXT.saveFile(bytes, name, type || 'application/pdf');
     const url = URL.createObjectURL(new Blob([bytes], { type: type || 'application/pdf' }));
     try {
       const a = document.createElement('a');
@@ -5618,6 +5624,7 @@
       document.body.appendChild(a); a.click(); a.remove();
     } catch (e) { window.open(url, '_blank'); }
     setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+    return Promise.resolve(true);
   }
 
   /* ---------------- extracting pages ---------------- */

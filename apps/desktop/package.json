@@ -1,0 +1,15 @@
+{
+  "name": "@adddots/desktop",
+  "private": true,
+  "description": "ADD DOTS PDF for Windows: the web app in a Tauri window",
+  "scripts": {
+    "tauri": "tauri",
+    "desktop:build": "tauri build",
+    "desktop:dev": "tauri dev",
+    "e2e": "node e2e.mjs"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.12.0",
+    "pdf-lib": "1.17.1"
+  }
+}

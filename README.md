@@ -8,6 +8,7 @@ This repo is being rebuilt in phases. The plan is in `C:\Users\zak\.claude\plans
 
 ```
 apps/web            the editor, served by Vite (v1 code under public/, unchanged)
+apps/desktop        the Windows app: apps/web in a Tauri window (see its README)
 packages/engine     PDF engine in TypeScript, no UI; filled in during Phase 1
 legacy/api          PHP/MySQL share-link API; replaced by Supabase in Phase 7
 legacy/README.md    v1 documentation: modules, marks, keyboard, deploying

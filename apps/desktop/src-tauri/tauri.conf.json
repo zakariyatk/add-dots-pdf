@@ -1,0 +1,57 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "ADD DOTS PDF",
+  "version": "0.1.0",
+  "identifier": "com.adddots.pdf",
+  "build": {
+    "frontendDist": "../../web/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npm run dev -w @adddots/web",
+    "beforeBuildCommand": "npm run build -w @adddots/web"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "main",
+        "title": "ADD DOTS PDF",
+        "width": 1280,
+        "height": 860,
+        "minWidth": 360,
+        "minHeight": 480,
+        "center": true,
+        "dragDropEnabled": false
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis", "msi"],
+    "publisher": "ADD DOTS",
+    "category": "Productivity",
+    "shortDescription": "Read, edit and mark up PDFs",
+    "longDescription": "Read, edit, mark up, pin site photos, organize and convert PDFs. Files are opened and edited on this computer; nothing is uploaded.",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["pdf"],
+        "name": "PDF document",
+        "description": "PDF document",
+        "mimeType": "application/pdf",
+        "role": "Editor"
+      }
+    ],
+    "windows": {
+      "nsis": { "installMode": "currentUser" }
+    }
+  }
+}
