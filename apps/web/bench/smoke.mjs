@@ -387,19 +387,28 @@ try {
     await page.evaluate(() => window.ADDPDF.goTo(1));
     await page.waitForTimeout(800);
     await page.focus('#findIn');
+    /* each step waits for its match to show: the first may need its page
+       drawn again, having been far from the screen */
     const seen = [];
     for (let i = 0; i < 16; i++) {
       await page.keyboard.press('Enter');
-      await page.waitForTimeout(450);
+      const shown = await page
+        .waitForFunction(
+          () => {
+            const m = document.querySelector('mark.hitw.now');
+            if (!m) return false;
+            const a = m.getBoundingClientRect(),
+              s = document.getElementById('stage').getBoundingClientRect();
+            return a.top >= s.top && a.bottom <= s.bottom;
+          },
+          null,
+          { timeout: 5000, polling: 50 },
+        )
+        .then(() => true)
+        .catch(() => false);
       seen.push(
-        await page.evaluate(() => {
-          const S = window.ADDPDF.S,
-            m = document.querySelector('mark.hitw.now');
-          if (!m) return 'none';
-          const a = m.getBoundingClientRect(),
-            s = document.getElementById('stage').getBoundingClientRect();
-          return (a.top >= s.top && a.bottom <= s.bottom ? '' : 'off:') + S.hits[S.hitIndex].page;
-        }),
+        (shown ? '' : 'not shown:') +
+          (await page.evaluate(() => window.ADDPDF.S.hits[window.ADDPDF.S.hitIndex].page)),
       );
     }
     check(

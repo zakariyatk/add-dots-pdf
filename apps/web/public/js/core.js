@@ -5893,6 +5893,9 @@
     const r = m.getBoundingClientRect(), sr = stage.getBoundingClientRect();
     const dy = r.top < sr.top + 40 || r.bottom > sr.bottom - 40 ? r.top - (sr.top + sr.height / 2) : 0;
     const dx = r.left < sr.left || r.right > sr.right ? r.left - (sr.left + sr.width / 2) : 0;
+    /* the reader's place is the match now: a jump's hold on the top of its
+       page (flushResizes) must not pull the view back there */
+    jumpHold = null;
     if (dx || dy) stage.scrollBy({ top: dy, left: dx, behavior: 'instant' });
   }
 
