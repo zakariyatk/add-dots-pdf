@@ -187,13 +187,14 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Opened::default())
         .setup(|app| {
-            main_window(app)?;
+            // the files first: the page asks for them as soon as it loads
             let args: Vec<String> = std::env::args().collect();
             let cwd = std::env::current_dir().unwrap_or_default();
             let paths = pdf_args(&args, &cwd);
             let state = app.state::<Opened>();
             let files = remember(&state, &paths);
             *state.pending.lock().unwrap() = files;
+            main_window(app)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![launch_files, read_file, save_file])

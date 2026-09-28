@@ -12,10 +12,19 @@
   if (!T || !T.core) return;
   var api = window.ADDPDF;
 
+  /* what the desktop side handed over and what became of it: for "Copy
+     diagnostics" and the end-to-end test when a file does not open */
+  var trace = window.ADDDOTS_DESKTOP = { launched: null, received: [], opened: [], errors: [] };
+  function fail(where, e) {
+    trace.errors.push(where + ': ' + String((e && e.message) || e));
+    console.error('[desktop] ' + where, e);
+  }
+
   function base(p) { return String(p).split(/[\\/]/).pop() || 'document.pdf'; }
 
   function openPaths(paths) {
     if (!paths || !paths.length || !api) return;
+    trace.received = trace.received.concat(paths);
     Promise.all(paths.map(function (p) {
       return T.core.invoke('read_file', { path: p }).then(function (buf) {
         return new File([buf], base(p), { type: 'application/pdf' });
@@ -25,10 +34,11 @@
       api.on('ready', function () {
         /* the picker asks before it replaces unsaved work; so does this */
         if (api.hasDoc() && !api.okToReplace()) return;
+        trace.opened = trace.opened.concat(files.map(function (f) { return f.name + ' (' + f.size + ' bytes)'; }));
         api.openFiles(files);
       });
     }).catch(function (e) {
-      console.error('[desktop] could not open', e);
+      fail('could not open', e);
       if (api.toast) api.toast('Could not open that file');
     });
   }
@@ -50,14 +60,15 @@
     }).then(function (path) {
       return path ? base(path) : false;
     }, function (e) {
-      console.error('[desktop] save', e);
+      fail('save', e);
       if (api.toast) api.toast('Could not save: ' + String(e).slice(0, 120));
       return false;
     });
   };
 
-  T.core.invoke('launch_files').then(openPaths, function (e) {
-    console.error('[desktop] launch files', e);
-  });
+  T.core.invoke('launch_files').then(function (paths) {
+    trace.launched = paths;
+    openPaths(paths);
+  }, function (e) { fail('launch files', e); });
   if (T.event) T.event.listen('open-files', function (e) { openPaths(e.payload); });
 })();

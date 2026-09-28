@@ -166,6 +166,23 @@ try {
     first,
   );
   check('pages are drawn in the render worker', !!first && first.worker === 'on', first && first.worker);
+  if (!first) {
+    /* why not: what the desktop side handed over, what the page did with it */
+    const why = await run(() => {
+      const a = window.ADDPDF;
+      return {
+        desktop: window.ADDDOTS_DESKTOP || null,
+        home: !document.getElementById('openPanel').hidden,
+        items: a && a.S ? a.S.items.length : null,
+        rendered: a && a.S ? a.S.items.filter((i) => i.rendered).length : null,
+        sources: a && a.S ? a.S.sources.map((s) => s.name) : null,
+        worker: a && a.renderWorker ? a.renderWorker() : null,
+        errors: window.ADDPDF_HEALTH ? window.ADDPDF_HEALTH.session().slice(0, 8) : null,
+        err: document.getElementById('errMsg').textContent,
+      };
+    }).catch((e) => String(e));
+    console.log('  state: ' + JSON.stringify(why));
+  }
 
   const shell = await runAsync(async () => ({
     tauri: !!window.__TAURI__,
