@@ -435,6 +435,46 @@ freed inside, but WebAssembly memory never shrinks. So the climb is each
 part reaching its high-water mark (V8's heaps, PDFium's memory, the
 browser's caches), not something kept that should have gone.
 
+### Stage H: the limits (`limits.mjs`, `results/limits-*.json`)
+
+`node bench/limits.mjs` opens files well past the everyday ones, generated
+on demand (`LIMITS` in `corpus.mjs`, not part of the regular corpus or CI):
+10,000 pages of text, 160 pages of scans (326 MB), and one A1 sheet drawn as
+a single path of 400,000 lines. Each opens in a fresh tab watched for a
+crash; page 1, all pages, a jump to the end and a save with a mark are
+timed, with the longest freeze and the browser's memory.
+
+| file (MB)          | page 1 ms       | all pages ms | save ms | longest freeze | browser MB, peak |
+| ------------------ | --------------- | ------------ | ------- | -------------- | ---------------- |
+| 10,000 pages (26)  | 5440            | 12020        | 5545    | 758            | 1640             |
+| 160 scans (326)    | 1603            | at once      | 15087   | 157            | 3011             |
+| 400,000 lines (16) | 116,564 -> 4698 | –            | 437     | 0              | 769              |
+
+None crashed or raised an error. The sheet of 400,000 lines was the one
+real limit: pdf.js strokes its one path in the canvas, which slows far
+faster than the line count (116 s for ten times the lines of a sheet it
+draws in 2.5 s), and a single stroke cannot be stopped once begun. PDFium
+draws the same page in 1.1 s. The render worker now counts a page's points
+as pdf.js builds its paths through the canvas, on the page's first drawing;
+past 30,000 in one path or 200,000 on the page it stops before the stroke,
+and PDFium draws that page from then on, whole page and parts. Page 1 of
+the 400,000 lines now shows in 4.7 s (loading PDFium included), the
+everyday CAD file's in 1.7 s (was 2.9). Pages with form fields stay pdf.js's,
+and text pages are untouched (a smoke check holds them pixel for pixel to
+pdf.js). PDFium draws a hairline at least a pixel wide where pdf.js draws it
+fainter, as Chrome's own viewer does; the smoke check asks that every line
+pdf.js inks has PDFium's ink within a pixel (100%).
+
+Known limits, not changed here:
+
+- 10,000 pages: the time to page 1 grows with the page count (1.2 s for
+  2,000 pages, 5.4 s for 10,000), with freezes up to 0.8 s, from making and
+  laying out a box for every page up front. Beyond that, a page list that
+  makes boxes only near the screen would be needed.
+- 326 MB: saving peaks at 3 GB for the browser, the file being held by the
+  page, pdf.js's parser, the render worker and the save worker, and once
+  more in the saved file. Fine on a desktop; too much for a phone.
+
 ### Choosing the drawing engine (Stage D0)
 
 Before moving drawing off the main thread, three engines were compared in

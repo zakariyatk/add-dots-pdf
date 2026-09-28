@@ -165,5 +165,5 @@ writeFileSync(
   JSON.stringify({ label: LABEL, date: new Date().toISOString(), results }, null, 2) + '\n',
 );
 await browser.close();
-server.close && server.close();
+server.kill();
 process.exit(0);

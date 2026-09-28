@@ -1,0 +1,24 @@
+{
+  "label": "after-cad",
+  "date": "2026-09-28T10:19:39.767Z",
+  "results": [
+    {
+      "file": "limit-cad-400k.pdf",
+      "kind": "weight",
+      "sizeMB": 16,
+      "errors": [],
+      "crashed": false,
+      "firstPageMs": 4698,
+      "allPagesMs": 7,
+      "jumpEndMs": 11,
+      "pages": 1,
+      "browserMBOpen": 666,
+      "savedMB": 16,
+      "saveMs": 437,
+      "appended": true,
+      "longestTaskMs": 0,
+      "blockedMs": 0,
+      "browserMBPeak": 769
+    }
+  ]
+}
