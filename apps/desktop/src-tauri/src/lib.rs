@@ -140,6 +140,34 @@ async fn save_file(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> R
     Ok(Some(path.to_string_lossy().into_owned()))
 }
 
+/// The window, from tauri.conf.json (which leaves creating it to this).
+///
+/// For the end-to-end test on Windows only: with ADDDOTS_DEVTOOLS_PORT set,
+/// WebView2 also listens for DevTools on that local port, which is how
+/// Playwright drives a WebView2 app. Edge's WebDriver cannot attach to this
+/// app, as it looks for WebView2 in a data folder of its own choosing.
+fn main_window(app: &tauri::App) -> tauri::Result<()> {
+    let config = app
+        .config()
+        .app
+        .windows
+        .iter()
+        .find(|w| w.label == "main")
+        .cloned()
+        .expect("a main window in tauri.conf.json");
+    #[allow(unused_mut)]
+    let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
+    #[cfg(windows)]
+    if let Some(port) = std::env::var("ADDDOTS_DEVTOOLS_PORT").ok().and_then(|p| p.parse::<u16>().ok()) {
+        // wry's own defaults, which setting any arguments replaces
+        builder = builder.additional_browser_args(&format!(
+            "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --remote-debugging-port={port}"
+        ));
+    }
+    builder.build()?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -159,6 +187,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Opened::default())
         .setup(|app| {
+            main_window(app)?;
             let args: Vec<String> = std::env::args().collect();
             let cwd = std::env::current_dir().unwrap_or_default();
             let paths = pdf_args(&args, &cwd);

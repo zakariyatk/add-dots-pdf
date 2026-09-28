@@ -45,7 +45,10 @@ there it needs `webkit2gtk-driver` and a display (`xvfb-run`).
 
 ## The end-to-end test (`e2e.mjs`)
 
-The built app, driven through `tauri-driver` (WebDriver):
+The built app, started as Explorer starts it and driven through Playwright
+over WebView2's DevTools port on Windows (the app opens it only when
+`ADDDOTS_DEVTOOLS_PORT` is set; Edge's WebDriver cannot attach to a Tauri
+app's WebView2), or `tauri-driver` (WebDriver) on Linux:
 
 - started with a PDF as its argument, the PDF opens and page 1 is drawn, in
   the render worker
@@ -55,8 +58,7 @@ The built app, driven through `tauri-driver` (WebDriver):
 - Save writes a PDF with every page (`ADDDOTS_SAVE_TO` stands in for the Save
   dialog)
 
-CI runs it on `windows-latest` against the release build, with Edge's driver
-matched to the runner's WebView2 (`msedgedriver-tool`), then uploads the
+CI runs it on `windows-latest` against the release build, then uploads the
 installers as the `windows-installers` artifact.
 
 ## Signing

@@ -71,15 +71,7 @@ jobs:
       # builds the web app first (beforeBuildCommand), then the installers
       - run: npx tauri build
         working-directory: apps/desktop
-      # the app driven end to end through WebDriver: tauri-driver in front of
-      # Edge's driver, matched to the WebView2 on the runner
-      - name: Install tauri-driver and msedgedriver
-        shell: pwsh
-        run: |
-          cargo install tauri-driver --locked
-          cargo install --git https://github.com/chippers/msedgedriver-tool
-          & "$HOME/.cargo/bin/msedgedriver-tool.exe"
-          $PWD.Path >> $env:GITHUB_PATH
+      # the app driven end to end: Playwright over WebView2's DevTools port
       - run: node e2e.mjs
         working-directory: apps/desktop
         env:

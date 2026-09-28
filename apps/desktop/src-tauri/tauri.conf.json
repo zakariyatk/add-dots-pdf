@@ -20,7 +20,8 @@
         "minWidth": 360,
         "minHeight": 480,
         "center": true,
-        "dragDropEnabled": false
+        "dragDropEnabled": false,
+        "create": false
       }
     ],
     "security": {
@@ -51,7 +52,9 @@
       }
     ],
     "windows": {
-      "nsis": { "installMode": "currentUser" }
+      "nsis": {
+        "installMode": "currentUser"
+      }
     }
   }
 }
