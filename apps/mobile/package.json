@@ -1,0 +1,19 @@
+{
+  "name": "@adddots/mobile",
+  "private": true,
+  "description": "ADD DOTS PDF for Android and iOS: the web app in a Capacitor shell",
+  "scripts": {
+    "cap": "cap",
+    "sync": "cap sync",
+    "e2e:android": "node e2e-android.mjs"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/core": "^8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.2",
+    "pdf-lib": "1.17.1",
+    "playwright-core": "1.56.1"
+  }
+}

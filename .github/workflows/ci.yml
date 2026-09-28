@@ -93,6 +93,50 @@ jobs:
             apps/desktop/src-tauri/target/release/bundle/msi/*.msi
           retention-days: 14
 
+  android:
+    name: Android app (Capacitor)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci
+      # the engine bundle first, then the web app it loads
+      - run: npx turbo run build --filter=@adddots/web...
+      - run: npx cap sync android
+        working-directory: apps/mobile
+      - run: ./gradlew assembleDebug --no-daemon
+        working-directory: apps/mobile/android
+      # unsigned test build: a debug APK, installable after allowing
+      # "install unknown apps"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: apps/mobile/android/app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 14
+      # the app driven end to end on an emulator
+      - name: Enable KVM for the emulator
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          working-directory: apps/mobile
+          script: node e2e-android.mjs
+
   legacy-api:
     name: PHP share API unit tests
     runs-on: ubuntu-latest
