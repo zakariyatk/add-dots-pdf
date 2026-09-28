@@ -511,21 +511,19 @@ try {
         whole === lines(2, 6),
         whole,
       );
+      /* off the words, the selection ends where the drag last crossed one
+         (which, on a diagonal drag, depends on the browser): it must not
+         jump back to the page's first word, nor on into the other column */
+      const held = (t) =>
+        typeof t === 'string' &&
+        t.startsWith(lines(2, 4) + '\n') &&
+        !t.includes('Right') &&
+        !t.includes('line 1 ') &&
+        !t.includes('line 7 ');
       const gap = await drag(l6.x + l6.w / 2, (l6.y + l6.h + l7.y) / 2);
-      check(
-        'a drag ending between two lines keeps its selection (' + kind + ')',
-        typeof gap === 'string' &&
-          gap.startsWith(lines(2, 5)) &&
-          !gap.includes('Right') &&
-          !gap.includes('line 1 '),
-        gap,
-      );
+      check('a drag ending between two lines keeps its selection (' + kind + ')', held(gap), gap);
       const gutter = await drag(to.x + to.w + 40, to.y + to.h / 2);
-      check(
-        'a drag ending in the gutter keeps its selection (' + kind + ')',
-        typeof gutter === 'string' && gutter.startsWith(lines(2, 5)) && !gutter.includes('Right'),
-        gutter,
-      );
+      check('a drag ending in the gutter keeps its selection (' + kind + ')', held(gutter), gutter);
     }
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
