@@ -162,6 +162,21 @@
   const COARSE = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
   const MAX_CANVAS_SIDE = COARSE ? 4096 : 8192;
   const MAX_CANVAS_PX = COARSE ? 5.5e6 : 22e6;
+  /* Low-memory mode. A device that says it has 4 GB or less, or a touch
+     device that does not say (iPhones and iPads, whose tabs are the first a
+     system closes), keeps fewer pages drawn and smaller bitmaps. ?lowmem=1
+     turns it on anywhere. And on any device, when the page's memory runs
+     near what the browser allows it, pages off screen give their pictures
+     back at once and the smaller caps hold until it eases. */
+  const MEM = {
+    low: /[?&]lowmem=1\b/.test(location.search) ||
+      (navigator.deviceMemory ? navigator.deviceMemory <= 4 : COARSE),
+    pressed: false,
+    relieved: 0,
+    tight: function () { return MEM.low || MEM.pressed; }
+  };
+  function capSide() { return MEM.tight() ? Math.min(MAX_CANVAS_SIDE, 4096) : MAX_CANVAS_SIDE; }
+  function capPx() { return MEM.tight() ? Math.min(MAX_CANVAS_PX, 4e6) : MAX_CANVAS_PX; }
   const THEMES = ['paper', 'sepia', 'dark'];
   const THEME_LABEL = { paper: 'Paper', sepia: 'Sepia', dark: 'Night' };
   /* the quick row: ten you reach for most. The full palette (theme colours
@@ -1072,7 +1087,7 @@
     const nearTop = heading > 0 ? behind : ahead, nearBot = heading > 0 ? ahead : behind;
     /* A page long scrolled past gives its bitmap back, so a long document
        costs the memory of a few screens, not of every page ever looked at. */
-    const keep = Math.max(3000, stage.clientHeight * 4);
+    const keep = MEM.tight() ? Math.max(1500, stage.clientHeight * 2) : Math.max(3000, stage.clientHeight * 4);
     const top = stage.scrollTop, bot = top + stage.clientHeight;
     /* Every position is read before anything is written: a write between two
        reads makes the browser lay the whole document out again, and with
@@ -1180,8 +1195,8 @@
   /* how much of full resolution one page bitmap may have at viewport v */
   function bitmapCap(v) {
     return Math.min(1,
-      MAX_CANVAS_SIDE / Math.max(v.width * DPR, v.height * DPR),
-      Math.sqrt(MAX_CANVAS_PX / Math.max(1, v.width * DPR * v.height * DPR)));
+      capSide() / Math.max(v.width * DPR, v.height * DPR),
+      Math.sqrt(capPx() / Math.max(1, v.width * DPR * v.height * DPR)));
   }
   async function paintItem(it) {
     await ensurePage(it);
@@ -1564,7 +1579,8 @@
        tools and all (46,000 elements for 2,000 pages) */
     if (!host.clientHeight) return;
     const top = host.scrollTop - 500, bot = host.scrollTop + host.clientHeight + 500;
-    const keepTop = host.scrollTop - 4000, keepBot = host.scrollTop + host.clientHeight + 4000;
+    const hold = MEM.tight() ? 1500 : 4000;
+    const keepTop = host.scrollTop - hold, keepBot = host.scrollTop + host.clientHeight + hold;
     /* read every position first, then write */
     let chrome = 0;
     if (!thumbChrome) {
@@ -7919,6 +7935,8 @@
     if (!H) return;
     const text = H.diagnostics({
       'Render worker': RW.state,
+      'Low-memory mode': (MEM.low ? 'on' : 'off') + (MEM.pressed ? ', memory short now' : '') +
+        (MEM.relieved ? ', pictures released ' + MEM.relieved + (MEM.relieved === 1 ? ' time' : ' times') : ''),
       'Document open': S.items.length ? S.items.length + ' pages' : 'none'
     });
     EXT.lastDiagnostics = text;
@@ -7927,6 +7945,45 @@
   });
   renderHealth();
   renderRecovery();
+
+  /* ---- memory running short ----
+     Chrome says how much the page's script holds and how much it may; other
+     browsers do not, and there low-memory mode (MEM.low) is what there is.
+     Past three quarters of the limit, every page and thumbnail off screen
+     gives its picture back now rather than when scrolled far enough, and the
+     smaller caps hold until use falls under half. */
+  function relieveMemory() {
+    const pages = [], thumbs = [];
+    LIVE.forEach(function (it) { if (!it.box || !it.box.isConnected || screenGap(it) > 0) pages.push(it); });
+    const host = $('railPages'), top = host.scrollTop, bot = top + host.clientHeight;
+    TLIVE.forEach(function (it) {
+      const th = it.thumb;
+      if (!th || !th.isConnected || rail.hidden || th.offsetTop + th.offsetHeight < top || th.offsetTop > bot) thumbs.push(it);
+    });
+    pages.forEach(releaseBitmap);
+    thumbs.forEach(function (it) {
+      it.thumbCanvas.width = it.thumbCanvas.height = 1;
+      it.thumbDone = false;
+      TLIVE.delete(it);
+    });
+    MEM.relieved++;
+    return { pages: pages.length, thumbs: thumbs.length };
+  }
+  function setPressed(on) {
+    if (on === MEM.pressed) return null;
+    MEM.pressed = on;
+    return on ? relieveMemory() : null;
+  }
+  if (performance.memory) {
+    setInterval(function () {
+      const m = performance.memory, use = m.usedJSHeapSize / m.jsHeapSizeLimit;
+      if (!MEM.pressed && use > 0.75) setPressed(true);
+      else if (MEM.pressed && use < 0.5) setPressed(false);
+    }, 5000);
+  }
+  /* for the tests: which mode this is, and memory running short on demand */
+  EXT.lowMemory = MEM.low;
+  EXT.memoryPressure = setPressed;
 
   /* ---- hand the feature modules what they need, and nothing more ---- */
   Object.assign(EXT, {

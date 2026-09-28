@@ -619,6 +619,90 @@ try {
     await ctx.close();
   }
 
+  /* ---- a device short of memory keeps fewer pages drawn (low-memory mode) ---- */
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: 'block',
+    });
+    /* a 2 GB phone, as the browser reports it */
+    await ctx.addInitScript(() =>
+      Object.defineProperty(Navigator.prototype, 'deviceMemory', { get: () => 2 }),
+    );
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    /* read down through thirty pages, a step at a time */
+    const readDown = async (page) => {
+      await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+      /* every page at its size first: until then the reader is held on page 1 */
+      await page.waitForFunction(() => window.ADDPDF.S.items.every((i) => i.page && !i.estimated), null, {
+        timeout: 60000,
+      });
+      for (let i = 0; i < 30; i++) {
+        await page.mouse.move(700, 450);
+        await page.mouse.wheel(0, 700);
+        /* each screen read: its pages drawn */
+        await page.waitForFunction(
+          () => {
+            const stage = document.getElementById('stage');
+            const top = stage.scrollTop,
+              bot = top + stage.clientHeight;
+            return window.ADDPDF.S.items.every(
+              (it) =>
+                it.rendered ||
+                !it.box ||
+                !it.box.isConnected ||
+                it.box.offsetTop > bot ||
+                it.box.offsetTop + it.box.offsetHeight < top,
+            );
+          },
+          null,
+          { timeout: 20000, polling: 50 },
+        );
+      }
+      await page.waitForTimeout(500);
+    };
+    const held = (page) =>
+      page.evaluate(() => {
+        const stage = document.getElementById('stage');
+        const top = stage.scrollTop,
+          bot = top + stage.clientHeight;
+        const gaps = window.ADDPDF.S.items
+          .filter((it) => it.rendered && it.box && it.box.isConnected)
+          .map((it) => {
+            const y = it.box.offsetTop,
+              h = it.box.offsetHeight;
+            return y + h < top ? top - (y + h) : y > bot ? y - bot : 0;
+          });
+        return { low: window.ADDPDF.lowMemory, drawn: gaps.length, far: Math.max(0, ...gaps), top };
+      });
+    await readDown(page);
+    const low = await held(page);
+    /* the same reading on this machine as it is */
+    const usual = await fresh(browser);
+    await readDown(usual.page);
+    const normal = await held(usual.page);
+    await usual.ctx.close();
+    check(
+      'a 2 GB device is in low-memory mode and keeps pages drawn only two screens out',
+      low.low === true && low.drawn > 0 && low.far <= 1800 && (normal.low || normal.far > 1800),
+      { low, normal },
+    );
+    const freed = await page.evaluate(() => window.ADDPDF.memoryPressure(true));
+    const after = await held(page);
+    check(
+      'memory running short: every page off screen gives its picture back',
+      freed && freed.pages > 0 && after.far === 0 && after.drawn > 0,
+      { freed, after },
+    );
+    await page.evaluate(() => window.ADDPDF.memoryPressure(false));
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- saving in the worker writes the same file the page would ---- */
   {
     /* every module's marks (annotate, draw, leader, docops, insert,

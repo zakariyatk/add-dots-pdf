@@ -475,6 +475,28 @@ Known limits, not changed here:
   page, pdf.js's parser, the render worker and the save worker, and once
   more in the saved file. Fine on a desktop; too much for a phone.
 
+### Stage H: short of memory (low-memory mode)
+
+A device that says it has 4 GB or less (`navigator.deviceMemory`), or a touch
+device that does not say (iPhones and iPads, whose tabs the system closes
+first), runs in low-memory mode; `?lowmem=1` turns it on anywhere. It keeps
+pages drawn two screens out rather than four (1,500 px at least, not 3,000),
+thumbnails 1,500 px beyond the rail's view rather than 4,000, and caps one
+page's bitmap at 4 million pixels (4096 on a side) where a desktop takes 22
+million; zoomed past that, the detail layer draws the part on screen sharp
+as before.
+
+On any device, in Chrome (the one browser that reports it), the page's script
+memory is read every 5 s: past three quarters of what the browser allows,
+every page and thumbnail off screen gives its picture back at once, and the
+low-memory caps hold until use falls under half. "Copy diagnostics" says
+whether the mode is on and how often pictures were released.
+
+The smoke test emulates a 2 GB phone: reading down thirty pages, no page
+more than 1,800 px off screen is still drawn (the same reading on the test
+machine keeps pages further out), and with memory short only the pages on
+screen keep their pictures.
+
 ### Choosing the drawing engine (Stage D0)
 
 Before moving drawing off the main thread, three engines were compared in
