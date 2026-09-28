@@ -31,6 +31,28 @@ jobs:
           path: apps/web/dist
           retention-days: 7
 
+  smoke:
+    name: Smoke test in Chrome
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # The benchmark files are generated from fixed seeds (bench/corpus.mjs);
+      # cached so a run does not rebuild 100 MB of PDFs each time.
+      - uses: actions/cache@v4
+        with:
+          path: apps/web/bench/.corpus
+          key: bench-corpus-${{ hashFiles('apps/web/bench/corpus.mjs') }}
+      # the runner's own Chrome: playwright-core downloads no browser
+      - run: npm run smoke -w @adddots/web
+        env:
+          BENCH_CHANNEL: chrome
+
   legacy-api:
     name: PHP share API unit tests
     runs-on: ubuntu-latest

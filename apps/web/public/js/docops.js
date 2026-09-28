@@ -645,7 +645,7 @@
         };
         document.body.appendChild(frame);
       } catch (e) {
-        X.toast('Could not prepare this file for printing');
+        X.toast(X.esc(X.saveError(e, 'This file could not be prepared for printing')));
       }
     }
 
