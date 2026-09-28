@@ -1364,7 +1364,7 @@
     try { tc = await it.page.getTextContent(); } catch (e) { return; }
     if (gen !== it.tlGen || (it.vp && it.vp.rotation !== viewport.rotation)) return;   /* turned again meanwhile */
     const unit = it.page.getViewport({ scale: 1, rotation: viewport.rotation });
-    const frag = document.createDocumentFragment();
+    const spans = [], boxes = [];
     tc.items.forEach(function (item) {
       if (!item.str || !item.str.trim()) return;
       const tx = pdfjsLib.Util.transform(unit.transform, item.transform);
@@ -1382,8 +1382,19 @@
       /* at 100%: multiply by the zoom for screen pixels */
       el.dataset.top = tx[5] - asc; el.dataset.asc = asc; el.dataset.fh = fh;
       el.dataset.tw = item.width;
-      frag.appendChild(el);
+      el.dataset.x = tx[4];
+      const flat = tx[0] > 0 && Math.abs(tx[1]) < 1e-6 && Math.abs(tx[2]) < 1e-6;
+      if (!flat) el.dataset.turned = '1';
+      /* the file's order: search counts its matches in it */
+      el.dataset.i = spans.length;
+      spans.push(el);
+      boxes.push({ x: tx[4], top: tx[5] - asc, w: item.width, h: fh, base: tx[5],
+        horiz: flat });
     });
+    /* laid out in reading order, so a drag down one column stays in it */
+    const frag = document.createDocumentFragment();
+    E.readingOrder(boxes).forEach(function (i) { frag.appendChild(spans[i]); });
+    frag.appendChild(selectionEnd(it));
     it.tl.innerHTML = '';
     it.tl.appendChild(frag);
     it.tlRot = viewport.rotation;
@@ -1397,7 +1408,7 @@
   }
   function fitTextLayer(it) {
     it.tlFit = false;
-    const spans = Array.from(it.tl.children);
+    const spans = Array.from(it.tl.querySelectorAll('span'));
     const ws = spans.map(function (el) { return el.getBoundingClientRect().width; });
     const sf = it.tlScale || 1;
     spans.forEach(function (el, i) {
@@ -1405,6 +1416,88 @@
       if (ws[i] > 0 && target > 0) el.style.transform = 'scaleX(' + (target / ws[i]) + ')';
     });
   }
+
+  /* ---- selecting the words ----
+     Between words the pointer is over the layer itself, which the browser
+     reads as the layer's start: the selection jumped back to the page's first
+     word. While a drag selects, a blank box under the words covers the layer,
+     kept just after the end being dragged (as pdf.js does), so a gap leaves
+     the selection where it was. */
+  function selectionEnd(it) {
+    if (!it.selEnd) {
+      it.selEnd = document.createElement('div');
+      it.selEnd.className = 'selEnd';
+    }
+    return it.selEnd;
+  }
+  function selectingDone() {
+    document.querySelectorAll('.textLayer.selecting').forEach(function (tl) { tl.classList.remove('selecting'); });
+  }
+  document.addEventListener('pointerdown', function (e) {
+    if (e.button !== 0 || !e.target.closest) return;
+    const span = e.target.closest('.textLayer > span');
+    if (span) span.parentNode.classList.add('selecting');
+  }, true);
+  document.addEventListener('pointerup', selectingDone, true);
+  document.addEventListener('pointercancel', selectingDone, true);
+  window.addEventListener('blur', selectingDone);
+  document.addEventListener('selectionchange', function () {
+    const sel = window.getSelection();
+    if (!sel || !sel.rangeCount || !sel.focusNode || !document.querySelector('.textLayer.selecting')) return;
+    const f = sel.focusNode.nodeType === 1 ? sel.focusNode : sel.focusNode.parentElement;
+    const span = f && f.closest ? f.closest('.textLayer > span') : null;
+    if (!span) return;
+    const tl = span.parentNode, end = tl.querySelector(':scope > .selEnd');
+    if (!end) return;
+    const range = sel.getRangeAt(0);
+    const back = !sel.isCollapsed && range.startContainer === sel.focusNode && range.startOffset === sel.focusOffset;
+    if (back) { if (span.previousSibling !== end) tl.insertBefore(end, span); }
+    else if (span.nextSibling !== end) tl.insertBefore(end, span.nextSibling);
+  });
+
+  /* A copy gives the words as they read: the runs of text are separate boxes,
+     so their text alone runs together ("line 2line 3"); the space or line
+     break between two is read from where they sit on the page. */
+  function offsetIn(span, node, off) {
+    const r = document.createRange();
+    r.setStart(span, 0);
+    r.setEnd(node, off);
+    return r.toString().length;
+  }
+  function runBox(span) {
+    const d = span.dataset, top = +d.top;
+    return { x: +d.x, top: top, w: +d.tw, h: +d.fh, base: top + +d.asc, horiz: !d.turned };
+  }
+  function selectedText() {
+    const sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+    const a = document.activeElement;
+    if (a && (a.isContentEditable || /^(INPUT|TEXTAREA)$/.test(a.tagName))) return null;
+    const range = sel.getRangeAt(0);
+    const c = range.commonAncestorContainer;
+    const el = c.nodeType === 1 ? c : c.parentElement;
+    if (!el || !(el.closest('.textLayer') || el.contains(stage) || stage.contains(el))) return null;
+    const pages = [];
+    S.items.forEach(function (it) {
+      if (!it.tl || !it.tl.firstChild || !range.intersectsNode(it.tl)) return;
+      const runs = [];
+      it.tl.querySelectorAll(':scope > span').forEach(function (span) {
+        if (!range.intersectsNode(span)) return;
+        const t = span.textContent;
+        const from = span.contains(range.startContainer) ? offsetIn(span, range.startContainer, range.startOffset) : 0;
+        const to = span.contains(range.endContainer) ? offsetIn(span, range.endContainer, range.endOffset) : t.length;
+        if (to > from) runs.push({ text: t.slice(from, to), box: runBox(span) });
+      });
+      if (runs.length) pages.push(E.joinRuns(runs));
+    });
+    return pages.length ? pages.join('\n\n') : null;
+  }
+  document.addEventListener('copy', function (e) {
+    const t = selectedText();
+    if (t == null || !e.clipboardData) return;
+    e.clipboardData.setData('text/plain', t);
+    e.preventDefault();
+  });
 
   /* ---------------- thumbnails ----------------
      Drawn only while no page is being drawn, one at a time, nearest the
@@ -5859,7 +5952,10 @@
     const cur = S.hits[S.hitIndex];
     const nth = cur && S.items[cur.page - 1] === it ? cur.nth : -1;
     const marks = [];
-    it.tl.querySelectorAll('span').forEach(function (span) {
+    /* in the file's order, which the search counted its matches in */
+    const spans = Array.from(it.tl.querySelectorAll('span'));
+    spans.sort(function (a, b) { return a.dataset.i - b.dataset.i; });
+    spans.forEach(function (span) {
       const t = span.textContent, low = t.toLowerCase();
       let idx = low.indexOf(q);
       if (idx === -1) return;
@@ -7483,7 +7579,7 @@
     setRail: setRail, openSheet: openSheet,
     removeItem: removeItem, moveItem: moveItem, rotateItem: rotateItem,
     newItem: newItem, ensureEls: ensureEls,
-    buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource, saveError: saveError,
+    buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource, saveError: saveError, selectedText: selectedText,
     insertBlank: insertBlank, ensurePage: ensurePage, ensureAllPages: ensureAllPages, renderIdle: renderIdle,
     drawPageInto: drawPageInto,
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */

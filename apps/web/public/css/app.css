@@ -234,7 +234,10 @@
   .blankmark{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
              font-family:var(--mono);font-size:11px;color:#AAAAAA;letter-spacing:.1em}
 
-  .textLayer{position:absolute;inset:0;overflow:hidden;line-height:1}
+  .textLayer{position:absolute;inset:0;overflow:hidden;line-height:1;isolation:isolate}
+  /* while a drag selects, covers the gaps between the words (see selectionEnd) */
+  .textLayer .selEnd{position:absolute;left:0;right:0;top:100%;bottom:0;z-index:-1;cursor:default;user-select:none}
+  .textLayer.selecting .selEnd{top:0}
   .textLayer span{position:absolute;white-space:pre;transform-origin:0 0;color:transparent;cursor:text}
   /* a search match, in the words of the page (core.js markItem); the one stepped to, stronger */
   .textLayer mark.hitw{background:rgba(242,193,78,.42);color:transparent;border-radius:2px;padding:0}

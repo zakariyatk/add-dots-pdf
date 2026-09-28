@@ -258,6 +258,28 @@ only hidden, they were laid out every frame and the zoom took 0.2 s longer.
 The CAD file's zoom (3.8 s for D2, 3.7 s here) varies between about 2.7 and
 3.8 s from run to run, as noted for Stage D2.
 
+**Selecting text** (checked by the smoke test on a two-column page, drawn
+column by column and row by row):
+
+- **A copy keeps its spaces and line breaks.** Each run of text is its own
+  box, so a copy of five lines gave `Left line 2tail2Left line 3tail3...`.
+  The copy is now built from where the runs sit on the page: a space where two
+  runs on a line are apart, a line break where the next run starts a new line
+  (`packages/engine/src/reading.ts`, `joinRuns`). A text markup's quote reads
+  the same way.
+- **A gap no longer resets the selection.** Between words the pointer is over
+  the layer itself, which the browser reads as its start, so the selection
+  jumped to the page's first word. While a drag selects, a blank box under
+  the words covers the gaps, kept just after the end being dragged (as pdf.js
+  does).
+- **A drag stays in its column.** Some files draw two columns row by row, left
+  line then right line, so a drag down the left column picked up the right one
+  too. The runs are laid out in reading order (`readingOrder`): a gutter with a
+  text column at least 10 font sizes wide on each side is read one side after
+  the other, and a page without one keeps the file's order. Search still
+  counts its matches in the file's order. Ordering takes 3 ms or less a page
+  on the CAD sheets (400 labels) and 0.2 ms on the reports.
+
 ### Choosing the drawing engine (Stage D0)
 
 Before moving drawing off the main thread, three engines were compared in
