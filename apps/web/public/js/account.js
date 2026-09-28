@@ -24,7 +24,7 @@
   var dlg = $('authDlg');
   if (!api || !dlg || !cfg.supabaseUrl || !cfg.supabaseKey) return;
 
-  var client = null, user = null, email = '', view = 'signin', busy = false, lastFocus = null;
+  var client = null, user = null, email = '', view = 'signin', back = 'signin', busy = false, lastFocus = null;
   var app = document.querySelector('.app');
 
   var TITLES = {
@@ -33,7 +33,10 @@
     verify: ['Check your email', ''],
     forgot: ['Reset your password', 'We will email you a code to set a new password.'],
     reset: ['Set a new password', ''],
-    account: ['Your account', '']
+    newpw: ['Set a new password', ''],
+    account: ['Your account', ''],
+    delete: ['Delete your account', ''],
+    privacy: ['Privacy policy', 'What ADD DOTS PDF keeps about you, where, and how to delete it.']
   };
 
   function health(where, e) {
@@ -52,6 +55,20 @@
     });
   }
 
+  /* The emails carry a 6-digit code once the project has its own sender
+     (docs/accounts.md); until then Supabase's own emails carry a link. The
+     link opens the website (the project's Site URL) signed in: a sign-up is
+     confirmed, and a password reset asks for the new password there. The
+     Windows and phone apps are not the website: there the link confirms the
+     account in the browser, and the app signs in with the password. */
+  var IN_APP = !!window.__TAURI__ ||
+    !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  var link = (function () {
+    var h = new URLSearchParams(location.hash.replace(/^#/, ''));
+    if (IN_APP || !(h.get('access_token') || h.get('error_description'))) return null;
+    return { type: h.get('type') || '', error: h.get('error_description') || '' };
+  })();
+
   function start() {
     $('grpAccount').hidden = false;
     $('hAccount').hidden = false;
@@ -61,21 +78,35 @@
         auth: {
           persistSession: true,
           autoRefreshToken: true,
-          /* codes, not links: nothing to read from the address */
-          detectSessionInUrl: false,
+          /* a link from one of the emails (above): the website only */
+          detectSessionInUrl: !!link,
           storageKey: 'adpdf.auth'
         }
       });
       client.auth.onAuthStateChange(function (ev, session) {
         setUser(session ? session.user : null);
+        /* the reset link: signed in for this, the new password next */
+        if (ev === 'PASSWORD_RECOVERY') { if (link) link.type = 'recovery'; setTimeout(function () { open('newpw'); }, 0); }
       });
       return client.auth.getSession();
     }).then(function (r) {
       setUser(r && r.data && r.data.session ? r.data.session.user : null);
+      if (link) linkDone();
     }).catch(function (e) {
       health('start', e);
       setUser(null);
     });
+  }
+
+  /* what a link from an email did, said once */
+  function linkDone() {
+    if (link.error) {
+      api.toast(/expired|invalid/i.test(link.error)
+        ? 'That email link has expired or was already used. Sign in, or ask for a new email.'
+        : 'That email link did not work: ' + api.esc(link.error));
+    } else if (link.type !== 'recovery' && user) {
+      api.toast('Email confirmed. You are signed in as <b>' + api.esc(user.email) + '</b>');
+    }
   }
 
   /* ---------- who is signed in, everywhere it shows ---------- */
@@ -101,6 +132,7 @@
   }
 
   function show(v) {
+    if (v === 'privacy' && view !== 'privacy') { back = view; policy(); }
     view = v;
     Array.prototype.forEach.call(dlg.querySelectorAll('[data-view]'), function (f) {
       f.hidden = f.getAttribute('data-view') !== v;
@@ -110,7 +142,9 @@
     var sub = t[1];
     if (v === 'verify') sub = 'Enter the code we sent to ' + email + '.';
     if (v === 'reset') sub = 'Enter the code we sent to ' + email + ', then your new password.';
+    if (v === 'newpw') sub = user ? 'For ' + user.email + '.' : '';
     if (v === 'account') sub = user ? 'Signed in as ' + user.email : 'Not signed in.';
+    if (v === 'delete') sub = user ? user.email : '';
     $('authSub').textContent = sub;
     msg('');
     /* the email typed on one form follows to the next */
@@ -120,8 +154,31 @@
     /* focus: the first field still empty, else the form's button */
     var form = dlg.querySelector('[data-view="' + v + '"]');
     var empty = form && Array.prototype.find.call(form.querySelectorAll('input'), function (i) { return !i.value; });
-    var target = empty || (form && form.querySelector('button[type=submit]'));
+    var target = empty || (form && form.querySelector('button[type=submit], [tabindex="0"]'));
     if (target) setTimeout(function () { target.focus(); }, 0);
+  }
+
+  /* the policy is privacy.html's article (the same page the stores link to),
+     shown in the dialog so reading it never leaves the open document */
+  var policyLoaded = null;
+  function policy() {
+    if (policyLoaded) return;
+    policyLoaded = fetch('privacy.html').then(function (r) {
+      if (!r.ok) throw new Error('http ' + r.status);
+      return r.text();
+    }).then(function (html) {
+      var art = new DOMParser().parseFromString(html, 'text/html').getElementById('policy');
+      if (!art) throw new Error('no policy in privacy.html');
+      if (cfg.contactEmail) {
+        var c = art.querySelector('[data-contact]');
+        if (c) c.innerHTML = 'write to <a href="mailto:' + api.esc(cfg.contactEmail) + '">' + api.esc(cfg.contactEmail) + '</a>';
+      }
+      $('authPolicy').innerHTML = art.innerHTML;
+    }).catch(function (e) {
+      policyLoaded = null;
+      health('privacy', e);
+      $('authPolicy').textContent = 'The privacy policy could not be loaded. Check your connection and try again.';
+    });
   }
 
   function open(v) {
@@ -268,6 +325,37 @@
         });
       });
     },
+    delete: function (f) {
+      var pw = f.elements.password.value;
+      if (!pw) { msg('Enter your password to confirm.', 'bad'); return; }
+      var who = user && user.email;
+      run(f, 'Deleting…', function () {
+        /* the password proves it is the account's owner at this device, then
+           the account deletes itself (delete_my_account: docs/accounts.md) */
+        return client.auth.signInWithPassword({ email: who, password: pw }).then(ok).then(function () {
+          return client.rpc('delete_my_account');
+        }).then(ok).then(function () {
+          f.reset();
+          /* the session is gone with the account: forget it here */
+          return client.auth.signOut({ scope: 'local' }).catch(function () {});
+        }).then(function () {
+          try { localStorage.removeItem('adpdf.auth'); } catch (e) {}
+          setUser(null);
+          close();
+          api.toast('Your account <b>' + api.esc(who) + '</b> is deleted');
+        });
+      });
+    },
+    newpw: function (f) {
+      var pw = f.elements.password.value;
+      if (pw.length < 8) { msg('Choose a longer password: at least 8 characters.', 'bad'); return; }
+      run(f, 'Saving…', function () {
+        return client.auth.updateUser({ password: pw }).then(ok).then(function () {
+          f.reset();
+          signedIn('Password changed. You are signed in.');
+        });
+      });
+    },
     account: function (f) {
       run(f, 'Signing out…', function () {
         /* local: this device only; other devices stay signed in */
@@ -291,6 +379,7 @@
     var go = e.target.closest('[data-go]');
     if (go) { e.preventDefault(); show(go.getAttribute('data-go')); return; }
     if (e.target.closest('[data-resend]')) { e.preventDefault(); resend(); return; }
+    if (e.target.closest('[data-back]')) { e.preventDefault(); show(back); return; }
     if (e.target === dlg) close();
   });
   $('authClose').addEventListener('click', close);
