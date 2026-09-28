@@ -251,6 +251,19 @@ try {
     /* ---- a second file: the first is closed on the shared worker ---- */
     const workersBefore = page.workers().length;
     await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+    /* the rail builds only the thumbnails near view, a second file too: its
+       thumbnails, not yet sized, all stood at one spot and every one was
+       built, tools and all (46,000 elements for 2,000 pages) */
+    const built = () => page.evaluate(() => window.ADDPDF.S.items.filter((i) => i.thumbTools).length);
+    const hidden = await built();
+    /* the search tab covers the rail; back to its pages */
+    await page.click('#tabPages');
+    await page.waitForTimeout(1000);
+    const shown = await built();
+    check('a second file builds only the thumbnails near view', hidden <= 60 && shown > 0 && shown <= 60, {
+      builtWhileSearchCovers: hidden,
+      builtOnceShown: shown,
+    });
     check(
       'a second file opens at page 1',
       await page.evaluate(() => document.getElementById('stage').scrollTop < 50),
