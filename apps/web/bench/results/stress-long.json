@@ -1,0 +1,609 @@
+{
+  "label": "long",
+  "date": "2026-09-28T09:50:50.968Z",
+  "rows": [
+    {
+      "round": 1,
+      "file": "medium-report-300p.pdf",
+      "ms": 10898,
+      "browserMB": 531,
+      "byProcess": {
+        "browser": 46,
+        "renderer": 384,
+        "GPU": 56,
+        "network.mojom.NetworkService": 24,
+        "other": 20
+      },
+      "jsHeapMB": 9,
+      "workers": 4,
+      "domNodes": 3576,
+      "canvases": 23,
+      "canvasMB": 19,
+      "pages": 300,
+      "sources": 1
+    },
+    {
+      "round": 2,
+      "file": "cad-a1-8sheets.pdf",
+      "ms": 13343,
+      "browserMB": 679,
+      "byProcess": {
+        "browser": 59,
+        "renderer": 515,
+        "GPU": 56,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2465,
+      "canvases": 2,
+      "canvasMB": 4,
+      "pages": 8,
+      "sources": 1
+    },
+    {
+      "round": 3,
+      "file": "scans-40p.pdf",
+      "ms": 12083,
+      "browserMB": 1135,
+      "byProcess": {
+        "browser": 141,
+        "renderer": 894,
+        "GPU": 51,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2098,
+      "canvases": 4,
+      "canvasMB": 24,
+      "pages": 40,
+      "sources": 1
+    },
+    {
+      "round": 4,
+      "file": "large-text-2000p.pdf",
+      "ms": 46100,
+      "browserMB": 857,
+      "byProcess": {
+        "browser": 49,
+        "renderer": 710,
+        "GPU": 49,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 34,
+      "workers": 4,
+      "domNodes": 6474,
+      "canvases": 2,
+      "canvasMB": 8,
+      "pages": 2000,
+      "sources": 1
+    },
+    {
+      "round": 5,
+      "file": "medium-report-300p.pdf",
+      "ms": 10718,
+      "browserMB": 706,
+      "byProcess": {
+        "browser": 50,
+        "renderer": 547,
+        "GPU": 61,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 10,
+      "workers": 4,
+      "domNodes": 3233,
+      "canvases": 3,
+      "canvasMB": 16,
+      "pages": 300,
+      "sources": 1
+    },
+    {
+      "round": 6,
+      "file": "cad-a1-8sheets.pdf",
+      "ms": 12883,
+      "browserMB": 750,
+      "byProcess": {
+        "browser": 64,
+        "renderer": 581,
+        "GPU": 57,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2867,
+      "canvases": 3,
+      "canvasMB": 8,
+      "pages": 8,
+      "sources": 1
+    },
+    {
+      "round": 7,
+      "file": "scans-40p.pdf",
+      "ms": 11303,
+      "browserMB": 1274,
+      "byProcess": {
+        "browser": 139,
+        "renderer": 1036,
+        "GPU": 50,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2098,
+      "canvases": 4,
+      "canvasMB": 39,
+      "pages": 40,
+      "sources": 1
+    },
+    {
+      "round": 8,
+      "file": "large-text-2000p.pdf",
+      "ms": 45211,
+      "browserMB": 1006,
+      "byProcess": {
+        "browser": 49,
+        "renderer": 858,
+        "GPU": 50,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 34,
+      "workers": 4,
+      "domNodes": 6474,
+      "canvases": 2,
+      "canvasMB": 8,
+      "pages": 2000,
+      "sources": 1
+    },
+    {
+      "round": 9,
+      "file": "medium-report-300p.pdf",
+      "ms": 10619,
+      "browserMB": 850,
+      "byProcess": {
+        "browser": 50,
+        "renderer": 691,
+        "GPU": 60,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 10,
+      "workers": 4,
+      "domNodes": 3136,
+      "canvases": 3,
+      "canvasMB": 16,
+      "pages": 300,
+      "sources": 1
+    },
+    {
+      "round": 10,
+      "file": "cad-a1-8sheets.pdf",
+      "ms": 13261,
+      "browserMB": 878,
+      "byProcess": {
+        "browser": 64,
+        "renderer": 710,
+        "GPU": 55,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2465,
+      "canvases": 2,
+      "canvasMB": 4,
+      "pages": 8,
+      "sources": 1
+    },
+    {
+      "round": 11,
+      "file": "scans-40p.pdf",
+      "ms": 12095,
+      "browserMB": 1430,
+      "byProcess": {
+        "browser": 140,
+        "renderer": 1191,
+        "GPU": 50,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2098,
+      "canvases": 4,
+      "canvasMB": 39,
+      "pages": 40,
+      "sources": 1
+    },
+    {
+      "round": 12,
+      "file": "large-text-2000p.pdf",
+      "ms": 50705,
+      "browserMB": 933,
+      "byProcess": {
+        "browser": 48,
+        "renderer": 787,
+        "GPU": 49,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 34,
+      "workers": 4,
+      "domNodes": 6771,
+      "canvases": 4,
+      "canvasMB": 24,
+      "pages": 2000,
+      "sources": 1
+    },
+    {
+      "round": 13,
+      "file": "medium-report-300p.pdf",
+      "ms": 10563,
+      "browserMB": 888,
+      "byProcess": {
+        "browser": 50,
+        "renderer": 727,
+        "GPU": 62,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 10,
+      "workers": 4,
+      "domNodes": 3243,
+      "canvases": 4,
+      "canvasMB": 24,
+      "pages": 300,
+      "sources": 1
+    },
+    {
+      "round": 14,
+      "file": "cad-a1-8sheets.pdf",
+      "ms": 13399,
+      "browserMB": 924,
+      "byProcess": {
+        "browser": 63,
+        "renderer": 755,
+        "GPU": 58,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2465,
+      "canvases": 2,
+      "canvasMB": 4,
+      "pages": 8,
+      "sources": 1
+    },
+    {
+      "round": 15,
+      "file": "scans-40p.pdf",
+      "ms": 11589,
+      "browserMB": 1421,
+      "byProcess": {
+        "browser": 139,
+        "renderer": 1183,
+        "GPU": 50,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2098,
+      "canvases": 4,
+      "canvasMB": 39,
+      "pages": 40,
+      "sources": 1
+    },
+    {
+      "round": 16,
+      "file": "large-text-2000p.pdf",
+      "ms": 51457,
+      "browserMB": 969,
+      "byProcess": {
+        "browser": 48,
+        "renderer": 821,
+        "GPU": 51,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 34,
+      "workers": 4,
+      "domNodes": 6717,
+      "canvases": 4,
+      "canvasMB": 24,
+      "pages": 2000,
+      "sources": 1
+    },
+    {
+      "round": 17,
+      "file": "medium-report-300p.pdf",
+      "ms": 10501,
+      "browserMB": 890,
+      "byProcess": {
+        "browser": 52,
+        "renderer": 727,
+        "GPU": 63,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 10,
+      "workers": 4,
+      "domNodes": 3243,
+      "canvases": 4,
+      "canvasMB": 24,
+      "pages": 300,
+      "sources": 1
+    },
+    {
+      "round": 18,
+      "file": "cad-a1-8sheets.pdf",
+      "ms": 13096,
+      "browserMB": 955,
+      "byProcess": {
+        "browser": 63,
+        "renderer": 784,
+        "GPU": 59,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2465,
+      "canvases": 4,
+      "canvasMB": 12,
+      "pages": 8,
+      "sources": 1
+    },
+    {
+      "round": 19,
+      "file": "scans-40p.pdf",
+      "ms": 11761,
+      "browserMB": 1338,
+      "byProcess": {
+        "browser": 140,
+        "renderer": 1100,
+        "GPU": 50,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2098,
+      "canvases": 4,
+      "canvasMB": 24,
+      "pages": 40,
+      "sources": 1
+    },
+    {
+      "round": 20,
+      "file": "large-text-2000p.pdf",
+      "ms": 44002,
+      "browserMB": 1020,
+      "byProcess": {
+        "browser": 48,
+        "renderer": 874,
+        "GPU": 49,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 34,
+      "workers": 4,
+      "domNodes": 6474,
+      "canvases": 2,
+      "canvasMB": 8,
+      "pages": 2000,
+      "sources": 1
+    },
+    {
+      "round": 21,
+      "file": "medium-report-300p.pdf",
+      "ms": 10478,
+      "browserMB": 839,
+      "byProcess": {
+        "browser": 52,
+        "renderer": 681,
+        "GPU": 58,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 10,
+      "workers": 4,
+      "domNodes": 3428,
+      "canvases": 3,
+      "canvasMB": 16,
+      "pages": 300,
+      "sources": 1
+    },
+    {
+      "round": 22,
+      "file": "cad-a1-8sheets.pdf",
+      "ms": 12867,
+      "browserMB": 922,
+      "byProcess": {
+        "browser": 63,
+        "renderer": 755,
+        "GPU": 55,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2063,
+      "canvases": 3,
+      "canvasMB": 8,
+      "pages": 8,
+      "sources": 1
+    },
+    {
+      "round": 23,
+      "file": "scans-40p.pdf",
+      "ms": 11616,
+      "browserMB": 1382,
+      "byProcess": {
+        "browser": 141,
+        "renderer": 1140,
+        "GPU": 52,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 6,
+      "workers": 4,
+      "domNodes": 2098,
+      "canvases": 4,
+      "canvasMB": 24,
+      "pages": 40,
+      "sources": 1
+    },
+    {
+      "round": 24,
+      "file": "large-text-2000p.pdf",
+      "ms": 46098,
+      "browserMB": 915,
+      "byProcess": {
+        "browser": 48,
+        "renderer": 770,
+        "GPU": 48,
+        "network.mojom.NetworkService": 29,
+        "other": 20
+      },
+      "jsHeapMB": 34,
+      "workers": 4,
+      "domNodes": 6771,
+      "canvases": 4,
+      "canvasMB": 24,
+      "pages": 2000,
+      "sources": 1
+    }
+  ],
+  "laps": [
+    {
+      "file": "medium-report-300p.pdf",
+      "round": 5,
+      "browserMB": 175,
+      "jsHeapMB": 1
+    },
+    {
+      "file": "cad-a1-8sheets.pdf",
+      "round": 6,
+      "browserMB": 71,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "scans-40p.pdf",
+      "round": 7,
+      "browserMB": 139,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "large-text-2000p.pdf",
+      "round": 8,
+      "browserMB": 149,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "medium-report-300p.pdf",
+      "round": 9,
+      "browserMB": 144,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "cad-a1-8sheets.pdf",
+      "round": 10,
+      "browserMB": 128,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "scans-40p.pdf",
+      "round": 11,
+      "browserMB": 156,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "large-text-2000p.pdf",
+      "round": 12,
+      "browserMB": -73,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "medium-report-300p.pdf",
+      "round": 13,
+      "browserMB": 38,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "cad-a1-8sheets.pdf",
+      "round": 14,
+      "browserMB": 46,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "scans-40p.pdf",
+      "round": 15,
+      "browserMB": -9,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "large-text-2000p.pdf",
+      "round": 16,
+      "browserMB": 36,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "medium-report-300p.pdf",
+      "round": 17,
+      "browserMB": 2,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "cad-a1-8sheets.pdf",
+      "round": 18,
+      "browserMB": 31,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "scans-40p.pdf",
+      "round": 19,
+      "browserMB": -83,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "large-text-2000p.pdf",
+      "round": 20,
+      "browserMB": 51,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "medium-report-300p.pdf",
+      "round": 21,
+      "browserMB": -51,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "cad-a1-8sheets.pdf",
+      "round": 22,
+      "browserMB": -33,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "scans-40p.pdf",
+      "round": 23,
+      "browserMB": 44,
+      "jsHeapMB": 0
+    },
+    {
+      "file": "large-text-2000p.pdf",
+      "round": 24,
+      "browserMB": -105,
+      "jsHeapMB": 0
+    }
+  ],
+  "errors": []
+}
