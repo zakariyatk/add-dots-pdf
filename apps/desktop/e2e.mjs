@@ -165,7 +165,14 @@ try {
     !!first && first.pages === 3 && first.name === 'first.pdf',
     first,
   );
-  check('pages are drawn in the render worker', !!first && first.worker === 'on', first && first.worker);
+  /* the render worker says ready only once pdf.js has opened and drawn a
+     page in it (up to two tries of 8 s); pages are drawn on the page
+     meanwhile */
+  const rw = await until(() => {
+    const a = window.ADDPDF;
+    return a.renderWorker() !== 'wait' && { state: a.renderWorker(), mode: a.renderWorkerMode() };
+  }, 40000);
+  check('pages are drawn in the render worker', !!rw && rw.state === 'on', rw);
   if (!first) {
     /* why not: what the desktop side handed over, what the page did with it */
     const why = await run(() => {
