@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../../web/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "npm run dev -w @adddots/web",
-    "beforeBuildCommand": "npm run build -w @adddots/web"
+    "beforeDevCommand": "npx turbo run build --filter=@adddots/engine && npm run dev -w @adddots/web",
+    "beforeBuildCommand": "npx turbo run build --filter=@adddots/web..."
   },
   "app": {
     "withGlobalTauri": true,

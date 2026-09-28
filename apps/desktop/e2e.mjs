@@ -128,9 +128,14 @@ try {
 
   const shell = await runAsync(async () => ({
     tauri: !!window.__TAURI__,
+    engine: !!window.ADDPDFEngine,
     workers: navigator.serviceWorker ? (await navigator.serviceWorker.getRegistrations()).length : 0,
   }));
-  check('in the desktop app, and no service worker', shell.tauri === true && shell.workers === 0, shell);
+  check(
+    'in the desktop app, with the engine bundle, and no service worker',
+    shell.tauri === true && shell.engine === true && shell.workers === 0,
+    shell,
+  );
 
   const refused = await runAsync(
     (p) =>
