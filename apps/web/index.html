@@ -75,6 +75,9 @@
     </div>
     <span class="grow"></span>
     <span class="meta" id="meta" title="SDS-JD-048 R0 - RESUBMIT - MV GF Doory Type D1 Main Entrance Door.pdf · 3.2 MB · 4p"></span>
+    <div class="grp" id="grpAccount" hidden="">
+      <button class="btn acct" id="btnAccount" aria-haspopup="dialog" aria-label="Sign in" title="Sign in to your ADD DOTS account"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span class="lbl" id="acctLbl">Sign in</span></button>
+    </div>
     <div class="grp" id="grpUi">
       <button class="btn uimode" id="btnUi" title="Switch to dark interface" aria-label="Switch to dark interface"><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg></button>
     </div>
@@ -329,6 +332,9 @@
           <button data-go="hRecent"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>Recent files</button>
         </nav>
         <span class="grow"></span>
+        <div class="hacct" id="hAccount" hidden="">
+          <button class="hacct-btn" id="hAcctBtn" aria-haspopup="dialog"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span><b id="hAcctName">Sign in</b><small id="hAcctSub">One account on every device</small></span></button>
+        </div>
         <div class="safe">
           <svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path><polyline points="8.5 12 11 14.5 15.5 9.5"></polyline></svg>
           <span>Private by design. Your files are opened and edited on this device — nothing is uploaded.</span>
@@ -343,6 +349,7 @@
               <p>Read, edit, mark up, pin site photos, organize and convert your PDFs.</p>
             </div>
             <button class="resume uimode" id="hUi" title="Switch to dark interface"><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg><span id="hUiLbl">Dark mode</span></button>
+            <button class="resume hacct-top" id="hAcctTop" aria-haspopup="dialog" hidden=""><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span id="hAcctTopLbl">Sign in</span></button>
             <button class="resume" id="hResume" hidden="">Back to <b id="hResumeName"></b> →</button>
           </div>
 
@@ -425,6 +432,66 @@
 </div>
 
 <div class="scrim" id="scrim"></div>
+
+<!-- Sign in / create account (js/account.js). One form per step; the code
+     steps take the 6-digit code Supabase emails. -->
+<div class="authdlg" id="authDlg" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-describedby="authSub" hidden="">
+  <div class="authcard">
+    <button class="authx" id="authClose" type="button" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
+    <div class="authbrand">ADD DOTS <em>PDF</em></div>
+    <h2 id="authTitle">Sign in</h2>
+    <p class="authsub" id="authSub"></p>
+    <div class="authmsg" id="authMsg" role="alert" hidden=""></div>
+
+    <form data-view="signin" novalidate>
+      <label for="aSiEmail">Email</label>
+      <input id="aSiEmail" name="email" type="email" autocomplete="username" required>
+      <label for="aSiPw">Password</label>
+      <input id="aSiPw" name="password" type="password" autocomplete="current-password" required>
+      <button class="authgo" type="submit">Sign in</button>
+      <div class="authlinks"><a href="#" data-go="forgot">Forgot password?</a><a href="#" data-go="signup">Create an account</a></div>
+    </form>
+
+    <form data-view="signup" novalidate hidden="">
+      <label for="aSuEmail">Email</label>
+      <input id="aSuEmail" name="email" type="email" autocomplete="username" required>
+      <label for="aSuPw">Password</label>
+      <input id="aSuPw" name="password" type="password" autocomplete="new-password" minlength="8" required aria-describedby="aSuHint">
+      <p class="authhint" id="aSuHint">At least 8 characters.</p>
+      <button class="authgo" type="submit">Create account</button>
+      <div class="authlinks"><span>Have an account?</span><a href="#" data-go="signin">Sign in</a></div>
+    </form>
+
+    <form data-view="verify" novalidate hidden="">
+      <label for="aVeCode">6-digit code</label>
+      <input id="aVeCode" name="code" class="authcode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required>
+      <button class="authgo" type="submit">Confirm email</button>
+      <div class="authlinks"><a href="#" data-resend="">Send a new code</a><a href="#" data-go="signup">Use a different email</a></div>
+    </form>
+
+    <form data-view="forgot" novalidate hidden="">
+      <label for="aFoEmail">Email</label>
+      <input id="aFoEmail" name="email" type="email" autocomplete="username" required>
+      <button class="authgo" type="submit">Send code</button>
+      <div class="authlinks"><a href="#" data-go="signin">Back to sign in</a></div>
+    </form>
+
+    <form data-view="reset" novalidate hidden="">
+      <label for="aReCode">6-digit code</label>
+      <input id="aReCode" name="code" class="authcode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required>
+      <label for="aRePw">New password</label>
+      <input id="aRePw" name="password" type="password" autocomplete="new-password" minlength="8" required>
+      <p class="authhint">At least 8 characters.</p>
+      <button class="authgo" type="submit">Set new password</button>
+      <div class="authlinks"><a href="#" data-resend="">Send a new code</a><a href="#" data-go="signin">Back to sign in</a></div>
+    </form>
+
+    <form data-view="account" novalidate hidden="">
+      <p class="authnote">Your documents stay on this device. Your account is the same on the web, Windows, Android and iOS.</p>
+      <button class="authgo" type="submit">Sign out</button>
+    </form>
+  </div>
+</div>
 
 <div class="sheet" id="moreSheet" role="dialog" aria-label="More options" aria-modal="true" hidden="">
   <div class="grab"></div>
@@ -1090,5 +1157,7 @@
 <script src="js/pwa.js"></script>
 <script src="js/desktop.js"></script>
 <script src="js/mobile.js"></script>
+<script src="js/config.js"></script>
+<script src="js/account.js"></script>
 </body>
 </html>
