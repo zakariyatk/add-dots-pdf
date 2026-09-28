@@ -240,6 +240,13 @@ try {
     );
     const cur = await page.evaluate(() => window.ADDPDF.S.current);
     check('after zooming, the page being read is still on screen', Math.abs(cur - 30) <= 1, { current: cur });
+    /* a zoom the moment after a jump, while the stage still glides there:
+       it used to stop the glide partway (page 8 for a jump to page 30) */
+    await page.evaluate(() => window.ADDPDF.goTo(45));
+    await page.click('#btnIn');
+    await page.waitForTimeout(1500);
+    const landed = await page.evaluate(() => window.ADDPDF.S.current);
+    check('a zoom straight after a jump lands on the page jumped to', landed === 45, { current: landed });
 
     /* ---- a second file: the first is closed on the shared worker ---- */
     const workersBefore = page.workers().length;
