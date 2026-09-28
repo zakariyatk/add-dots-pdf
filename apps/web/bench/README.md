@@ -497,6 +497,37 @@ more than 1,800 px off screen is still drawn (the same reading on the test
 machine keeps pages further out), and with memory short only the pages on
 screen keep their pictures.
 
+### Stage H: accessibility
+
+axe-core (WCAG 2.1 A and AA, and axe's best practices) was run on the home
+screen, the document view, the Save popover, search and the dark interface,
+on a desktop and a phone. The words of the PDF (the text layer) were left
+out: they are the document's, not the app's. It found:
+
+- no landmarks: the toolbar, ribbon, tool options, side panel and pages
+  were not marked, so a screen reader could not jump between them. They are
+  now a banner, two labelled regions, a side panel and the main area
+  ("Document"); on the home screen its content is the main area.
+- no heading in the document view: a heading, read out and not shown, now
+  names the file and its page count.
+- the blue of the light interface (#1473E6) as text on its greys: 3.7:1 and
+  4.0:1 (the active ribbon tab, the current page's number), under the 4.5:1
+  asked for. Blue text is now #0D5FC2 (5.0:1 and 5.4:1); fills keep #1473E6.
+
+Checked by hand, which axe cannot see:
+
+- while the home screen shows, the app under it is inert: the keyboard and
+  screen readers no longer reach the toolbar and pages behind it.
+- the popovers (Save, Add pages, Extract, Translate…) are labelled dialogs;
+  opened from the keyboard, the focus goes to their first control, and
+  Escape brings it back to the button they opened from.
+- messages ("Mark removed", "Diagnostics copied"…) are read out.
+- each page is labelled "Page N", and its drawn number is not read twice.
+
+The smoke test runs axe on the home screen, the document, the Save popover
+and the dark interface and asks for no finding, and checks the focus into
+and out of two popovers.
+
 ### Choosing the drawing engine (Stage D0)
 
 Before moving drawing off the main thread, three engines were compared in

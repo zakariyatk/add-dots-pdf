@@ -17,6 +17,7 @@ body[data-ui="light"] {
   --text: #1F2328;
   --text-dim: #646A73;
   --marker: #1473E6;
+  --marker-ink: #0D5FC2;          /* the blue as text: 4.5:1 on every grey here */
   --danger: #D7373F;
   --accent-ink: #FFFFFF;          /* text on a blue fill */
   --hover: rgba(0, 0, 0, .045);
@@ -28,7 +29,7 @@ body[data-ui="light"] {
    reads better on black. They get the dark values back. */
 body[data-ui="light"] :is(#pm, #cam, #lb) {
   --chrome: #050505; --chrome-2: #181818; --stage: #111111; --line: #333333;
-  --text: #E4E4E4; --text-dim: #8D8D8D; --marker: #FFFFFF; --danger: #E27C68;
+  --text: #E4E4E4; --text-dim: #8D8D8D; --marker: #FFFFFF; --marker-ink: #FFFFFF; --danger: #E27C68;
   color: var(--text);
   color-scheme: dark;
 }
@@ -37,10 +38,10 @@ body[data-ui="light"] :is(#pm, #cam, #lb) {
 body[data-ui="light"] .bar,
 body[data-ui="light"] .ribbon { box-shadow: 0 1px 0 rgba(0, 0, 0, .02) }
 body[data-ui="light"] .btn:hover:not(:disabled) { background: var(--hover); border-color: transparent }
-body[data-ui="light"] .btn.on { background: #E8F1FC; border-color: #C4DAF6; color: var(--marker) }
+body[data-ui="light"] .btn.on { background: #E8F1FC; border-color: #C4DAF6; color: var(--marker-ink) }
 body[data-ui="light"] .btn.primary { background: var(--marker); color: var(--accent-ink); border-color: transparent }
 body[data-ui="light"] .btn.primary:hover:not(:disabled) { background: #0D66D0; border-color: transparent }
-body[data-ui="light"] .ribbon .btn.on::after { color: var(--marker) }
+body[data-ui="light"] .ribbon .btn.on::after { color: var(--marker-ink) }
 body[data-ui="light"] .admark { color: #1F2328; border-color: #9AA0A6 }
 body[data-ui="light"] a.admark:hover { border-color: #1F2328 }
 body[data-ui="light"] #btnHome { background: #FFFFFF }
@@ -90,7 +91,7 @@ body[data-ui="light"] .hdrop { background: #FFFFFF; border-color: #C3C7CD }
 body[data-ui="light"] .hdrop.hot { background: #EEF5FD; border-color: var(--marker) }
 body[data-ui="light"] .hdrop .art .pg { box-shadow: 0 4px 12px rgba(0, 0, 0, .14) }
 body[data-ui="light"] .tcard:hover { border-color: #AEB4BC; background: #FFFFFF; box-shadow: 0 4px 14px rgba(0, 0, 0, .06) }
-body[data-ui="light"] .tcard .ic { background: #EEF5FD; border-color: #CFE0F7; color: var(--marker) }
+body[data-ui="light"] .tcard .ic { background: #EEF5FD; border-color: #CFE0F7; color: var(--marker-ink) }
 body[data-ui="light"] .rrow .fi { box-shadow: inset 0 0 0 1px #D5D8DC }
 body[data-ui="light"] .rrow .x:hover { background: var(--hover) }
 
