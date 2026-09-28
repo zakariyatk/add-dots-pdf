@@ -302,7 +302,7 @@ async function drawWithPdfium(entry, page, viewport, m) {
    cannot load (WebView2 in the Windows app does not always serve a worker's
    own requests through the app's protocol), pdf.js waits for it forever and
    no page is ever drawn, although this worker said it was ready. So the
-   first hello opens a one-page PDF first, and says ready only once that has
+   first hello opens and draws a one-page PDF first, and says ready only once that has
    worked; otherwise the page draws every page itself. */
 const PROBE_PDF = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
   '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
@@ -331,7 +331,11 @@ function tryOpen(ms) {
       task = pdfjsLib.getDocument({
         data: new TextEncoder().encode(PROBE_PDF), ownerDocument: docShim, disableFontFace: true
       });
-      task.promise.then(function (doc) { return doc.getPage(1); }).then(function () {
+      /* opened and drawn: the whole path a page takes here */
+      task.promise.then(function (doc) { return doc.getPage(1); }).then(function (page) {
+        const ctx = new OffscreenCanvas(8, 8).getContext('2d', { alpha: false });
+        return page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: 1 }) }).promise;
+      }).then(function () {
         clearTimeout(timer);
         task.destroy().catch(function () {});
         res(true);
