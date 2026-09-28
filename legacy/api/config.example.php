@@ -36,8 +36,14 @@ return [
     /** A document nobody has opened for this many days is swept away. */
     'retention_days' => 180,
 
-    /** Allowed origins for the browser app. Use [] to allow same-origin only. */
-    'cors_origins' => [],
+    /** Other origins allowed to use this API. The browser app on this same
+     *  site needs none. The Windows and phone apps share through this server
+     *  (shareServer in js/config.js), from these origins:
+     *    'http://tauri.localhost'  Windows app
+     *    'https://localhost'       Android app
+     *    'capacitor://localhost'   iOS app
+     *  Use [] to allow this site only. */
+    'cors_origins' => ['http://tauri.localhost', 'https://localhost', 'capacitor://localhost'],
 
     /** Set false once you are live: it stops error details reaching the client. */
     'debug' => false,

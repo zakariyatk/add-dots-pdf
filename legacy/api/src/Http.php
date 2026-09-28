@@ -98,7 +98,7 @@ final class Http
         if ($origin !== '' && in_array($origin, $allowed, true)) {
             header('Access-Control-Allow-Origin: ' . $origin);
             header('Vary: Origin');
-            header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Share-Password, X-Author-Key');
+            header('Access-Control-Allow-Headers: Authorization, Content-Type, X-Share-Password, X-Author-Key, X-HTTP-Method-Override');
             header('Access-Control-Allow-Methods: GET, POST, PATCH, DELETE, OPTIONS');
             header('Access-Control-Max-Age: 600');
         }

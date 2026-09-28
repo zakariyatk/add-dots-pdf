@@ -23,7 +23,12 @@ does nothing outside the app.
   as an app update.
 - Files cross between the page and the plugin as base64.
 
-Not in the phone app yet: share links (they need the web server's API).
+- **Share links** go through the website set in `js/config.js`
+  (`shareServer`, https://app.adddots.com/): the document is uploaded to its
+  API, and the links handed out open there, in any browser. The server must
+  allow the apps' origins (`cors_origins` in `legacy/api/config.php`:
+  `https://localhost` for Android, `capacitor://localhost` for iOS,
+  `http://tauri.localhost` for Windows).
 
 ## Commands
 

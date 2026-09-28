@@ -18,11 +18,21 @@
   const X = window.ADDPDF;
   if (!X) { console.error('[share] core bridge missing'); return; }
 
-  /* Where the API lives, relative to wherever the app is served from. */
-  const API = (function () {
-    const p = location.pathname.replace(/[^/]*$/, '');
-    return p + 'api';
-  })();
+  /* Where the app's website is: the address share links point to, with the
+     API under it. In a browser, wherever the app is served from. The Windows
+     and phone apps are not served from the web, so they use the address in
+     js/config.js (shareServer), which is read when first needed: config.js
+     loads after this file. */
+  const IN_APP = !!window.__TAURI__ ||
+    !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  function site() {
+    const cfg = window.ADDDOTS_CONFIG || {};
+    if (IN_APP && cfg.shareServer) return cfg.shareServer.replace(/\/?$/, '/');
+    return location.origin + location.pathname.replace(/[^/]*$/, '');
+  }
+  function apiBase() {
+    return IN_APP ? site() + 'api' : location.pathname.replace(/[^/]*$/, '') + 'api';
+  }
 
   X.on('ready', function () {
     const S = X.S, $ = X.$;
@@ -84,7 +94,7 @@
 
       let res;
       try {
-        res = await fetch(API + '/' + path, {
+        res = await fetch(apiBase() + '/' + path, {
           method: method, headers: headers, body: opts.body, cache: 'no-store'
         });
       } catch (e) {
@@ -184,16 +194,17 @@
 
     async function sizeHint() {
       try {
-        const h = await fetch(API + '/health', { cache: 'no-store' });
+        const h = await fetch(apiBase() + '/health', { cache: 'no-store' });
         const j = await h.json();
         const mb = Math.round((j.max_upload || 0) / 1048576);
         $('shSize').textContent = mb
           ? 'Up to ' + mb + ' MB per document.'
           : '';
       } catch (e) {
-        $('shSize').innerHTML =
-          '<span class="bad">The API did not answer. Upload <b>api/</b> to your host and open ' +
-          '<b>api/setup.php</b> once.</span>';
+        $('shSize').innerHTML = IN_APP
+          ? '<span class="bad">The share server did not answer. Check your connection and try again.</span>'
+          : '<span class="bad">The API did not answer. Upload <b>api/</b> to your host and open ' +
+            '<b>api/setup.php</b> once.</span>';
       }
     }
 
@@ -260,7 +271,7 @@
       return location.pathname + '?d=' + encodeURIComponent(id) + '#k=' + encodeURIComponent(token);
     }
     function shareUrl(token) {
-      return location.origin + location.pathname + '?s=' + encodeURIComponent(token);
+      return site() + '?s=' + encodeURIComponent(token);
     }
 
     /** Keep a local note of documents this browser owns, so links are recoverable. */
@@ -307,7 +318,8 @@
         '<button class="btn del" id="shDelete">Delete from server</button>' +
         '<button class="btn" id="shDone">Done</button></div>';
 
-      $('shOwner').value = location.origin + ownerUrl(session.id, session.token);
+      /* the owner's link opens on the website, from the apps too */
+      $('shOwner').value = site() + ownerUrl(session.id, session.token).replace(/^[^?]*/, '');
       $('shCopyOwner').addEventListener('click', function () {
         copy($('shOwner').value, $('shCopyOwner'));
       });
@@ -494,7 +506,7 @@
 
       showLoading('Downloading ' + (meta.title || 'the document') + '…');
 
-      const url = API + '/documents/' + meta.id + '/file?token=' + encodeURIComponent(session.token) +
+      const url = apiBase() + '/documents/' + meta.id + '/file?token=' + encodeURIComponent(session.token) +
         (session.password ? '&pw=' + encodeURIComponent(session.password) : '');
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error('The PDF could not be downloaded.');

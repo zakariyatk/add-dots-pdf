@@ -10,5 +10,9 @@ window.ADDDOTS_CONFIG = window.ADDDOTS_CONFIG || {
   supabaseKey: 'sb_publishable_LD1GNGGp9Q9aHwcws71gRQ_C76ri7J9',
   /* the privacy policy's contact address (privacy.html); empty until the
      support address exists */
-  contactEmail: ''
+  contactEmail: '',
+  /* the website the Windows and phone apps share documents through: share
+     links point here, and its API is at <shareServer>api. The browser app
+     uses wherever it is served from instead. */
+  shareServer: 'https://app.adddots.com/'
 };

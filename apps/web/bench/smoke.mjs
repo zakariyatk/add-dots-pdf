@@ -858,6 +858,46 @@ try {
       done.closed && /Saved/.test(done.toast),
       done,
     );
+
+    /* Share: the app is not served from the web, so it shares through the
+       website in js/config.js (shareServer), and its links point there */
+    const shareCalls = [];
+    await ctx.route('https://app.adddots.com/api/**', async (route) => {
+      const req = route.request();
+      const path = new globalThis.URL(req.url()).pathname.replace('/api', '');
+      shareCalls.push(req.method() + ' ' + path);
+      let body = {};
+      if (path === '/health') body = { ok: true, max_upload: 50 * 1048576 };
+      else if (path === '/documents' && req.method() === 'POST')
+        body = { id: 'd1', owner_token: 'own3r', version: 1, title: 'Shared' };
+      else if (/\/shares$/.test(path) && req.method() === 'POST') body = { token: 'r3view' };
+      else if (/\/shares$/.test(path)) body = { shares: [] };
+      else if (/\/comments/.test(path)) body = { comments: [], server_time: '2026-09-28T00:00:00Z' };
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify(body),
+      });
+    });
+    await page.evaluate(() => document.getElementById('btnShare').click());
+    await page.waitForFunction(() => /50 MB/.test(document.getElementById('shSize').textContent), null, {
+      timeout: 10000,
+    });
+    await page.evaluate(() => document.getElementById('shGo').click());
+    await page.waitForFunction(() => document.getElementById('shOwner'), null, { timeout: 30000 });
+    const owner = await page.evaluate(() => document.getElementById('shOwner').value);
+    await page.evaluate(() => document.getElementById('shMake').click());
+    await page.waitForFunction(() => document.getElementById('shNew'), null, { timeout: 10000 });
+    const review = await page.evaluate(() => document.getElementById('shNew').value);
+    check(
+      'phone app: Share uploads to the website in config.js, and its links point there',
+      shareCalls.includes('GET /health') &&
+        shareCalls.includes('POST /documents') &&
+        owner === 'https://app.adddots.com/?d=d1#k=own3r' &&
+        review === 'https://app.adddots.com/?s=r3view',
+      { owner, review, calls: shareCalls.slice(0, 5) },
+    );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }
