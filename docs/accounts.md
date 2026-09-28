@@ -17,6 +17,14 @@ styles at the end of `css/app.css`:
   code, and the app asks for it.
 - **Forgot password**: a code by email, then a new password; the account is
   signed in.
+- **Links as well as codes.** Supabase lets a project edit its email
+  templates only once it has its own email sender (custom SMTP, step 4
+  below); until then its emails carry a link, not a code. The app works
+  with both. On the website, the confirm link opens it signed in, and the
+  reset link opens "Set a new password". In the Windows and phone apps, the
+  link opens the website (the project's Site URL) and confirms the account
+  there; the app then signs in with the password. The dialog says so under
+  the code field.
 - **Sign out**: this device only; other devices stay signed in.
 - **Delete account** (Your account > Delete account…): the password again,
   then the account is deleted for good, with its sign-ins on every device;
@@ -64,8 +72,9 @@ and it can only ever reach the caller's own account.
    `apps/web/public/js/config.js`. The publishable key is meant to ship in the
    app; it identifies the project, and what it may do is decided by the
    project's own settings.
-2. **Email codes instead of links.** In the Supabase dashboard, Authentication
-   > Emails > Templates:
+2. **Email codes instead of links** (needs step 4 first: without a custom
+   SMTP sender Supabase shows the templates read-only). In the Supabase
+   dashboard, Authentication > Emails > Templates:
    - **Confirm signup**: subject `Your ADD DOTS confirmation code`, body
      containing `{{ .Token }}`, for example:
 
@@ -79,8 +88,10 @@ and it can only ever reach the caller's own account.
    - **Reset password**: subject `Your ADD DOTS password reset code`, same
      shape, with `{{ .Token }}`.
    - Leave out `{{ .ConfirmationURL }}`: the app uses the code only.
-3. **Authentication > Providers > Email**: Email enabled, "Confirm email" on,
-   minimum password length 8. Authentication > Settings: email OTP length 6,
+3. **Authentication > Sign In / Providers > Email**: Email enabled,
+   "Confirm email" on, minimum password length 8. **Authentication > URL
+   Configuration**: Site URL `https://app.adddots.com`, where the links in
+   the emails lead. Authentication > Settings: email OTP length 6,
    expiry 3600 s (the defaults).
 4. **Sending email for real users.** Supabase's own mailer is for trying
    things out: it sends only a few emails an hour, and only to the project's

@@ -33,6 +33,7 @@
     verify: ['Check your email', ''],
     forgot: ['Reset your password', 'We will email you a code to set a new password.'],
     reset: ['Set a new password', ''],
+    newpw: ['Set a new password', ''],
     account: ['Your account', ''],
     delete: ['Delete your account', ''],
     privacy: ['Privacy policy', 'What ADD DOTS PDF keeps about you, where, and how to delete it.']
@@ -54,6 +55,20 @@
     });
   }
 
+  /* The emails carry a 6-digit code once the project has its own sender
+     (docs/accounts.md); until then Supabase's own emails carry a link. The
+     link opens the website (the project's Site URL) signed in: a sign-up is
+     confirmed, and a password reset asks for the new password there. The
+     Windows and phone apps are not the website: there the link confirms the
+     account in the browser, and the app signs in with the password. */
+  var IN_APP = !!window.__TAURI__ ||
+    !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  var link = (function () {
+    var h = new URLSearchParams(location.hash.replace(/^#/, ''));
+    if (IN_APP || !(h.get('access_token') || h.get('error_description'))) return null;
+    return { type: h.get('type') || '', error: h.get('error_description') || '' };
+  })();
+
   function start() {
     $('grpAccount').hidden = false;
     $('hAccount').hidden = false;
@@ -63,21 +78,35 @@
         auth: {
           persistSession: true,
           autoRefreshToken: true,
-          /* codes, not links: nothing to read from the address */
-          detectSessionInUrl: false,
+          /* a link from one of the emails (above): the website only */
+          detectSessionInUrl: !!link,
           storageKey: 'adpdf.auth'
         }
       });
       client.auth.onAuthStateChange(function (ev, session) {
         setUser(session ? session.user : null);
+        /* the reset link: signed in for this, the new password next */
+        if (ev === 'PASSWORD_RECOVERY') { if (link) link.type = 'recovery'; setTimeout(function () { open('newpw'); }, 0); }
       });
       return client.auth.getSession();
     }).then(function (r) {
       setUser(r && r.data && r.data.session ? r.data.session.user : null);
+      if (link) linkDone();
     }).catch(function (e) {
       health('start', e);
       setUser(null);
     });
+  }
+
+  /* what a link from an email did, said once */
+  function linkDone() {
+    if (link.error) {
+      api.toast(/expired|invalid/i.test(link.error)
+        ? 'That email link has expired or was already used. Sign in, or ask for a new email.'
+        : 'That email link did not work: ' + api.esc(link.error));
+    } else if (link.type !== 'recovery' && user) {
+      api.toast('Email confirmed. You are signed in as <b>' + api.esc(user.email) + '</b>');
+    }
   }
 
   /* ---------- who is signed in, everywhere it shows ---------- */
@@ -113,6 +142,7 @@
     var sub = t[1];
     if (v === 'verify') sub = 'Enter the code we sent to ' + email + '.';
     if (v === 'reset') sub = 'Enter the code we sent to ' + email + ', then your new password.';
+    if (v === 'newpw') sub = user ? 'For ' + user.email + '.' : '';
     if (v === 'account') sub = user ? 'Signed in as ' + user.email : 'Not signed in.';
     if (v === 'delete') sub = user ? user.email : '';
     $('authSub').textContent = sub;
@@ -313,6 +343,16 @@
           setUser(null);
           close();
           api.toast('Your account <b>' + api.esc(who) + '</b> is deleted');
+        });
+      });
+    },
+    newpw: function (f) {
+      var pw = f.elements.password.value;
+      if (pw.length < 8) { msg('Choose a longer password: at least 8 characters.', 'bad'); return; }
+      run(f, 'Saving…', function () {
+        return client.auth.updateUser({ password: pw }).then(ok).then(function () {
+          f.reset();
+          signedIn('Password changed. You are signed in.');
         });
       });
     },

@@ -467,6 +467,7 @@
       <label for="aVeCode">6-digit code</label>
       <input id="aVeCode" name="code" class="authcode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required>
       <button class="authgo" type="submit">Confirm email</button>
+      <p class="authhint">The email has a link instead of a code? Click the link, then come back and <a href="#" data-go="signin">sign in</a>.</p>
       <div class="authlinks"><a href="#" data-resend="">Send a new code</a><a href="#" data-go="signup">Use a different email</a></div>
     </form>
 
@@ -484,7 +485,15 @@
       <input id="aRePw" name="password" type="password" autocomplete="new-password" minlength="8" required>
       <p class="authhint">At least 8 characters.</p>
       <button class="authgo" type="submit">Set new password</button>
+      <p class="authhint">The email has a link instead of a code? Click it: you set the new password on the page it opens, then sign in here with it.</p>
       <div class="authlinks"><a href="#" data-resend="">Send a new code</a><a href="#" data-go="signin">Back to sign in</a></div>
+    </form>
+
+    <form data-view="newpw" novalidate hidden="">
+      <label for="aNpPw">New password</label>
+      <input id="aNpPw" name="password" type="password" autocomplete="new-password" minlength="8" required>
+      <p class="authhint">At least 8 characters.</p>
+      <button class="authgo" type="submit">Set new password</button>
     </form>
 
     <form data-view="account" novalidate hidden="">

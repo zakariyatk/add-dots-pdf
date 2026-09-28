@@ -937,8 +937,23 @@ try {
     };
     const calls = [];
     const fail = (status, code, msg) => ({ status, body: { code: status, error_code: code, msg } });
-    function gotrue(method, path, body) {
+    const bearer = (auth) => {
+      try {
+        const sub = JSON.parse(
+          Buffer.from(auth.replace(/^Bearer /, '').split('.')[1], 'base64url').toString(),
+        ).sub;
+        return [...users.values()].find((x) => x.id === sub) || null;
+      } catch {
+        return null;
+      }
+    };
+    function gotrue(method, path, body, auth) {
       calls.push(method + ' ' + path);
+      /* who a token belongs to: a link from an email arrives as a token */
+      if (path === '/user' && method === 'GET') {
+        const me = bearer(auth || '');
+        return me ? { status: 200, body: userJson(me) } : fail(401, 'bad_jwt', 'invalid JWT');
+      }
       const u = body && body.email ? users.get(body.email) : null;
       if (path === '/signup') {
         if (u && u.confirmed) return { status: 200, body: { ...userJson(u), identities: [] } };
@@ -965,8 +980,8 @@ try {
       }
       if (path === '/resend' || path.startsWith('/recover')) return { status: 200, body: {} };
       if (path === '/user' && method === 'PUT') {
-        /* the account that just proved its reset code */
-        const target = [...users.values()].find((x) => x.lastReset);
+        /* the account that just proved its reset code, or the token's */
+        const target = [...users.values()].find((x) => x.lastReset) || bearer(auth || '');
         if (!target) return fail(401, 'no_authorization', 'not signed in');
         target.password = body.password;
         target.lastReset = false;
@@ -988,7 +1003,12 @@ try {
         const u = users.get(body.email);
         if (u) u.lastReset = true;
       }
-      const r = gotrue(req.method(), url.pathname.replace('/auth/v1', '') + url.search, body);
+      const r = gotrue(
+        req.method(),
+        url.pathname.replace('/auth/v1', '') + url.search,
+        body,
+        req.headers()['authorization'],
+      );
       await route.fulfill({
         status: r.status,
         contentType: 'application/json',
@@ -1256,6 +1276,67 @@ try {
         delAfter.home === 'Sign in' &&
         /do not match/.test(gone.msg),
       { del: del.title, delBad: delBad.msg, kept, deleted, delAfter: delAfter.home, gone: gone.msg },
+    );
+
+    /* Supabase's own emails (no custom sender yet) carry a link, not a code:
+       it opens the website with the session in the address */
+    const linkTo = async (u, type) => {
+      const s = session(u);
+      /* a fresh load, as from the email (a change of #... alone would not reload) */
+      await page.goto('about:blank');
+      await page.goto(
+        URL +
+          '#access_token=' +
+          s.access_token +
+          '&refresh_token=' +
+          s.refresh_token +
+          '&expires_in=3600&expires_at=' +
+          s.expires_at +
+          '&token_type=bearer&type=' +
+          type,
+      );
+      await page.waitForFunction(
+        () => window.ADDPDF && window.ADDPDF.account && window.ADDPDF.account.ready(),
+        null,
+        {
+          timeout: 20000,
+        },
+      );
+      await page
+        .waitForFunction(() => !!window.ADDPDF.account.user(), null, { timeout: 10000 })
+        .catch(() => {});
+      await page.waitForTimeout(300);
+    };
+    const linked = { id: 'u20', email: 'link@example.com', password: 'link password 1', confirmed: true };
+    users.set(linked.email, linked);
+    await linkTo(linked, 'signup');
+    const viaLink = await page.evaluate(() => ({
+      user: window.ADDPDF.account.user(),
+      hash: location.hash,
+      toast: document.getElementById('toast').textContent,
+    }));
+    check(
+      'accounts: the confirm link from an email opens the website signed in, and leaves no token in the address',
+      viaLink.user &&
+        viaLink.user.email === 'link@example.com' &&
+        viaLink.hash === '' &&
+        /Email confirmed/.test(viaLink.toast),
+      viaLink,
+    );
+    await page.evaluate(() => localStorage.removeItem('adpdf.auth'));
+    await linkTo(linked, 'recovery');
+    const rec = await state();
+    await page.fill('#aNpPw', 'fresh password 9');
+    await submit('newpw');
+    const recDone = await state();
+    check(
+      'accounts: the reset link opens Set a new password; saved, the account signs in with it',
+      rec.open &&
+        rec.title === 'Set a new password' &&
+        !recDone.open &&
+        recDone.user &&
+        linked.password === 'fresh password 9',
+      { rec: rec.title, recDone, password: linked.password },
     );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
