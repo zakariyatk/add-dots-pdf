@@ -61,7 +61,7 @@ const yieldCh = new MessageChannel();
 yieldCh.port1.onmessage = function () { const next = yieldQ.shift(); if (next) next(); };
 function yieldThen(next) { yieldQ.push(next); yieldCh.port2.postMessage(0); }
 
-const docs = new Map();      /* key -> { task, promise, file, raw, slow, fx } */
+const docs = new Map();      /* key -> { task, promise, file, raw, slow, vector, fx } */
 const renders = new Map();   /* rid -> pdf.js RenderTask, or null while it starts */
 
 function openDoc(m) {
@@ -74,7 +74,7 @@ function openDoc(m) {
   /* pdf.js takes the bytes it is given (they are detached): PDFium, if a
      page turns out to need it, reads the file again or uses the original */
   const entry = { task: null, promise: null, file: m.file || null, raw: m.file ? null : m.bytes,
-                  password: m.password || null, slow: new Map(), fx: null };
+                  password: m.password || null, slow: new Map(), vector: new Map(), fx: null };
   if (old) closePdfium(old);
   entry.promise = data.then(function (bytes) {
     if (docs.get(m.key) !== entry) throw new Error('closed');
@@ -107,17 +107,24 @@ async function render(m) {
   const page = await doc.getPage(m.num);
   if (!renders.has(m.rid)) return { cancelled: true };
   const viewport = page.getViewport({ scale: m.scale, rotation: m.rotation });
-  if (m.fast && (entry.slow.get(m.num) || 0) > HEAVY_MS) {
+  const vector = entry.vector.get(m.num);
+  if (vector || (m.fast && (entry.slow.get(m.num) || 0) > HEAVY_MS)) {
     try {
       const bitmap = await drawWithPdfium(entry, page, viewport, m);
       if (!renders.has(m.rid)) { bitmap.close(); return { cancelled: true }; }
       return { bitmap: bitmap, engine: 'pdfium' };
-    } catch (e) { /* not loaded, or failed on this page: pdf.js draws it */ }
+    } catch (e) {
+      /* not loaded, or failed on this page (form fields): pdf.js draws it */
+      if (vector) entry.vector.set(m.num, false);
+    }
     if (!renders.has(m.rid)) return { cancelled: true };
   }
   const canvas = new OffscreenCanvas(m.w, m.h);
+  const ctx = canvas.getContext('2d', { alpha: false });
+  /* not yet known: count its drawing as pdf.js builds it (see guardPaths) */
+  if (vector === undefined) guardPaths(ctx);
   const task = page.render({
-    canvasContext: canvas.getContext('2d', { alpha: false }),
+    canvasContext: ctx,
     viewport: viewport,
     transform: m.transform || null,
     intent: m.intent || 'display'
@@ -129,8 +136,17 @@ async function render(m) {
   catch (e) {
     canvas.width = canvas.height = 0;
     if (e && e.name === 'RenderingCancelledException') return { cancelled: true };
+    if (e && e.name === 'TooManyPoints') {
+      /* PDFium draws this page, parts and whole: 400,000 lines take it
+         1.1 s, against pdf.js's 116; if it cannot (form fields), pdf.js
+         draws it after all, unwatched */
+      entry.vector.set(m.num, true);
+      renders.set(m.rid, null);
+      return render(m);
+    }
     throw e;
   }
+  if (vector === undefined) entry.vector.set(m.num, false);
   /* pdf.js runs every drawing command of the page whatever part is shown:
      its time for the page decides whether PDFium draws the parts */
   const took = performance.now() - t0;
@@ -147,11 +163,38 @@ async function render(m) {
    zoomed-in part of a CAD sheet costs as much as the whole sheet (over a
    second). PDFium skips what falls outside the part: about 15 times faster
    there. It is 2 MB (compressed) of WebAssembly, so it loads only the first
-   time a page proves heavy, and draws only parts ("fast" renders) of such
-   pages; the whole-page bitmaps stay pdf.js's. Pages with form fields stay
+   time a page proves heavy, and draws the parts ("fast" renders) of such
+   pages; the whole page too when it is drawn with a great many points (see
+   guardPaths), else the whole-page bitmaps stay pdf.js's. Pages with form fields stay
    with pdf.js too: it leaves the fields to the app's own controls, where
    PDFium would draw them into the picture. */
 const HEAVY_MS = 250;
+
+/* A page drawn with a great many points (a CAD sheet) is PDFium's, whole
+   page too: pdf.js strokes one path of 400,000 lines in 116 s where PDFium
+   takes 1.1 s (40,000: 2.5 s against 0.15), and a single stroke cannot be
+   stopped partway. pdf.js builds each path through the canvas's own
+   moveTo/lineTo, so they are counted on the page's first drawing, and past
+   the limit the drawing stops before the stroke and PDFium takes the page. */
+const PATH_POINTS = 30000, PAGE_POINTS = 200000;
+function guardPaths(ctx) {
+  let path = 0, page = 0;
+  const count = function (fn) {
+    return function () {
+      if (++path > PATH_POINTS || ++page > PAGE_POINTS) {
+        const e = new Error('too many points for pdf.js');
+        e.name = 'TooManyPoints';
+        throw e;
+      }
+      return fn.apply(this, arguments);
+    };
+  };
+  const proto = Object.getPrototypeOf(ctx);
+  ctx.moveTo = count(proto.moveTo);
+  ctx.lineTo = count(proto.lineTo);
+  ctx.bezierCurveTo = count(proto.bezierCurveTo);
+  ctx.beginPath = function () { path = 0; return proto.beginPath.call(this); };
+}
 let pdfiumP = null;
 function pdfium() {
   if (!pdfiumP) {

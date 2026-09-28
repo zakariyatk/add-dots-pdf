@@ -1,0 +1,60 @@
+{
+  "label": "base",
+  "date": "2026-09-28T10:04:38.223Z",
+  "results": [
+    {
+      "file": "limit-text-10000p.pdf",
+      "kind": "pages",
+      "sizeMB": 26,
+      "errors": [],
+      "crashed": false,
+      "firstPageMs": 5440,
+      "allPagesMs": 12020,
+      "jumpEndMs": 1904,
+      "pages": 10000,
+      "browserMBOpen": 1145,
+      "savedMB": 26,
+      "saveMs": 5545,
+      "appended": true,
+      "longestTaskMs": 758,
+      "blockedMs": 3990,
+      "browserMBPeak": 1640
+    },
+    {
+      "file": "limit-scans-160p.pdf",
+      "kind": "size",
+      "sizeMB": 326,
+      "errors": [],
+      "crashed": false,
+      "firstPageMs": 1603,
+      "allPagesMs": 255,
+      "jumpEndMs": 1109,
+      "pages": 160,
+      "browserMBOpen": 1410,
+      "savedMB": 326,
+      "saveMs": 15087,
+      "appended": true,
+      "longestTaskMs": 157,
+      "blockedMs": 173,
+      "browserMBPeak": 3011
+    },
+    {
+      "file": "limit-cad-400k.pdf",
+      "kind": "weight",
+      "sizeMB": 16,
+      "errors": [],
+      "crashed": false,
+      "firstPageMs": 115322,
+      "allPagesMs": 7,
+      "jumpEndMs": 11,
+      "pages": 1,
+      "browserMBOpen": 412,
+      "savedMB": 16,
+      "saveMs": 406,
+      "appended": true,
+      "longestTaskMs": 0,
+      "blockedMs": 0,
+      "browserMBPeak": 525
+    }
+  ]
+}

@@ -170,6 +170,29 @@ export const CORPUS = [
   { name: 'scans-40p.pdf', kind: 'scans', make: () => scans(40, 5) },
 ];
 
+/* Files well past the everyday ones, for finding the app's limits (bench/limits.mjs):
+   not part of the regular corpus, so the benchmark and CI never build them. */
+export const LIMITS = [
+  { name: 'limit-text-10000p.pdf', kind: 'pages', make: () => textReport(10000, 6, false) },
+  { name: 'limit-scans-160p.pdf', kind: 'size', make: () => scans(160, 7) },
+  { name: 'limit-cad-400k.pdf', kind: 'weight', make: () => cadSheets(1, 400000, 8) },
+];
+
+export async function ensureLimits() {
+  mkdirSync(CORPUS_DIR, { recursive: true });
+  const out = [];
+  for (const f of LIMITS) {
+    const path = join(CORPUS_DIR, f.name);
+    if (!existsSync(path)) {
+      const t = Date.now();
+      writeFileSync(path, await f.make());
+      console.log('made', f.name, Math.round(statSync(path).size / 1048576) + ' MB', Date.now() - t + ' ms');
+    }
+    out.push({ ...f, path, bytes: statSync(path).size });
+  }
+  return out;
+}
+
 export async function ensureCorpus(force = false) {
   mkdirSync(CORPUS_DIR, { recursive: true });
   const out = [];
