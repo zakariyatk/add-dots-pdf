@@ -323,6 +323,55 @@ five or six times, 100 to 150 ms each); the benchmark's median does not show
 them. pdf-lib sets the saved file's Producer to its own name, as it always
 did: the one we set is overwritten.
 
+### Stage F2: saving onto the original (`results/stage-f2.json`)
+
+Save now writes the marks onto the original as an incremental update: the
+original's bytes exactly as they were, then the objects that changed, a new
+cross-reference section and a trailer pointing back to the old one
+(`packages/engine/src/append.ts`, `E.appendPdf`). The marks are painted onto
+the loaded original by the same code a rebuild uses, the objects are
+compared with how they were loaded, and the changed ones are written out in
+the form the original's last section has (a table or a stream). What a
+rebuild drops is kept: bookmarks, links, the structure, attachments. Only
+Save does this, and only for the original's own pages, all of them, in
+order, in a file without form fields (a rebuild paints the answers onto the
+page, and on the original the live fields would disagree with them); any
+other save rebuilds as before. Applying a redaction replaces its page with a
+new source, so a redacted file is always rebuilt and the covered content is
+gone from it.
+
+Two things pdf-lib does not do for an update, and the tests now check:
+
+- New objects must be numbered past every object in the original, counting
+  the object streams pdf-lib unpacks and does not keep. The number comes from
+  the original's `/Size`. Reusing those numbers overwrote the object streams:
+  pdf-lib still read the file, but pdf.js saw 46 of 300 pages.
+- Fonts and images are written by pdf-lib's `flush()`, which a whole-file
+  save calls for it; without it the pages pointed at fonts that were never
+  written.
+
+Building the file (the worker's part of a save, timed on the page, median of
+3, a mark on page 1; the rest of "save ms" is the browser writing the
+download):
+
+| file               | append ms | rebuild ms | file size (append / rebuild) |
+| ------------------ | --------- | ---------- | ---------------------------- |
+| small-text-12p     | 11        | 19         | 36 KB / 34 KB                |
+| medium-report-300p | 72        | 179        | 2.18 MB / 2.18 MB            |
+| large-text-2000p   | 579       | 1346       | 5.44 MB / 5.44 MB            |
+| cad-a1-8sheets     | 65        | 116        | 13.34 MB / 13.33 MB          |
+| scans-40p          | 547       | 1142       | 85.52 MB / 85.52 MB          |
+
+Parsing the original is most of what is left. The full benchmark
+(`stage-f2.json`) was a noisy run: its save ms move by a second or more from
+run to run on the scans, with the download written in them. The saved file
+of the smoke test opens in qpdf with no warnings (all 300 pages, every font
+there) and in the app.
+
+What it costs: an update keeps the original whole, so a file never gets
+smaller by being saved, and earlier revisions inside the original (its own
+incremental updates) stay in it, as they do in Acrobat's Save.
+
 ### Choosing the drawing engine (Stage D0)
 
 Before moving drawing off the main thread, three engines were compared in

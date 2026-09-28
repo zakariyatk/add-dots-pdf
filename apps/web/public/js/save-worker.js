@@ -12,7 +12,10 @@
      { op: 'source', id, bytes | file, name }       a source file, sent once
      { op: 'forget', id }                           frees it
      { op: 'build', rid, items, state, opts, cacheId, blob }
-                                                    -> { rid, out } | { rid, error: { name, message } }
+                                                    -> { rid, out, appended } | { rid, error: { name, message } }
+   opts.append asks for the marks to be saved onto the original (an
+   incremental update, E.appendPdf) when the pages allow it; appended says
+   whether they were, else the file was rebuilt.
    items are { src: id, num, rot, crop, shapes, fields }. Builds that share a
    cacheId (the pages of one file split up) parse each source once. */
 'use strict';
@@ -57,6 +60,13 @@ function loadEmojiFont() {
   return emojiFont;
 }
 
+function joined(parts) {
+  const out = new Uint8Array(parts.reduce(function (n, p) { return n + p.length; }, 0));
+  let at = 0;
+  parts.forEach(function (p) { out.set(p, at); at += p.length; });
+  return out;
+}
+
 async function build(m) {
   await measured;
   const srcs = new Map();
@@ -77,11 +87,18 @@ async function build(m) {
   }
   const items = m.items.map(function (it) { return Object.assign({}, it, { src: srcs.get(it.src) }); });
   if (m.cacheId !== cache.id) cache = { id: m.cacheId, map: m.cacheId == null ? null : new Map() };
-  const hooks = E.saveHooks(m.state, {
-    measure: function (item, line) { return measure ? measure(item, line) : null; },
-    unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont }
-  });
-  return E.buildPdf(items, cache.map, m.opts || {}, hooks);
+  const hooks = function () {
+    return E.saveHooks(m.state, {
+      measure: function (item, line) { return measure ? measure(item, line) : null; },
+      unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont }
+    });
+  };
+  const opts = m.opts || {};
+  if (opts.append) {
+    const got = await E.appendPdf(items, opts, hooks());
+    if (got) return { parts: [got.src.bytes, got.update], appended: true };
+  }
+  return { parts: [await E.buildPdf(items, cache.map, opts, hooks())], appended: false };
 }
 
 self.onmessage = function (e) {
@@ -94,9 +111,13 @@ self.onmessage = function (e) {
   }
   if (m.op === 'forget') { sources.delete(m.id); if (cache.map) cache.map.delete(m.id); return; }
   if (m.op !== 'build') return;
-  build(m).then(function (bytes) {
-    if (m.blob) self.postMessage({ rid: m.rid, out: new Blob([bytes], { type: 'application/pdf' }) });
-    else self.postMessage({ rid: m.rid, out: bytes }, [bytes.buffer]);
+  build(m).then(function (r) {
+    if (m.blob) {
+      self.postMessage({ rid: m.rid, out: new Blob(r.parts, { type: 'application/pdf' }), appended: r.appended });
+      return;
+    }
+    const bytes = r.parts.length === 1 ? r.parts[0] : joined(r.parts);
+    self.postMessage({ rid: m.rid, out: bytes, appended: r.appended }, [bytes.buffer]);
   }, function (err) {
     self.postMessage({ rid: m.rid, error: { name: err && err.name || 'Error', message: String(err && err.message || err) } });
   });

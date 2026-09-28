@@ -29,6 +29,7 @@ import { arrowHead, boxOf, lineOrigin, rotPt, textRect, type MeasureText } from 
 import { isText, type AnyMark, type Mark, type PageItem, type Source, type TextMark } from './model';
 import { dashOf, hexToRgb01, shCap, shJoin, shOp } from './style';
 import { drawLine, embedFallbacks, needsUnicode, textIn, textWidth, type UnicodeFontSource } from './text';
+import { readXrefTail, reserveNumbers, snapshot, writeUpdate } from './append';
 
 const PDF_CAP = [LineCapStyle.Butt, LineCapStyle.Round, LineCapStyle.Projecting];
 const PDF_JOIN = [LineJoinStyle.Miter, LineJoinStyle.Round, LineJoinStyle.Bevel];
@@ -136,12 +137,108 @@ export async function buildPdf(
   opts: BuildOptions | undefined,
   hooks: SaveHooks,
 ): Promise<Uint8Array> {
+  const out = await PDFDocument.create();
+  await compose(out, items, opts, hooks, () => copyPages(out, items, cache), true);
+  return out.save();
+}
+
+/* the pages of the saved file, copied from their sources in order */
+async function copyPages(out: PDFDocument, items: PageItem[], cache: SourceCache | null | undefined) {
+  const groups = new Map<Source['id'], { src: Source; idxs: number[]; slots: number[] }>();
+  items.forEach((it, i) => {
+    if (!groups.has(it.src.id)) groups.set(it.src.id, { src: it.src, idxs: [], slots: [] });
+    const g = groups.get(it.src.id)!;
+    g.idxs.push(it.num - 1);
+    g.slots.push(i);
+  });
+  const slots: PDFPage[] = new Array(items.length);
+  for (const g of groups.values()) {
+    const srcDoc = await loadSrc(g.src, cache);
+    /* pdf-lib reuses objects it has already copied within one copyPages call,
+       so a page used twice (Duplicate) came back sharing its content list, and
+       marks drawn on one copy printed on both. Each repeat gets its own call:
+       first uses in round 0, second uses in round 1, and so on. */
+    const rounds: { idxs: number[]; slots: number[] }[] = [];
+    const uses = new Map<number, number>();
+    g.idxs.forEach((idx, k) => {
+      const r = uses.get(idx) || 0;
+      uses.set(idx, r + 1);
+      const round = rounds[r] || (rounds[r] = { idxs: [], slots: [] });
+      round.idxs.push(idx);
+      round.slots.push(g.slots[k]!);
+    });
+    for (const round of rounds) {
+      const copied = await out.copyPages(srcDoc, round.idxs);
+      copied.forEach((p, k) => {
+        slots[round.slots[k]!] = p;
+      });
+    }
+  }
+  return slots;
+}
+
+/** An incremental update to append to the pages' source, or null when these
+    pages cannot be saved that way (see appendPdf). */
+export interface AppendResult {
+  src: Source;
+  update: Uint8Array;
+}
+
+/**
+ * Saves the marks onto the original instead of rebuilding it: the update to
+ * append to `src.bytes` (see append.ts). Only for the original's own pages,
+ * all of them, in order, and a file without form fields (a rebuild paints
+ * the answers onto the page; on the original its fields stay live, and the
+ * two would disagree). Returns null otherwise, or when the original's
+ * cross-reference cannot be read; the caller then rebuilds.
+ */
+export async function appendPdf(
+  items: PageItem[],
+  opts: BuildOptions | undefined,
+  hooks: SaveHooks,
+): Promise<AppendResult | null> {
+  const src = items[0] && items[0].src;
+  if (!src || !items.every((it, i) => it.src.id === src.id && it.num === i + 1)) return null;
+  if (items.some((it) => Array.isArray(it.fields) && it.fields.length)) return null;
+  const tail = readXrefTail(src.bytes);
+  if (!tail) return null;
+  let doc: PDFDocument;
+  try {
+    /* strict: an original pdf-lib had to repair would take a broken update */
+    doc = await PDFDocument.load(src.bytes, {
+      ignoreEncryption: true,
+      throwOnInvalidObject: true,
+      updateMetadata: false,
+    });
+  } catch {
+    return null;
+  }
+  if (doc.isEncrypted) throw new EncryptedSourceError(src.name);
+  if (doc.getPageCount() !== items.length || doc.getForm().getFields().length) return null;
+  reserveNumbers(doc, tail);
+  const snap = snapshot(doc);
+  await compose(doc, items, opts, hooks, async () => doc.getPages(), false);
+  /* pdf-lib writes embedded fonts and images out when it saves; this is
+     that step, without the rest of saving */
+  await doc.flush();
+  return { src, update: writeUpdate(doc, snap, src.bytes, tail) };
+}
+
+/* Paints the marks, crops, turns and pins onto the pages `pagesFor` gives:
+   copies added to `out` (add), or `out`'s own pages. */
+async function compose(
+  out: PDFDocument,
+  items: PageItem[],
+  opts: BuildOptions | undefined,
+  hooks: SaveHooks,
+  pagesFor: () => Promise<PDFPage[]>,
+  add: boolean,
+): Promise<void> {
   const measure = hooks.measure;
   const fontNeeds = hooks.fontNeeds || {};
   const painters = hooks.shapePainters || {};
   const locs = hooks.pins ? hooks.pins.locs : {};
 
-  const out = await PDFDocument.create();
   const embedded: Record<string, PDFFont> = {};
   const hasPins = items.some((it) => it.shapes.some((s) => s.t === 'pin' && locs[s.id as string]));
   let pinFont: PDFFont | null = null,
@@ -181,41 +278,11 @@ export async function buildPdf(
     return f ? textWidth(line, s.size, { font: f, fallback: extra.fallback }) : measure(s, line);
   };
 
-  const groups = new Map<Source['id'], { src: Source; idxs: number[]; slots: number[] }>();
-  items.forEach((it, i) => {
-    if (!groups.has(it.src.id)) groups.set(it.src.id, { src: it.src, idxs: [], slots: [] });
-    const g = groups.get(it.src.id)!;
-    g.idxs.push(it.num - 1);
-    g.slots.push(i);
-  });
-
   /* modules that need to embed something (a signature image, a logo) do it
      here, while we can still await, and stash the result in `extra` */
   for (const fn of hooks.prepare || []) await fn(out, items, extra);
 
-  const slots: PDFPage[] = new Array(items.length);
-  for (const g of groups.values()) {
-    const srcDoc = await loadSrc(g.src, cache);
-    /* pdf-lib reuses objects it has already copied within one copyPages call,
-       so a page used twice (Duplicate) came back sharing its content list, and
-       marks drawn on one copy printed on both. Each repeat gets its own call:
-       first uses in round 0, second uses in round 1, and so on. */
-    const rounds: { idxs: number[]; slots: number[] }[] = [];
-    const uses = new Map<number, number>();
-    g.idxs.forEach((idx, k) => {
-      const r = uses.get(idx) || 0;
-      uses.set(idx, r + 1);
-      const round = rounds[r] || (rounds[r] = { idxs: [], slots: [] });
-      round.idxs.push(idx);
-      round.slots.push(g.slots[k]!);
-    });
-    for (const round of rounds) {
-      const copied = await out.copyPages(srcDoc, round.idxs);
-      copied.forEach((p, k) => {
-        slots[round.slots[k]!] = p;
-      });
-    }
-  }
+  const slots = await pagesFor();
 
   slots.forEach((p, i) => {
     const it = items[i]!;
@@ -384,13 +451,11 @@ export async function buildPdf(
       const cur = p.getRotation().angle || 0;
       p.setRotation(degrees((((cur + it.rot) % 360) + 360) % 360));
     }
-    out.addPage(p);
+    if (add) out.addPage(p);
   });
 
   if (opts && opts.photos && pinsOut.length && hooks.pins)
     await hooks.pins.addPhotoPages(out, pinsOut, pinFont, pinFontB, extra.unicode);
 
   for (const fn of hooks.finish || []) await fn(out, items, slots, extra, opts);
-
-  return out.save();
 }

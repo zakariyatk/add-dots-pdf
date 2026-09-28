@@ -528,6 +528,65 @@ try {
     ]);
   }
 
+  /* ---- Save writes the marks onto the original (an incremental update) ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    const ORIG = join(CORPUS_DIR, 'medium-report-300p.pdf');
+    const orig = readFileSync(ORIG);
+    await open(page, ORIG);
+    await allLoaded(page);
+    await page.evaluate(() =>
+      window.ADDPDF.S.items[1].shapes.push({ t: 'rect', a: [60, 60], b: [260, 160], c: '#E2483D', w: 3 }),
+    );
+    const save = async () => {
+      await page.click('#btnSave');
+      const [dl] = await Promise.all([
+        page.waitForEvent('download', { timeout: 60000 }),
+        page.click('#saveGo'),
+      ]);
+      return readFileSync(await dl.path());
+    };
+    const a = await save();
+    const appended = await page.evaluate(() => window.ADDPDF.appended);
+    check(
+      'Save writes the marks onto the original: its bytes as they were, then an update',
+      appended === true && a.length > orig.length && Buffer.compare(a.subarray(0, orig.length), orig) === 0,
+      { appended, updateBytes: a.length - orig.length },
+    );
+    const was = await PDFDocument.load(orig);
+    const now = await PDFDocument.load(a);
+    const contents = (d) => {
+      const c = d.getPage(1).node.Contents();
+      return c instanceof PDFArray ? c.size() : 1;
+    };
+    check(
+      'the updated file has every page, and the mark on page 2',
+      now.getPageCount() === 300 && contents(now) > contents(was),
+      { pages: now.getPageCount(), contents: [contents(was), contents(now)] },
+    );
+    /* and the app opens it again */
+    const AGAIN = join(CORPUS_DIR, 'smoke-appended.pdf');
+    writeFileSync(AGAIN, a);
+    await open(page, AGAIN);
+    check(
+      'the updated file opens and draws in the app',
+      await page.evaluate(() => window.ADDPDF.S.items.length === 300 && window.ADDPDF.S.items[0].rendered),
+    );
+    /* pages moved: the file is rebuilt, as before */
+    await page.evaluate(() => window.ADDPDF.moveItem(0, 1));
+    const b = await save();
+    const rebuilt = await page.evaluate(() => window.ADDPDF.appended);
+    check(
+      'with pages moved, Save rebuilds the file',
+      rebuilt === false && (await PDFDocument.load(b)).getPageCount() === 300,
+      {
+        appended: rebuilt,
+      },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- selecting text: across lines, over gaps, down one column ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
