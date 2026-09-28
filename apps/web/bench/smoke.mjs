@@ -1151,6 +1151,38 @@ try {
     await ctx.close();
   }
 
+  /* ---- where pdf.js's own worker cannot start inside the render worker
+     (WebView2 in the Windows app), its code runs in the render worker's
+     thread and pages are still drawn there ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser, '?rwfake=1');
+    await open(page, MIXED);
+    const got = await page
+      .waitForFunction(
+        () => {
+          const a = window.ADDPDF;
+          return a.renderWorker() !== 'wait' && a.S.items[0].rendered
+            ? {
+                state: a.renderWorker(),
+                mode: a.renderWorkerMode(),
+                drawn: a.S.items.filter((i) => i.rendered).length,
+              }
+            : null;
+        },
+        null,
+        { timeout: 30000 },
+      )
+      .then((h) => h.jsonValue())
+      .catch(() => null);
+    check(
+      'render worker in same-thread mode: it starts and draws the pages',
+      !!got && got.state === 'on' && got.mode === 'same-thread' && got.drawn > 0,
+      got,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- saving in the worker writes the same file the page would ---- */
   {
     /* every module's marks (annotate, draw, leader, docops, insert,
