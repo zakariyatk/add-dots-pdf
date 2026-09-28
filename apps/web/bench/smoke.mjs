@@ -495,6 +495,214 @@ try {
     await ctx.close();
   }
 
+  /* ---- errors are kept in this browser, for a report (js/health.js) ---- */
+  {
+    const { ctx, page } = await fresh(browser);
+    await ctx.grantPermissions(['clipboard-read', 'clipboard-write']);
+    await page.evaluate(() => {
+      setTimeout(() => {
+        throw new Error('smoke boom in C:/jobs/secret-plan.pdf');
+      }, 0);
+      Promise.reject(new Error('smoke promise left rejected'));
+    });
+    await page.waitForTimeout(300);
+    const kept = await page.evaluate(() => window.ADDPDF_HEALTH.errors().map((e) => e.where + ': ' + e.msg));
+    check(
+      'an uncaught error and a rejected promise are kept, file names hidden',
+      kept.some((m) => /page: .*smoke boom in C:\/jobs\/<file>\.pdf/.test(m)) &&
+        kept.some((m) => /page \(promise\): smoke promise left rejected/.test(m)) &&
+        !kept.join().includes('secret-plan'),
+      kept,
+    );
+    /* still there after a reload, and copied for a report from the home screen */
+    await page.reload();
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await page.click('#diagCopy');
+    await page.waitForTimeout(200);
+    const report = await page.evaluate(() => window.ADDPDF.lastDiagnostics || '');
+    const note = await page.textContent('#diagNote');
+    check(
+      '"Copy diagnostics" gives the browser, the memory and the errors kept, after a reload too',
+      /Browser: /.test(report) &&
+        /Errors \(\d+/.test(report) &&
+        report.includes('smoke boom') &&
+        !report.includes('secret-plan') &&
+        /2 errors recorded/.test(note),
+      { note, lines: report.split('\n').length },
+    );
+    await ctx.close();
+  }
+
+  /* ---- unsaved work comes back after the tab closes (crash recovery) ---- */
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: 'block',
+      acceptDownloads: true,
+    });
+    const errors = [];
+    const first = await ctx.newPage();
+    first.on('pageerror', (e) => errors.push(e.message));
+    await first.goto(URL);
+    await first.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await open(first, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+    await first.evaluate(async () => {
+      const S = window.ADDPDF.S;
+      S.items[1].shapes.push({ t: 'rect', a: [60, 60], b: [200, 140], c: '#E2483D', w: 2, id: 'rec1' });
+      S.items[2].rot = 90;
+      await window.ADDPDF.recoverNow();
+    });
+    /* the tab goes, unsaved */
+    await first.close({ runBeforeUnload: false });
+    const page = await ctx.newPage();
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await page
+      .waitForFunction(() => !document.getElementById('hRecover').hidden, null, { timeout: 5000 })
+      .catch(() => {});
+    const offered = await page.evaluate(() => ({
+      shown: !document.getElementById('hRecover').hidden,
+      rows: document.querySelectorAll('#recoverList .rrow').length,
+      text: document.getElementById('recoverList').textContent,
+    }));
+    check(
+      'after the tab closes with unsaved work, the next start offers it back',
+      offered.shown && offered.rows === 1 && /300 pages · 1 mark/.test(offered.text),
+      offered,
+    );
+    await page.click('#recoverList .rrow .btn.primary');
+    await page.waitForFunction(
+      () => window.ADDPDF.S.items.length === 300 && window.ADDPDF.S.items[0].rendered,
+      null,
+      {
+        timeout: 60000,
+      },
+    );
+    const back = await page.evaluate(() => {
+      const S = window.ADDPDF.S;
+      return {
+        pages: S.items.length,
+        marks: S.items[1].shapes.length,
+        mark: S.items[1].shapes[0]?.id,
+        rot: S.items[2].rot,
+      };
+    });
+    check(
+      'Restore brings back every page, the mark and the turn',
+      back.pages === 300 && back.marks === 1 && back.mark === 'rec1' && back.rot === 90,
+      back,
+    );
+    /* saved: nothing is kept any more */
+    await page.evaluate(() => window.ADDPDF.recoverNow());
+    await page.click('#btnSave');
+    const [dl] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }),
+      page.click('#saveGo'),
+    ]);
+    await dl.delete();
+    await page.waitForTimeout(500);
+    const left = await page.evaluate(
+      () =>
+        new Promise((res) => {
+          const r = indexedDB.open('adddots-pdf');
+          r.onsuccess = () => {
+            const tx = r.result.transaction(['recovery', 'recoverySrc'], 'readonly');
+            const a = tx.objectStore('recovery').count(),
+              b = tx.objectStore('recoverySrc').count();
+            tx.oncomplete = () => res({ records: a.result, files: b.result });
+          };
+        }),
+    );
+    check('once saved, no unsaved work is kept', left.records === 0 && left.files === 0, left);
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- a device short of memory keeps fewer pages drawn (low-memory mode) ---- */
+  {
+    const ctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: 'block',
+    });
+    /* a 2 GB phone, as the browser reports it */
+    await ctx.addInitScript(() =>
+      Object.defineProperty(Navigator.prototype, 'deviceMemory', { get: () => 2 }),
+    );
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    /* read down through thirty pages, a step at a time */
+    const readDown = async (page) => {
+      await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+      /* every page at its size first: until then the reader is held on page 1 */
+      await page.waitForFunction(() => window.ADDPDF.S.items.every((i) => i.page && !i.estimated), null, {
+        timeout: 60000,
+      });
+      for (let i = 0; i < 30; i++) {
+        await page.mouse.move(700, 450);
+        await page.mouse.wheel(0, 700);
+        /* each screen read: its pages drawn */
+        await page.waitForFunction(
+          () => {
+            const stage = document.getElementById('stage');
+            const top = stage.scrollTop,
+              bot = top + stage.clientHeight;
+            return window.ADDPDF.S.items.every(
+              (it) =>
+                it.rendered ||
+                !it.box ||
+                !it.box.isConnected ||
+                it.box.offsetTop > bot ||
+                it.box.offsetTop + it.box.offsetHeight < top,
+            );
+          },
+          null,
+          { timeout: 20000, polling: 50 },
+        );
+      }
+      await page.waitForTimeout(500);
+    };
+    const held = (page) =>
+      page.evaluate(() => {
+        const stage = document.getElementById('stage');
+        const top = stage.scrollTop,
+          bot = top + stage.clientHeight;
+        const gaps = window.ADDPDF.S.items
+          .filter((it) => it.rendered && it.box && it.box.isConnected)
+          .map((it) => {
+            const y = it.box.offsetTop,
+              h = it.box.offsetHeight;
+            return y + h < top ? top - (y + h) : y > bot ? y - bot : 0;
+          });
+        return { low: window.ADDPDF.lowMemory, drawn: gaps.length, far: Math.max(0, ...gaps), top };
+      });
+    await readDown(page);
+    const low = await held(page);
+    /* the same reading on this machine as it is */
+    const usual = await fresh(browser);
+    await readDown(usual.page);
+    const normal = await held(usual.page);
+    await usual.ctx.close();
+    check(
+      'a 2 GB device is in low-memory mode and keeps pages drawn only two screens out',
+      low.low === true && low.drawn > 0 && low.far <= 1800 && (normal.low || normal.far > 1800),
+      { low, normal },
+    );
+    const freed = await page.evaluate(() => window.ADDPDF.memoryPressure(true));
+    const after = await held(page);
+    check(
+      'memory running short: every page off screen gives its picture back',
+      freed && freed.pages > 0 && after.far === 0 && after.drawn > 0,
+      { freed, after },
+    );
+    await page.evaluate(() => window.ADDPDF.memoryPressure(false));
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- saving in the worker writes the same file the page would ---- */
   {
     /* every module's marks (annotate, draw, leader, docops, insert,

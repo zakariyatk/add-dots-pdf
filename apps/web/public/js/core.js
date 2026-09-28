@@ -42,7 +42,9 @@
     const failed = new Set();       /* keys the worker could not open */
     const api = { state: 'off', ready: Promise.resolve(false) };
     function err(name, message) { const e = new Error(message); e.name = name; return e; }
-    function stop() {
+    function stop(why) {
+      /* pages are drawn here from now on: worth knowing in a report */
+      if (why && window.ADDPDF_HEALTH) window.ADDPDF_HEALTH.log('render worker', why);
       api.state = 'off';
       if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
       waiting.forEach(function (w) { w.rej(err('RenderWorkerError', 'render worker stopped')); });
@@ -54,12 +56,12 @@
         api.state = 'wait';
         api.ready = new Promise(function (res) {
           /* a worker that has not answered in a few seconds is not coming */
-          const timer = setTimeout(function () { stop(); res(false); }, 4000);
+          const timer = setTimeout(function () { stop('did not answer'); res(false); }, 4000);
           worker.onmessage = function (e) {
             const m = e.data;
             if (m.op === 'hello') {
               clearTimeout(timer);
-              if (m.ok) api.state = 'on'; else stop();
+              if (m.ok) api.state = 'on'; else stop('could not start: ' + (m.why || 'unknown'));
               res(api.state === 'on');
               return;
             }
@@ -70,14 +72,15 @@
             else if (m.cancelled) w.rej(err('RenderingCancelledException', 'cancelled'));
             else {
               if (/^open failed/.test(m.error || '')) failed.add(w.key);
+              if (window.ADDPDF_HEALTH) window.ADDPDF_HEALTH.log('render worker', m.error || 'render failed');
               w.rej(err('RenderWorkerError', m.error || 'render failed'));
             }
           };
-          worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop(); res(false); };
+          worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop('failed: ' + (e.message || 'error')); res(false); };
           worker.postMessage({ op: 'hello' });
         });
       }
-    } catch (e) { stop(); }
+    } catch (e) { stop('could not be made: ' + e.message); }
 
     /* opens (or, with a password now known, reopens) these bytes in the
        worker; given the file they were read from, the worker reads that
@@ -159,6 +162,21 @@
   const COARSE = window.matchMedia && window.matchMedia('(pointer:coarse)').matches;
   const MAX_CANVAS_SIDE = COARSE ? 4096 : 8192;
   const MAX_CANVAS_PX = COARSE ? 5.5e6 : 22e6;
+  /* Low-memory mode. A device that says it has 4 GB or less, or a touch
+     device that does not say (iPhones and iPads, whose tabs are the first a
+     system closes), keeps fewer pages drawn and smaller bitmaps. ?lowmem=1
+     turns it on anywhere. And on any device, when the page's memory runs
+     near what the browser allows it, pages off screen give their pictures
+     back at once and the smaller caps hold until it eases. */
+  const MEM = {
+    low: /[?&]lowmem=1\b/.test(location.search) ||
+      (navigator.deviceMemory ? navigator.deviceMemory <= 4 : COARSE),
+    pressed: false,
+    relieved: 0,
+    tight: function () { return MEM.low || MEM.pressed; }
+  };
+  function capSide() { return MEM.tight() ? Math.min(MAX_CANVAS_SIDE, 4096) : MAX_CANVAS_SIDE; }
+  function capPx() { return MEM.tight() ? Math.min(MAX_CANVAS_PX, 4e6) : MAX_CANVAS_PX; }
   const THEMES = ['paper', 'sepia', 'dark'];
   const THEME_LABEL = { paper: 'Paper', sepia: 'Sepia', dark: 'Night' };
   /* the quick row: ten you reach for most. The full palette (theme colours
@@ -362,6 +380,8 @@
 
   function hardReset(keepDoc) {
     EXT.emit('reset');
+    /* the document being replaced: its unsaved work was let go of */
+    clearRecovery();
     S.items.forEach(function (it) { if (it.task) { try { it.task.cancel(); } catch (e) {} } });
     DETAILED.forEach(dropDetail);
     LIVE.clear(); TLIVE.clear(); MOUNTED.clear(); TMOUNTED.clear();
@@ -1067,7 +1087,7 @@
     const nearTop = heading > 0 ? behind : ahead, nearBot = heading > 0 ? ahead : behind;
     /* A page long scrolled past gives its bitmap back, so a long document
        costs the memory of a few screens, not of every page ever looked at. */
-    const keep = Math.max(3000, stage.clientHeight * 4);
+    const keep = MEM.tight() ? Math.max(1500, stage.clientHeight * 2) : Math.max(3000, stage.clientHeight * 4);
     const top = stage.scrollTop, bot = top + stage.clientHeight;
     /* Every position is read before anything is written: a write between two
        reads makes the browser lay the whole document out again, and with
@@ -1175,8 +1195,8 @@
   /* how much of full resolution one page bitmap may have at viewport v */
   function bitmapCap(v) {
     return Math.min(1,
-      MAX_CANVAS_SIDE / Math.max(v.width * DPR, v.height * DPR),
-      Math.sqrt(MAX_CANVAS_PX / Math.max(1, v.width * DPR * v.height * DPR)));
+      capSide() / Math.max(v.width * DPR, v.height * DPR),
+      Math.sqrt(capPx() / Math.max(1, v.width * DPR * v.height * DPR)));
   }
   async function paintItem(it) {
     await ensurePage(it);
@@ -1559,7 +1579,8 @@
        tools and all (46,000 elements for 2,000 pages) */
     if (!host.clientHeight) return;
     const top = host.scrollTop - 500, bot = host.scrollTop + host.clientHeight + 500;
-    const keepTop = host.scrollTop - 4000, keepBot = host.scrollTop + host.clientHeight + 4000;
+    const hold = MEM.tight() ? 1500 : 4000;
+    const keepTop = host.scrollTop - hold, keepBot = host.scrollTop + host.clientHeight + hold;
     /* read every position first, then write */
     let chrome = 0;
     if (!thumbChrome) {
@@ -4738,7 +4759,7 @@
     return a;
   }
 
-  function buildProject() {
+  function buildProject(withBytes) {
     const used = {};
     S.items.forEach(function (it) { if (it.src) used[it.src.id] = it.src; });
     const locs = {};
@@ -4748,7 +4769,9 @@
       baseName: S.baseName, current: S.current,
       sources: Object.keys(used).map(function (k) {
         const s = used[k];
-        return { id: s.id, name: s.name, synthetic: !!s.synthetic, b64: bytesToB64(s.bytes) };
+        const out = { id: s.id, name: s.name, synthetic: !!s.synthetic };
+        if (withBytes !== false) out.b64 = bytesToB64(s.bytes);
+        return out;
       }),
       items: S.items.map(function (it) {
         return {
@@ -4768,7 +4791,7 @@
     try {
       srcs = [];
       for (const s of (d.sources || [])) {
-        const bytes = b64ToBytes(s.b64);
+        const bytes = s.bytes || b64ToBytes(s.b64);
         const doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
         srcs.push({ old: s.id, name: s.name || 'document.pdf', synthetic: !!s.synthetic,
                     bytes: bytes, doc: doc });
@@ -5459,6 +5482,7 @@
       return e;
     }
     function stop(why) {
+      if (why && window.ADDPDF_HEALTH) window.ADDPDF_HEALTH.log('save worker', why);
       if (worker) { try { worker.terminate(); } catch (e) {} }
       worker = null; sent.clear();
       waiting.forEach(function (w) { w.rej(unavailable(why)); });
@@ -5482,7 +5506,7 @@
             w.rej(err);
           } else w.res(m);
         };
-        worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop('it failed'); res(false); };
+        worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop('failed: ' + (e.message || 'error')); res(false); };
         worker.postMessage({ op: 'hello' });
       });
       return starting;
@@ -5543,6 +5567,9 @@
      HTML. */
   function saveError(err, what) {
     const doing = what || 'This PDF could not be built';
+    if (window.ADDPDF_HEALTH) {
+      window.ADDPDF_HEALTH.log('save', (err && err.name ? err.name + ': ' : '') + (err && err.message || err), err && err.stack);
+    }
     if (err && err.name === 'EncryptedSourceError') {
       return doing + ': the original is password-protected (encrypted), and its pages would come ' +
         'out blank. Save an unprotected copy of it in the app that made it, then open that.';
@@ -5566,6 +5593,7 @@
       closePops();
       toast('Saved <b>' + esc(name) + '</b>');
       S.baseCount = S.items.length;
+      clearRecovery();
     } catch (e) {
       $('saveNote').innerHTML = '<span style="color:var(--danger)">' + esc(saveError(e)) + '</span>';
     } finally {
@@ -7332,6 +7360,8 @@
     if (sheetOpen) closeSheet(true);
     $('hResume').hidden = !S.items.length;
     $('hResumeName').textContent = docName();
+    renderHealth();
+    renderRecovery();
     $('openPanel').hidden = false;
     $('hMain').scrollTop = 0;
     navOn('hTop');
@@ -7400,8 +7430,14 @@
   function idb() {
     return new Promise(function (res, rej) {
       try {
-        const r = indexedDB.open('adddots-pdf', 1);
-        r.onupgradeneeded = function () { r.result.createObjectStore('recent', { keyPath: 'key' }); };
+        const r = indexedDB.open('adddots-pdf', 2);
+        r.onupgradeneeded = function () {
+          const db = r.result;
+          if (!db.objectStoreNames.contains('recent')) db.createObjectStore('recent', { keyPath: 'key' });
+          /* crash recovery: a tab's unsaved session, and its source files */
+          if (!db.objectStoreNames.contains('recovery')) db.createObjectStore('recovery', { keyPath: 'key' });
+          if (!db.objectStoreNames.contains('recoverySrc')) db.createObjectStore('recoverySrc', { keyPath: 'key' });
+        };
         r.onsuccess = function () { res(r.result); };
         r.onerror = function () { rej(r.error); };
       } catch (e) { rej(e); }
@@ -7722,6 +7758,232 @@
   $('btnTheme').dataset.label = 'Reading theme · Paper';
   applyLayout();
   renderRecent();
+
+  /* ---- crash recovery ----
+     While there is unsaved work, the session (page order, turns, crops,
+     marks, pins) is kept in this browser a few seconds after each change,
+     with its source files, once each. If the tab crashes or is closed, the
+     next start offers to restore it. A tab keeps its own record and says
+     it is alive every half minute; only records whose tab has gone are
+     offered. Saving, or opening another file, clears it. Files over 150 MB
+     in all are not kept (browser storage is not meant for that much). */
+  const TAB = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const REC_MAX_BYTES = 150 * 1048576, REC_STALE_MS = 45000, REC_MAX_AGE = 14 * 86400000;
+  const rec = { sig: '', srcs: new Set(), aliveAt: 0, changedAt: 0, busy: false, tooBig: false };
+  function recRun(stores, mode, fn) {
+    return idb().then(function (db) {
+      return new Promise(function (res, rej) {
+        const tx = db.transaction(stores, mode);
+        const q = fn(tx);
+        tx.oncomplete = function () { db.close(); res(q && q.result); };
+        tx.onerror = tx.onabort = function () { db.close(); rej(tx.error); };
+      });
+    });
+  }
+  /* what changed: the pages and marks, and the pins without their photos' bytes */
+  function recSignature() {
+    const locs = Object.keys(S.locs).map(function (k) {
+      const L = S.locs[k];
+      return [k, L.n, L.ref, L.desc, L.boq, L.note, (L.photos || []).length];
+    });
+    return JSON.stringify([S.baseName, S.items.map(function (it) {
+      return [it.src && it.src.id, it.num, it.rot || 0, it.crop, it.shapes];
+    }), locs]);
+  }
+  async function recoverTick() {
+    if (rec.busy || !S.items.length || rec.tooBig) return;
+    if (!isDirty()) { if (rec.sig) clearRecovery(); return; }
+    const now = Date.now(), sig = recSignature();
+    if (sig === rec.sig && now - rec.aliveAt < REC_STALE_MS / 2) return;
+    const used = {};
+    S.items.forEach(function (it) { if (it.src) used[it.src.id] = it.src; });
+    const srcs = Object.keys(used).map(function (k) { return used[k]; });
+    if (srcs.reduce(function (n, s) { return n + s.bytes.length; }, 0) > REC_MAX_BYTES) { rec.tooBig = true; return; }
+    if (sig !== rec.sig) rec.changedAt = now;
+    const fresh = srcs.filter(function (s) { return !rec.srcs.has(s.id); });
+    const project = sig === rec.sig ? null : buildProject(false);
+    rec.busy = true;
+    try {
+      await recRun(['recovery', 'recoverySrc'], 'readwrite', function (tx) {
+        fresh.forEach(function (s) {
+          /* the file as opened is stored as it is; otherwise its bytes */
+          const blob = s.file && s.fileOf === s.bytes ? s.file : new Blob([s.bytes], { type: 'application/pdf' });
+          tx.objectStore('recoverySrc').put({ key: TAB + ':' + s.id, tab: TAB, blob: blob });
+        });
+        const st = tx.objectStore('recovery');
+        if (project) {
+          st.put({
+            key: TAB, tab: TAB, time: rec.changedAt, alive: now, name: docName(), pages: S.items.length,
+            marks: S.items.reduce(function (n, it) { return n + it.shapes.length; }, 0), project: project
+          });
+        } else {
+          const q = st.get(TAB);
+          q.onsuccess = function () { if (q.result) { q.result.alive = now; st.put(q.result); } };
+        }
+      });
+      fresh.forEach(function (s) { rec.srcs.add(s.id); });
+      rec.sig = sig; rec.aliveAt = now;
+    } catch (e) {
+      /* storage full or blocked: recovery is a nicety, never an error for the reader */
+      if (window.ADDPDF_HEALTH) window.ADDPDF_HEALTH.log('recovery', e && e.message);
+    } finally { rec.busy = false; }
+  }
+  function dropRecord(tab) {
+    try { localStorage.removeItem(GONE + tab); } catch (e) { /* fine */ }
+    return recRun(['recovery', 'recoverySrc'], 'readwrite', function (tx) {
+      tx.objectStore('recovery').delete(tab);
+      const src = tx.objectStore('recoverySrc');
+      const q = src.getAllKeys();
+      q.onsuccess = function () {
+        (q.result || []).forEach(function (k) { if (String(k).indexOf(tab + ':') === 0) src.delete(k); });
+      };
+    }).catch(function () {});
+  }
+  function clearRecovery() {
+    rec.sig = ''; rec.srcs.clear(); rec.aliveAt = 0; rec.tooBig = false;
+    return dropRecord(TAB);
+  }
+  /* a tab being closed says so, in localStorage (a database write started
+     now would not finish): its record is offered at once next time */
+  const GONE = 'adpdf.tabGone.';
+  window.addEventListener('pagehide', function () {
+    if (!rec.sig) return;
+    try { localStorage.setItem(GONE + TAB, String(Date.now())); } catch (e) { /* the half-minute rule still holds */ }
+  });
+  window.addEventListener('pageshow', function (e) {
+    /* back from the browser's page cache: still alive after all */
+    if (e.persisted) { try { localStorage.removeItem(GONE + TAB); } catch (err) { /* fine */ } }
+  });
+  function tabGone(tab) {
+    try { return localStorage.getItem(GONE + tab) != null; } catch (e) { return false; }
+  }
+  setInterval(recoverTick, 4000);
+
+  async function renderRecovery() {
+    const host = $('recoverList');
+    if (!host) return;
+    let all = [];
+    try { all = await recRun(['recovery'], 'readonly', function (tx) { return tx.objectStore('recovery').getAll(); }) || []; }
+    catch (e) { all = []; }
+    const now = Date.now();
+    all.filter(function (r) { return now - r.time > REC_MAX_AGE; }).forEach(function (r) { dropRecord(r.tab); });
+    const gone = all.filter(function (r) {
+      return r.tab !== TAB && now - r.time <= REC_MAX_AGE && (tabGone(r.tab) || now - (r.alive || 0) > REC_STALE_MS);
+    }).sort(function (a, b) { return b.time - a.time; }).slice(0, 3);
+    host.innerHTML = '';
+    $('hRecover').hidden = !gone.length;
+    gone.forEach(function (r) {
+      const row = document.createElement('div'); row.className = 'rrow';
+      const what = document.createElement('span'); what.className = 'rwhat';
+      what.innerHTML = '<b>' + esc(r.name || 'document.pdf') + '</b> · ' + r.pages + ' page' + (r.pages === 1 ? '' : 's') +
+        ' · ' + r.marks + ' mark' + (r.marks === 1 ? '' : 's') + ' · ' + esc(whenLabel(r.time));
+      const go = document.createElement('button'); go.className = 'btn primary'; go.textContent = 'Restore';
+      const no = document.createElement('button'); no.className = 'btn'; no.textContent = 'Discard';
+      go.addEventListener('click', function () { restoreRecord(r); });
+      no.addEventListener('click', function () { dropRecord(r.tab).then(renderRecovery); });
+      row.appendChild(what); row.appendChild(go); row.appendChild(no);
+      host.appendChild(row);
+    });
+  }
+  async function restoreRecord(r) {
+    let blobs;
+    try {
+      blobs = await recRun(['recoverySrc'], 'readonly', function (tx) { return tx.objectStore('recoverySrc').getAll(); });
+    } catch (e) { toast('That work could not be read back'); return; }
+    const mine = {};
+    (blobs || []).forEach(function (b) { if (b.tab === r.tab) mine[b.key.slice(r.tab.length + 1)] = b.blob; });
+    const d = Object.assign({}, r.project);
+    try {
+      d.sources = await Promise.all((r.project.sources || []).map(async function (s) {
+        const b = mine[String(s.id)];
+        if (!b) throw new Error('missing');
+        return Object.assign({}, s, { bytes: new Uint8Array(await b.arrayBuffer()) });
+      }));
+    } catch (e) { toast('Its file is no longer kept in this browser'); return; }
+    if (await openProject(d)) {
+      /* it lives in this tab now */
+      await dropRecord(r.tab);
+      S.metaBase = '<b>' + esc(r.name || S.baseName) + '</b> · restored';
+      $('meta').innerHTML = S.metaBase;
+      toast('Restored your unsaved work on <b>' + esc(r.name || S.baseName) + '</b>');
+    }
+  }
+  EXT.recoverNow = recoverTick;
+
+  /* ---- "Something not working?": the errors kept in this browser (js/health.js) ---- */
+  function renderHealth() {
+    const H = window.ADDPDF_HEALTH, note = $('diagNote');
+    if (!H || !note) return;
+    const n = H.errors().length;
+    note.textContent = n
+      ? n + (n === 1 ? ' error' : ' errors') + ' recorded in this browser. Copy the diagnostics and paste them into your report.'
+      : 'No errors recorded in this browser. If something goes wrong, copy the diagnostics into your report.';
+  }
+  function copyText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) return navigator.clipboard.writeText(text);
+    return new Promise(function (res, rej) {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      ok ? res() : rej(new Error('copy refused'));
+    });
+  }
+  $('diagCopy').addEventListener('click', function () {
+    const H = window.ADDPDF_HEALTH;
+    if (!H) return;
+    const text = H.diagnostics({
+      'Render worker': RW.state,
+      'Low-memory mode': (MEM.low ? 'on' : 'off') + (MEM.pressed ? ', memory short now' : '') +
+        (MEM.relieved ? ', pictures released ' + MEM.relieved + (MEM.relieved === 1 ? ' time' : ' times') : ''),
+      'Document open': S.items.length ? S.items.length + ' pages' : 'none'
+    });
+    EXT.lastDiagnostics = text;
+    copyText(text).then(function () { toast('Diagnostics copied: paste them into your report'); },
+      function () { toast('Could not copy: your browser blocked it'); });
+  });
+  renderHealth();
+  renderRecovery();
+
+  /* ---- memory running short ----
+     Chrome says how much the page's script holds and how much it may; other
+     browsers do not, and there low-memory mode (MEM.low) is what there is.
+     Past three quarters of the limit, every page and thumbnail off screen
+     gives its picture back now rather than when scrolled far enough, and the
+     smaller caps hold until use falls under half. */
+  function relieveMemory() {
+    const pages = [], thumbs = [];
+    LIVE.forEach(function (it) { if (!it.box || !it.box.isConnected || screenGap(it) > 0) pages.push(it); });
+    const host = $('railPages'), top = host.scrollTop, bot = top + host.clientHeight;
+    TLIVE.forEach(function (it) {
+      const th = it.thumb;
+      if (!th || !th.isConnected || rail.hidden || th.offsetTop + th.offsetHeight < top || th.offsetTop > bot) thumbs.push(it);
+    });
+    pages.forEach(releaseBitmap);
+    thumbs.forEach(function (it) {
+      it.thumbCanvas.width = it.thumbCanvas.height = 1;
+      it.thumbDone = false;
+      TLIVE.delete(it);
+    });
+    MEM.relieved++;
+    return { pages: pages.length, thumbs: thumbs.length };
+  }
+  function setPressed(on) {
+    if (on === MEM.pressed) return null;
+    MEM.pressed = on;
+    return on ? relieveMemory() : null;
+  }
+  if (performance.memory) {
+    setInterval(function () {
+      const m = performance.memory, use = m.usedJSHeapSize / m.jsHeapSizeLimit;
+      if (!MEM.pressed && use > 0.75) setPressed(true);
+      else if (MEM.pressed && use < 0.5) setPressed(false);
+    }, 5000);
+  }
+  /* for the tests: which mode this is, and memory running short on demand */
+  EXT.lowMemory = MEM.low;
+  EXT.memoryPressure = setPressed;
 
   /* ---- hand the feature modules what they need, and nothing more ---- */
   Object.assign(EXT, {

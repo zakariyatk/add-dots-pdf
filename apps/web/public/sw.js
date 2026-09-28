@@ -25,7 +25,7 @@
    Paths are relative so the app works from a subfolder (adddots.com/pdfreader/)
    exactly as it does from a domain root. */
 
-const VERSION = 'v27';
+const VERSION = 'v28';
 const CACHE = 'adpdf-' + VERSION;
 
 /* Everything the app is made of. The pdf.js worker is in here too — without it
@@ -54,6 +54,7 @@ const SHELL = [
   'js/site-nav.js',
   'js/pwa.js',
   /* draws the pages, off the main thread (see core.js) */
+  'js/health.js',
   'js/render-worker.js',
   'js/save-worker.js',
   'js/vendor/pdf.min.js',
