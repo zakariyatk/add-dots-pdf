@@ -618,7 +618,16 @@
   let resizeRaf = 0;
   /* The page a jump went to, held in view while the pages above it take their
      real size (flushResizes); let go by the reader or a zoom (goTo, zoomTo). */
-  let jumpHold = null;
+  let jumpHold = null, jumpAt = 0;
+  /* A jump glides there (the stage scrolls smoothly), and a zoom scrolls at
+     once, which stops the glide where it is: a zoom straight after a jump
+     to page 30 held page 8 still instead. So a zoom first lands a jump still
+     on its way. One that landed long ago is not brought back. */
+  function landJump() {
+    if (!jumpHold || !jumpHold.box || !jumpHold.box.isConnected || performance.now() - jumpAt > 2000) return;
+    const top = jumpHold.box.offsetTop - 14;
+    if (Math.abs(stage.scrollTop - top) > 1) stage.scrollTo({ top: top, behavior: 'instant' });
+  }
   function queueResize(it) {
     resizeQ.add(it);
     if (!resizeRaf) resizeRaf = requestAnimationFrame(flushResizes);
@@ -877,6 +886,7 @@
     if (Math.abs(next - S.scale) < 0.0005) return;
     if (S.editing) closeEditor(true);
     S.fit = null;
+    landJump();
     jumpHold = null;
     const r = stage.getBoundingClientRect();
     const anchor = grabAnchor(cx == null ? r.left + r.width / 2 : cx,
@@ -911,6 +921,7 @@
     glide.x = cx; glide.y = cy;
     clearTimeout(zoomTimer);
     if (glide.raf) return;
+    landJump();
     anchorBox = null;
     const a = grabAnchor(cx, cy);
     anchorBox = a ? a.box : null;
@@ -5867,7 +5878,7 @@
     const it = S.items[n - 1]; if (!it) return;
     S.jumping = true;
     stage.scrollTop = it.box.offsetTop - 14;
-    jumpHold = it;
+    jumpHold = it; jumpAt = performance.now();
     mountPage(it);
     setCurrent(n);
     setTimeout(function () { S.jumping = false; }, 320);
