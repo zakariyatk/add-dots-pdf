@@ -236,8 +236,9 @@
 
   .textLayer{position:absolute;inset:0;overflow:hidden;line-height:1}
   .textLayer span{position:absolute;white-space:pre;transform-origin:0 0;color:transparent;cursor:text}
-  .textLayer span.hit{background:rgba(242,193,78,.42);border-radius:2px}
-  .textLayer span.hit.now{background:rgba(242,193,78,.85)}
+  /* a search match, in the words of the page (core.js markItem); the one stepped to, stronger */
+  .textLayer mark.hitw{background:rgba(242,193,78,.42);color:transparent;border-radius:2px;padding:0}
+  .textLayer mark.hitw.now{background:rgba(242,193,78,.85)}
   .textLayer ::selection{background:rgba(242,193,78,.42)}
 
   .anno{position:absolute;left:0;top:0;pointer-events:none;overflow:visible;z-index:2}
@@ -1006,6 +1007,8 @@
   /* while a zoom gesture is live the scroll must jump exactly, not glide, or the
      anchor drifts; the text layer is stale until the repaint, so it waits */
   body.zooming .stage{scroll-behavior:auto}
-  body.zooming .textLayer{visibility:hidden}
+  /* out of layout, not only hidden, while a zoom glides: the words' places follow
+     the zoom (--sf), and laying them out every frame slowed the glide */
+  body.zooming .textLayer{display:none}
 
   @media (prefers-reduced-motion:reduce){*{transition:none!important}.stage{scroll-behavior:auto}}

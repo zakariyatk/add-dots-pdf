@@ -586,6 +586,20 @@
       try { await ensurePage(it); } catch (e) {}
       if (epoch !== loadEpoch) return;
     }
+    indexText(epoch);
+  }
+
+  /* Then the text of every page is read, in the background, a few pages at a
+     time and only while no page is being drawn: a search looks through text
+     already here instead of reading every page first (seven seconds for
+     2,000 pages). */
+  async function indexText(epoch) {
+    for (let i = 0; i < S.items.length; i += 8) {
+      await renderIdle();
+      if (epoch !== loadEpoch) return;
+      await Promise.all(S.items.slice(i, i + 8).map(textOf));
+      if (epoch !== loadEpoch) return;
+    }
   }
 
   /* Pages that just learned their real size are resized together once a
@@ -758,6 +772,7 @@
     }
     it.anno.setAttribute('width', w);
     it.anno.setAttribute('height', h);
+    setTextScale(it, s);
     /* Mid-gesture the viewBox is left where it was: the SVG then scales its own
        marks to the new size for free, so no page has to rebuild its overlay. */
     if (!live) it.anno.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
@@ -795,9 +810,8 @@
       if (!it.canvas) return;
       if (it.task) { try { it.task.cancel(); } catch (e) {} it.task = null; }
       it.rendered = false;
-      /* The picture is kept, stretched, until the repaint lands. The words
-         would sit in the wrong place meanwhile, so they hide instead. */
-      if (it.tl) it.tl.style.visibility = 'hidden';
+      /* The picture is kept, stretched, until the repaint lands; the words
+         follow the zoom already (--sf, set by sizeItem) */
     });
     renderVisible(); drawVisibleThumbs();
     detailSoon(0);
@@ -1172,7 +1186,7 @@
       it.canvas.style.height = Math.floor(v.height) + 'px';
       it.rendered = true;
       LIVE.add(it);
-      buildTextLayer(it, v).then(function () { if (S.query) markItem(it); });
+      buildTextLayer(it, v).then(function () { markAndReveal(it); });
       detailSoon(0);
       return;
     }
@@ -1234,7 +1248,7 @@
       it.inner.appendChild(it.blankMark);
     }
     /* the words come after the picture and do not hold up the next page */
-    buildTextLayer(it, v).then(function () { if (S.query) markItem(it); });
+    buildTextLayer(it, v).then(function () { markAndReveal(it); });
     /* zoomed past what one bitmap holds: the part on screen, sharp */
     if (k < 1) detailSoon(0);
   }
@@ -1335,15 +1349,25 @@
     });
   }
 
+  /* The words are laid out once per turn of the page, at 100%, in units the
+     layer's --sf (its zoom) scales: a zoom changes one CSS variable instead
+     of asking pdf.js for the text again and rebuilding and re-measuring every
+     word. The fit to each word's width (fitTextLayer) holds at any zoom. */
   async function buildTextLayer(it, viewport) {
+    setTextScale(it, viewport.scale);
+    if (it.tl.firstChild && it.tlRot === viewport.rotation) {
+      it.tl.style.visibility = '';
+      return;
+    }
     const gen = it.tlGen = (it.tlGen || 0) + 1;
     let tc;
     try { tc = await it.page.getTextContent(); } catch (e) { return; }
-    if (gen !== it.tlGen || (it.vp && !sameView(viewport, it.vp))) return;   /* zoomed again meanwhile */
+    if (gen !== it.tlGen || (it.vp && it.vp.rotation !== viewport.rotation)) return;   /* turned again meanwhile */
+    const unit = it.page.getViewport({ scale: 1, rotation: viewport.rotation });
     const frag = document.createDocumentFragment();
     tc.items.forEach(function (item) {
       if (!item.str || !item.str.trim()) return;
-      const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
+      const tx = pdfjsLib.Util.transform(unit.transform, item.transform);
       const fh = Math.hypot(tx[2], tx[3]);
       const st = tc.styles ? tc.styles[item.fontName] : null;
       let asc = fh;
@@ -1351,27 +1375,33 @@
       else if (st && st.descent) asc = (1 + st.descent) * fh;
       const el = document.createElement('span');
       el.textContent = item.str;
-      el.style.left = tx[4] + 'px';
-      el.style.top = (tx[5] - asc) + 'px';
-      el.style.fontSize = fh + 'px';
+      el.style.left = 'calc(var(--sf) * ' + tx[4] + 'px)';
+      el.style.top = 'calc(var(--sf) * ' + (tx[5] - asc) + 'px)';
+      el.style.fontSize = 'calc(var(--sf) * ' + fh + 'px)';
       el.style.fontFamily = (st && st.fontFamily) || 'sans-serif';
-      el.dataset.asc = asc; el.dataset.fh = fh;
-      el.dataset.tw = item.width * viewport.scale;
+      /* at 100%: multiply by the zoom for screen pixels */
+      el.dataset.top = tx[5] - asc; el.dataset.asc = asc; el.dataset.fh = fh;
+      el.dataset.tw = item.width;
       frag.appendChild(el);
     });
     it.tl.innerHTML = '';
     it.tl.appendChild(frag);
+    it.tlRot = viewport.rotation;
     it.tl.style.visibility = '';
     /* the words are stretched to their width on the page; that needs them
        measured, so a page out of the document fits them when it comes back */
     if (it.mounted) fitTextLayer(it); else it.tlFit = true;
   }
+  function setTextScale(it, s) {
+    if (it.tl && it.tlScale !== s) { it.tl.style.setProperty('--sf', s); it.tlScale = s; }
+  }
   function fitTextLayer(it) {
     it.tlFit = false;
     const spans = Array.from(it.tl.children);
     const ws = spans.map(function (el) { return el.getBoundingClientRect().width; });
+    const sf = it.tlScale || 1;
     spans.forEach(function (el, i) {
-      const target = +el.dataset.tw;
+      const target = +el.dataset.tw * sf;
       if (ws[i] > 0 && target > 0) el.style.transform = 'scaleX(' + (target / ws[i]) + ')';
     });
   }
@@ -4833,6 +4863,7 @@
   /* find the whole line of original text under a point (inner coords) */
   function lineUnder(it, x, y) {
     const spans = it.tl.querySelectorAll('span');
+    const sf = it.tlScale || S.scale;   /* the word sizes are stored at 100% */
     if (!spans.length) return null;
     const ir = it.inner.getBoundingClientRect();
     let hit = null, hitR = null;
@@ -4859,7 +4890,7 @@
 
     let text = '', prev = null;
     group.forEach(function (g) {
-      if (prev && g.x - (prev.x + prev.w) > parseFloat(prev.el.dataset.fh || 8) * 0.25) text += ' ';
+      if (prev && g.x - (prev.x + prev.w) > parseFloat(prev.el.dataset.fh || 8) * sf * 0.25) text += ' ';
       text += g.el.textContent;
       prev = g;
     });
@@ -4868,11 +4899,11 @@
     const top = Math.min.apply(null, group.map(function (g) { return g.y; }));
     const right = Math.max.apply(null, group.map(function (g) { return g.x + g.w; }));
     const bottom = Math.max.apply(null, group.map(function (g) { return g.y + g.h; }));
-    const fh = parseFloat(hit.dataset.fh || 12);
-    const asc = parseFloat(hit.dataset.asc || fh * 0.78);
+    const fh = parseFloat(hit.dataset.fh || 12) * sf;
+    const asc = parseFloat(hit.dataset.asc || 12 * 0.78) * sf;
     return {
       text: text, left: left, top: top, width: right - left, height: bottom - top,
-      baseline: parseFloat(hit.style.top) + asc, sizePx: fh
+      baseline: parseFloat(hit.dataset.top || 0) * sf + asc, sizePx: fh
     };
   }
 
@@ -5703,7 +5734,7 @@
   async function searchNow() {
     const q = $('findIn').value.trim();
     S.query = q; S.hits = []; S.hitIndex = -1;
-    $('hitList').innerHTML = ''; hitsShown = 0; clearMarks();
+    $('hitList').innerHTML = ''; hitsShown = 0; revealFor = null; clearMarks();
     if (q.length < 2) { $('hitCount').textContent = q ? 'Type at least two characters' : ''; return; }
     $('hitCount').textContent = 'Reading text…';
     const needle = q.toLowerCase();
@@ -5715,18 +5746,24 @@
       if (S.query !== q) return;
       for (let k = 0; k < texts.length; k++) {
         const t = texts[k], hay = t.toLowerCase();
-        let from = 0, idx;
-        while ((idx = hay.indexOf(needle, from)) !== -1) {
-          S.hits.push({ page: at + k + 1, snippet: snippetOf(t, idx, q.length) });
+        let from = 0, idx, nth = 0;
+        /* every match (the list is written as it is read, see showHits); only
+           a word found tens of thousands of times stops early. There used to
+           be a limit of 400 that stopped only the page it was reached on, so
+           every later page then listed just its first match. */
+        while (S.hits.length < MAX_HITS && (idx = hay.indexOf(needle, from)) !== -1) {
+          S.hits.push({ page: at + k + 1, nth: nth++, snippet: snippetOf(t, idx, q.length) });
           from = idx + needle.length;
-          if (S.hits.length > 400) break;
         }
       }
+      if (S.hits.length >= MAX_HITS) break;
       if (total > 40) $('hitCount').textContent = 'Reading text… ' + Math.min(total, at + BATCH) + ' of ' + total + ' pages';
     }
-    $('hitCount').textContent = S.hits.length
-      ? S.hits.length + (S.hits.length === 1 ? ' match' : ' matches') + ' · Enter to step through'
-      : 'No matches';
+    $('hitCount').textContent = S.hits.length >= MAX_HITS
+      ? 'The first ' + MAX_HITS.toLocaleString() + ' matches · Enter to step through'
+      : S.hits.length
+        ? S.hits.length + (S.hits.length === 1 ? ' match' : ' matches') + ' · Enter to step through'
+        : 'No matches';
     hitsShown = 0;
     showHits(HIT_CHUNK);
     S.items.forEach(function (it) { if (it.rendered) markItem(it); });
@@ -5738,6 +5775,7 @@
      found thousands of times made thousands of rows (7,000 elements for
      2,376 matches), most of them never looked at. */
   const HIT_CHUNK = 150;
+  const MAX_HITS = 50000;
   let hitsShown = 0;
   function showHits(upTo) {
     const n = Math.min(S.hits.length, upTo);
@@ -5784,27 +5822,78 @@
     if (el) el.classList.add('active');
     if (el) el.scrollIntoView({ block: 'nearest' });
     const hit = S.hits[i];
-    goTo(hit.page);
-    /* hold the hit itself: a new search may have emptied the list by then */
-    setTimeout(function () { const it = S.items[hit.page - 1]; if (it) markItem(it); }, 280);
+    const it = S.items[hit.page - 1];
+    if (!it) return;
+    /* the match stepped from may be on another page: it is current no more */
+    stage.querySelectorAll('mark.hitw.now').forEach(function (m) { m.classList.remove('now'); });
+    /* the match is shown where it is on its page: a step to the next match
+       on the page being read scrolls there, rather than back to the top */
+    revealFor = it;
+    if (it.box && it.mounted && it.tl && it.tl.firstChild && screenGap(it) === 0) markAndReveal(it);
+    else {
+      goTo(hit.page);
+      /* hold the hit itself: a new search may have emptied the list by then;
+         a page drawn meanwhile marks and reveals it itself (paintItem) */
+      setTimeout(function () { markAndReveal(it); }, 280);
+    }
   }
   function stepHit(d) { if (S.hits.length) activateHit((S.hitIndex + d + S.hits.length) % S.hits.length); }
+  /* Each match is marked where it is in the words of the page, not the whole
+     run of text around it, and the one stepped to more strongly. The run's
+     text is split around its matches; clearing puts it back whole. */
+  let revealFor = null;          /* the page whose current match still wants showing */
   function clearMarks() {
-    S.items.forEach(function (it) {
-      it.tl && it.tl.querySelectorAll('span.hit').forEach(function (s) { s.classList.remove('hit', 'now'); });
+    S.items.forEach(function (it) { if (it.tl) unmark(it); });
+  }
+  function unmark(it) {
+    it.tl.querySelectorAll('mark.hitw').forEach(function (m) {
+      const span = m.parentNode;
+      if (span && span.parentNode) { const whole = span.textContent; span.textContent = whole; }
     });
   }
   function markItem(it) {
-    if (!it.tl || !S.query) return;
+    if (!it.tl) return;
+    unmark(it);
+    if (!S.query) return;
     const q = S.query.toLowerCase();
-    const active = S.hits[S.hitIndex] && S.items[S.hits[S.hitIndex].page - 1] === it;
-    let first = true;
-    it.tl.querySelectorAll('span').forEach(function (s) {
-      const has = s.textContent.toLowerCase().indexOf(q) !== -1;
-      s.classList.toggle('hit', has);
-      s.classList.toggle('now', has && active && first);
-      if (has && first) first = false;
+    const cur = S.hits[S.hitIndex];
+    const nth = cur && S.items[cur.page - 1] === it ? cur.nth : -1;
+    const marks = [];
+    it.tl.querySelectorAll('span').forEach(function (span) {
+      const t = span.textContent, low = t.toLowerCase();
+      let idx = low.indexOf(q);
+      if (idx === -1) return;
+      const frag = document.createDocumentFragment();
+      let from = 0;
+      while (idx !== -1) {
+        if (idx > from) frag.appendChild(document.createTextNode(t.slice(from, idx)));
+        const m = document.createElement('mark');
+        m.className = 'hitw';
+        m.textContent = t.slice(idx, idx + q.length);
+        frag.appendChild(m);
+        marks.push(m);
+        from = idx + q.length;
+        idx = low.indexOf(q, from);
+      }
+      if (from < t.length) frag.appendChild(document.createTextNode(t.slice(from)));
+      span.textContent = '';
+      span.appendChild(frag);
     });
+    /* a match the search found across two runs of text has no mark of its
+       own: the last one on the page stands in */
+    if (nth >= 0 && marks.length) marks[Math.min(nth, marks.length - 1)].classList.add('now');
+  }
+  function markAndReveal(it) {
+    if (!S.query) return;
+    markItem(it);
+    if (revealFor !== it) return;
+    const m = it.tl && it.tl.querySelector('mark.hitw.now');
+    if (!m) return;
+    revealFor = null;
+    const r = m.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+    const dy = r.top < sr.top + 40 || r.bottom > sr.bottom - 40 ? r.top - (sr.top + sr.height / 2) : 0;
+    const dx = r.left < sr.left || r.right > sr.right ? r.left - (sr.left + sr.width / 2) : 0;
+    if (dx || dy) stage.scrollBy({ top: dy, left: dx, behavior: 'instant' });
   }
 
   /* ---------------- tools & mode bar ---------------- */
