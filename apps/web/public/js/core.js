@@ -7529,31 +7529,57 @@
     return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
+  /* "Good morning", and the account's name when signed in */
+  function helloText() {
+    const h = new Date().getHours();
+    const part = h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+    const who = EXT.account && EXT.account.user && EXT.account.user();
+    if (who && who.email) {
+      const first = who.email.split('@')[0].split(/[._\-+]/)[0];
+      if (first) return part + ', ' + first.charAt(0).toUpperCase() + first.slice(1);
+    }
+    return recentRecs.length ? part : 'Welcome to ADD DOTS PDF';
+  }
+  function refreshHello() { $('hHello').textContent = helloText(); }
+
   let recentToken = 0, recentRecs = [];
   async function renderRecent() {
     const my = ++recentToken;
     const all = await recentAll();
     if (my !== recentToken) return;
     recentRecs = all;
-    $('hHello').textContent = all.length ? 'Welcome back' : 'Welcome to Add Dots PDF';
+    refreshHello();
     $('recentClear').hidden = !all.length;
     const list = $('recentList');
     if (!all.length) {
       list.innerHTML = '<div class="rempty">Files you open will appear here, so you can pick up where you left off.</div>';
       return;
     }
-    list.innerHTML = all.map(function (r, i) {
-      const bits = [bytesLabel(r.size)];
+    /* the search box above filters the list by name */
+    const q = ($('hSearch').value || '').trim().toLowerCase();
+    const rows = all.map(function (r, i) {
+      if (q && r.name.toLowerCase().indexOf(q) < 0) return '';
+      const bits = [];
       if (r.pages) bits.push(r.pages + (r.pages === 1 ? ' page' : ' pages'));
-      if (!r.blob) bits.push('select again to open');
+      bits.push(bytesLabel(r.size));
       return '<div class="rrow" role="button" tabindex="0" data-i="' + i + '">' +
         '<span class="fi"></span>' +
         '<span class="nm"><b>' + esc(r.name) + '</b><small>' + esc(bits.join(' · ')) + '</small></span>' +
         '<span class="when">' + esc(whenLabel(r.time)) + '</span>' +
+        '<span class="sz">' + esc(bytesLabel(r.size)) + '</span>' +
+        (r.blob
+          ? '<span class="tag">On this device</span>'
+          : '<span class="tag off" title="Too large to keep here: select it again to open">Select again</span>') +
         '<button class="x" data-x="' + i + '" title="Remove from list" aria-label="Remove ' + esc(r.name) + ' from list">&times;</button>' +
         '</div>';
     }).join('');
+    list.innerHTML = rows || '<div class="rempty">No recent PDF matches “' + esc(q) + '”.</div>';
   }
+  $('hSearch').addEventListener('input', function () {
+    renderRecent();
+    /* searching is about the list: bring it into view */
+    if (this.value) $('hRecent').scrollIntoView({ block: 'nearest' });
+  });
 
   async function openRecent(i) {
     const r = recentRecs[i]; if (!r) return;
@@ -8037,7 +8063,7 @@
   /* ---- hand the feature modules what they need, and nothing more ---- */
   Object.assign(EXT, {
     S: S, SVGNS: SVGNS, COLORS: COLORS, WIDTHS: WIDTHS, FONTS: FONTS,
-    $: $, toast: toast, esc: esc, icon: icon, ICON: ICON, download: download, zipStore: zipStore,
+    $: $, toast: toast, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
     snapLine: snapLine, snapBox: snapBox, constrainPt: constrainPt,
     selList: selList, setGroup: setGroup,
     snapshot: snapshot, setUndoState: setUndoState,

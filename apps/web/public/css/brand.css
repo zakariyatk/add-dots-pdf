@@ -1,0 +1,298 @@
+/* ---------------------------------------------------------------
+   The ADD DOTS look (design/AD PDF Editor Web.dc.html): a teal sky over
+   a soft grey desk, dark teal for what is primary, Figtree type, round
+   cards. Loaded after app.css, pro.css and light.css, it changes how
+   things look and nothing else: the ids, the structure the scripts use,
+   and the page's own reading themes (Paper, Sepia, Night) stay as they
+   were. The pages' marks keep their own fonts (Helvetica, as saved).
+   --------------------------------------------------------------- */
+
+/* Figtree (UI) and JetBrains Mono (small labels), in the app so that it
+   looks the same offline and in the Windows and phone apps. SIL Open Font
+   License 1.1: assets/fonts/OFL-Figtree.txt, OFL-JetBrainsMono.txt. */
+@font-face {
+  font-family: "Figtree";
+  src: url("../assets/fonts/Figtree-latin-wght.woff2") format("woff2");
+  font-weight: 300 900;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  src: url("../assets/fonts/JetBrainsMono-latin-500.woff2") format("woff2");
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --sans: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  /* the brand's own colours, the same in both interfaces */
+  --deep: #06303A;         /* primary: buttons, the drop panel, what is on */
+  --deep-hover: #0A4452;
+  --sky: #8DDCEA;
+  --teal: #0A6C7D;         /* teal as text and links: 5.9:1 on white */
+  --teal-bright: #1D9BB2;  /* selection rings */
+}
+body { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale }
+button, input, select, textarea { font-family: inherit }
+
+/* ---- light interface: the design's palette ---- */
+body[data-ui="light"] {
+  --chrome: #FFFFFF;
+  --chrome-2: #F2F5F6;
+  --stage: #E9EEEF;
+  --line: #E3E9EA;
+  --text: #0B2A31;
+  --text-dim: #51686E;          /* 6:1 on white, 5.5:1 on --chrome-2 */
+  --marker: #0A6C7D;
+  --marker-ink: #0A6C7D;
+  --accent-ink: #FFFFFF;
+  --hover: rgba(6, 48, 58, .06);
+  --shadow-pop: 0 18px 40px -16px rgba(6, 48, 58, .35), 0 2px 6px rgba(6, 48, 58, .08);
+}
+body[data-ui="light"] .btn.on { background: #E2F4F8; border-color: #BFE3EA; color: var(--teal) }
+body[data-ui="light"] :is(.btn.primary, .pick, .authgo) { background: var(--deep); color: #FFFFFF; border-color: transparent }
+body[data-ui="light"] :is(.btn.primary, .pick, .authgo):hover:not(:disabled) { background: var(--deep-hover) }
+body[data-ui="light"] .toast { background: #0B2A31; border-color: #0B2A31 }
+body[data-ui="light"] .toast b { color: #8FE0EE }
+body[data-ui="light"] .thumb.active .shell,
+body[data-ui="light"] .thumb.picked .shell { box-shadow: 0 0 0 2px rgba(29, 155, 178, .45) }
+body[data-ui="light"] .hit-item mark { background: rgba(255, 230, 107, .75) }
+body[data-ui="light"] #btnHome:hover:not(:disabled) { background: var(--deep); color: #FFFFFF }
+
+/* ================================================================
+   Home screen
+   ================================================================ */
+body[data-ui="light"] .home {
+  background: linear-gradient(180deg, #8DDCEA 0, #C4ECF2 220px, #EEF2F3 420px, #F2F4F5 640px) #F2F4F5;
+}
+body[data-ui="light"] .adnav { background: transparent; border-bottom-color: transparent }
+/* one AD mark: where the side menu shows it, the site strip leaves it out */
+@media (min-width: 901px) {
+  .adnav { justify-content: flex-end }
+  .adnav-logo { display: none }
+}
+body[data-ui="light"] .hnav { background: transparent; border-right: none }
+
+/* ---- side menu ---- */
+.hnav { width: 248px; padding: 24px 16px; gap: 28px }
+.hnav .brand { display: flex; align-items: center; gap: 12px; padding: 0 8px }
+.hnav .brand .label { display: none }
+.hlogo {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center;
+  background: #050505; color: #FFFFFF; outline: 2px solid #9A9A9A; outline-offset: -6px;
+  font: 700 14px/1 Arial, Helvetica, sans-serif; letter-spacing: 1px;
+}
+.hname { display: flex; flex-direction: column }
+.hname b { font-weight: 800; font-size: 15px; letter-spacing: .04em; color: var(--text) }
+.hname small { font-size: 13px; color: var(--text-dim) }
+body[data-ui="light"] .hname small { color: #34494E }
+.hnav nav { gap: 4px }
+.hnav nav button {
+  height: 46px; padding: 0 16px; border-radius: 23px; gap: 12px;
+  font-size: 15px; font-weight: 500; color: var(--text);
+}
+body[data-ui="light"] .hnav nav button { color: #1E363C }
+body[data-ui="light"] .hnav nav button:hover { background: rgba(255, 255, 255, .6); color: #1E363C }
+.hnav nav button.on,
+body[data-ui="light"] .hnav nav button.on { background: var(--deep); color: #FFFFFF; box-shadow: none; font-weight: 600 }
+.hnav nav svg { width: 19px; height: 19px; stroke-width: 2 }
+.hnav .safe {
+  flex-direction: column; gap: 8px; padding: 16px; border-radius: 20px;
+  font-size: 13px; line-height: 1.45;
+}
+body[data-ui="light"] .hnav .safe { background: #FFFFFF; color: var(--text-dim) }
+.hnav .safe svg,
+body[data-ui="light"] .hnav .safe svg { width: 22px; height: 22px; margin: 0; stroke: #22A06B; stroke-width: 2 }
+.hnav .safe b { display: block; margin-bottom: 4px; font-size: 14px; font-weight: 600; color: var(--text) }
+.hacct { margin: 0 }
+.hacct-btn { border-radius: 20px; padding: 12px 14px }
+body[data-ui="light"] .hacct-btn { background: #FFFFFF }
+body[data-ui="light"] .hacct-btn:hover { background: #FFFFFF; box-shadow: 0 10px 24px -16px rgba(6, 48, 58, .45) }
+
+/* ---- the main column ---- */
+.hmain { padding: 32px 40px 64px }
+.hwrap { max-width: 1240px }
+
+/* greeting, search, and the round buttons */
+.htop { align-items: center; gap: 20px; margin-bottom: 32px }
+.hhead { flex: 1; min-width: 260px }
+.htop h1 { font-size: 34px; font-weight: 700; letter-spacing: -.02em }
+.htop p { margin-top: 6px; font-size: 16px }
+body[data-ui="light"] .htop p { color: #34494E }
+.hsearch {
+  flex: 0 1 380px; min-width: 220px; height: 52px; border-radius: 26px; padding: 0 20px;
+  display: flex; align-items: center; gap: 12px; background: var(--chrome); cursor: text;
+}
+body[data-ui="light"] .hsearch { background: #FFFFFF }
+.hsearch:focus-within { outline: 2px solid var(--teal-bright); outline-offset: 1px }
+.hsearch svg { width: 19px; height: 19px; flex: none; fill: none; stroke: var(--text); stroke-width: 2; stroke-linecap: round }
+.hsearch input {
+  flex: 1; min-width: 0; height: 100%; border: none; outline: none; background: none;
+  font-size: 15px; color: var(--text);
+}
+.hsearch input::placeholder { color: #5B7076 }
+.htop .resume {
+  height: 52px; border-radius: 26px; padding: 0 20px; border: none;
+  font-size: 15px; font-weight: 600; color: var(--text); background: var(--chrome);
+}
+body[data-ui="light"] .htop .resume { background: #FFFFFF; color: var(--deep) }
+.htop .resume:hover,
+body[data-ui="light"] .htop .resume:hover { color: var(--teal); box-shadow: 0 10px 24px -16px rgba(6, 48, 58, .5) }
+#hResume { white-space: nowrap; min-width: 0 }
+#hResume b { min-width: 0 }
+/* the light / dark switch: a round button, its name read out, not shown */
+.htop .resume.uimode { width: 52px; padding: 0; justify-content: center }
+.htop .resume.uimode svg { width: 20px; height: 20px; stroke-width: 2 }
+#hUiLbl {
+  position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0);
+  clip-path: inset(50%); white-space: nowrap;
+}
+
+/* ---- the drop panel: dark teal, a dashed line inside ---- */
+.hdrop,
+body[data-ui="light"] .hdrop {
+  position: relative; gap: 24px; padding: 42px; margin-bottom: 32px;
+  background: var(--deep); border: none; border-radius: 32px; color: #FFFFFF;
+}
+.hdrop::before {
+  content: ""; position: absolute; inset: 14px; border: 1.5px dashed rgba(255, 255, 255, .25);
+  border-radius: 24px; pointer-events: none; transition: border-color .15s;
+}
+.hdrop.hot,
+body[data-ui="light"] .hdrop.hot { background: #0A3E4A }
+.hdrop.hot::before { border-color: var(--sky) }
+.hdrop .art {
+  width: 72px; height: 72px; border-radius: 22px; display: grid; place-items: center;
+  background: rgba(255, 255, 255, .12);
+}
+.hdrop .art :is(.pg, .dot) { display: none }
+.hdrop .art .plus { width: 30px; height: 30px; fill: none; stroke: #FFFFFF; stroke-width: 2; stroke-linecap: round }
+.hdrop .txt {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; column-gap: 24px; align-items: center;
+}
+.hdrop .txt > * { grid-column: 1 / -1 }
+.hdrop .txt > :is(h2, p) { grid-column: 1 }
+.hdrop .txt > .acts { grid-column: 2; grid-row: 1 / span 2 }
+.hdrop h2,
+body[data-ui="light"] .hdrop h2 { margin: 0 0 6px; font-size: 24px; font-weight: 700; color: #FFFFFF }
+.hdrop p { margin: 0; font-size: 15px; line-height: 1.45; color: #A9C4C9 }
+.hdrop .acts { gap: 10px; justify-content: flex-end }
+.hdrop .acts .pick,
+body[data-ui="light"] .hdrop .acts .pick {
+  height: 52px; padding: 0 24px; border-radius: 26px; gap: 10px;
+  background: #FFFFFF; color: var(--deep); font-size: 16px; font-weight: 600;
+}
+.hdrop .acts .pick:hover,
+body[data-ui="light"] .hdrop .acts .pick:hover:not(:disabled) { background: #E2F4F8; color: var(--deep) }
+.hdrop .pick svg { width: 18px; height: 18px }
+.hdrop .install,
+body[data-ui="light"] .hdrop .install {
+  height: 52px; padding: 0 22px; border-radius: 26px; background: transparent;
+  border: 1.5px solid rgba(255, 255, 255, .3); color: #FFFFFF; font-size: 16px; font-weight: 600;
+}
+.hdrop .install:hover,
+body[data-ui="light"] .hdrop .install:hover { border-color: #FFFFFF; color: #FFFFFF }
+.hdrop .or { flex-basis: 100%; text-align: right; font-size: 12.5px; color: #A9C4C9 }
+.hdrop .pw input { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .3); color: #FFFFFF; border-radius: 12px; height: 44px }
+.hdrop .pw input::placeholder { color: #A9C4C9 }
+.hdrop .pw .pick { height: 44px }
+.hdrop .err { color: #FFC2B8 }
+
+/* ---- sections ---- */
+.hsec { margin-bottom: 32px }
+.hsec h3,
+body[data-ui="light"] .hsec h3 { margin: 0 0 16px; font-size: 22px; font-weight: 700; color: var(--text); text-transform: none; letter-spacing: 0 }
+.hsec h3 button { font-size: 14px; font-weight: 500 }
+.hsec .hnote { font-size: 14px }
+
+/* ---- tools: a coloured tile each ---- */
+.tgrid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px }
+.tcard {
+  flex-direction: column; gap: 14px; padding: 18px; border-radius: 24px; border: none;
+  background: var(--chrome); transition: transform .15s, box-shadow .15s;
+}
+body[data-ui="light"] .tcard { background: #FFFFFF }
+.tcard:hover,
+body[data-ui="light"] .tcard:hover { transform: translateY(-2px); background: var(--chrome); border-color: transparent;
+  box-shadow: 0 14px 30px -18px rgba(6, 48, 58, .45) }
+body[data-ui="light"] .tcard:hover { background: #FFFFFF }
+.tcard .ic,
+body[data-ui="light"] .tcard .ic {
+  width: 46px; height: 46px; border-radius: 14px; border: none;
+  background: color-mix(in srgb, var(--c) 18%, transparent); color: var(--c);
+}
+body[data-ui="light"] .tcard .ic { background: color-mix(in srgb, var(--c) 12%, #FFFFFF) }
+.tcard .ic svg { width: 22px; height: 22px; stroke-width: 2 }
+.tcard b { font-size: 16px; font-weight: 600; margin-bottom: 4px }
+.tcard small { font-size: 13.5px; line-height: 1.4 }
+
+/* ---- recent files: a table ---- */
+.rlist,
+body[data-ui="light"] .rlist { border: none; border-radius: 26px; padding: 6px 22px; background: var(--chrome) }
+body[data-ui="light"] .rlist { background: #FFFFFF }
+#recentList .rrow {
+  display: grid; grid-template-columns: 48px minmax(0, 1fr) 150px 80px 130px 28px; gap: 16px;
+  padding: 14px 0; border-bottom: 1px solid var(--line); background: none;
+}
+body[data-ui="light"] #recentList .rrow { border-bottom-color: #EEF1F2 }
+#recentList .rrow:last-child { border-bottom: none }
+#recentList .rrow:hover { background: none }
+#recentList .rrow:hover .nm b { color: var(--teal) }
+body:not([data-ui="light"]) #recentList .rrow:hover .nm b { color: var(--sky) }
+#recentList .rrow:focus-visible { outline: 2px solid var(--teal-bright); outline-offset: 2px; border-radius: 12px }
+#recentList .fi,
+body[data-ui="light"] #recentList .rrow .fi {
+  width: 48px; height: 48px; border-radius: 14px; display: grid; place-items: center;
+  background: #FDECEC; box-shadow: none;
+}
+#recentList .fi::after {
+  content: "PDF"; position: static; width: 26px; height: 30px; padding: 0; border-radius: 5px;
+  background: #E5322D; color: #FFFFFF; font: 800 8px/30px var(--sans); text-align: center;
+}
+#recentList .nm b { font-size: 15.5px; font-weight: 600 }
+#recentList .nm small { font-size: 13px; margin-top: 3px }
+#recentList :is(.when, .sz) { width: auto; font-size: 14px; color: var(--text-dim); white-space: nowrap }
+#recentList .nm small { display: none }
+.rrow .tag {
+  justify-self: start; height: 28px; padding: 0 12px; border-radius: 14px; display: inline-flex; align-items: center;
+  font-size: 12.5px; font-weight: 600; white-space: nowrap; background: var(--chrome-2); color: var(--text-dim);
+}
+.rrow .tag.off { background: #FEF4E2; color: #8A5300 }
+body:not([data-ui="light"]) .rrow .tag.off { background: #3A2A0B; color: #F7C979 }
+#recentList .x { opacity: .6 }
+.rempty { font-size: 14px }
+
+/* narrower: the row folds its date and size under the name */
+@media (max-width: 1060px) {
+  #recentList .rrow { grid-template-columns: 48px minmax(0, 1fr) 28px }
+  #recentList :is(.when, .sz, .tag) { display: none }
+  #recentList .nm small { display: block }
+}
+@media (max-width: 900px) {
+  .hmain { padding: 22px 18px 40px }
+}
+@media (max-width: 760px) {
+  .hmain { padding: 16px 16px calc(28px + env(safe-area-inset-bottom)) }
+  .htop { gap: 12px; margin-bottom: 20px }
+  .htop h1 { font-size: 26px }
+  .htop p { font-size: 14px }
+  .hsearch { flex: 1 1 100%; order: 3; height: 46px }
+  .htop .resume { height: 46px }
+  #hResume { flex: 1 1 100%; order: 2; justify-content: center }
+  .htop .resume.uimode { width: 46px }
+  .hdrop, body[data-ui="light"] .hdrop { padding: 30px 22px; gap: 16px; border-radius: 26px }
+  .hdrop::before { inset: 10px; border-radius: 18px }
+  .hdrop .txt { display: block }
+  .hdrop .acts { justify-content: center; margin-top: 16px }
+  .hdrop .or { text-align: center }
+  .hdrop .pick, .hdrop .install,
+  body[data-ui="light"] :is(.hdrop .pick, .hdrop .install) { height: 48px; font-size: 15px }
+  .hsec h3, body[data-ui="light"] .hsec h3 { font-size: 19px }
+  .tgrid { grid-template-columns: 1fr 1fr; gap: 10px }
+  .tcard { padding: 14px; gap: 10px; border-radius: 20px }
+  .tcard b { font-size: 14.5px }
+  .rlist, body[data-ui="light"] .rlist { padding: 4px 14px; border-radius: 20px }
+}

@@ -859,6 +859,34 @@ try {
       done,
     );
 
+    /* the home screen's search box filters the recent files by name */
+    const found = await page.evaluate(async () => {
+      const box = document.getElementById('hSearch');
+      const rows = () => document.querySelectorAll('#recentList .rrow').length;
+      const settle = () => new Promise((r) => setTimeout(r, 300));
+      /* the list is drawn when the home screen shows: draw it now */
+      box.dispatchEvent(new Event('input'));
+      for (let i = 0; i < 50 && !rows(); i++) await settle();
+      const all = rows();
+      box.value = 'FROM-files';
+      box.dispatchEvent(new Event('input'));
+      await settle();
+      const hit = rows();
+      box.value = 'no such file';
+      box.dispatchEvent(new Event('input'));
+      await settle();
+      const miss = rows();
+      const note = document.getElementById('recentList').textContent;
+      box.value = '';
+      box.dispatchEvent(new Event('input'));
+      return { all, hit, miss, note };
+    });
+    check(
+      'home: Search your PDFs filters the recent files by name',
+      found.all >= 1 && found.hit === 1 && found.miss === 0 && /No recent PDF matches/.test(found.note),
+      found,
+    );
+
     /* Share: the app is not served from the web, so it shares through the
        website in js/config.js (shareServer), and its links point there */
     const shareCalls = [];
@@ -1126,6 +1154,12 @@ try {
       'accounts: after a restart the app is still signed in',
       again.user && again.user.email === 'zak@example.com' && again.home === 'zak@example.com',
       again,
+    );
+    const hello = await page.evaluate(() => document.getElementById('hHello').textContent);
+    check(
+      'home: the greeting names the signed-in account',
+      /^Good (morning|afternoon|evening), Zak$/.test(hello),
+      hello,
     );
 
     /* sign out, from the toolbar's account button (behind the home screen: the home entry) */
