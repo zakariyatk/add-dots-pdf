@@ -177,6 +177,7 @@ try {
         rendered: a && a.S ? a.S.items.filter((i) => i.rendered).length : null,
         sources: a && a.S ? a.S.sources.map((s) => s.name) : null,
         worker: a && a.renderWorker ? a.renderWorker() : null,
+        workerMode: a && a.renderWorkerMode ? a.renderWorkerMode() : null,
         errors: window.ADDPDF_HEALTH ? window.ADDPDF_HEALTH.session().slice(0, 8) : null,
         err: document.getElementById('errMsg').textContent,
       };

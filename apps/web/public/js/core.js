@@ -52,7 +52,8 @@
     }
     try {
       if (typeof OffscreenCanvas !== 'undefined' && typeof createImageBitmap === 'function') {
-        worker = new Worker('js/render-worker.js');
+        /* ?rwfake=1 (tests): pdf.js's worker code in the render worker's own thread */
+        worker = new Worker('js/render-worker.js' + (/[?&]rwfake=1\b/.test(location.search) ? '?fake=1' : ''));
         api.state = 'wait';
         api.ready = new Promise(function (res) {
           /* A worker that has not answered in 20 s is not coming. Pages are
@@ -64,6 +65,7 @@
             const m = e.data;
             if (m.op === 'hello') {
               clearTimeout(timer);
+              api.mode = m.mode || 'nested';
               if (m.ok) api.state = 'on'; else stop('could not start: ' + (m.why || 'unknown'));
               res(api.state === 'on');
               return;
@@ -8052,6 +8054,10 @@
     drawPageInto: drawPageInto,
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */
     renderWorker: function () { return RW.state; },
+    /* 'nested': pdf.js's own worker inside the render worker; 'same-thread':
+       its worker code in the render worker's thread (where the nested one
+       cannot start) */
+    renderWorkerMode: function () { return RW.mode || null; },
     /* zoomed past the bitmap cap, the part on screen is drawn sharp (Stage D2) */
     hasDetail: true,
     pdfjsLib: pdfjsLib, PDFLib: PDFLib,

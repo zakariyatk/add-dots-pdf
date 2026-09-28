@@ -37,11 +37,17 @@ const docShim = {
 };
 
 let ready = false, whyNot = '';
+/* 'nested' (pdf.js's own worker inside this one) or 'same-thread' */
+let mode = 'nested';
 try {
   importScripts('vendor/pdf.min.js');
   /* pdf.js decides its worker from window.location, which a worker lacks:
-     hand it one directly */
-  pdfjsLib.GlobalWorkerOptions.workerPort = new Worker('vendor/pdf.worker.min.js');
+     hand it one directly. ?fake=1 (tests) starts in same-thread mode. */
+  if (!/[?&]fake=1\b/.test(self.location.search)) {
+    pdfjsLib.GlobalWorkerOptions.workerPort = new Worker('vendor/pdf.worker.min.js');
+  } else {
+    sameThread();
+  }
   ready = typeof OffscreenCanvas !== 'undefined' &&
     !!new OffscreenCanvas(1, 1).getContext('2d') &&
     typeof OffscreenCanvas.prototype.transferToImageBitmap === 'function';
@@ -292,9 +298,67 @@ async function drawWithPdfium(entry, page, viewport, m) {
   }
 }
 
+/* pdf.js here runs its own worker inside this one. Where that nested worker
+   cannot load (WebView2 in the Windows app does not always serve a worker's
+   own requests through the app's protocol), pdf.js waits for it forever and
+   no page is ever drawn, although this worker said it was ready. So the
+   first hello opens a one-page PDF first, and says ready only once that has
+   worked; otherwise the page draws every page itself. */
+const PROBE_PDF = '%PDF-1.4\n1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n' +
+  '2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n' +
+  '3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 8 8]>>endobj\n' +
+  'trailer<</Root 1 0 R>>\n%%EOF\n';
+/* Where pdf.js's own worker cannot start, its worker code runs in this
+   thread instead (pdf.js's same-thread mode): still off the page's thread,
+   only parsing and drawing share one. */
+function sameThread() {
+  const port = pdfjsLib.GlobalWorkerOptions.workerPort;
+  if (port) { try { port.terminate(); } catch (e) {} }
+  pdfjsLib.GlobalWorkerOptions.workerPort = null;
+  importScripts('vendor/pdf.worker.min.js');   /* sets globalThis.pdfjsWorker */
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'vendor/pdf.worker.min.js';
+  mode = 'same-thread';
+}
+/* one try at opening the probe: resolves true or false, never hangs */
+function tryOpen(ms) {
+  return new Promise(function (res) {
+    let task = null;
+    const timer = setTimeout(function () {
+      if (task) task.destroy().catch(function () {});
+      res(false);
+    }, ms);
+    try {
+      task = pdfjsLib.getDocument({
+        data: new TextEncoder().encode(PROBE_PDF), ownerDocument: docShim, disableFontFace: true
+      });
+      task.promise.then(function (doc) { return doc.getPage(1); }).then(function () {
+        clearTimeout(timer);
+        task.destroy().catch(function () {});
+        res(true);
+      }, function () { clearTimeout(timer); res(false); });
+    } catch (e) { clearTimeout(timer); res(false); }
+  });
+}
+let probed = null;
+function probe() {
+  if (!ready) return Promise.resolve();
+  if (probed) return probed;
+  probed = tryOpen(8000).then(function (ok) {
+    if (ok || mode === 'same-thread') return ok;
+    try { sameThread(); } catch (e) { return false; }
+    return tryOpen(8000);
+  }).then(function (ok) {
+    if (!ok) { ready = false; whyNot = 'pdf.js did not start in the worker'; }
+  });
+  return probed;
+}
+
 self.onmessage = function (e) {
   const m = e.data;
-  if (m.op === 'hello') { postMessage({ op: 'hello', ok: ready, why: whyNot }); return; }
+  if (m.op === 'hello') {
+    probe().then(function () { postMessage({ op: 'hello', ok: ready, why: whyNot, mode: mode }); });
+    return;
+  }
   if (m.op === 'open') { openDoc(m); return; }
   if (m.op === 'close') {
     const entry = docs.get(m.key);
