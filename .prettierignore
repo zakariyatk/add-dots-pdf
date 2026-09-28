@@ -10,3 +10,7 @@ package-lock.json
 
 # recorded output, written by the /__golden/ recorder
 packages/engine/test/golden/
+
+# native projects: Xcode and Gradle write these, and cap sync copies the web app in
+apps/mobile/ios/
+apps/mobile/android/
