@@ -396,6 +396,45 @@ annotation is added to the page's list directly instead, so nothing but the
 list changes (and an update onto the original stays small). The saved files
 open in qpdf with no warnings and every annotation's appearance there.
 
+### Stage H: a long session (`stress.mjs`, `results/stress-long.json`)
+
+`node bench/stress.mjs --rounds 24` keeps one tab open for a whole session:
+it opens the report, the CAD sheets, the scans and the 2,000 pages in turn,
+six times over, and on each one jumps through, scrolls, zooms in and out,
+searches, adds a mark and saves. After every round it collects the page's
+garbage and records the page's JS heap, its elements and canvases, and the
+browser's memory by process. A leak shows as a line that keeps rising where
+the same file should come back to the same place.
+
+It found one. The thumbnail rail built every thumbnail of a file opened
+after another, with its tools: 46,474 elements for the 2,000 pages, carried
+on into the next file (the report then had 9,208 where it first had 3,643).
+The new file's thumbnails, not yet sized, all stood at one spot and all read
+as near view; so did every thumbnail while the search tab covered the rail.
+The rail now waits while its list is not laid out, skips thumbnails without
+a size yet (the layout calls it back) and mounts at most 60 at a time: the
+2,000 pages now hold 6,685 elements. The smoke test checks it.
+
+After that fix, over 24 rounds (browser MB, the same file one lap apart):
+
+| file               | lap 1 | lap 2 | lap 3 | lap 4 | lap 5 | lap 6 |
+| ------------------ | ----- | ----- | ----- | ----- | ----- | ----- |
+| medium-report-300p | 531   | 706   | 850   | 888   | 890   | 839   |
+| cad-a1-8sheets     | 679   | 750   | 878   | 924   | 955   | 922   |
+| scans-40p          | 1135  | 1274  | 1430  | 1421  | 1338  | 1382  |
+| large-text-2000p   | 857   | 1006  | 933   | 969   | 1020  | 915   |
+
+The browser's memory climbs over the first three laps and then holds, moving
+up and down within a band; the page's JS heap (9, 6, 6 and 34 MB), its
+elements and its canvases come back to the same values every lap, and no
+error is raised in the 24 rounds. Each worker, measured through DevTools,
+also holds the same for the same file every lap: pdf.js's parser, the save
+worker (the open file's copy), and the render worker, which keeps 106 MB of
+WebAssembly memory once PDFium has drawn a heavy page of the scans: it is
+freed inside, but WebAssembly memory never shrinks. So the climb is each
+part reaching its high-water mark (V8's heaps, PDFium's memory, the
+browser's caches), not something kept that should have gone.
+
 ### Choosing the drawing engine (Stage D0)
 
 Before moving drawing off the main thread, three engines were compared in

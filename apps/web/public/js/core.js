@@ -1552,6 +1552,10 @@
   function drawVisibleThumbs() {
     if (rail.hidden || !S.items.length) return;
     const host = $('railPages');
+    /* not laid out (another panel shows in the rail, or it is opening):
+       every thumbnail reads as at the top, and all of them were mounted,
+       tools and all (46,000 elements for 2,000 pages) */
+    if (!host.clientHeight) return;
     const top = host.scrollTop - 500, bot = host.scrollTop + host.clientHeight + 500;
     const keepTop = host.scrollTop - 4000, keepBot = host.scrollTop + host.clientHeight + 4000;
     /* read every position first, then write */
@@ -1568,7 +1572,12 @@
       const it = S.items[i];
       if (!it.thumb) continue;
       if (it.thumb.offsetTop > bot) break;
+      /* a new file's thumbnails before the layout sizes them all stand at
+         one spot, all "near": they wait for their size (relayout calls
+         back). And never more than a screenful or two at once. */
+      if (!it.thumb.offsetHeight) continue;
       near.push(it);
+      if (near.length >= 60) break;
     }
     const drop = [], away = [];
     TLIVE.forEach(function (it) {
