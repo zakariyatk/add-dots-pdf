@@ -30,6 +30,7 @@ import { isText, type AnyMark, type Mark, type PageItem, type Source, type TextM
 import { dashOf, hexToRgb01, shCap, shJoin, shOp } from './style';
 import { drawLine, embedFallbacks, needsUnicode, textIn, textWidth, type UnicodeFontSource } from './text';
 import { readXrefTail, reserveNumbers, snapshot, writeUpdate } from './append';
+import { annotRect, commitAnnot, isAnnotMark, scratchPage } from './annots';
 
 const PDF_CAP = [LineCapStyle.Butt, LineCapStyle.Round, LineCapStyle.Projecting];
 const PDF_JOIN = [LineJoinStyle.Miter, LineJoinStyle.Round, LineJoinStyle.Bevel];
@@ -59,7 +60,10 @@ export type Extra = Record<string, unknown> & {
   unicode?: (text?: string) => Promise<PDFFont[]>;
   fallback?: PDFFont[] | null;
 };
-export type BuildOptions = { photos?: boolean } & Record<string, unknown>;
+/** photos: add the photo pages for the pins. annots: save markups as PDF
+    comments (annotations), editable in a reader, instead of painting them
+    into the page (see annots.ts). */
+export type BuildOptions = { photos?: boolean; annots?: boolean } & Record<string, unknown>;
 
 export interface PinOut {
   s: AnyMark;
@@ -284,12 +288,27 @@ async function compose(
 
   const slots = await pagesFor();
 
-  slots.forEach((p, i) => {
+  /* markups kept editable: each one painted onto a page of its own, which
+     becomes the look of its annotation (annots.ts); the rest onto the page */
+  const editable = !!(opts && opts.annots);
+  slots.forEach((page, i) => {
     const it = items[i]!;
+    const onto = (s: AnyMark, draw: (p: PDFPage) => void) => {
+      if (!editable || !isAnnotMark(s)) {
+        draw(page);
+        return;
+      }
+      const scratch = scratchPage(out);
+      draw(scratch);
+      commitAnnot(out, page, scratch, s, annotRect(s, measureT));
+    };
 
     /* text patches and text first, so marks sit on top */
     it.shapes.forEach((s) => {
       if (!isText(s)) return;
+      onto(s, (p) => paintText(p, s));
+    });
+    function paintText(p: PDFPage, s: TextMark) {
       if (s.bg) {
         const r = textRect(s, measureT);
         const bo = s.r ? rotPt([r.x, r.y], [s.a[0], s.a[1]], s.r) : [r.x, r.y];
@@ -364,10 +383,13 @@ async function compose(
           });
         }
       });
-    });
+    }
 
     it.shapes.forEach((any) => {
       if (any.t === 'text' || any.t === 'pin') return;
+      onto(any, (p) => paintMark(p, any));
+    });
+    function paintMark(p: PDFPage, any: AnyMark) {
       const painter = painters[any.t];
       if (painter) {
         painter(p, any, { out, doc: out, it, index: i, fonts: embedded, extra });
@@ -431,8 +453,9 @@ async function compose(
           });
         }
       }
-    });
+    }
 
+    const p = page;
     if (it.crop) {
       p.setCropBox(it.crop.x, it.crop.y, it.crop.w, it.crop.h);
       p.setMediaBox(it.crop.x, it.crop.y, it.crop.w, it.crop.h);

@@ -5548,8 +5548,10 @@
       const photos = !$('savePhotosRow').hidden && $('savePhotos').checked;
       if (photos) toast('Building the PDF with photo pages…');
       /* onto the original where it can be: a few kilobytes appended, and
-         what a rebuild drops (bookmarks, links) kept */
-      download(await buildPdf(S.items, null, { photos: photos, append: true }, 'blob'), name);
+         what a rebuild drops (bookmarks, links) kept; markups as PDF
+         comments, editable in a reader, unless flattened */
+      const annots = !$('saveFlat').checked;
+      download(await buildPdf(S.items, null, { photos: photos, append: true, annots: annots }, 'blob'), name);
       closePops();
       toast('Saved <b>' + esc(name) + '</b>');
       S.baseCount = S.items.length;

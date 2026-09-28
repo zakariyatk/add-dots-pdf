@@ -372,6 +372,30 @@ What it costs: an update keeps the original whole, so a file never gets
 smaller by being saved, and earlier revisions inside the original (its own
 incremental updates) stay in it, as they do in Acrobat's Save.
 
+### Stage F3: markups saved as PDF comments
+
+Save now keeps markups editable: a highlight, underline or strike, ink, a
+sticky note, a box, ellipse, line or arrow, a text box and a stamp each
+become a PDF annotation of their own kind (Highlight, Underline, StrikeOut,
+Ink, Text, Square, Circle, Line, FreeText, Stamp) with their colour,
+opacity, points and comment text (a note's text and its replies), so
+Acrobat lists them with the comments and can move, edit or delete them.
+Measurements, pins, pictures, tables, watermarks, headers and footers,
+signatures and a text edit's patch over the original words stay painted
+into the page. "Flatten markups into the page" in the Save dialog paints
+them all in, as before (`packages/engine/src/annots.ts`, `opts.annots`).
+
+How each looks is not left to the reader: it is painted by the same code
+that flattens it, onto a page of its own that is never added to the file,
+and that drawing becomes the annotation's appearance, over a box around the
+mark in page coordinates. The engine's tests check, for each of the 21
+editable marks in the fixtures, that the appearance is exactly what
+flattening paints onto the page, and that the page itself is left as it was.
+pdf-lib's own `addAnnot` wraps the page's content in `q`..`Q` first; the
+annotation is added to the page's list directly instead, so nothing but the
+list changes (and an update onto the original stays small). The saved files
+open in qpdf with no warnings and every annotation's appearance there.
+
 ### Choosing the drawing engine (Stage D0)
 
 Before moving drawing off the main thread, three engines were compared in

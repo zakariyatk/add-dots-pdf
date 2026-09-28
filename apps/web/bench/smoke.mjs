@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as PDFLib from 'pdf-lib';
-import { PDFArray, PDFDocument, StandardFonts, decodePDFRawStream, degrees } from 'pdf-lib';
+import { PDFArray, PDFDocument, PDFName, StandardFonts, decodePDFRawStream, degrees } from 'pdf-lib';
 import { chromium } from 'playwright-core';
 import { CORPUS_DIR, ensureCorpus } from './corpus.mjs';
 import { digest } from '../../../packages/engine/test/fixtures/marks.fixture.js';
@@ -559,11 +559,34 @@ try {
       const c = d.getPage(1).node.Contents();
       return c instanceof PDFArray ? c.size() : 1;
     };
+    const annots = (d) =>
+      (d.getPage(1).node.Annots()?.asArray() || []).map((r) =>
+        String(d.context.lookup(r).get(PDFName.of('Subtype'))),
+      );
     check(
-      'the updated file has every page, and the mark on page 2',
-      now.getPageCount() === 300 && contents(now) > contents(was),
-      { pages: now.getPageCount(), contents: [contents(was), contents(now)] },
+      'the updated file has every page, and the box on page 2 as an editable comment',
+      now.getPageCount() === 300 && contents(now) === contents(was) && annots(now).join() === '/Square',
+      { pages: now.getPageCount(), annots: annots(now), contents: [contents(was), contents(now)] },
     );
+    /* with "Flatten markups" on, the box is painted into the page */
+    await page.click('#btnSave');
+    await page.check('#saveFlat');
+    const [dlFlat] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }),
+      page.click('#saveGo'),
+    ]);
+    const flat = await PDFDocument.load(readFileSync(await dlFlat.path()));
+    check(
+      'with "Flatten markups" on, the box is painted into the page, not a comment',
+      contents(flat) > contents(was) && !annots(flat).length,
+      {
+        annots: annots(flat),
+        contents: contents(flat),
+      },
+    );
+    await page.click('#btnSave');
+    await page.uncheck('#saveFlat');
+    await page.click('#saveCancel');
     /* and the app opens it again */
     const AGAIN = join(CORPUS_DIR, 'smoke-appended.pdf');
     writeFileSync(AGAIN, a);
