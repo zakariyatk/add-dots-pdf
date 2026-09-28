@@ -771,6 +771,97 @@ try {
     await ctx.close();
   }
 
+  /* ---- the phone app's page half (js/mobile.js), with the native side faked ---- */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'allow' });
+    const pdf = await PDFDocument.create();
+    for (let i = 0; i < 4; i++) pdf.addPage([595, 842]);
+    const b64 = Buffer.from(await pdf.save()).toString('base64');
+    /* what Capacitor's bridge would give the page: the app's plugin, which
+       hands over the PDF the app was opened with and takes what Save writes */
+    await ctx.addInitScript((data) => {
+      window.__saved = [];
+      window.Capacitor = {
+        isNativePlatform: () => true,
+        Plugins: {
+          AddDots: {
+            launchFile: () => Promise.resolve({ name: 'from-files.pdf', data }),
+            addListener: (ev, fn) => (window.__openFile = fn),
+            saveFile: (o) => (
+              window.__saved.push({ name: o.name, type: o.type, bytes: atob(o.data).length }),
+              Promise.resolve(window.__cancel ? { cancelled: true } : { name: o.name })
+            ),
+          },
+        },
+      };
+    }, b64);
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    const opened = await page
+      .waitForFunction(
+        () => {
+          const a = window.ADDPDF;
+          const it = a && a.S && a.S.items[0];
+          return (
+            it && it.rendered && a.S.sources[0] && { pages: a.S.items.length, name: a.S.sources[0].name }
+          );
+        },
+        null,
+        { timeout: 30000 },
+      )
+      .then((h) => h.jsonValue())
+      .catch(() => null);
+    check(
+      'phone app: the PDF it was opened with opens',
+      !!opened && opened.pages === 4 && opened.name === 'from-files.pdf',
+      opened,
+    );
+    const sw = await page.evaluate(async () => (await navigator.serviceWorker.getRegistrations()).length);
+    check('phone app: no service worker', sw === 0, sw);
+    /* Save, cancelled in the picker: still unsaved, popover still open */
+    await page.evaluate(() => {
+      window.__cancel = true;
+      window.ADDPDF.S.items[0].shapes.push({
+        t: 'rect',
+        a: [60, 60],
+        b: [200, 140],
+        c: '#E2483D',
+        w: 2,
+        id: 'm1',
+      });
+    });
+    await page.click('#btnSave');
+    await page.click('#saveGo');
+    await page.waitForFunction(() => window.__saved.length === 1);
+    await page.waitForTimeout(300);
+    const cancelled = await page.evaluate(() => ({
+      open: !document.getElementById('savePop').hidden,
+      saved: window.__saved[0],
+    }));
+    check(
+      'phone app: Save sends the PDF to the picker; cancelled, the Save popover stays open',
+      cancelled.open && cancelled.saved.type === 'application/pdf' && cancelled.saved.bytes > 1000,
+      cancelled,
+    );
+    await page.evaluate(() => (window.__cancel = false));
+    await page.click('#saveGo');
+    await page.waitForFunction(() => window.__saved.length === 2);
+    await page.waitForTimeout(300);
+    const done = await page.evaluate(() => ({
+      closed: document.getElementById('savePop').hidden,
+      toast: document.getElementById('toast').textContent,
+    }));
+    check(
+      'phone app: saved, the popover closes and says where',
+      done.closed && /Saved/.test(done.toast),
+      done,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- saving in the worker writes the same file the page would ---- */
   {
     /* every module's marks (annotate, draw, leader, docops, insert,

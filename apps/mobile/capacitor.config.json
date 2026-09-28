@@ -1,0 +1,8 @@
+{
+  "appId": "com.adddots.pdf",
+  "appName": "ADD DOTS PDF",
+  "webDir": "../web/dist",
+  "android": {
+    "allowMixedContent": false
+  }
+}

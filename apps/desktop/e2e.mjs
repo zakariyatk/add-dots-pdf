@@ -1,5 +1,5 @@
-/* The desktop app, end to end: the built app driven through tauri-driver
-   (WebDriver), the way a person uses it from Explorer.
+/* The desktop app, end to end: the built app driven the way a person uses
+   it from Explorer.
 
      npx tauri build --debug --no-bundle && node e2e.mjs
 
@@ -11,8 +11,10 @@
    - Save writes the file (ADDDOTS_SAVE_TO stands in for the Save dialog),
      a PDF with every page
 
-   Linux needs WebKitWebDriver and a display (xvfb-run); Windows needs
-   msedgedriver (NATIVE_DRIVER, or on PATH). */
+   Windows: Playwright over WebView2's DevTools port, which the app opens
+   only when ADDDOTS_DEVTOOLS_PORT is set (Microsoft's way to test a WebView2
+   app; Edge's WebDriver cannot find this app's WebView2). Linux: tauri-driver
+   (WebDriver), with WebKitWebDriver and a display (xvfb-run). */
 
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -20,6 +22,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { chromium } from 'playwright-core';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const WIN = process.platform === 'win32';
@@ -27,6 +30,7 @@ const APP =
   process.env.APP || join(here, 'src-tauri', 'target', 'debug', WIN ? 'adddots-pdf.exe' : 'adddots-pdf');
 const PORT = 4444;
 const W = 'http://127.0.0.1:' + PORT;
+const CDP = 9333;
 
 let failed = 0;
 function check(name, ok, detail) {
@@ -55,10 +59,10 @@ if (!existsSync(APP)) {
   console.error('no app at ' + APP + ': build it first (npx tauri build --debug --no-bundle)');
   process.exit(1);
 }
-const env = { ...process.env, ADDDOTS_SAVE_TO: saveTo };
-const driverArgs = ['--port', String(PORT)];
-if (process.env.NATIVE_DRIVER) driverArgs.push('--native-driver', process.env.NATIVE_DRIVER);
-const driver = spawn('tauri-driver', driverArgs, { env, stdio: ['ignore', 'inherit', 'inherit'] });
+const env = { ...process.env, ADDDOTS_SAVE_TO: saveTo, ADDDOTS_DEVTOOLS_PORT: String(CDP) };
+const driver = WIN
+  ? null
+  : spawn('tauri-driver', ['--port', String(PORT)], { env, stdio: ['ignore', 'inherit', 'inherit'] });
 
 async function wd(method, path, body) {
   const r = await fetch(W + path, {
@@ -72,8 +76,38 @@ async function wd(method, path, body) {
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-let sid = null;
-try {
+/* Windows: the app started as Explorer starts it, then Playwright attached
+   to its WebView2 */
+async function viaDevTools() {
+  const proc = spawn(APP, [A], { env, stdio: 'ignore' });
+  let browser = null;
+  for (let i = 0; i < 120 && !browser; i++) {
+    browser = await chromium.connectOverCDP('http://127.0.0.1:' + CDP).catch(() => null);
+    if (!browser) await sleep(500);
+  }
+  if (!browser) throw new Error('no DevTools on port ' + CDP + ': the app did not start its WebView2');
+  let page = null;
+  for (let i = 0; i < 60 && !page; i++) {
+    page = browser
+      .contexts()
+      .flatMap((c) => c.pages())
+      .find((p) => /tauri/.test(p.url()));
+    if (!page) await sleep(500);
+  }
+  if (!page)
+    throw new Error(
+      'no app page among ' +
+        browser
+          .contexts()
+          .flatMap((c) => c.pages())
+          .map((p) => p.url()),
+    );
+  const run = (fn, arg) => page.evaluate(fn, arg);
+  return { run, runAsync: run, close: async () => (await browser.close().catch(() => {}), proc.kill()) };
+}
+
+/* Linux: tauri-driver starts the app with the PDF */
+async function viaWebDriver() {
   for (let i = 0; i < 50; i++) {
     try {
       await fetch(W + '/status');
@@ -87,7 +121,7 @@ try {
       alwaysMatch: { 'tauri:options': { application: APP, args: [A] } },
     },
   });
-  sid = s.sessionId;
+  const sid = s.sessionId;
   const run = (fn, ...args) =>
     wd('POST', '/session/' + sid + '/execute/sync', {
       script: 'return (' + fn + ').apply(null, arguments)',
@@ -101,6 +135,13 @@ try {
         ').apply(null, Array.prototype.slice.call(arguments, 0, -1)).then(done, function (e) { done({ error: String(e) }); });',
       args,
     });
+  return { run, runAsync, close: () => wd('DELETE', '/session/' + sid).catch(() => {}) };
+}
+
+let app = null;
+try {
+  app = WIN ? await viaDevTools() : await viaWebDriver();
+  const { run, runAsync } = app;
   const until = async (fn, ms = 30000) => {
     const t = Date.now();
     while (Date.now() - t < ms) {
@@ -128,9 +169,14 @@ try {
 
   const shell = await runAsync(async () => ({
     tauri: !!window.__TAURI__,
+    engine: !!window.ADDPDFEngine,
     workers: navigator.serviceWorker ? (await navigator.serviceWorker.getRegistrations()).length : 0,
   }));
-  check('in the desktop app, and no service worker', shell.tauri === true && shell.workers === 0, shell);
+  check(
+    'in the desktop app, with the engine bundle, and no service worker',
+    shell.tauri === true && shell.engine === true && shell.workers === 0,
+    shell,
+  );
 
   const refused = await runAsync(
     (p) =>
@@ -193,8 +239,8 @@ try {
 } catch (e) {
   check('the desktop app could be driven', false, String(e.message || e));
 } finally {
-  if (sid) await wd('DELETE', '/session/' + sid).catch(() => {});
-  driver.kill();
+  if (app) await app.close();
+  if (driver) driver.kill();
 }
 
 console.log(failed ? '\n' + failed + ' check(s) failed' : '\nall checks passed');
