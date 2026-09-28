@@ -14,9 +14,13 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as PDFLib from 'pdf-lib';
 import { PDFArray, PDFDocument, StandardFonts, decodePDFRawStream, degrees } from 'pdf-lib';
 import { chromium } from 'playwright-core';
 import { CORPUS_DIR, ensureCorpus } from './corpus.mjs';
+import { digest } from '../../../packages/engine/test/fixtures/marks.fixture.js';
+import { makeModulesFixture } from '../../../packages/engine/test/fixtures/modules.fixture.js';
+import { makePinsFixture } from '../../../packages/engine/test/fixtures/pins.fixture.js';
 import { serve } from './serve.mjs';
 
 const PORT = 4176;
@@ -115,7 +119,7 @@ function detailSharp() {
   );
 }
 
-async function fresh(browser) {
+async function fresh(browser, query = '') {
   const ctx = await browser.newContext({
     viewport: { width: 1440, height: 900 },
     serviceWorkers: 'block',
@@ -124,7 +128,7 @@ async function fresh(browser) {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(URL);
+  await page.goto(URL + query);
   await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
   return { ctx, page, errors };
 }
@@ -252,10 +256,11 @@ try {
       'the second file draws after the first was closed',
       await page.evaluate(() => window.ADDPDF.S.items[149].rendered),
     );
-    /* pdf.js's parser, the render worker and the render worker's own parser */
+    /* pdf.js's parser, the render worker and the render worker's own parser,
+       and the save worker */
     check(
       'no new workers for the second file',
-      page.workers().length === workersBefore && workersBefore <= 3,
+      page.workers().length === workersBefore && workersBefore <= 4,
       {
         before: workersBefore,
         after: page.workers().map((w) => w.url().replace(/^.*\//, '')),
@@ -441,6 +446,79 @@ try {
     );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
+  }
+
+  /* ---- saving in the worker writes the same file the page would ---- */
+  {
+    /* every module's marks (annotate, draw, leader, docops, insert,
+       signature) and photo pins with their pages, as the engine's golden
+       tests save them */
+    const plain = (items) =>
+      items.map((it) => ({
+        ...it,
+        src: {
+          id: 'fx' + it.src.id,
+          name: 'fixture.pdf',
+          bytes: Buffer.from(it.src.bytes).toString('base64'),
+        },
+      }));
+    const modules = plain(await makeModulesFixture(PDFLib));
+    const pins = await makePinsFixture(PDFLib);
+    const job = { modules, pins: plain(pins.items), locs: pins.locs };
+    const saved = {};
+    for (const mode of ['page', 'worker']) {
+      const { ctx, page, errors } = await fresh(browser, mode === 'page' ? '?saveworker=0' : '');
+      saved[mode] = await page.evaluate(async (job) => {
+        const X = window.ADDPDF,
+          S = X.S;
+        const bin = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
+        const srcs = {};
+        const items = (list) =>
+          list.map((it) => ({
+            ...it,
+            src:
+              srcs[it.src.id] ||
+              (srcs[it.src.id] = { id: it.src.id, name: it.src.name, bytes: bin(it.src.bytes) }),
+          }));
+        const b64 = (u8) => {
+          let s = '';
+          for (let i = 0; i < u8.length; i += 0x8000)
+            s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+          return btoa(s);
+        };
+        S.baseName = 'fixture';
+        S.locs = job.locs;
+        const a = await X.buildPdf(items(job.modules), null, {});
+        const by = X.savedBy;
+        const b = await X.buildPdf(items(job.pins), null, { photos: true }, 'blob');
+        return { by, modules: b64(a), pins: b64(new Uint8Array(await b.arrayBuffer())) };
+      }, job);
+      saved[mode].errors = errors;
+      await ctx.close();
+    }
+    check('with the worker off, the page saves', saved.page.by === 'page', saved.page.by);
+    check('the save worker builds the file', saved.worker.by === 'worker', saved.worker.by);
+    const pages = async (b64) => digest(PDFLib, Buffer.from(b64, 'base64'));
+    const [mp, mw, pp, pw] = await Promise.all([
+      pages(saved.page.modules),
+      pages(saved.worker.modules),
+      pages(saved.page.pins),
+      pages(saved.worker.pins),
+    ]);
+    check(
+      "the worker's file draws every module's marks as the page's does",
+      mp.length > 0 && JSON.stringify(mp) === JSON.stringify(mw),
+      { pages: [mp.length, mw.length] },
+    );
+    check(
+      "the worker's file has the same photo pins and photo pages",
+      pp.length > 2 && JSON.stringify(pp) === JSON.stringify(pw),
+      { pages: [pp.length, pw.length] },
+    );
+    check('no errors on the page', !saved.page.errors.length && !saved.worker.errors.length, [
+      ...saved.page.errors,
+      ...saved.worker.errors,
+    ]);
   }
 
   /* ---- selecting text: across lines, over gaps, down one column ---- */

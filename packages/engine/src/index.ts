@@ -6,6 +6,7 @@ export * from './text';
 export * from './save';
 export * from './measure';
 export * from './reading';
+export * from './savehooks';
 export * from './painters/common';
 export * from './painters/annotate';
 export * from './painters/draw';

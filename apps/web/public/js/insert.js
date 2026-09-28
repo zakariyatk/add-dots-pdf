@@ -142,8 +142,6 @@
     /* ================= shared image cache (image + video poster) ================= */
     /* pictures, video posters and the link and table fonts are embedded,
        and all four marks painted, by the engine */
-    X.prepare.push(window.ADDPDFEngine.prepareInsert);
-    Object.assign(X.shapePainters, window.ADDPDFEngine.insertPainters);
 
     /* ================= IMAGE ================= */
     X.handleKind.image = 'rect';

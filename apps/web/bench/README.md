@@ -280,6 +280,49 @@ column by column and row by row):
   counts its matches in the file's order. Ordering takes 3 ms or less a page
   on the CAD sheets (400 labels) and 0.2 ms on the reports.
 
+### Stage F1: saving in a worker (`results/stage-f1.json`), stage-e → stage-f1
+
+Saving rebuilt the file on the page: pdf-lib copied each page's content,
+images included, then wrote the new file out in one piece, and the browser
+copied that into a Blob to download it. None of it can be split into slices
+(pdf-lib copies a whole image stream at once), so a large file froze the
+page: on the 84 MB scans, for 773, 719 and 558 ms, 2.7 s in all, in a
+profile of a first save.
+
+Now `js/save-worker.js` builds it: pdf-lib and the engine run there with the
+same hooks the page uses, and the file comes back as a Blob, so the page
+does not copy it again. What the hooks need from the page is plain data
+(`E.saveHooks(state)`: the drawing scale, form values, document details,
+page count and name, photo pins), so the feature modules no longer register
+painters one by one; the page and the worker build the same set. A file as
+it was opened is handed over as the `File` and read there, not copied; one
+changed on disk since is sent as bytes. Without a worker (or for marks that
+cannot be posted) the page builds it as before (`?saveworker=0` forces it).
+
+Medians of 3 runs:
+
+| file               | save max task | save ms     | browser MB after use |
+| ------------------ | ------------- | ----------- | -------------------- |
+| small-text-12p     | 64 → 0        | 713 → 673   | 537 → 561            |
+| medium-report-300p | 66 → 0        | 1208 → 1161 | 492 → 582            |
+| large-text-2000p   | 227 → 0       | 2714 → 2829 | 809 → 831            |
+| cad-a1-8sheets     | 202 → 0       | 331 → 340   | 592 → 564            |
+| scans-40p          | 469 → 0       | 1391 → 1116 | 729 → 762            |
+
+The smoke test checks that the worker builds the file and that it matches the
+page's own, page for page: every module's marks (the engine's golden
+fixtures) and photo pins with their photo pages. The engine's tests check
+that `saveHooks` saves what the modules' own registrations did.
+
+What it costs: the worker is started once a file is open and the page is
+idle, and it keeps a copy of each file saved, freed when the document
+closes: 20 to 90 MB more for the browser here. Zoomed right in on the scans,
+the browser itself still does one or two tasks of 150 to 190 ms while the
+worker builds, with no script of ours in them (building on the page froze it
+five or six times, 100 to 150 ms each); the benchmark's median does not show
+them. pdf-lib sets the saved file's Producer to its own name, as it always
+did: the one we set is overwritten.
+
 ### Choosing the drawing engine (Stage D0)
 
 Before moving drawing off the main thread, three engines were compared in
