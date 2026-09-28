@@ -15,7 +15,7 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as PDFLib from 'pdf-lib';
-import { PDFArray, PDFDocument, StandardFonts, decodePDFRawStream, degrees } from 'pdf-lib';
+import { PDFArray, PDFDocument, PDFName, StandardFonts, decodePDFRawStream, degrees } from 'pdf-lib';
 import { chromium } from 'playwright-core';
 import { CORPUS_DIR, ensureCorpus } from './corpus.mjs';
 import { digest } from '../../../packages/engine/test/fixtures/marks.fixture.js';
@@ -526,6 +526,88 @@ try {
       ...saved.page.errors,
       ...saved.worker.errors,
     ]);
+  }
+
+  /* ---- Save writes the marks onto the original (an incremental update) ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    const ORIG = join(CORPUS_DIR, 'medium-report-300p.pdf');
+    const orig = readFileSync(ORIG);
+    await open(page, ORIG);
+    await allLoaded(page);
+    await page.evaluate(() =>
+      window.ADDPDF.S.items[1].shapes.push({ t: 'rect', a: [60, 60], b: [260, 160], c: '#E2483D', w: 3 }),
+    );
+    const save = async () => {
+      await page.click('#btnSave');
+      const [dl] = await Promise.all([
+        page.waitForEvent('download', { timeout: 60000 }),
+        page.click('#saveGo'),
+      ]);
+      return readFileSync(await dl.path());
+    };
+    const a = await save();
+    const appended = await page.evaluate(() => window.ADDPDF.appended);
+    check(
+      'Save writes the marks onto the original: its bytes as they were, then an update',
+      appended === true && a.length > orig.length && Buffer.compare(a.subarray(0, orig.length), orig) === 0,
+      { appended, updateBytes: a.length - orig.length },
+    );
+    const was = await PDFDocument.load(orig);
+    const now = await PDFDocument.load(a);
+    const contents = (d) => {
+      const c = d.getPage(1).node.Contents();
+      return c instanceof PDFArray ? c.size() : 1;
+    };
+    const annots = (d) =>
+      (d.getPage(1).node.Annots()?.asArray() || []).map((r) =>
+        String(d.context.lookup(r).get(PDFName.of('Subtype'))),
+      );
+    check(
+      'the updated file has every page, and the box on page 2 as an editable comment',
+      now.getPageCount() === 300 && contents(now) === contents(was) && annots(now).join() === '/Square',
+      { pages: now.getPageCount(), annots: annots(now), contents: [contents(was), contents(now)] },
+    );
+    /* with "Flatten markups" on, the box is painted into the page */
+    await page.click('#btnSave');
+    await page.check('#saveFlat');
+    const [dlFlat] = await Promise.all([
+      page.waitForEvent('download', { timeout: 60000 }),
+      page.click('#saveGo'),
+    ]);
+    const flat = await PDFDocument.load(readFileSync(await dlFlat.path()));
+    check(
+      'with "Flatten markups" on, the box is painted into the page, not a comment',
+      contents(flat) > contents(was) && !annots(flat).length,
+      {
+        annots: annots(flat),
+        contents: contents(flat),
+      },
+    );
+    await page.click('#btnSave');
+    await page.uncheck('#saveFlat');
+    await page.click('#saveCancel');
+    /* and the app opens it again */
+    const AGAIN = join(CORPUS_DIR, 'smoke-appended.pdf');
+    writeFileSync(AGAIN, a);
+    await open(page, AGAIN);
+    check(
+      'the updated file opens and draws in the app',
+      await page.evaluate(() => window.ADDPDF.S.items.length === 300 && window.ADDPDF.S.items[0].rendered),
+    );
+    /* pages moved: the file is rebuilt, as before */
+    await page.evaluate(() => window.ADDPDF.moveItem(0, 1));
+    const b = await save();
+    const rebuilt = await page.evaluate(() => window.ADDPDF.appended);
+    check(
+      'with pages moved, Save rebuilds the file',
+      rebuilt === false && (await PDFDocument.load(b)).getPageCount() === 300,
+      {
+        appended: rebuilt,
+      },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
   }
 
   /* ---- selecting text: across lines, over gaps, down one column ---- */

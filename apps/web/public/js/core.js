@@ -5409,18 +5409,28 @@
       const state = saveState();
       if (await SW.usable()) {
         try {
-          const out = await SW.build(items, cache, opts || {}, state, want === 'blob');
-          EXT.savedBy = 'worker';
-          return out;
+          const r = await SW.build(items, cache, opts || {}, state, want === 'blob');
+          EXT.savedBy = 'worker'; EXT.appended = !!r.appended;
+          return r.out;
         } catch (e) { if (!e || e.name !== 'SaveWorkerUnavailable') throw e; }
       }
       EXT.savedBy = 'page';
-      const bytes = await E.buildPdf(items, cache, opts, E.saveHooks(state, {
-        measure: textWidth,
-        unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont },
-        breathe: breathe
-      }));
-      return want === 'blob' ? new Blob([bytes], { type: 'application/pdf' }) : bytes;
+      const hooks = function () {
+        return E.saveHooks(state, {
+          measure: textWidth,
+          unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont },
+          breathe: breathe
+        });
+      };
+      /* onto the original, when the pages allow it (E.appendPdf) */
+      const got = opts && opts.append ? await E.appendPdf(items, opts, hooks()) : null;
+      EXT.appended = !!got;
+      const parts = got ? [got.src.bytes, got.update] : [await E.buildPdf(items, cache, opts, hooks())];
+      if (want === 'blob') return new Blob(parts, { type: 'application/pdf' });
+      if (parts.length === 1) return parts[0];
+      const all = new Uint8Array(parts[0].length + parts[1].length);
+      all.set(parts[0], 0); all.set(parts[1], parts[0].length);
+      return all;
     } finally { thumbsResume(); }
   }
 
@@ -5459,7 +5469,7 @@
             const err = new Error(m.error.message);
             err.name = m.error.name;
             w.rej(err);
-          } else w.res(m.out);
+          } else w.res(m);
         };
         worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop('it failed'); res(false); };
         worker.postMessage({ op: 'hello' });
@@ -5537,7 +5547,11 @@
     try {
       const photos = !$('savePhotosRow').hidden && $('savePhotos').checked;
       if (photos) toast('Building the PDF with photo pages…');
-      download(await buildPdf(S.items, null, { photos: photos }, 'blob'), name);
+      /* onto the original where it can be: a few kilobytes appended, and
+         what a rebuild drops (bookmarks, links) kept; markups as PDF
+         comments, editable in a reader, unless flattened */
+      const annots = !$('saveFlat').checked;
+      download(await buildPdf(S.items, null, { photos: photos, append: true, annots: annots }, 'blob'), name);
       closePops();
       toast('Saved <b>' + esc(name) + '</b>');
       S.baseCount = S.items.length;
