@@ -848,8 +848,13 @@
   async function relayout(opts) {
     if (!S.items.length) return;
     if (S.editing) closeEditor(true);
-    /* page 1 sets the fit; the others arrive in the background (loadRestPages) */
-    await ensurePage(S.items[0]);
+    /* page 1 sets the fit; the others arrive in the background (loadRestPages).
+       A relayout is asked for from many places without a catch: if the
+       document is replaced while page 1 loads, its load fails ("Transport
+       destroyed") and this one stands down; the new document lays out anew. */
+    const first = S.items[0];
+    try { await ensurePage(first); } catch (e) { return; }
+    if (S.items[0] !== first) return;
     computeFit();
     $('zoomVal').textContent = Math.round(S.scale * 100) + '%';
     /* after a zoom, the pages away from the screen take their new size now:
