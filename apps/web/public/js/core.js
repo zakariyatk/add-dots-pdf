@@ -227,9 +227,13 @@
      Marks they invent are ordinary entries in it.shapes, so undo, save, the
      JPG export and the thumbnails all keep working with no extra wiring. */
   const EXT = window.ADDPDF || (window.ADDPDF = {
-    shapeRenderers: {}, shapePainters: {}, fontNeeds: {}, handleKind: {},
+    shapeRenderers: {}, handleKind: {},
     markPop: {},                 /* mark type -> {el, sync}: extra controls on the properties popover */
-    prepare: [], finish: [],
+    /* before a save: promises to wait for (forms reading the file's values) */
+    beforeSave: [],
+    /* what a save needs from each module, as plain data (see E.saveHooks):
+       name -> function returning it */
+    saveState: {},
     tools: {}, hints: {}, toolBtn: {}, listeners: {}, fired: {},
     /* 'ready' is sticky: core finishes booting before the feature modules are
        even parsed, so a listener that arrives late still has to run. */
@@ -316,6 +320,9 @@
     hardReset();
     if (S.tool !== 'select') setTool('select');
     const src = { id: ++srcId, name: file.name, bytes: bytes, doc: doc };
+    /* the file itself, while these are its bytes: a worker can read it
+       rather than be sent a copy (see SW) */
+    src.file = file; src.fileOf = bytes;
     if (lastPassword) src.password = lastPassword;
     S.sources.push(src);
     for (let i = 1; i <= doc.numPages; i++) S.items.push(newItem(src, i, 0, false));
@@ -335,6 +342,9 @@
     goTo(1);
     stage.focus();
     addRecent(file, doc.numPages);
+    /* the save worker loads pdf-lib once the page is idle, so the first save
+       does not wait for it (the file itself is sent when a save needs it) */
+    renderIdle().then(function () { SW.usable(); });
     return true;
   }
 
@@ -364,7 +374,7 @@
     TR.epoch++; TR.stop = false;
     /* the documents being closed: free them in the worker too */
     S.sources.forEach(function (src) {
-      if (src.doc && src.doc !== keepDoc) { RW.close(src.bytes); try { src.doc.destroy(); } catch (e) {} }
+      if (src.doc && src.doc !== keepDoc) { RW.close(src.bytes); SW.forget(src.id); try { src.doc.destroy(); } catch (e) {} }
     });
     S.sources = []; S.items = []; S.undo = []; S.textCache = new Map();
     S.hits = []; S.hitIndex = -1; S.query = ''; S.current = 1; S.fit = 'width'; S.sel = null;
@@ -4472,7 +4482,7 @@
     btn.disabled = true; btn.textContent = 'Building…';
     try {
       const name = S.baseName + '-pins.pdf';
-      download(await buildPdf(S.items, null, { photos: true }), name);
+      download(await buildPdf(S.items, null, { photos: true }, 'blob'), name);
       toast('Exported <b>' + esc(name) + '</b> · pins link to their photo pages');
     } catch (err) {
       toast(esc(saveError(err, 'The report could not be built')));
@@ -5365,22 +5375,135 @@
     return emojiFont;
   }
 
-  async function buildPdf(items, cache, opts) {
+  /* What a save needs from the page, as plain data: the save worker builds
+     the same hooks from it as the page does (E.saveHooks). */
+  function saveState() {
+    const g = EXT.saveState;
+    const get = function (k) { try { return g[k] ? g[k]() : null; } catch (e) { return null; } };
+    return {
+      scale: get('scale'), values: get('values'), meta: get('meta'),
+      totalPages: S.items.length, fileName: S.baseName, today: new Date().toLocaleDateString(),
+      locs: S.locs, docName: S.baseName
+    };
+  }
+
+  /* Builds the PDF: in the save worker when it can, so a large file does not
+     freeze the page; otherwise here, the same way. want 'blob' gives a Blob
+     (for a download: the worker's comes back without another copy), else
+     the bytes. */
+  async function buildPdf(items, cache, opts, want) {
     thumbsPause();
-    try { return await buildPdfNow(items, cache, opts); }
-    finally { thumbsResume(); }
+    try {
+      await Promise.all(EXT.beforeSave.map(function (fn) { return fn(); }));
+      const state = saveState();
+      if (await SW.usable()) {
+        try {
+          const out = await SW.build(items, cache, opts || {}, state, want === 'blob');
+          EXT.savedBy = 'worker';
+          return out;
+        } catch (e) { if (!e || e.name !== 'SaveWorkerUnavailable') throw e; }
+      }
+      EXT.savedBy = 'page';
+      const bytes = await E.buildPdf(items, cache, opts, E.saveHooks(state, {
+        measure: textWidth,
+        unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont },
+        breathe: breathe
+      }));
+      return want === 'blob' ? new Blob([bytes], { type: 'application/pdf' }) : bytes;
+    } finally { thumbsResume(); }
   }
-  function buildPdfNow(items, cache, opts) {
-    return E.buildPdf(items, cache, opts, {
-      measure: textWidth,
-      unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont },
-      fontNeeds: EXT.fontNeeds,
-      shapePainters: EXT.shapePainters,
-      prepare: EXT.prepare,
-      finish: EXT.finish,
-      pins: E.pinHooks(S.locs, { docName: function () { return S.baseName; }, breathe: breathe })
-    });
-  }
+
+  /* ---- the save worker (js/save-worker.js) ----
+     Each source file is sent once and kept there until the document closes.
+     A build it cannot take (the worker failed to start or died, or a mark
+     that cannot be posted) is done on the page instead. */
+  const SW = (function () {
+    let worker = null, starting = null, rid = 0;
+    const waiting = new Map(), sent = new Map(), cacheIds = new WeakMap();
+    let cacheSeq = 0;
+    function unavailable(why) {
+      const e = new Error('save worker unavailable' + (why ? ': ' + why : ''));
+      e.name = 'SaveWorkerUnavailable';
+      return e;
+    }
+    function stop(why) {
+      if (worker) { try { worker.terminate(); } catch (e) {} }
+      worker = null; sent.clear();
+      waiting.forEach(function (w) { w.rej(unavailable(why)); });
+      waiting.clear();
+    }
+    function start() {
+      if (starting) return starting;
+      starting = new Promise(function (res) {
+        if (typeof Worker === 'undefined' || /[?&]saveworker=0\b/.test(location.search)) { res(false); return; }
+        try { worker = new Worker('js/save-worker.js'); } catch (e) { res(false); return; }
+        const timer = setTimeout(function () { stop('no answer'); res(false); }, 10000);
+        worker.onmessage = function (e) {
+          const m = e.data;
+          if (m.op === 'hello') { clearTimeout(timer); if (!m.ok) stop(m.why); res(!!m.ok); return; }
+          const w = waiting.get(m.rid);
+          if (!w) return;
+          waiting.delete(m.rid);
+          if (m.error) {
+            const err = new Error(m.error.message);
+            err.name = m.error.name;
+            w.rej(err);
+          } else w.res(m.out);
+        };
+        worker.onerror = function (e) { e.preventDefault(); clearTimeout(timer); stop('it failed'); res(false); };
+        worker.postMessage({ op: 'hello' });
+      });
+      return starting;
+    }
+    return {
+      usable: function () { return start().then(function (ok) { return ok && !!worker; }); },
+      build: function (items, cache, opts, state, blob) {
+        const self = this;
+        return this.post(items, cache, opts, state, blob).catch(function (e) {
+          if (!e || e.name !== 'SaveSourceUnreadable') throw e;
+          /* a file changed on disk since it was opened: send its bytes */
+          items.forEach(function (it) { it.src.fileOf = null; sent.delete(it.src.id); });
+          return self.post(items, cache, opts, state, blob);
+        });
+      },
+      post: function (items, cache, opts, state, blob) {
+        if (!worker) return Promise.reject(unavailable());
+        let cacheId = null;
+        if (cache) {
+          if (!cacheIds.has(cache)) cacheIds.set(cache, ++cacheSeq);
+          cacheId = cacheIds.get(cache);
+        }
+        const plain = items.map(function (it) {
+          return { src: it.src.id, num: it.num, rot: it.rot, crop: it.crop || null, shapes: it.shapes, fields: it.fields || null };
+        });
+        return new Promise(function (res, rej) {
+          const id = ++rid;
+          try {
+            items.forEach(function (it) {
+              const src = it.src;
+              if (sent.get(src.id) === src.bytes) return;
+              /* the file as opened is read by the worker itself: posting the
+                 bytes copies them here first, a quarter-second for 84 MB */
+              const file = src.file && src.fileOf === src.bytes ? src.file : null;
+              worker.postMessage({ op: 'source', id: src.id, file: file, bytes: file ? null : src.bytes, name: src.name || '' });
+              sent.set(src.id, src.bytes);
+            });
+            worker.postMessage({ op: 'build', rid: id, items: plain, state: state, opts: opts, cacheId: cacheId, blob: !!blob });
+          } catch (e) {
+            /* something in the marks cannot be posted: the page builds it */
+            rej(unavailable(e && e.message));
+            return;
+          }
+          waiting.set(id, { res: res, rej: rej });
+        });
+      },
+      forget: function (id) {
+        if (!worker || !sent.has(id)) return;
+        sent.delete(id);
+        worker.postMessage({ op: 'forget', id: id });
+      }
+    };
+  })();
 
   /* What went wrong in building a PDF, for the reader: an encrypted source
      (the engine refuses it, since its pages would come out blank) or
@@ -5403,7 +5526,7 @@
     try {
       const photos = !$('savePhotosRow').hidden && $('savePhotos').checked;
       if (photos) toast('Building the PDF with photo pages…');
-      download(await buildPdf(S.items, null, { photos: photos }), name);
+      download(await buildPdf(S.items, null, { photos: photos }, 'blob'), name);
       closePops();
       toast('Saved <b>' + esc(name) + '</b>');
       S.baseCount = S.items.length;

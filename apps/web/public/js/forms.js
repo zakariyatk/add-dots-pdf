@@ -115,7 +115,7 @@
       scanning = X.renderIdle().then(scanAll).catch(function () { return 0; });
       return scanning;
     }
-    X.prepare.push(function () { return scanning; });
+    X.beforeSave.push(function () { return scanning; });
 
     async function scanAll() {
       let n = 0;
@@ -531,14 +531,12 @@
       return g;
     };
 
-    /* embedding is async, so it happens in the prepare pass */
-    X.prepare.push(E.prepareSignatures);
-    X.shapePainters.sig = E.formsPainters.sig;
     /* ---------------- writing the filled values into the PDF ---------------- */
 
     /* Values are painted onto the rebuilt page by the engine
-       (packages/engine/src/painters/fields.ts), read at save time. */
-    X.finish.push(E.fieldsFinish(function () { return values; }));
+       (packages/engine/src/painters/fields.ts), read at save time; signatures
+       are embedded and painted there too (E.saveHooks). */
+    X.saveState.values = function () { return values; };
 
     function hasValue(f) { return E.hasValue(f, values); }
 

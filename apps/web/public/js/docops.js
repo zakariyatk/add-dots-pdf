@@ -355,16 +355,8 @@
     }
 
     const meta = { title: '', author: '', subject: '', keywords: '' };
-    X.finish.push(async function (out) {
-      try {
-        if (meta.title) out.setTitle(meta.title);
-        if (meta.author) out.setAuthor(meta.author);
-        if (meta.subject) out.setSubject(meta.subject);
-        if (meta.keywords) out.setKeywords(meta.keywords.split(/\s*[,;]\s*/).filter(Boolean));
-        out.setProducer('ADD DOTS PDF Editor');
-        out.setModificationDate(new Date());
-      } catch (e) {}
-    });
+    /* written into the file by the engine's save hooks (E.saveHooks) */
+    X.saveState.meta = function () { return meta; };
 
     function note(msg) { $('docNote').innerHTML = '<span class="bad">' + X.esc(msg) + '</span>'; }
     function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
@@ -526,17 +518,9 @@
       return { bytes: bytes, ptW: vp.width / scale, ptH: vp.height / scale };
     }
 
-    /* ---------------- painters for the running marks ---------------- */
-
-    Object.assign(X.fontNeeds, window.ADDPDFEngine.docopsFontNeeds);
-    const docEnv = {
-      totalPages: function () { return S.items.length; },
-      fileName: function () { return S.baseName; },
-      today: function () { return new Date().toLocaleDateString(); }
-    };
-    Object.assign(X.shapePainters, window.ADDPDFEngine.docopsPainters(docEnv));
-    /* the file name or date may need the Unicode font; it is embedded up front */
-    X.prepare.push(window.ADDPDFEngine.docopsPrepare(docEnv));
+    /* ---------------- painters for the running marks ----------------
+       E.docopsPainters, in E.saveHooks: the page count, file name and date
+       they fill in come from core's saveState */
 
     /* ---------------- the same marks, on screen ---------------- */
 

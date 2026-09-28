@@ -541,9 +541,9 @@
 
     /* ---------------- writing into the PDF ---------------- */
 
-    /* read at save time, so the readings match what the editor shows */
-    Object.assign(X.shapePainters, E.drawPainters(function () { return scale; }));
-    Object.assign(X.fontNeeds, E.drawFontNeeds);
+    /* read at save time, so the readings match what the editor shows (the
+       painters are E.drawPainters, in E.saveHooks) */
+    X.saveState.scale = function () { return scale; };
 
     /* ---------------- the tools ---------------- */
 
@@ -813,7 +813,6 @@
 
     ['dimr', 'dimd', 'dima'].forEach(function (t) {
       X.handleKind[t] = 'ends';            /* grip the centre/corner and the reading */
-      X.fontNeeds[t] = function () { return 'HelveticaBold'; };
     });
 
     /* Guides while picking: a cross at each point so far, and the circle or

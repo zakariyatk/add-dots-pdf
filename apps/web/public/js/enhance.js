@@ -257,7 +257,6 @@
       }
       return g;
     };
-    X.shapePainters.leader = window.ADDPDFEngine.leaderPainters.leader;
     function leaderGhost(a, m, b) { return { t: 'leader', a: a, m: m, b: b, c: S.color, w: S.width, head: leaderHead }; }
     function commitLeader(it, a, m, b) {
       X.snapshot();

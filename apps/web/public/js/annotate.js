@@ -346,10 +346,8 @@
     X.shapeRenderers.note = noteEl;
     X.shapeRenderers.stamp = stampEl;
 
-    /* ---------------- writing the marks into the PDF ---------------- */
-
-    Object.assign(X.fontNeeds, window.ADDPDFEngine.annotateFontNeeds);
-    Object.assign(X.shapePainters, window.ADDPDFEngine.annotatePainters);
+    /* ---------------- writing the marks into the PDF ----------------
+       E.annotatePainters, in E.saveHooks */
 
     /* ---------------- pointer tools ---------------- */
 

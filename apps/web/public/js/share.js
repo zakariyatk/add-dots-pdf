@@ -666,8 +666,8 @@
       return g;
     };
     /* A remote mark belongs to the server, so it is never written to the PDF
-       from here — the owner resolves it, and then it stops existing. */
-    X.shapePainters.remote = function () {};
+       from here (E.saveHooks paints it as nothing) — the owner resolves it,
+       and then it stops existing. */
 
     function renderRemote() {
       /* Drop the previous overlay and rebuild it from the server's list. */
