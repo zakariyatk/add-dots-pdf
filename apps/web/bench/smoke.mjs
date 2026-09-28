@@ -1129,7 +1129,14 @@ try {
 
   /* ---- without a project configured, no account UI at all ---- */
   {
-    const { ctx, page, errors } = await fresh(browser);
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
+    await ctx.addInitScript(() => (window.ADDDOTS_CONFIG = { supabaseUrl: '', supabaseKey: '' }));
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await page.waitForTimeout(500);
     const none = await page.evaluate(() => ({
       home: !document.getElementById('hAccount').hidden || !document.getElementById('hAcctTop').hidden,
       bar: !document.getElementById('grpAccount').hidden,

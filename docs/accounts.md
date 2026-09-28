@@ -30,6 +30,14 @@ signed in, the toolbar shows the account's initial. The Supabase library
 costs nothing more. With no project configured (`js/config.js` empty) none of
 it shows and the library is not loaded.
 
+## The project
+
+Supabase project **add-dots-pdf** (`jrdbuifhcxwyjxgyaowz`), organisation
+adddots, region Mumbai (ap-south-1), free plan. Its address and publishable
+key are in `apps/web/public/js/config.js`. Steps 2 to 4 below are still to be
+done in the Supabase dashboard; until step 2 is done, sign-up emails carry a
+link instead of the code the app asks for.
+
 ## Setting up the Supabase project
 
 1. **The project's address and publishable key** go in
