@@ -55,8 +55,11 @@
         worker = new Worker('js/render-worker.js');
         api.state = 'wait';
         api.ready = new Promise(function (res) {
-          /* a worker that has not answered in a few seconds is not coming */
-          const timer = setTimeout(function () { stop('did not answer'); res(false); }, 4000);
+          /* A worker that has not answered in 20 s is not coming. Pages are
+             drawn here meanwhile, so waiting costs nothing; 4 s was too short
+             for a slow phone loading pdf.js into the worker while the app
+             starts (the Android emulator took longer). */
+          const timer = setTimeout(function () { stop('did not answer'); res(false); }, 20000);
           worker.onmessage = function (e) {
             const m = e.data;
             if (m.op === 'hello') {
@@ -394,7 +397,13 @@
     TR.epoch++; TR.stop = false;
     /* the documents being closed: free them in the worker too */
     S.sources.forEach(function (src) {
-      if (src.doc && src.doc !== keepDoc) { RW.close(src.bytes); SW.forget(src.id); try { src.doc.destroy(); } catch (e) {} }
+      /* destroy() answers with a promise, and closing a document still
+         loading its pages can reject it ("Transport destroyed"): a try alone
+         would leave that rejection unhandled */
+      if (src.doc && src.doc !== keepDoc) {
+        RW.close(src.bytes); SW.forget(src.id);
+        try { Promise.resolve(src.doc.destroy()).catch(function () {}); } catch (e) {}
+      }
     });
     S.sources = []; S.items = []; S.undo = []; S.textCache = new Map();
     S.hits = []; S.hitIndex = -1; S.query = ''; S.current = 1; S.fit = 'width'; S.sel = null;

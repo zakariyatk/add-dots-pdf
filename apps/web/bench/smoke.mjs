@@ -862,6 +862,295 @@ try {
     await ctx.close();
   }
 
+  /* ---- accounts: sign up with a code, stay signed in, sign out, sign in,
+     reset the password (js/account.js against a fake Supabase Auth) ---- */
+  {
+    const SB = 'https://adddots-test.supabase.co';
+    /* Supabase Auth (GoTrue), as much of it as the app uses: accounts in
+       memory, the emailed codes fixed so the test can type them */
+    const users = new Map();
+    const SIGNUP_CODE = '123456',
+      RESET_CODE = '654321';
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    const userJson = (u) => ({
+      id: u.id,
+      aud: 'authenticated',
+      role: 'authenticated',
+      email: u.email,
+      email_confirmed_at: u.confirmed ? '2026-09-28T00:00:00Z' : null,
+      identities: [{ id: u.id, provider: 'email' }],
+      app_metadata: { provider: 'email' },
+      user_metadata: {},
+      created_at: '2026-09-28T00:00:00Z',
+    });
+    const session = (u) => {
+      const exp = Math.floor(Date.now() / 1000) + 3600;
+      return {
+        access_token:
+          b64({ alg: 'HS256', typ: 'JWT' }) + '.' + b64({ sub: u.id, email: u.email, exp }) + '.sig',
+        token_type: 'bearer',
+        expires_in: 3600,
+        expires_at: exp,
+        refresh_token: 'refresh-' + u.id,
+        user: userJson(u),
+      };
+    };
+    const calls = [];
+    const fail = (status, code, msg) => ({ status, body: { code: status, error_code: code, msg } });
+    function gotrue(method, path, body) {
+      calls.push(method + ' ' + path);
+      const u = body && body.email ? users.get(body.email) : null;
+      if (path === '/signup') {
+        if (u && u.confirmed) return { status: 200, body: { ...userJson(u), identities: [] } };
+        const nu = {
+          id: 'u' + (users.size + 1),
+          email: body.email,
+          password: body.password,
+          confirmed: false,
+        };
+        users.set(body.email, nu);
+        return { status: 200, body: userJson(nu) };
+      }
+      if (path === '/verify') {
+        const want = body.type === 'recovery' ? RESET_CODE : SIGNUP_CODE;
+        if (!u || body.token !== want) return fail(403, 'otp_expired', 'Token has expired or is invalid');
+        u.confirmed = true;
+        return { status: 200, body: session(u) };
+      }
+      if (path.startsWith('/token')) {
+        if (!u || u.password !== body.password)
+          return fail(400, 'invalid_credentials', 'Invalid login credentials');
+        if (!u.confirmed) return fail(400, 'email_not_confirmed', 'Email not confirmed');
+        return { status: 200, body: session(u) };
+      }
+      if (path === '/resend' || path.startsWith('/recover')) return { status: 200, body: {} };
+      if (path === '/user' && method === 'PUT') {
+        /* the account that just proved its reset code */
+        const target = [...users.values()].find((x) => x.lastReset);
+        if (!target) return fail(401, 'no_authorization', 'not signed in');
+        target.password = body.password;
+        target.lastReset = false;
+        return { status: 200, body: userJson(target) };
+      }
+      if (path.startsWith('/logout')) return { status: 204, body: null };
+      return { status: 404, body: { msg: 'not in the fake: ' + method + ' ' + path } };
+    }
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
+    await ctx.addInitScript((url) => {
+      window.ADDDOTS_CONFIG = { supabaseUrl: url, supabaseKey: 'sb_publishable_test' };
+    }, SB);
+    await ctx.route(SB + '/auth/v1/**', async (route) => {
+      const req = route.request();
+      const url = new globalThis.URL(req.url());
+      const body = req.postData() ? JSON.parse(req.postData()) : null;
+      /* a password change is for whoever just proved the reset code */
+      if (url.pathname.endsWith('/verify') && body && body.type === 'recovery') {
+        const u = users.get(body.email);
+        if (u) u.lastReset = true;
+      }
+      const r = gotrue(req.method(), url.pathname.replace('/auth/v1', '') + url.search, body);
+      await route.fulfill({
+        status: r.status,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: r.body === null ? '' : JSON.stringify(r.body),
+      });
+    });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    const boot = async () => {
+      await page.goto(URL);
+      await page.waitForFunction(
+        () => window.ADDPDF && window.ADDPDF.account && window.ADDPDF.account.ready(),
+        null,
+        {
+          timeout: 20000,
+        },
+      );
+    };
+    const state = () =>
+      page.evaluate(() => ({
+        user: window.ADDPDF.account.user(),
+        open: !document.getElementById('authDlg').hidden,
+        title: document.getElementById('authTitle').textContent,
+        msg: document.getElementById('authMsg').hidden ? '' : document.getElementById('authMsg').textContent,
+        button: document.getElementById('btnAccount').getAttribute('aria-label'),
+        home: document.getElementById('hAcctName').textContent,
+      }));
+    const submit = async (view) => {
+      await page.click('#authDlg form[data-view="' + view + '"] button[type=submit]');
+      await page.waitForFunction(
+        (v) => !document.querySelector('#authDlg form[data-view="' + v + '"] button[type=submit]').disabled,
+        view,
+      );
+      await page.waitForTimeout(150);
+    };
+    await boot();
+    const shown = await page.evaluate(() => ({
+      home: !document.getElementById('hAccount').hidden,
+      bar: !document.getElementById('grpAccount').hidden,
+    }));
+    check(
+      'accounts: with a project configured, Sign in shows on the home screen and the toolbar',
+      shown.home && shown.bar,
+      shown,
+    );
+
+    /* sign up: the code, not a link */
+    await page.click('#hAcctBtn');
+    /* the dialog passes the same accessibility audit as the rest of the app */
+    await page.addScriptTag({
+      content: readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8'),
+    });
+    const axeDlg = await page.evaluate(async () =>
+      (
+        await window.axe.run('#authDlg', {
+          runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'],
+        })
+      ).violations.map((v) => v.id),
+    );
+    check('accounts: axe finds no accessibility problem in the sign-in dialog', axeDlg.length === 0, axeDlg);
+    await page.click('#authDlg [data-go="signup"]');
+    await page.fill('#aSuEmail', 'zak@example.com');
+    await page.fill('#aSuPw', 'short');
+    await submit('signup');
+    const weak = await state();
+    await page.fill('#aSuPw', 'correct horse 1');
+    await submit('signup');
+    const verify = await state();
+    await page.fill('#aVeCode', '000000');
+    await submit('verify');
+    const wrong = await state();
+    await page.fill('#aVeCode', SIGNUP_CODE);
+    await submit('verify');
+    const confirmed = await state();
+    check(
+      'accounts: sign up asks for the emailed 6-digit code; a wrong code is refused, the right one signs in',
+      /8 characters/.test(weak.msg) &&
+        verify.title === 'Check your email' &&
+        /wrong or has expired/.test(wrong.msg) &&
+        !confirmed.open &&
+        confirmed.user &&
+        confirmed.user.email === 'zak@example.com',
+      { weak: weak.msg, verify: verify.title, wrong: wrong.msg, confirmed },
+    );
+
+    /* staying signed in */
+    await boot();
+    await page
+      .waitForFunction(() => !!window.ADDPDF.account.user(), null, { timeout: 10000 })
+      .catch(() => {});
+    const again = await state();
+    check(
+      'accounts: after a restart the app is still signed in',
+      again.user && again.user.email === 'zak@example.com' && again.home === 'zak@example.com',
+      again,
+    );
+
+    /* sign out, from the toolbar's account button (behind the home screen: the home entry) */
+    await page.click('#hAcctBtn');
+    const account = await state();
+    await submit('account');
+    const out = await state();
+    await boot();
+    const outAfter = await state();
+    check(
+      'accounts: Sign out signs out, and stays signed out after a restart',
+      account.title === 'Your account' &&
+        !out.user &&
+        !out.open &&
+        !outAfter.user &&
+        outAfter.home === 'Sign in',
+      { account: account.title, out, outAfter },
+    );
+
+    /* sign in: a wrong password, then the right one */
+    await page.click('#hAcctBtn');
+    await page.fill('#aSiEmail', 'zak@example.com');
+    await page.fill('#aSiPw', 'not it');
+    await submit('signin');
+    const bad = await state();
+    await page.fill('#aSiPw', 'correct horse 1');
+    await submit('signin');
+    const inAgain = await state();
+    check(
+      'accounts: a wrong password is refused in plain words; the right one signs in',
+      /do not match/.test(bad.msg) && inAgain.user && !inAgain.open,
+      { bad: bad.msg, inAgain },
+    );
+
+    /* forgot password: a code, then a new password */
+    await page.click('#hAcctBtn');
+    await submit('account');
+    await page.click('#hAcctBtn');
+    await page.click('#authDlg [data-go="forgot"]');
+    await page.fill('#aFoEmail', 'zak@example.com');
+    await submit('forgot');
+    const reset = await state();
+    await page.fill('#aReCode', RESET_CODE);
+    await page.fill('#aRePw', 'new battery staple');
+    await submit('reset');
+    const afterReset = await state();
+    check(
+      'accounts: Forgot password sends a code; with it and a new password the account is signed in',
+      reset.title === 'Set a new password' &&
+        afterReset.user &&
+        !afterReset.open &&
+        users.get('zak@example.com').password === 'new battery staple',
+      { reset: reset.title, afterReset },
+    );
+
+    /* an account never confirmed: signing in sends a fresh code */
+    await page.click('#hAcctBtn');
+    await submit('account');
+    users.set('late@example.com', {
+      id: 'u9',
+      email: 'late@example.com',
+      password: 'late password 1',
+      confirmed: false,
+    });
+    await page.click('#hAcctBtn');
+    await page.fill('#aSiEmail', 'late@example.com');
+    await page.fill('#aSiPw', 'late password 1');
+    await submit('signin');
+    const late = await state();
+    check(
+      'accounts: signing in to an unconfirmed account sends a new code and asks for it',
+      late.title === 'Check your email' && /new code/.test(late.msg) && calls.includes('POST /resend'),
+      late,
+    );
+    await page.keyboard.press('Escape');
+    const closed = await state();
+    check('accounts: Escape closes the dialog', !closed.open, closed);
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- without a project configured, no account UI at all ---- */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
+    await ctx.addInitScript(() => (window.ADDDOTS_CONFIG = { supabaseUrl: '', supabaseKey: '' }));
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await page.waitForTimeout(500);
+    const none = await page.evaluate(() => ({
+      home: !document.getElementById('hAccount').hidden || !document.getElementById('hAcctTop').hidden,
+      bar: !document.getElementById('grpAccount').hidden,
+      lib: !!window.supabase,
+    }));
+    check(
+      'accounts: without a project configured nothing shows and the library is not loaded',
+      !none.home && !none.bar && !none.lib,
+      none,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- saving in the worker writes the same file the page would ---- */
   {
     /* every module's marks (annotate, draw, leader, docops, insert,
