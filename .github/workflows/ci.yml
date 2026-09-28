@@ -53,6 +53,46 @@ jobs:
         env:
           BENCH_CHANNEL: chrome
 
+  desktop:
+    name: Windows app (Tauri)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+      - run: npm ci
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+      # builds the web app first (beforeBuildCommand), then the installers
+      - run: npx tauri build
+        working-directory: apps/desktop
+      # the app driven end to end through WebDriver: tauri-driver in front of
+      # Edge's driver, matched to the WebView2 on the runner
+      - name: Install tauri-driver and msedgedriver
+        shell: pwsh
+        run: |
+          cargo install tauri-driver --locked
+          cargo install --git https://github.com/chippers/msedgedriver-tool
+          & "$HOME/.cargo/bin/msedgedriver-tool.exe"
+          $PWD.Path >> $env:GITHUB_PATH
+      - run: node e2e.mjs
+        working-directory: apps/desktop
+        env:
+          APP: ${{ github.workspace }}\apps\desktop\src-tauri\target\release\adddots-pdf.exe
+      # unsigned test installers: Windows SmartScreen warns before running them
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installers
+          path: |
+            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
+            apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+          retention-days: 14
+
   legacy-api:
     name: PHP share API unit tests
     runs-on: ubuntu-latest

@@ -24,6 +24,9 @@
      here; this is the half that decides what the reader sees happen. Idle: the
      page swaps itself over. Mid-document: it waits to be asked, because a
      reload under unsaved marks would cost work. */
+  /* The desktop app (Tauri) carries every file in its installer and updates
+     with a new installer: no offline copy to keep, nothing to install. */
+  var DESKTOP = !!window.__TAURI__;
   var hadWorker = !!navigator.serviceWorker && !!navigator.serviceWorker.controller;
   var reloading = false;
   var reg = null, lastCheck = 0;
@@ -59,7 +62,7 @@
     }
   }
 
-  if ('serviceWorker' in navigator) {
+  if (!DESKTOP && 'serviceWorker' in navigator) {
     /* after load: the first paint matters more than the worker does */
     window.addEventListener('load', function () {
       navigator.serviceWorker.register('sw.js').then(function (r) {
@@ -170,6 +173,7 @@
   }
 
   window.addEventListener('beforeinstallprompt', function (e) {
+    if (DESKTOP) return;
     /* Chrome and Edge only. Holding the event is what lets the app do the
        asking instead of leaving it to the icon in the address bar. */
     e.preventDefault();
@@ -186,7 +190,7 @@
     }, 2500);
   });
 
-  if (IOS && !installed() && pop) {
+  if (IOS && !DESKTOP && !installed() && pop) {
     /* nothing to wait for on iOS: there is no event, so the offer is ours to
        time. Same manners as the other one — home panel only, and it keeps
        looking until they are there. */

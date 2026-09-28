@@ -8,6 +8,8 @@ export default tseslint.config(
       '**/node_modules/**',
       '**/dist/**',
       '**/.turbo/**',
+      'apps/desktop/src-tauri/target/**',
+      'apps/desktop/src-tauri/gen/**',
       'apps/web/public/js/vendor/**',
       'apps/web/public/js/engine.js',
       'design/**',
