@@ -12,6 +12,7 @@
    non-zero if any check fails. */
 
 import { readFileSync, writeFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as PDFLib from 'pdf-lib';
@@ -699,6 +700,73 @@ try {
       { freed, after },
     );
     await page.evaluate(() => window.ADDPDF.memoryPressure(false));
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- accessibility: axe finds nothing, and the keyboard gets around ---- */
+  {
+    const AXE = readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8');
+    const { ctx, page, errors } = await fresh(browser);
+    /* WCAG 2.1 A and AA, and axe's best practices. The words of the PDF
+       itself (the text layer) are the document's, not the app's. */
+    const audit = async () => {
+      if (!(await page.evaluate(() => !!window.axe))) await page.addScriptTag({ content: AXE });
+      return page.evaluate(async () => {
+        const r = await window.axe.run(
+          { exclude: [['#stage .textLayer']] },
+          { runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'] },
+        );
+        return r.violations.map(
+          (v) =>
+            v.id +
+            ': ' +
+            v.nodes
+              .map((n) => n.target.join(' '))
+              .slice(0, 3)
+              .join(', '),
+        );
+      });
+    };
+    const found = {};
+    found.home = await audit();
+    const homeInert = await page.evaluate(() => document.getElementById('stage').inert);
+    await open(page, MIXED);
+    found.document = await audit();
+    const title = await page.textContent('#docTitle');
+    /* Save from the keyboard: focus goes into the popover, Escape brings it back */
+    await page.focus('#btnSave');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.getElementById('savePop').hidden);
+    found.save = await audit();
+    const inSave = await page.evaluate(() => document.activeElement.id);
+    await page.keyboard.press('Escape');
+    const backSave = await page.evaluate(() => document.activeElement.id);
+    await page.click('#ribPage');
+    await page.focus('#btnAdd');
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => !document.getElementById('addPop').hidden);
+    const inAdd = await page.evaluate(() => document.activeElement.id);
+    await page.keyboard.press('Escape');
+    const backAdd = await page.evaluate(() => document.activeElement.id);
+    await page.click('#btnUi');
+    found.darkInterface = await audit();
+    const all = Object.values(found).flat();
+    check(
+      'axe finds no accessibility problem: home, document, Save, dark interface',
+      all.length === 0,
+      found,
+    );
+    check(
+      'the app under the home screen is out of reach until it closes, and the document has a heading',
+      homeInert === true && /smoke-mixed-60p\.pdf, 60 pages/.test(title),
+      { homeInert, title },
+    );
+    check(
+      'a popover opened from the keyboard takes the focus, and Escape gives it back',
+      inSave === 'saveName' && backSave === 'btnSave' && inAdd === 'addPdf' && backAdd === 'btnAdd',
+      { inSave, backSave, inAdd, backAdd },
+    );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }

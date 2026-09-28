@@ -445,6 +445,7 @@
     if (it.box) return;
     const box = document.createElement('div');
     box.className = 'pagebox' + (it.added ? ' added' : '');
+    box.setAttribute('role', 'group');
     box._it = it;
 
     /* Everything in the page lives in `content`, a display:contents wrapper,
@@ -454,6 +455,7 @@
        browser has only one sized box per page to lay out. */
     const content = document.createElement('div'); content.className = 'pagebody';
     const tick = document.createElement('div'); tick.className = 'tick';
+    tick.setAttribute('aria-hidden', 'true');   /* the page's label says it */
     const cflag = document.createElement('div'); cflag.className = 'cropflag'; cflag.textContent = 'CROP';
     content.appendChild(tick); content.appendChild(cflag);
 
@@ -689,6 +691,7 @@
     $('railPages').replaceChildren.apply($('railPages'), S.items.map(function (it) { return it.thumb; }));
     S.items.forEach(function (it, i) {
       it.tick.textContent = String(i + 1).padStart(2, '0');
+      it.box.setAttribute('aria-label', 'Page ' + (i + 1));
       it.thumbNo.textContent = String(i + 1);
       it.box.classList.toggle('cropped', !!it.crop);
     });
@@ -709,6 +712,7 @@
     const m = $('meta');
     m.innerHTML = S.metaBase + ' · ' + n + 'p' + (changed ? ' <span class="dirty">· edited</span>' : '');
     m.title = m.textContent;   /* the bar truncates it on narrow screens */
+    $('docTitle').textContent = n ? docName() + ', ' + n + (n === 1 ? ' page' : ' pages') : 'ADD DOTS PDF';
   }
 
   /* ---------------- layout ---------------- */
@@ -7075,9 +7079,12 @@
   });
 
   /* ---------------- popovers ---------------- */
+  /* the button a popover opened from: focus goes back to it on closing */
+  let popFrom = null;
   function openPop(id, anchor) {
     closePops();
     const p = $(id); p.hidden = false;
+    popFrom = anchor || null;
     if (id === 'extractPop') prepExtract();
     if (id === 'jpgPop') prepJpg();
     if (id === 'savePop') $('savePhotosRow').hidden = !livePins().length;
@@ -7092,14 +7099,22 @@
     if (top + h > window.innerHeight - 8) top = Math.max(8, window.innerHeight - 8 - h);
     p.style.top = top + 'px';
     if (id === 'savePop') { $('saveNote').textContent = summary(); $('saveName').focus(); $('saveName').select(); }
+    else {
+      /* a keyboard user lands on the popover's first control */
+      const first = p.querySelector('button:not([disabled]),input:not([disabled]),select,textarea,[tabindex="0"]');
+      if (first) first.focus({ preventScroll: true });
+    }
   }
   function closePops(force) {
+    const inPop = document.activeElement && document.activeElement.closest &&
+      document.activeElement.closest('.pop');
     $('addPop').hidden = true; $('savePop').hidden = true; $('trPop').hidden = true;
     $('expPop').hidden = true;
     /* a running split owns its popover — that is where its progress is shown */
     if (!exBusy || force) $('extractPop').hidden = true;
     if (!jpgBusy || force) $('jpgPop').hidden = true;
     EXT_POPS.forEach(function (x) { const p = $(x.id); if (p) p.hidden = true; });
+    if (inPop && inPop.hidden && popFrom && popFrom.isConnected) popFrom.focus({ preventScroll: true });
   }
 
   /* Popovers a module owns. Registering one is what lets closePops shut it,
@@ -7367,6 +7382,17 @@
     navOn('hTop');
     renderRecent();
   }
+  /* The home screen covers the app: what is under it is out of reach of the
+     keyboard and screen readers until it closes. */
+  function behindHome() {
+    const on = homeShown();
+    ['bar', 'ribbon', 'modeBar', 'rail', 'stage', 'dock'].forEach(function (id) {
+      const el = $(id);
+      if (el) el.inert = on;
+    });
+  }
+  new MutationObserver(behindHome).observe($('openPanel'), { attributes: true, attributeFilter: ['hidden'] });
+  behindHome();
   function hideHome() {
     if (!S.items.length) return;
     $('openPanel').hidden = true;

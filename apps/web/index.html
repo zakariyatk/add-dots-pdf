@@ -39,7 +39,8 @@
   })();
 </script>
 <div class="app">
-  <div class="bar" id="bar">
+  <div class="bar" id="bar" role="banner">
+    <h1 class="sr" id="docTitle">ADD DOTS PDF</h1>
     <div class="brand" title="ADD DOTS PDF Editor">
       <a class="admark" href="https://www.adddots.com/" aria-label="ADD DOTS home">AD</a>
       <span class="label">ADD DOTS <em>PDF</em></span>
@@ -85,7 +86,7 @@
     </button>
   </div>
 
-  <div class="ribbon" id="ribbon">
+  <div class="ribbon" id="ribbon" role="region" aria-label="Ribbon">
     <div class="rpan" id="panView" role="tabpanel" aria-labelledby="ribView">
       <div class="grp" id="grpZoom">
         <button class="btn" id="btnOut" title="Zoom out (−)" aria-label="Zoom out" data-label="Zoom out"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="8" y1="11" x2="14" y2="11"></line><line x1="16" y1="16" x2="21" y2="21"></line></svg></button>
@@ -196,7 +197,7 @@
     </div>
   </div>
 
-  <div class="modebar" id="modeBar">
+  <div class="modebar" id="modeBar" role="region" aria-label="Tool options">
     <span class="hint" id="modeHint">Drag from the tail to the head.</span>
     <div class="swatches" id="swatches"></div>
     <div class="widths" id="widths"></div>
@@ -229,7 +230,7 @@
   </div>
 
   <div class="main">
-    <aside class="rail" id="rail" hidden="">
+    <aside class="rail" id="rail" aria-label="Side panel" hidden="">
       <div class="rail-tabs">
         <button class="btn on" id="tabPages">Pages</button>
         <button class="btn" id="tabFind">Find</button>
@@ -292,7 +293,7 @@
       </div>
     </aside>
 
-    <div class="stage" id="stage" tabindex="0"></div>
+    <div class="stage" id="stage" tabindex="0" role="main" aria-label="Document"></div>
 
     <div class="home" id="openPanel">
       <header class="adnav">
@@ -334,7 +335,7 @@
         </div>
       </aside>
 
-      <div class="hmain" id="hMain">
+      <div class="hmain" id="hMain" role="main" aria-label="Home">
         <div class="hwrap">
           <div class="htop" id="hTop">
             <div>
@@ -417,7 +418,7 @@
       </div>
     </div>
 
-    <div class="toast" id="toast">Mark removed</div>
+    <div class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true">Mark removed</div>
   </div>
 
   <nav class="dock" id="dock" aria-label="Tools"></nav>
@@ -432,7 +433,7 @@
   <button class="btn" id="moreClose" style="width:100%;height:44px;margin-top:4px;border-color:var(--line)">Close</button>
 </div>
 
-<div class="pop" id="addPop" hidden="">
+<div class="pop" id="addPop" role="dialog" aria-label="Add pages" hidden="">
   <button class="item" id="addPdf">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M14 3v5h5"></path><path d="M19 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v13z"></path></svg>
     <span>Insert PDFs here…<small>After the current page · pick several at once</small></span>
@@ -447,7 +448,7 @@
   </button>
 </div>
 
-<div class="pop" id="blankPop" hidden="">
+<div class="pop" id="blankPop" role="dialog" aria-label="Blank pages" hidden="">
   <label for="blankSize">Page size</label>
   <select id="blankSize" aria-label="Page size">
     <option value="same">Same as the current page</option>
@@ -475,7 +476,7 @@
   </div>
 </div>
 
-<div class="pop" id="trPop" hidden="">
+<div class="pop" id="trPop" role="dialog" aria-label="Translate" hidden="">
   <label for="trFrom">Translate from</label>
   <div class="subrow" style="margin-top:0">
     <select id="trFrom" aria-label="Source language"><option value="auto">Detect language</option><option value="en">English</option><option value="hi">Hindi — हिन्दी</option><option value="ml">Malayalam — മലയാളം</option><option value="ta">Tamil — தமிழ்</option><option value="te">Telugu — తెలుగు</option><option value="kn">Kannada — ಕನ್ನಡ</option><option value="mr">Marathi — मराठी</option><option value="gu">Gujarati — ગુજરાતી</option><option value="bn">Bengali — বাংলা</option><option value="pa">Punjabi — ਪੰਜਾਬੀ</option><option value="or">Odia — ଓଡ଼ିଆ</option><option value="as">Assamese — অসমীয়া</option><option value="ne">Nepali — नेपाली</option><option value="si">Sinhala — සිංහල</option><option value="ur">Urdu — اردو</option><option value="ar">Arabic — العربية</option><option value="fa">Persian — فارسی</option><option value="he">Hebrew — עברית</option><option value="zh-CN">Chinese (Simplified)</option><option value="zh-TW">Chinese (Traditional)</option><option value="ja">Japanese — 日本語</option><option value="ko">Korean — 한국어</option><option value="fr">French</option><option value="de">German</option><option value="es">Spanish</option><option value="pt">Portuguese</option><option value="it">Italian</option><option value="nl">Dutch</option><option value="ru">Russian</option><option value="uk">Ukrainian</option><option value="pl">Polish</option><option value="tr">Turkish</option><option value="vi">Vietnamese</option><option value="th">Thai</option><option value="id">Indonesian</option><option value="ms">Malay</option><option value="sw">Swahili</option><option value="el">Greek</option><option value="sv">Swedish</option><option value="fi">Finnish</option><option value="cs">Czech</option><option value="ro">Romanian</option><option value="hu">Hungarian</option><option value="da">Danish</option><option value="no">Norwegian</option><option value="tl">Filipino</option></select>
@@ -508,7 +509,7 @@
   </div>
 </div>
 
-<div class="pop wide" id="extractPop" hidden="">
+<div class="pop wide" id="extractPop" role="dialog" aria-label="Extract pages" hidden="">
   <button class="item" id="exAll">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="9" height="12" rx="1.5"></rect><path d="M15 6h4a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-1"></path></svg>
     <span>Every page as its own PDF<small id="exAllNote">One click · splits the whole document</small></span>
@@ -536,7 +537,7 @@
   </div>
 </div>
 
-<div class="pop wide" id="jpgPop" hidden="">
+<div class="pop wide" id="jpgPop" role="dialog" aria-label="Save pages as JPG" hidden="">
   <button class="item" id="jpgAll">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.4"></circle><polyline points="4 17 9 12 13 16 16 13 20 17"></polyline></svg>
     <span>Every page as a JPG<small id="jpgAllNote">One click · converts the whole document</small></span>
@@ -580,7 +581,7 @@
   </div>
 </div>
 
-<div class="pop" id="expPop" hidden="">
+<div class="pop" id="expPop" role="dialog" aria-label="Export report" hidden="">
   <label>Export report as</label>
   <button class="item" id="expAsPdf">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3v5h5"></path><path d="M19 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v13z"></path><line x1="9" y1="13" x2="15" y2="13"></line><line x1="9" y1="17" x2="13" y2="17"></line></svg>
@@ -592,7 +593,7 @@
   </button>
 </div>
 
-<div class="pop" id="savePop" hidden="">
+<div class="pop" id="savePop" role="dialog" aria-label="Save" hidden="">
   <label for="saveName">File name</label>
   <input id="saveName" value="document.pdf">
   <label class="chk" id="savePhotosRow" hidden=""><input type="checkbox" id="savePhotos" checked="">
@@ -615,7 +616,7 @@
 <input type="file" id="insImgIn" accept="image/*" hidden="">
 <input type="file" id="insVidIn" accept="video/*" hidden="">
 
-<div class="pop wide" id="insImgPop" hidden="">
+<div class="pop wide" id="insImgPop" role="dialog" aria-label="Insert image" hidden="">
   <button class="item" id="insImgDevice">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.4"></circle><polyline points="4 17 9 12 13 16 16 13 20 17"></polyline></svg>
     <span>This device<small>Choose a picture from your files</small></span>
@@ -627,7 +628,7 @@
   <div class="imggrid" id="insImgResults"></div>
 </div>
 
-<div class="pop wide" id="insVideoPop" hidden="">
+<div class="pop wide" id="insVideoPop" role="dialog" aria-label="Insert video" hidden="">
   <button class="item" id="insVidDevice">
     <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="14" height="14" rx="2"></rect><polygon points="21 8 21 16 17 12"></polygon></svg>
     <span>This device<small>Choose a video file — a poster frame is captured automatically</small></span>
@@ -642,7 +643,7 @@
   </div>
 </div>
 
-<div class="pop" id="insLinkPop" hidden="">
+<div class="pop" id="insLinkPop" role="dialog" aria-label="Insert link" hidden="">
   <label for="insLinkUrl">Link to</label>
   <input id="insLinkUrl" placeholder="https://…" autocomplete="off" spellcheck="false">
   <label style="margin-top:8px">Show it as</label>
@@ -662,7 +663,7 @@
   </div>
 </div>
 
-<div class="pop" id="insTablePop" hidden="">
+<div class="pop" id="insTablePop" role="dialog" aria-label="Insert table" hidden="">
   <label>Table size</label>
   <div class="tgridpick" id="insTableGrid"></div>
   <div class="note" id="insTableNote">1 × 1</div>
