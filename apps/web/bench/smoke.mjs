@@ -107,11 +107,19 @@ async function fresh(browser) {
   await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
   return { ctx, page, errors };
 }
+/* waits for the new file's page 1: with a file already open, its page 1 is
+   drawn from the start, and the new one takes a moment to replace it */
 const open = async (page, path) => {
+  await page.evaluate(() => (window.__before = window.ADDPDF.S.items[0] || null));
   await page.setInputFiles('#fileIn', path);
-  await page.waitForFunction(() => window.ADDPDF.S.items[0] && window.ADDPDF.S.items[0].rendered, null, {
-    timeout: 60000,
-  });
+  await page.waitForFunction(
+    () => {
+      const it = window.ADDPDF.S.items[0];
+      return it && it !== window.__before && it.rendered;
+    },
+    null,
+    { timeout: 60000 },
+  );
 };
 const allLoaded = (page) =>
   page.waitForFunction(() => window.ADDPDF.S.items.every((i) => i.page && !i.estimated), null, {
@@ -276,6 +284,137 @@ try {
       'stepping past the rows written shows the match stepped to, and only it, as active',
       stepped.hitIndex === 320 && stepped.active && stepped.actives === 1,
       stepped,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- text and search (Stage E) ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+    await page.waitForFunction(() => window.ADDPDF.S.items[0].tl.children.length > 10, null, {
+      timeout: 30000,
+    });
+    /* the text of every page is read in the background once the pages are in */
+    const indexed = await page
+      .waitForFunction(() => window.ADDPDF.S.textCache.size === window.ADDPDF.S.items.length, null, {
+        timeout: 60000,
+        polling: 100,
+      })
+      .then(() => true)
+      .catch(() => false);
+    check('the text of every page is read in the background', indexed, {
+      read: await page.evaluate(() => window.ADDPDF.S.textCache.size),
+    });
+    /* the words are laid out once and follow a zoom: the same elements, in
+       the same places on the page, and pdf.js is not asked for the text again */
+    const place = () =>
+      page.evaluate(() => {
+        const it = window.ADDPDF.S.items[0],
+          ir = it.inner.getBoundingClientRect();
+        return Array.from(it.tl.children)
+          .slice(0, 40)
+          .map((el) => {
+            const r = el.getBoundingClientRect();
+            return [(r.left - ir.left) / ir.width, (r.top - ir.top) / ir.height, r.width / ir.width];
+          });
+      });
+    const before = await place();
+    await page.evaluate(() => {
+      const it = window.ADDPDF.S.items[0];
+      window.__first = it.tl.firstChild;
+      window.__reads = 0;
+      const read = it.page.getTextContent.bind(it.page);
+      it.page.getTextContent = (...a) => (window.__reads++, read(...a));
+    });
+    for (let i = 0; i < 3; i++) await page.click('#btnIn');
+    await page.waitForTimeout(2500);
+    const after = await place();
+    let drift = 0;
+    before.forEach((b, i) => b.forEach((v, k) => (drift = Math.max(drift, Math.abs(v - after[i][k])))));
+    const kept = await page.evaluate(() => ({
+      same: window.ADDPDF.S.items[0].tl.firstChild === window.__first,
+      reads: window.__reads,
+    }));
+    check(
+      'after a zoom the words are the same elements, not read or built again',
+      kept.same && kept.reads === 0,
+      kept,
+    );
+    check('and they sit where they did on the page (within 0.2% of its size)', drift < 0.002, {
+      drift: +drift.toFixed(5),
+    });
+
+    await page.click('#btnFind');
+    const t0 = Date.now();
+    await page.fill('#findIn', 'engineer');
+    await page.waitForFunction(() => /match/.test(document.getElementById('hitCount').textContent), null, {
+      timeout: 30000,
+    });
+    const took = Date.now() - t0;
+    check('with the text read, a search of 300 pages answers within a second', took < 1000, { ms: took });
+
+    /* every match is listed: a limit of 400 used to leave each later page
+       with only its first */
+    await page.evaluate(() => window.ADDPDF.goTo(300));
+    await page
+      .waitForFunction(() => window.ADDPDF.S.items[299].tl.querySelectorAll('mark.hitw').length > 0, null, {
+        timeout: 15000,
+      })
+      .catch(() => {});
+    const last = await page.evaluate(() => {
+      const S = window.ADDPDF.S,
+        it = S.items[299];
+      const marks = Array.from(it.tl.querySelectorAll('mark.hitw'));
+      return {
+        listed: S.hits.filter((h) => h.page === 300).length,
+        marked: marks.length,
+        wordOnly: marks.every(
+          (m) =>
+            m.textContent.toLowerCase() === 'engineer' &&
+            m.getBoundingClientRect().width < m.parentNode.getBoundingClientRect().width + 0.5,
+        ),
+      };
+    });
+    check(
+      'page 300 lists every match it has, and each is marked on the word alone',
+      last.listed > 1 && last.listed === last.marked && last.wordOnly,
+      last,
+    );
+
+    /* stepping through: each match stepped to is on screen, across pages too */
+    await page.evaluate(() => window.ADDPDF.goTo(1));
+    await page.waitForTimeout(800);
+    await page.focus('#findIn');
+    /* each step waits for its match to show: the first may need its page
+       drawn again, having been far from the screen */
+    const seen = [];
+    for (let i = 0; i < 16; i++) {
+      await page.keyboard.press('Enter');
+      const shown = await page
+        .waitForFunction(
+          () => {
+            const m = document.querySelector('mark.hitw.now');
+            if (!m) return false;
+            const a = m.getBoundingClientRect(),
+              s = document.getElementById('stage').getBoundingClientRect();
+            return a.top >= s.top && a.bottom <= s.bottom;
+          },
+          null,
+          { timeout: 5000, polling: 50 },
+        )
+        .then(() => true)
+        .catch(() => false);
+      seen.push(
+        (shown ? '' : 'not shown:') +
+          (await page.evaluate(() => window.ADDPDF.S.hits[window.ADDPDF.S.hitIndex].page)),
+      );
+    }
+    check(
+      'stepping through matches shows each on screen, on to the next page',
+      seen.every((x) => /^\d+$/.test(x)) && new Set(seen).size > 1,
+      seen,
     );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();

@@ -214,6 +214,50 @@ What it costs:
 
 The other differences are within the run-to-run variation of this machine.
 
+### Stage E: text and search (`results/stage-e.json`)
+
+| file               | search ms (D2 → E) | zoom ms (D2 → E) | deep step ms (D2 → E) | DOM nodes (D2 → E) |
+| ------------------ | ------------------ | ---------------- | --------------------- | ------------------ |
+| small-text-12p     | 143 → 151          | 741 → 810        | 787 → 865             | 2981 → 2873        |
+| medium-report-300p | 1179 → 226         | 764 → 891        | 582 → 1047            | 5082 → 3350        |
+| large-text-2000p   | 7599 → 7297        | 1058 → 1291      | 1061 → 1528           | 13388 → 6776       |
+| cad-a1-8sheets     | 1081 → 165         | 3805 → 3674      | 638 → 643             | 2990 → 2990        |
+| scans-40p          | 150 → 186          | 690 → 815        | 1930 → 1902           | 2420 → 2420        |
+
+The D2 column is `results/stage-d2.json`, from an earlier day; most of the
+drop in DOM nodes is the search list written in chunks (the Stage D2
+follow-ups, merged between the two). Measured again the same day as E, the D2
+build zoomed the 300- and 2,000-page files in 869 and 1,230 ms (E: 891 and
+1,291) and made the deep step in 716 and 962 ms.
+
+What changed:
+
+- **The text of every page is read in the background** once the pages have
+  loaded, a few pages at a time while nothing is being drawn. A search then
+  looks through text already read: 300 pages answer in about 0.2 s instead of
+  1.2 s. The 2,000-page file takes about 12 s to read, and the benchmark
+  searches before that is done, so its search time is unchanged.
+- **Every match is listed.** A limit of 400 stopped only the page it was
+  reached on, so every later page listed just its first match: "engineer" in
+  the 300-page file has 4,647 matches, of which 674 were listed. The limit is
+  now 50,000, and the list is written as it is read (Stage D2 follow-ups).
+- **Matches are marked on the word**, not on the whole run of text around it,
+  and the one stepped to is scrolled into view where it is on its page. A step
+  to the next match on the same page no longer scrolls back to the page's top.
+- **The words are laid out once per turn of the page**, at 100%, in units a
+  CSS variable scales. A zoom used to ask pdf.js for each page's text again
+  and rebuild and re-measure every word; now it sets one variable, and the
+  same elements stay (checked by the smoke test).
+
+What it costs: after a zoom the words are shown and selectable at once, where
+before they came back only after being rebuilt. Laying them out at the new
+size is part of the deep step now: 50 to 100 ms in a direct comparison (D2 743
+to 801 ms, E 764 to 910 ms), and more in the benchmark, where search marks are
+on the page. While a zoom glides the words are out of layout (`display: none`);
+only hidden, they were laid out every frame and the zoom took 0.2 s longer.
+The CAD file's zoom (3.8 s for D2, 3.7 s here) varies between about 2.7 and
+3.8 s from run to run, as noted for Stage D2.
+
 ### Choosing the drawing engine (Stage D0)
 
 Before moving drawing off the main thread, three engines were compared in
