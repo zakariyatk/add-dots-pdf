@@ -1,8 +1,8 @@
-# ADD DOTS PDF for Android (and later iOS)
+# ADD DOTS PDF for Android and iOS
 
 The web app (`apps/web/dist`) in a Capacitor 8 shell. On Android the app runs
 in the system WebView, which is Chromium, the engine the web app's smoke test
-runs in. iOS comes next (Stage G3), from the same project.
+runs in. On iOS it runs in WKWebView, the Safari engine (WebKit).
 
 ## What the phone app adds
 
@@ -62,3 +62,33 @@ The APK is a debug build, not from the Play Store: on the phone, allow
 "Install unknown apps" for the app you open it with (Files, Chrome), then open
 the APK. A Play Store release needs a signed release build (an upload key) and
 a Google Play developer account.
+
+## iOS
+
+The same web app and the same page code (`js/mobile.js`): the app's plugin
+has a Swift twin with the same name and methods, in
+`ios/App/App/SceneDelegate.swift` (kept in a file the Xcode project already
+lists, so the project file needs no hand edits).
+
+- **"Open in ADD DOTS PDF"** from Files, Mail and other apps: the app is
+  registered for PDFs (`Info.plist`, `CFBundleDocumentTypes`); iOS hands it a
+  copy of the file, read once by the page (`launchFile`) or announced to it
+  (`openFile`).
+- **Save** goes to iOS's own "Save to Files" picker; cancelling it keeps the
+  document unsaved.
+
+```bash
+npx turbo run build --filter=@adddots/web...
+cd apps/mobile && npx cap sync ios
+npx cap open ios        # on a Mac: opens the project in Xcode, Run
+```
+
+CI (`macos-latest`) checks the web app in WebKit (`apps/web/bench/webkit.mjs`:
+a PDF opens and is drawn, its text read, Save), builds the app for the iOS
+simulator, installs and starts it there (still running after 20 s, with a
+screenshot), and uploads the build as `ios-simulator-app`.
+
+Not yet: a test that drives the app's pages inside the iOS simulator (WKWebView
+cannot be attached to from Linux or Playwright; that needs Safari's Web
+Inspector or an XCUITest target), and a build for a real iPhone, which needs
+an Apple developer account to sign it (TestFlight, then the App Store).

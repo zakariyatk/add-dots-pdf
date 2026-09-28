@@ -143,6 +143,61 @@ jobs:
           working-directory: apps/mobile
           script: node e2e-android.mjs "$RUNNER_TEMP/app-debug.apk"
 
+  ios:
+    name: iOS app (Capacitor)
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # the engine bundle first, then the web app it loads
+      - run: npx turbo run build --filter=@adddots/web...
+      # WebKit, the engine of the iOS app: the web app's own check in it
+      - run: npx playwright-core install webkit
+      - run: node bench/webkit.mjs
+        working-directory: apps/web
+      - run: npx cap sync ios
+        working-directory: apps/mobile
+      # for the simulator: no signing, no Apple account needed
+      - name: Build for the iOS simulator
+        working-directory: apps/mobile/ios/App
+        run: |
+          set -o pipefail
+          xcodebuild -project App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build CODE_SIGNING_ALLOWED=NO build | tail -40
+      # installed on a simulator and started: still running after 20 s
+      - name: Install and start on a simulator
+        run: |
+          set -euo pipefail
+          APP=apps/mobile/ios/App/build/Build/Products/Debug-iphonesimulator/App.app
+          DEV=$(xcrun simctl list devices available -j | node -e '
+            const d = JSON.parse(require("fs").readFileSync(0, "utf8")).devices;
+            const all = Object.entries(d).filter(([k]) => /iOS/.test(k)).flatMap(([, v]) => v);
+            const p = all.find((x) => /^iPhone/.test(x.name));
+            if (!p) process.exit(1);
+            console.log(p.udid);')
+          xcrun simctl boot "$DEV"
+          xcrun simctl bootstatus "$DEV" -b
+          xcrun simctl install "$DEV" "$APP"
+          xcrun simctl launch "$DEV" com.adddots.pdf
+          sleep 20
+          xcrun simctl spawn "$DEV" launchctl list | grep com.adddots.pdf
+          xcrun simctl io "$DEV" screenshot "$RUNNER_TEMP/ios-start.png"
+          (cd "$(dirname "$APP")" && zip -qry "$RUNNER_TEMP/ios-simulator-app.zip" App.app)
+      # a simulator build (runs in Xcode's simulator, not on a phone): a
+      # phone build needs an Apple developer account to sign it
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: |
+            ${{ runner.temp }}/ios-simulator-app.zip
+            ${{ runner.temp }}/ios-start.png
+          retention-days: 14
+
   legacy-api:
     name: PHP share API unit tests
     runs-on: ubuntu-latest
