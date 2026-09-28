@@ -1248,6 +1248,8 @@
         fresh.getContext('2d', { alpha: false }).drawImage(bitmap, 0, 0);
         bitmap.close();
       }
+      /* which drew it: pdf.js, or PDFium for a page of many lines */
+      it.engine = inWorker ? task.engine || 'pdfjs' : 'pdfjs';
       break;
     }
     it.task = null;

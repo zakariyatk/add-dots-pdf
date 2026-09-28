@@ -344,6 +344,33 @@ try {
     await page.waitForFunction(() => window.ADDPDF.S.items[0].tl.children.length > 10, null, {
       timeout: 30000,
     });
+    /* a text page stays pdf.js's, in the worker: the same picture as pdf.js here */
+    const same = await page.evaluate(async () => {
+      const it = window.ADDPDF.S.items[0];
+      const a = it.canvas;
+      const b = document.createElement('canvas');
+      b.width = a.width;
+      b.height = a.height;
+      const rs = a.width / Math.floor(it.vp.width);
+      await it.page.render({
+        canvasContext: b.getContext('2d', { alpha: false }),
+        viewport: it.vp,
+        transform: Math.abs(rs - 1) > 0.01 ? [rs, 0, 0, rs, 0, 0] : null,
+      }).promise;
+      const pa = a.getContext('2d').getImageData(0, 0, a.width, a.height).data;
+      const pb = b.getContext('2d').getImageData(0, 0, b.width, b.height).data;
+      let off = 0;
+      for (let i = 0; i < pa.length; i += 4) {
+        if (Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2]) > 48)
+          off++;
+      }
+      return { engine: it.engine, percentOff: +((100 * off) / (pa.length / 4)).toFixed(3) };
+    });
+    check(
+      'a text page is drawn by pdf.js in the worker, the same as pdf.js draws it here',
+      same.engine === 'pdfjs' && same.percentOff < 0.5,
+      same,
+    );
     /* the text of every page is read in the background once the pages are in */
     const indexed = await page
       .waitForFunction(() => window.ADDPDF.S.textCache.size === window.ADDPDF.S.items.length, null, {
@@ -914,9 +941,39 @@ try {
         if (Math.abs(pa[i] - pb[i]) + Math.abs(pa[i + 1] - pb[i + 1]) + Math.abs(pa[i + 2] - pb[i + 2]) > 48)
           off++;
       }
-      return { w: a.width, h: a.height, percentOff: +((100 * off) / (pa.length / 4)).toFixed(3) };
+      /* PDFium draws a hairline at least a pixel wide where pdf.js draws it
+         fainter: what has to hold is that every line is where pdf.js puts
+         it. Of the pixels pdf.js inks, the share PDFium inks within a pixel */
+      const W = a.width,
+        H = a.height,
+        ink = (p, i) => p[i] + p[i + 1] + p[i + 2] < 600;
+      let inked = 0,
+        near = 0;
+      for (let y = 1; y < H - 1; y++) {
+        for (let x = 1; x < W - 1; x++) {
+          const i = (y * W + x) * 4;
+          if (!ink(pb, i)) continue;
+          inked++;
+          let hit = false;
+          for (let dy = -1; dy <= 1 && !hit; dy++)
+            for (let dx = -1; dx <= 1 && !hit; dx++) hit = ink(pa, ((y + dy) * W + x + dx) * 4);
+          if (hit) near++;
+        }
+      }
+      return {
+        engine: it.engine,
+        w: W,
+        h: H,
+        percentOff: +((100 * off) / (pa.length / 4)).toFixed(3),
+        linesInPlace: +((100 * near) / Math.max(1, inked)).toFixed(2),
+      };
     });
-    check("the worker's picture matches pdf.js drawing it here", diff.percentOff < 0.5, diff);
+    /* a page of many lines is PDFium's (bench/README.md, Stage H) */
+    check(
+      "the worker's picture of a CAD sheet is PDFium's, every line where pdf.js draws it",
+      diff.engine === 'pdfium' && diff.linesInPlace > 99,
+      diff,
+    );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }
