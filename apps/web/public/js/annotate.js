@@ -175,7 +175,8 @@
         const b = it.vp.convertToPdfPoint(r.right - base.left, r.bottom - base.top);
         return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
       });
-      return { it: it, quads: quads, text: String(sel).replace(/\s+/g, ' ').trim() };
+      const text = (X.selectedText && X.selectedText()) || String(sel);
+      return { it: it, quads: quads, text: text.replace(/\s+/g, ' ').trim() };
     }
 
     function applyMarkup(kind) {

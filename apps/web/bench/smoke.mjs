@@ -47,6 +47,27 @@ async function mixedPdf() {
   return d.save();
 }
 
+/* two columns of text, the first page drawn column by column, the second
+   row by row (left line, then right line), each line in two runs */
+async function columnsPdf() {
+  const d = await PDFDocument.create();
+  const f = await d.embedFont(StandardFonts.Helvetica);
+  for (const rowMajor of [false, true]) {
+    const p = d.addPage([595, 842]);
+    const lines = [];
+    for (let c = 0; c < 2; c++) for (let i = 0; i < 20; i++) lines.push({ c, i });
+    if (rowMajor) lines.sort((a, b) => a.i - b.i || a.c - b.c);
+    for (const { c, i } of lines) {
+      const x = 50 + c * 270,
+        y = 780 - i * 18;
+      const head = (c ? 'Right' : 'Left') + ' line ' + (i + 1) + ' of the column text';
+      p.drawText(head, { x, y, size: 11, font: f });
+      p.drawText('tail' + (i + 1), { x: x + f.widthOfTextAtSize(head + ' ', 11), y, size: 11, font: f });
+    }
+  }
+  return d.save();
+}
+
 /* 400 pages, with a filled-in text field on the last one */
 async function prefilledPdf() {
   const d = await PDFDocument.create();
@@ -145,6 +166,8 @@ const MIXED = join(CORPUS_DIR, 'smoke-mixed-60p.pdf');
 const PREFILLED = join(CORPUS_DIR, 'smoke-prefilled-400p.pdf');
 writeFileSync(MIXED, await mixedPdf());
 writeFileSync(PREFILLED, await prefilledPdf());
+const COLUMNS = join(CORPUS_DIR, 'smoke-columns.pdf');
+writeFileSync(COLUMNS, await columnsPdf());
 /* the CAD sheets, the first turned a quarter by the file itself (/Rotate) */
 const TURNED = join(CORPUS_DIR, 'smoke-cad-turned.pdf');
 {
@@ -416,6 +439,94 @@ try {
       seen.every((x) => /^\d+$/.test(x)) && new Set(seen).size > 1,
       seen,
     );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- selecting text: across lines, over gaps, down one column ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, COLUMNS);
+    await page.waitForFunction(
+      () =>
+        window.ADDPDF.S.items.length === 2 &&
+        window.ADDPDF.S.items.every((it) => it.tl && it.tl.children.length > 40),
+      null,
+      { timeout: 30000 },
+    );
+    for (let i = 0; i < 3; i++) await page.click('#btnOut');
+    await page.waitForTimeout(1500);
+    const lines = (a, b) =>
+      Array.from(
+        { length: b - a + 1 },
+        (_, k) => 'Left line ' + (a + k) + ' of the column text tail' + (a + k),
+      ).join('\n');
+    for (const n of [0, 1]) {
+      const kind = n ? 'drawn row by row' : 'drawn column by column';
+      /* scrolled until the page's first line stays put near the top */
+      for (let k = 0; k < 3; k++) {
+        await page.evaluate((n) => {
+          const it = window.ADDPDF.S.items[n],
+            st = document.getElementById('stage');
+          const sp = Array.from(it.tl.children).find((s) => s.textContent.startsWith('Left line 1 '));
+          st.scrollTop += sp.getBoundingClientRect().top - st.getBoundingClientRect().top - 60;
+        }, n);
+        await page.waitForTimeout(300);
+      }
+      const at = await page.evaluate((n) => {
+        const out = {};
+        for (const s of window.ADDPDF.S.items[n].tl.querySelectorAll('span')) {
+          const r = s.getBoundingClientRect();
+          /* both columns have a "tail6": the left one comes first */
+          if (!(s.textContent in out)) out[s.textContent] = { x: r.left, y: r.top, w: r.width, h: r.height };
+        }
+        return out;
+      }, n);
+      const from = at['Left line 2 of the column text'],
+        to = at['tail6'],
+        l6 = at['Left line 6 of the column text'],
+        l7 = at['Left line 7 of the column text'];
+      const drag = async (x2, y2) => {
+        await page.evaluate(() => getSelection().removeAllRanges());
+        await page.mouse.move(from.x + 1, from.y + from.h / 2);
+        await page.mouse.down();
+        for (let k = 1; k <= 10; k++)
+          await page.mouse.move(
+            from.x + 1 + ((x2 - from.x - 1) * k) / 10,
+            from.y + from.h / 2 + ((y2 - from.y - from.h / 2) * k) / 10,
+          );
+        await page.mouse.up();
+        return page.evaluate(() => {
+          let copied = null;
+          const grab = (e) => (copied = e.clipboardData.getData('text/plain'));
+          document.addEventListener('copy', grab);
+          document.execCommand('copy');
+          document.removeEventListener('copy', grab);
+          return copied;
+        });
+      };
+      const whole = await drag(to.x + to.w - 1, to.y + to.h / 2);
+      check(
+        'copied text keeps its spaces and line breaks, one column (' + kind + ')',
+        whole === lines(2, 6),
+        whole,
+      );
+      const gap = await drag(l6.x + l6.w / 2, (l6.y + l6.h + l7.y) / 2);
+      check(
+        'a drag ending between two lines keeps its selection (' + kind + ')',
+        typeof gap === 'string' &&
+          gap.startsWith(lines(2, 5)) &&
+          !gap.includes('Right') &&
+          !gap.includes('line 1 '),
+        gap,
+      );
+      const gutter = await drag(to.x + to.w + 40, to.y + to.h / 2);
+      check(
+        'a drag ending in the gutter keeps its selection (' + kind + ')',
+        typeof gutter === 'string' && gutter.startsWith(lines(2, 5)) && !gutter.includes('Right'),
+        gutter,
+      );
+    }
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }
