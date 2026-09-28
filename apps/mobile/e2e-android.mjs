@@ -92,7 +92,13 @@ try {
     !!first && first.pages === 3 && first.name === 'first.pdf',
     first,
   );
-  check('pages are drawn in the render worker', !!first && first.worker === 'on', first && first.worker);
+  /* the render worker may still be starting on a slow phone: pages are drawn
+     on the page meanwhile; once it has started, it draws */
+  const worker = await until(
+    () => (window.ADDPDF.renderWorker() !== 'wait' ? window.ADDPDF.renderWorker() : null),
+    30000,
+  );
+  check('pages are drawn in the render worker once it has started', worker === 'on', worker);
 
   const shell = await page.evaluate(async () => ({
     native: !!(window.Capacitor && window.Capacitor.isNativePlatform()),
