@@ -279,6 +279,36 @@ try {
       { insp, turned, savePop, w0, closedP, back },
     );
 
+    /* drawing: the quick colour dots and line weights set the tool's colour and width */
+    const was = await page.evaluate(() => ({ c: window.ADDPDF.S.color, w: window.ADDPDF.S.width }));
+    await page.click('#ribDraw');
+    await page.click('#tRect');
+    await page.click('#swatches .sw.quick[data-c="#3B82F6"]');
+    await page.click('.wdquick button[data-w="3"]');
+    const quickPick = await page.evaluate(() => ({
+      color: window.ADDPDF.S.color,
+      width: window.ADDPDF.S.width,
+      dotOn: document.querySelector('#swatches .sw.quick[data-c="#3B82F6"]').classList.contains('on'),
+      drop: document.getElementById('wdDrop').textContent,
+      chipOn: document.querySelector('.wdquick button[data-w="3"]').getAttribute('aria-pressed'),
+    }));
+    await page.evaluate((w) => {
+      const X = window.ADDPDF;
+      X.S.color = w.c;
+      X.S.width = w.w;
+      X.setTool('select');
+      X.setRibbon('ribView');
+    }, was);
+    check(
+      'drawing: a quick colour dot and a quick line weight set the tool',
+      quickPick.color === '#3B82F6' &&
+        quickPick.width === 3 &&
+        quickPick.dotOn &&
+        /3 pt/.test(quickPick.drop) &&
+        quickPick.chipOn === 'true',
+      quickPick,
+    );
+
     await page.evaluate(() => window.ADDPDF.goTo(47));
     await page
       .waitForFunction(() => window.ADDPDF.S.items[46].rendered, null, { timeout: 10000 })

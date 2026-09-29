@@ -6286,7 +6286,9 @@
     S.items.forEach(function (x) { drawShapes(x); });
   }
 
-  /* the tool's colour: ten quick squares, and "More" for the whole palette */
+  /* the tool's colour: five quick dots, and the whole palette behind "Colour" */
+  const QUICK_COLORS = [['#E2483D', 'Red'], ['#3B82F6', 'Blue'], ['#22A06B', 'Green'],
+                        ['#F59E0B', 'Amber'], ['#0B2A31', 'Ink']];
   function pickToolColor(c) {
     S.color = c;
     Array.prototype.forEach.call($('swatches').querySelectorAll('.sw'), function (x) {
@@ -6304,8 +6306,17 @@
     more.className = 'swmore'; more.id = 'swMore'; more.type = 'button';
     more.title = 'Colour';
     more.innerHTML = '<i id="swMoreChip"></i><span>Colour</span><b>▾</b>';
+    /* the design's five quick colours, round, before the full palette */
+    QUICK_COLORS.forEach(function (q) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.className = 'sw quick'; b.dataset.c = q[0];
+      b.title = q[1]; b.setAttribute('aria-label', q[1]);
+      b.style.background = q[0];
+      b.addEventListener('click', function () { pickToolColor(q[0]); });
+      $('swatches').appendChild(b);
+    });
     $('swatches').appendChild(more);
-    $('swMoreChip').style.background = S.color;
+    pickToolColor(S.color);
     const pop = document.createElement('div');
     pop.className = 'swpop palette'; pop.id = 'toolPalette'; pop.hidden = true;
     document.body.appendChild(pop);
@@ -6330,6 +6341,19 @@
     function linePx(w) { return Math.max(1, Math.min(6, Math.round(w * 1.2 * 2) / 2)); }
     const btn = document.createElement('button');
     btn.className = 'wdrop'; btn.id = 'wdDrop'; btn.type = 'button'; btn.title = 'Line width';
+    /* three quick weights, as in the design, before the full list */
+    const quick = document.createElement('div');
+    quick.className = 'wdquick'; quick.setAttribute('role', 'group'); quick.setAttribute('aria-label', 'Line width');
+    quick.innerHTML = [1, 3, 5].map(function (w) {
+      return '<button type="button" data-w="' + w + '" aria-pressed="false" title="' + w + ' pt line">' +
+        '<i style="height:' + linePx(w) + 'px"></i>' + w + 'pt</button>';
+    }).join('');
+    quick.addEventListener('click', function (e) {
+      const o = e.target.closest('button'); if (!o) return;
+      S.width = parseFloat(o.dataset.w);
+      paint();
+    });
+    $('widths').appendChild(quick);
     $('widths').appendChild(btn);
     const menu = document.createElement('div');
     menu.className = 'wdmenu'; menu.id = 'wdMenu'; menu.hidden = true;
@@ -6337,6 +6361,11 @@
     document.body.appendChild(menu);
     function paint() {
       btn.innerHTML = '<i style="height:' + linePx(S.width) + 'px"></i><span>' + S.width + ' pt</span><b>▾</b>';
+      Array.prototype.forEach.call(quick.children, function (q) {
+        const on = parseFloat(q.dataset.w) === S.width;
+        q.classList.toggle('on', on);
+        q.setAttribute('aria-pressed', on ? 'true' : 'false');
+      });
     }
     paint();
     btn.addEventListener('click', function (e) {
