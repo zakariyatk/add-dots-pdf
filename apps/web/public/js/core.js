@@ -352,7 +352,7 @@
 
     S.baseName = (file.name || 'document').replace(/\.pdf$/i, '');
     S.baseCount = doc.numPages;
-    S.metaBase = '<b>' + esc(file.name) + '</b> · ' + bytesLabel(file.size);
+    S.metaBase = '<b>' + esc(file.name) + '</b>' + META_SEP + bytesLabel(file.size);
     $('meta').innerHTML = S.metaBase;
     $('saveName').value = S.baseName + '-edited.pdf';
 
@@ -715,13 +715,17 @@
     loadRestPages();
   }
 
+  /* between the file's name and its details: the top bar puts the details on
+     a second line under the name and leaves the dot out (brand.css) */
+  const META_SEP = '<i class="msep"> · </i>';
   function updateMeta() {
     const n = S.items.length;
     const changed = n !== S.baseCount || S.items.some(function (it) {
       return it.rot || it.added || it.crop || it.shapes.length;
     });
     const m = $('meta');
-    m.innerHTML = S.metaBase + ' · ' + n + 'p' + (changed ? ' <span class="dirty">· edited</span>' : '');
+    m.innerHTML = S.metaBase + ' · ' + n + (n === 1 ? ' page' : ' pages') +
+      (changed ? ' <span class="dirty">· edited</span>' : '');
     m.title = m.textContent;   /* the bar truncates it on narrow screens */
     $('docTitle').textContent = n ? docName() + ', ' + n + (n === 1 ? ' page' : ' pages') : 'ADD DOTS PDF';
   }
@@ -858,7 +862,7 @@
     try { await ensurePage(first); } catch (e) { return; }
     if (S.items[0] !== first) return;
     computeFit();
-    $('zoomVal').textContent = Math.round(S.scale * 100) + '%';
+    showZoom();
     /* after a zoom, the pages away from the screen take their new size now:
        keep the page being read where it is */
     const hold = opts && opts.hold ? holdMiddle() : null;
@@ -876,13 +880,20 @@
     detailSoon(0);
   }
 
+  /* the zoom level, in the ribbon and on the floating zoom pill */
+  function showZoom() {
+    const z = Math.round(S.scale * 100) + '%';
+    $('zoomVal').textContent = z;
+    $('zpVal').textContent = z;
+  }
+
   /* ---------------- smooth zooming ----------------
      The live part only resizes and keeps the scroll anchored on whatever the
      reader is looking at; the sharp repaint is debounced to the end. */
   let zoomTimer = null, zoomRaf = 0;
   function zoomPreview() {
     applySizes(true);
-    $('zoomVal').textContent = Math.round(S.scale * 100) + '%';
+    showZoom();
   }
   /* Hold on to whatever page is under the fingers and put it back under them
      afterwards. Doing it off the real element beats scroll arithmetic, which
@@ -4854,7 +4865,7 @@
     S.baseName = d.baseName || 'project';
     S.baseCount = S.items.length;
     const nPins = livePins().length;
-    S.metaBase = '<b>' + esc(S.baseName) + '</b> · project';
+    S.metaBase = '<b>' + esc(S.baseName) + '</b>' + META_SEP + 'project';
     $('meta').innerHTML = S.metaBase;
     $('saveName').value = S.baseName + '-edited.pdf';
 
@@ -7209,6 +7220,10 @@
   $('btnIn').addEventListener('click', function () { setZoom(1.2); });
   $('btnOut').addEventListener('click', function () { setZoom(1 / 1.2); });
   $('btnFitW').addEventListener('click', function () { S.fit = 'width'; relayout(); });
+  /* the floating zoom pill over the pages does the same as the ribbon's buttons */
+  $('zpIn').addEventListener('click', function () { setZoom(1.2); });
+  $('zpOut').addEventListener('click', function () { setZoom(1 / 1.2); });
+  $('zpFit').addEventListener('click', function () { S.fit = 'width'; relayout(); });
   $('btnRotL').addEventListener('click', function (e) { e.shiftKey ? rotateAll(-90) : rotateItem(S.current - 1, -90); });
   $('btnRotR').addEventListener('click', function (e) { e.shiftKey ? rotateAll(90) : rotateItem(S.current - 1, 90); });
   $('btnDel').addEventListener('click', function () { if (S.items.length) removeItem(S.current - 1); });
@@ -7347,6 +7362,15 @@
       $(r[1]).hidden = !on;
     });
     closePops();
+    /* a narrow window scrolls the tab strip sideways: keep the open tab in
+       sight (the Drawing Tool tab shows itself at the end of the strip) */
+    requestAnimationFrame(function () {
+      const t = $(tab), strip = t && t.parentNode;
+      if (!strip || t.hidden || strip.scrollWidth <= strip.clientWidth) return;
+      const l = t.offsetLeft - strip.offsetLeft, r = l + t.offsetWidth;
+      if (l < strip.scrollLeft) strip.scrollLeft = l - 4;
+      else if (r > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = r - strip.clientWidth + 4;
+    });
   }
   RIBBON.forEach(function (r) {
     $(r[0]).addEventListener('click', function () { setRibbon(r[0]); });
@@ -7978,7 +8002,7 @@
     if (await openProject(d)) {
       /* it lives in this tab now */
       await dropRecord(r.tab);
-      S.metaBase = '<b>' + esc(r.name || S.baseName) + '</b> · restored';
+      S.metaBase = '<b>' + esc(r.name || S.baseName) + '</b>' + META_SEP + 'restored';
       $('meta').innerHTML = S.metaBase;
       toast('Restored your unsaved work on <b>' + esc(r.name || S.baseName) + '</b>');
     }

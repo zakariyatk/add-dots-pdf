@@ -204,6 +204,40 @@ try {
     );
     check('pages stand in order without overlapping', order);
 
+    /* the zoom pill over the pages zooms like the ribbon's buttons */
+    const z0 = await page.evaluate(() => window.ADDPDF.S.scale);
+    await page.click('#zpIn');
+    await page.waitForFunction((z) => window.ADDPDF.S.scale > z * 1.1, z0, { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    const zoomed = await page.evaluate(() => ({
+      scale: window.ADDPDF.S.scale,
+      pill: document.getElementById('zpVal').textContent,
+      ribbon: document.getElementById('zoomVal').textContent,
+    }));
+    check(
+      'the zoom pill zooms in, and shows the level the ribbon shows',
+      zoomed.scale > z0 * 1.1 && zoomed.pill === zoomed.ribbon,
+      { z0, ...zoomed },
+    );
+    await page.click('#zpFit');
+    await page.waitForTimeout(400);
+
+    /* the top bar stays one row, down to a tablet: the tabs scroll instead */
+    const rows = {};
+    for (const width of [1440, 1100, 800]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(200);
+      /* on one row when Save and Home share some of their height */
+      rows[width] = await page.evaluate(() => {
+        const a = document.getElementById('btnHome').getBoundingClientRect();
+        const b = document.getElementById('btnSave').getBoundingClientRect();
+        return b.top < a.bottom && a.top < b.bottom;
+      });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(300);
+    check('the top bar stays on one row at 1440, 1100 and 800 px', Object.values(rows).every(Boolean), rows);
+
     await page.evaluate(() => window.ADDPDF.goTo(47));
     await page
       .waitForFunction(() => window.ADDPDF.S.items[46].rendered, null, { timeout: 10000 })

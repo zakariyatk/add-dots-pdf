@@ -296,3 +296,240 @@ body:not([data-ui="light"]) .rrow .tag.off { background: #3A2A0B; color: #F7C979
   .tcard b { font-size: 14.5px }
   .rlist, body[data-ui="light"] .rlist { padding: 4px 14px; border-radius: 20px }
 }
+
+/* ================================================================
+   Editor (the "Web Editor" screen of the design)
+   ================================================================ */
+
+/* pro.css set the ribbon and the tab names in Segoe UI with 1px icons */
+.ribbon, .tabs .tab { font-family: var(--sans); -webkit-font-smoothing: antialiased }
+.ribbon .btn svg { stroke-width: 1.75 }
+
+/* the sky over the desk; the bar and the ribbon float on it */
+body[data-ui="light"] .app {
+  background: linear-gradient(180deg, #A6E3EE 0, #D6F1F5 120px, #EEF2F3 240px) #EEF2F3;
+}
+body[data-ui="light"] :is(.bar, .ribbon) { background: transparent; border-bottom-color: transparent; box-shadow: none }
+body:not([data-ui="light"]) .bar { border-bottom-color: transparent }
+
+/* ---- the top bar: round white buttons ---- */
+.bar { gap: 8px; padding: 12px 16px }
+.bar .sep { display: none }
+.bar .brand { padding: 0 }
+.bar .brand .label { display: none }
+.bar .admark {
+  width: 40px; height: 40px; font-size: 13px; letter-spacing: 1px; padding: 0;
+  outline: 2px solid #9A9A9A; outline-offset: -6px; border: none;
+}
+body[data-ui="light"] .bar .admark,
+body[data-ui="light"] a.admark:hover { background: #050505; color: #FFFFFF; border: none }
+.bar .btn {
+  height: 44px; min-width: 44px; padding: 0 12px; border-radius: 22px; border: none;
+  font-size: 14.5px; font-weight: 600;
+}
+.bar .btn svg { width: 19px; height: 19px; stroke-width: 2 }
+body[data-ui="light"] .bar .btn:not(.primary) { background: #FFFFFF; color: var(--deep) }
+body[data-ui="light"] .bar .btn:not(.primary):hover:not(:disabled) { background: #E2F4F8; color: var(--deep) }
+body[data-ui="light"] .bar .btn.on:not(.primary) { background: var(--deep); color: #FFFFFF }
+body[data-ui="light"] .bar .btn:disabled { background: rgba(255, 255, 255, .55); color: #7B8E92; opacity: 1 }
+body:not([data-ui="light"]) .bar .btn:not(.primary) { background: var(--chrome-2) }
+/* Home: the round button of the design, its name read out */
+#btnHome .lbl { display: none }
+#btnHome { width: 44px; height: 44px; padding: 0; border: none }
+.bar #btnSave { height: 44px; padding: 0 24px; border-radius: 22px; font-size: 15px }
+
+/* the page number: one white pill with its arrows */
+.bar .pager { height: 44px; border-radius: 22px; padding: 0 4px; gap: 2px; font-family: var(--sans); font-size: 14px; font-weight: 600 }
+body[data-ui="light"] .bar .pager { background: #FFFFFF }
+body:not([data-ui="light"]) .bar .pager { background: var(--chrome-2) }
+.bar .pager .btn { width: 36px; min-width: 36px; height: 36px; padding: 0; border-radius: 18px }
+body[data-ui="light"] .bar .pager .btn:not(:hover) { background: transparent }
+.bar .pager input {
+  width: 40px; height: 32px; border: none; border-radius: 10px; background: var(--chrome-2);
+  font-family: var(--sans); font-size: 14px; font-weight: 600;
+}
+body[data-ui="light"] .bar .pager input { background: #F2F5F6; color: var(--text) }
+.bar .pager #pageTotal { color: var(--text-dim); font-weight: 500; padding-right: 2px }
+
+/* the file's name, and under it its size, pages and whether it is edited */
+.bar .meta {
+  order: -1; flex: 0 1 auto; max-width: 280px; min-width: 110px; padding: 0 4px;
+  display: flex; flex-direction: column; gap: 1px; text-align: left; overflow: hidden;
+  font-family: var(--sans); font-size: 12.5px; letter-spacing: 0; line-height: 1.25; white-space: nowrap;
+}
+.bar .meta b {
+  font-size: 15px; font-weight: 700; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+body[data-ui="light"] .bar .meta { color: #34494E }
+.bar .meta .msep { display: none }
+.bar .meta .dirty { color: var(--teal) }
+body:not([data-ui="light"]) .bar .meta .dirty { color: var(--sky) }
+/* the brand, Home and the name come first, as in the design */
+.bar .brand { order: -3 }
+.bar #btnHome { order: -2 }
+.msep { font-style: normal }
+
+/* ---- the ribbon's tabs: a white pill, the open one dark teal ---- */
+.bar .tabs { height: 48px; padding: 4px; gap: 2px; border-radius: 24px }
+/* one row always: when the window is too narrow for every tab, the pill
+   gives way and scrolls sideways rather than pushing Save to a second row */
+@media (min-width: 761px) {
+  .bar { flex-wrap: nowrap }
+  .bar > * { flex-shrink: 0 }
+  .bar > .grow { flex-shrink: 1 }
+  .bar .tabs {
+    flex: 0 1 auto; min-width: 120px; overflow-x: auto; overflow-y: hidden;
+    scrollbar-width: none; overscroll-behavior-x: contain;
+  }
+  .bar .tabs::-webkit-scrollbar { display: none }
+  .tabs .tab { flex: none }
+}
+body[data-ui="light"] .bar .tabs { background: #FFFFFF }
+body:not([data-ui="light"]) .bar .tabs { background: var(--chrome-2) }
+.tabs .tab,
+body[data-ui="light"] .tabs .tab:not(.on):not(.ctx) {
+  height: 40px; padding: 0 14px; border-radius: 20px; font-size: 14.5px; font-weight: 600; color: #34494E;
+}
+body:not([data-ui="light"]) .tabs .tab:not(.on) { color: var(--text-dim) }
+.tabs .tab:hover:not(.on) { background: var(--hover, rgba(255, 255, 255, .08)); color: var(--text) }
+.tabs .tab.on::after { content: none }
+body[data-ui="light"] .tabs .tab.on { background: var(--deep); color: #FFFFFF; font-weight: 600 }
+body:not([data-ui="light"]) .tabs .tab.on { background: var(--text); color: var(--chrome); font-weight: 600 }
+.tabs .tab.ctx:not(.on) { border-radius: 20px }
+body[data-ui="light"] .tabs .tab.ctx:not(.on) { background: #E2F4F8; color: var(--teal) }
+
+/* ---- the ribbon: a white card of tall buttons ---- */
+@media (min-width: 761px) {
+  .ribbon {
+    margin: 0 16px; padding: 8px 10px; border: none; border-radius: 22px; align-items: center;
+  }
+  body[data-ui="light"] .ribbon { background: #FFFFFF }
+  body:not([data-ui="light"]) .ribbon { background: var(--chrome-2); border-bottom: none }
+  .ribbon .btn {
+    height: 56px; min-width: 64px; padding: 0 10px; gap: 4px; border: none; border-radius: 16px;
+  }
+  .ribbon .btn svg { width: 20px; height: 20px; stroke-width: 2 }
+  .ribbon .btn::after,
+  .ribbon #btnTheme .lbl { font-size: 12px; line-height: 15px; font-weight: 500 }
+  body[data-ui="light"] .ribbon .btn:not(.on),
+  body[data-ui="light"] .ribbon .btn:not(.on)::after,
+  body[data-ui="light"] .ribbon #btnTheme .lbl { color: #1E363C }
+  body[data-ui="light"] .ribbon .btn:hover:not(:disabled):not(.on) { background: #F2F5F6 }
+  /* the tool that is on: dark teal, as in the design */
+  body[data-ui="light"] .ribbon .btn.on,
+  body[data-ui="light"] .ribbon .btn.on::after { background: var(--deep); color: #FFFFFF; font-weight: 600 }
+  body[data-ui="light"] .ribbon .btn.on::after { background: none }
+  body:not([data-ui="light"]) .ribbon .btn.on { background: var(--text); color: var(--chrome); border: none }
+  body:not([data-ui="light"]) .ribbon .btn.on::after { color: var(--chrome) }
+  .ribbon :is(.sep, .tsep) { height: 32px; margin: 0 10px; background: var(--line) }
+  .ribbon .zoomval { font-family: var(--sans) }
+  body[data-ui="light"] .ribbon .zoomval { color: var(--text) }
+
+  /* a tool's colour, width and text settings inside the ribbon */
+  body.props-in-ribbon #modeBar, body.props-in-ribbon #panTool .markpop { min-height: 56px }
+  #panTool #modeBar .btn { height: 36px; border-radius: 18px; padding: 0 14px }
+  body[data-ui="light"] #panTool #modeBar #modeDone { background: var(--deep); color: #FFFFFF }
+  :is(.swmore, .wdrop, .snapbtn) { height: 34px; border-radius: 12px; padding: 0 10px; font-size: 13px }
+  body[data-ui="light"] :is(.swmore, .wdrop) { background: #F2F5F6; border-color: transparent }
+  body[data-ui="light"] :is(.swmore, .wdrop):hover { border-color: #BFE3EA }
+  .swmore i { width: 18px; height: 18px; border-radius: 9px }
+  .txctl select, .txctl input, .txctl .tg { border-radius: 10px }
+}
+
+/* ---- the side panel: a white card beside the pages ---- */
+@media (min-width: 761px) {
+  .main { padding: 16px 0 0 }
+  .rail {
+    margin: 0 0 16px 16px; border: none; border-radius: 24px; overflow: hidden;
+  }
+  body[data-ui="light"] .rail { background: #FFFFFF }
+  body:not([data-ui="light"]) .rail { background: var(--chrome-2) }
+  .rail-tabs { margin: 12px 12px 0; padding: 4px; gap: 2px; border-radius: 14px }
+  body[data-ui="light"] .rail-tabs { background: #F2F5F6 }
+  body:not([data-ui="light"]) .rail-tabs { background: var(--chrome) }
+  .rail-tabs .btn { height: 32px; border: none; border-radius: 10px; font-size: 13px; font-weight: 600 }
+  body[data-ui="light"] .rail-tabs .btn:not(.on) { color: var(--text-dim); background: transparent }
+  body[data-ui="light"] .rail-tabs .btn.on {
+    background: #FFFFFF; color: var(--text); box-shadow: 0 1px 3px rgba(6, 48, 58, .12);
+  }
+  .rail-body { padding: 12px }
+}
+/* the thumbnails are drawn 176px wide: the panel keeps room for them */
+@media (max-width: 900px) { :root { --rail: 204px } }
+.thumb .shell { border-radius: 8px }
+body[data-ui="light"] .thumb .shell { border-color: #E3E9EA; box-shadow: 0 4px 14px -8px rgba(6, 48, 58, .3) }
+body[data-ui="light"] :is(.thumb.active, .thumb.picked) .shell {
+  border: 2px solid #1D9BB2; box-shadow: 0 4px 14px -8px rgba(6, 48, 58, .3);
+}
+.thumb .no { font-family: var(--sans); font-size: 12.5px; font-weight: 600 }
+body[data-ui="light"] .thumb .no { color: #6B8186 }
+body[data-ui="light"] .thumb.active .no { color: var(--teal) }
+body[data-ui="light"] .search-in { height: 40px; border-radius: 12px; border-color: #E3E9EA; background: #F2F5F6 }
+
+/* ---- the pages ---- */
+@media (min-width: 761px) {
+  .stage { border-radius: 24px 24px 0 0 }
+}
+.stage:focus-visible { outline-offset: -2px }
+body[data-ui="light"] .page { border-radius: 4px; box-shadow: 0 20px 50px -26px rgba(6, 48, 58, .45), 0 1px 3px rgba(6, 48, 58, .1) }
+.tick { font-family: var(--mono) }
+body[data-ui="light"] .tick { color: #6B8186 }
+body[data-ui="light"] .pagebox.cur .tick { color: var(--teal) }
+
+/* ---- the zoom pill floating over the pages ---- */
+.zpill {
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 8;
+  height: 44px; padding: 0 6px; border-radius: 22px; display: flex; align-items: center; gap: 2px;
+  background: var(--deep); color: #FFFFFF; font-size: 13.5px; font-weight: 600; white-space: nowrap;
+  box-shadow: 0 12px 28px -14px rgba(6, 48, 58, .7);
+}
+/* centred on the pages, not on the window, when the side panel is open */
+.main:has(> .rail:not([hidden])) .zpill { left: calc(50% + (var(--rail) + 16px) / 2) }
+.zpill button {
+  height: 32px; min-width: 32px; padding: 0; border: none; border-radius: 16px; background: transparent;
+  color: inherit; font: inherit; cursor: pointer; display: grid; place-items: center;
+}
+.zpill button:hover { background: rgba(255, 255, 255, .14) }
+.zpill button:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px }
+.zpill svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round }
+.zpill span { min-width: 48px; padding: 0 4px; text-align: center; font-variant-numeric: tabular-nums }
+.zpill i { width: 1px; height: 20px; margin: 0 4px; background: rgba(255, 255, 255, .2) }
+.zpill .fit { padding: 0 12px }
+body:not([data-ui="light"]) .zpill { background: var(--chrome-2); border: 1px solid var(--line); color: var(--text) }
+body.no-doc .zpill { display: none }
+/* what else floats at the bottom stands above it */
+@media (min-width: 761px) {
+  body:not(.no-doc) .main > .toast { bottom: 72px }
+  body:not(.no-doc) .panhome { bottom: 72px }
+}
+/* phones zoom with two fingers and have the dock down there */
+@media (max-width: 760px) {
+  .zpill { display: none }
+}
+
+/* ---- narrower windows: the bar sheds words before it wraps ---- */
+@media (max-width: 1500px) {
+  .tabs .tab, body[data-ui="light"] .tabs .tab:not(.on):not(.ctx) { padding: 0 12px }
+  .bar #btnShare .lbl, .bar #acctLbl { display: none }
+  .bar :is(#btnShare, #btnAccount) { width: 44px; padding: 0 }
+  .bar .meta { max-width: 200px }
+}
+@media (max-width: 1280px) {
+  .tabs .tab, body[data-ui="light"] .tabs .tab:not(.on):not(.ctx) { padding: 0 10px; font-size: 14px }
+  .bar .meta { display: none }
+}
+@media (max-width: 1100px) {
+  .bar { gap: 6px; padding: 10px 12px }
+  .bar .brand { display: none }
+  .tabs .tab, body[data-ui="light"] .tabs .tab:not(.on):not(.ctx) { padding: 0 9px; font-size: 13.5px }
+}
+@media (max-width: 760px) {
+  .bar { padding: 8px; padding-top: calc(8px + env(safe-area-inset-top)); gap: 4px }
+  .bar .btn { height: 40px; min-width: 40px; padding: 0 8px }
+  #btnHome, .bar :is(#btnShare, #btnAccount) { width: 40px; height: 40px }
+  .bar .pager { height: 40px; padding: 0 3px }
+  .bar .pager input { width: 34px }
+  .bar #btnSave { height: 40px; padding: 0 15px }
+  .bar #btnMore { width: 40px; padding: 0 }
+}
