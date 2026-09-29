@@ -1,8 +1,71 @@
 # Accounts (Stage I): Sign In / Sign Up with Supabase Auth
 
-One ADD DOTS account on the web, Windows, Android and iOS. Signing in is
-optional: everything works signed out, and documents stay on the device
-either way.
+One ADD DOTS account on the web, Windows, Android and iOS. An account is
+free, and **signing in is required**: the app opens to "Sign in to ADD DOTS
+PDF" (and Create account) and nothing else until an account is signed in, as
+WPS, Acrobat and Google Docs do. Documents still stay on the device.
+
+## Sign-in required (`requireSignIn`)
+
+`requireSignIn: true` in `apps/web/public/js/config.js` (the default):
+
+- With no sign-in kept on this device, the app starts behind a full-screen
+  sign-in page: Sign in, Create account, Forgot password and the privacy
+  policy. It cannot be closed (no close button, Escape and clicks outside do
+  nothing), and the app under it is inert. A shared review link waits behind
+  it too.
+- A device that has signed in before opens straight away, offline as well;
+  Supabase renews the session when it can.
+- Signing out, deleting the account, or the session ending elsewhere (a
+  password changed on another device) brings the sign-in page back.
+- On a phone's first run the welcome pages come first, then the sign-in page.
+- `requireSignIn: false` makes signing in optional again, as before.
+
+## Continue with Google and Continue with Apple
+
+On the website, the sign-in page and Create account show **Continue with
+Google** and **Continue with Apple** for each provider the Supabase project
+has turned on. The app asks the project which are on
+(`/auth/v1/settings`), so a provider appears the moment it is enabled, with
+no new release. Signing in with one opens the provider's page and comes back
+to the website signed in; a new person gets a free account the same way.
+
+In the Windows and phone apps the buttons stay hidden for now: the
+provider's page opens in a browser that cannot hand the session back to the
+app without an app link (a custom URL scheme or universal link), which is
+the next step (below). There people sign in with email.
+
+### Turning on Google
+
+1. Google Cloud Console > APIs & Services > Credentials > Create
+   credentials > **OAuth client ID** > Web application.
+2. Authorised redirect URI:
+   `https://jrdbuifhcxwyjxgyaowz.supabase.co/auth/v1/callback`
+3. OAuth consent screen: app name "ADD DOTS PDF", support email, the
+   privacy policy link (`https://app.adddots.com/privacy.html`), and publish
+   it.
+4. Supabase dashboard > Authentication > Sign In / Providers > **Google**:
+   turn on, paste the Client ID and Client Secret, save.
+5. Supabase > Authentication > URL Configuration: Site URL
+   `https://app.adddots.com/`, and add it to the Redirect URLs.
+
+### Turning on Apple
+
+1. Apple Developer (a paid membership) > Certificates, Identifiers &
+   Profiles: an **App ID** with "Sign in with Apple", then a **Services ID**
+   (e.g. `com.adddots.pdf.web`) with Sign in with Apple configured for the
+   domain `jrdbuifhcxwyjxgyaowz.supabase.co` and the return URL
+   `https://jrdbuifhcxwyjxgyaowz.supabase.co/auth/v1/callback`.
+2. Keys > a new key with Sign in with Apple; download the `.p8` file and
+   note the Key ID and your Team ID.
+3. Supabase > Authentication > Sign In / Providers > **Apple**: turn on,
+   the Services ID as Client ID, and the secret made from the `.p8` key
+   (the Supabase page links the generator; it expires every 6 months).
+
+Apple's App Store rule 4.8: an iPhone app that offers Google sign-in must
+also offer Sign in with Apple. The iPhone app shows neither for now (email
+only), so it is within the rule; when the app links arrive, both come
+together.
 
 ## What the app does
 
@@ -110,7 +173,13 @@ forgot password with a code and a new password, an unconfirmed account sent a
 new code, the privacy policy in the dialog (Back returns to the form as it
 was), Delete account (a wrong password keeps the account; the right one
 deletes it, signs out, and it cannot sign in again), and nothing at all when
-no project is configured.
+no project is configured. And the sign-in page itself, as shipped
+(`requireSignIn`): it opens with the app inert behind it, Escape and clicks
+outside do not close it, Continue with Google shows when the project has
+Google on (and Apple does not when it is off), signing in lets the app
+through, signing out brings the page back, and Continue with Google goes to
+the project's Google sign-in with this page as the way back. The other
+checks run with sign-in not required.
 
 ## Later
 
@@ -118,4 +187,8 @@ no project is configured.
   the signed-in user through Supabase's row-level security.
 - On phones the session can move from the app's storage to the system's
   secure storage (Keychain, Keystore) if needed.
-- Sign in with Google, Microsoft or Apple can be added as Supabase providers.
+- Google and Apple inside the Windows and phone apps: an app link
+  (`com.adddots.pdf://auth`, or a universal link on `app.adddots.com`) that
+  the provider's page returns to, with the Capacitor App plugin and Tauri's
+  deep-link plugin handing the session to the app.
+- Microsoft sign-in, the same way, if wanted.

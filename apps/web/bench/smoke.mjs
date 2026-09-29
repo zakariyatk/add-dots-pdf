@@ -183,6 +183,19 @@ const TURNED = join(CORPUS_DIR, 'smoke-cad-turned.pdf');
 
 const server = await serve(join(dirname(fileURLToPath(import.meta.url)), '..', 'dist'), PORT);
 const browser = await chromium.launch({ channel: process.env.BENCH_CHANNEL || undefined });
+/* the checks below use the app without an account: sign-in is not required
+   in them (js/config.js requireSignIn) unless a test sets it again. The
+   sign-in page itself has its own check, with the accounts. */
+{
+  const newContext = browser.newContext.bind(browser);
+  browser.newContext = async (opts) => {
+    const c = await newContext(opts);
+    await c.addInitScript(() => {
+      window.ADDDOTS_CONFIG = Object.assign({ requireSignIn: false }, window.ADDDOTS_CONFIG || {});
+    });
+    return c;
+  };
+}
 try {
   /* ---- a document of mixed sizes ---- */
   {
@@ -1155,7 +1168,7 @@ try {
       email: u.email,
       email_confirmed_at: u.confirmed ? '2026-09-28T00:00:00Z' : null,
       identities: [{ id: u.id, provider: 'email' }],
-      app_metadata: { provider: 'email' },
+      app_metadata: { provider: u.provider || 'email' },
       user_metadata: {},
       created_at: '2026-09-28T00:00:00Z',
     });
@@ -1224,13 +1237,16 @@ try {
         return { status: 200, body: userJson(target) };
       }
       if (path.startsWith('/logout')) return { status: 204, body: null };
+      /* which sign-in providers the project has on: Google, not Apple */
+      if (path === '/settings')
+        return { status: 200, body: { external: { email: true, google: true, apple: false } } };
       return { status: 404, body: { msg: 'not in the fake: ' + method + ' ' + path } };
     }
     const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, serviceWorkers: 'block' });
     await ctx.addInitScript((url) => {
-      window.ADDDOTS_CONFIG = { supabaseUrl: url, supabaseKey: 'sb_publishable_test' };
+      window.ADDDOTS_CONFIG = { supabaseUrl: url, supabaseKey: 'sb_publishable_test', requireSignIn: false };
     }, SB);
-    await ctx.route(SB + '/auth/v1/**', async (route) => {
+    const authRoute = async (route) => {
       const req = route.request();
       const url = new globalThis.URL(req.url());
       const body = req.postData() ? JSON.parse(req.postData()) : null;
@@ -1251,7 +1267,8 @@ try {
         headers: { 'access-control-allow-origin': '*' },
         body: r.body === null ? '' : JSON.stringify(r.body),
       });
-    });
+    };
+    await ctx.route(SB + '/auth/v1/**', authRoute);
     /* the account deleting itself (delete_my_account): whoever the token names */
     await ctx.route(SB + '/rest/v1/rpc/delete_my_account', async (route) => {
       const req = route.request();
@@ -1580,8 +1597,132 @@ try {
         linked.password === 'fresh password 9',
       { rec: rec.title, recDone, password: linked.password },
     );
+
+    /* an account made with Google has no password: deleting it asks for its email */
+    const goog = { id: 'u40', email: 'g@example.com', confirmed: true, provider: 'google' };
+    users.set(goog.email, goog);
+    await page.evaluate(() => localStorage.removeItem('adpdf.auth'));
+    await linkTo(goog, '');
+    await page.click('#hAcctBtn');
+    await page.click('#authDlg [data-go="delete"]');
+    const gLabel = await page.textContent('label[for="aDePw"]');
+    await page.fill('#aDePw', 'someone@example.com');
+    await submit('delete');
+    const gBad = await state();
+    await page.fill('#aDePw', 'g@example.com');
+    await submit('delete');
+    const gDel = await state();
+    check(
+      'accounts: an account from Google is deleted by typing its email (it has no password); a wrong email keeps it',
+      gLabel === 'Type your email to confirm' &&
+        /not this account/.test(gBad.msg) &&
+        !users.has('g@example.com') &&
+        !gDel.user,
+      { gLabel, gBad: gBad.msg, gone: !users.has('g@example.com'), gDel: gDel.user },
+    );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
+
+    /* sign-in required (the app as shipped): the app waits behind the
+       sign-in page, which cannot be closed, until an account signs in */
+    const gctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: 'block',
+    });
+    await gctx.addInitScript((url) => {
+      window.ADDDOTS_CONFIG = { supabaseUrl: url, supabaseKey: 'sb_publishable_test', requireSignIn: true };
+    }, SB);
+    await gctx.route(SB + '/auth/v1/**', authRoute);
+    const gp = await gctx.newPage();
+    const gerr = [];
+    gp.on('pageerror', (e) => gerr.push(e.message));
+    await gp.goto(URL);
+    await gp.waitForFunction(
+      () => window.ADDPDF && window.ADDPDF.account && window.ADDPDF.account.ready(),
+      null,
+      {
+        timeout: 20000,
+      },
+    );
+    await gp
+      .waitForFunction(() => !document.querySelector('#authDlg [data-provider="google"]').hidden, null, {
+        timeout: 5000,
+      })
+      .catch(() => {});
+    const gateState = () =>
+      gp.evaluate(() => ({
+        open: !document.getElementById('authDlg').hidden,
+        gate: document.getElementById('authDlg').classList.contains('gate'),
+        inert: document.querySelector('.app').inert,
+        title: document.getElementById('authTitle').textContent,
+        google: !document.querySelector('#authDlg [data-view="signin"] [data-provider="google"]').hidden,
+        apple: !document.querySelector('#authDlg [data-view="signin"] [data-provider="apple"]').hidden,
+        user: window.ADDPDF.account.user(),
+      }));
+    const atStart = await gateState();
+    await gp.keyboard.press('Escape');
+    await gp.mouse.click(5, 5);
+    const stays = await gateState();
+    /* a script (the phone apps' own test runs) still reaches the app behind it */
+    const ui0 = await gp.evaluate(() => document.body.dataset.ui);
+    await gp.evaluate(() => document.getElementById('btnUi').click());
+    const scripted = (await gp.evaluate(() => document.body.dataset.ui)) !== ui0;
+    await gp.evaluate(() => document.getElementById('btnUi').click());
+    /* a free account: sign in, and the app is there */
+    users.set('gate@example.com', {
+      id: 'u30',
+      email: 'gate@example.com',
+      password: 'gate password 1',
+      confirmed: true,
+    });
+    await gp.fill('#aSiEmail', 'gate@example.com');
+    await gp.fill('#aSiPw', 'gate password 1');
+    await gp.click('#authDlg form[data-view="signin"] button[type=submit]');
+    await gp
+      .waitForFunction(() => document.getElementById('authDlg').hidden, null, { timeout: 10000 })
+      .catch(() => {});
+    const inApp = await gateState();
+    /* signed out: the sign-in page again */
+    await gp.click('#hAcctBtn');
+    await gp.click('#authDlg form[data-view="account"] button[type=submit]');
+    await gp
+      .waitForFunction(() => document.getElementById('authDlg').classList.contains('gate'), null, {
+        timeout: 10000,
+      })
+      .catch(() => {});
+    const gOut = await gateState();
+    /* Continue with Google goes to the project's Google sign-in, and back here */
+    const [authorize] = await Promise.all([
+      gp.waitForRequest((r) => /\/auth\/v1\/authorize/.test(r.url()), { timeout: 10000 }).catch(() => null),
+      gp.click('#authDlg [data-view="signin"] [data-provider="google"]'),
+    ]);
+    const to = authorize ? new globalThis.URL(authorize.url()) : null;
+    check(
+      'sign-in required: the app waits behind a sign-in page that cannot be closed; Google shows when the project has it; signing in opens the app, signing out closes it again',
+      atStart.open &&
+        atStart.gate &&
+        atStart.inert &&
+        atStart.title === 'Sign in to ADD DOTS PDF' &&
+        atStart.google &&
+        !atStart.apple &&
+        stays.open &&
+        stays.gate &&
+        scripted &&
+        !inApp.open &&
+        !inApp.inert &&
+        inApp.user &&
+        inApp.user.email === 'gate@example.com' &&
+        gOut.open &&
+        gOut.gate &&
+        gOut.inert &&
+        !gOut.user &&
+        !!to &&
+        to.searchParams.get('provider') === 'google' &&
+        (to.searchParams.get('redirect_to') || '').startsWith(URL),
+      { atStart, stays, scripted, inApp, gOut, authorize: to && to.search },
+    );
+    check('no errors on the page', gerr.length === 0, gerr);
+    await gctx.close();
   }
 
   /* ---- without a project configured, no account UI at all ---- */

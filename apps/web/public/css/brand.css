@@ -768,7 +768,7 @@ body:not([data-ui="light"]) #panTool #modeBar #modeDone { background: var(--text
 
 /* ---- phones, the first time: welcome (js/welcome.js; "01 Onboarding") ---- */
 .welcome {
-  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; overflow: hidden;
+  position: fixed; inset: 0; z-index: 130; display: flex; flex-direction: column; overflow: hidden;
   padding: calc(16px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
   background: linear-gradient(180deg, #8DDCEA 0%, #BFEAF1 34%, #EEF2F3 62%, #F2F4F5 100%) #F2F4F5;
   color: #0B2A31; font-family: var(--sans);
@@ -858,3 +858,25 @@ body:not([data-ui="light"]) .wgo { background: #FFFFFF; color: #06303A }
   .etools button:focus-visible { outline: 2px solid var(--teal-bright); outline-offset: 2px }
   .etools svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
 }
+
+/* ---- the sign-in page the app waits behind (js/account.js, requireSignIn) ---- */
+.authdlg.gate { background: linear-gradient(180deg, #8DDCEA 0%, #C4ECF2 30%, #EEF2F3 60%, #F2F4F5 100%) #F2F4F5 }
+body:not([data-ui="light"]) .authdlg.gate { background: linear-gradient(180deg, #0A3E4A 0%, #06303A 30%, #0B0F10 70%) #0B0F10 }
+.authdlg.gate .authx { display: none }
+.authdlg.gate .authcard { box-shadow: 0 30px 60px -30px rgba(6, 48, 58, .45) }
+/* Continue with Google / Apple, and "or with email" under them */
+.authsso { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 6px }
+.authsso[hidden], .authprov[hidden] { display: none }
+.authprov {
+  height: 48px; border-radius: 24px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  border: 1px solid var(--line); background: var(--chrome); color: var(--text);
+  font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+body[data-ui="light"] .authprov { background: #FFFFFF; border-color: #D5DDDF; color: #0B2A31 }
+.authprov:hover { border-color: var(--text-dim) }
+.authprov:focus-visible { outline: 2px solid var(--teal-bright); outline-offset: 2px }
+.authprov svg { width: 20px; height: 20px; flex: none }
+.authprov[data-provider="apple"],
+body[data-ui="light"] .authprov[data-provider="apple"] { background: #000000; color: #FFFFFF; border-color: #000000 }
+.author { display: flex; align-items: center; gap: 10px; margin: 6px 0 0; font-size: 13px; color: var(--text-dim) }
+.author::before, .author::after { content: ""; flex: 1; height: 1px; background: var(--line) }
