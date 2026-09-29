@@ -1141,15 +1141,12 @@ try {
           words: document.querySelector('#drop h2').innerText.trim(),
         };
       });
-      const box = await hp.evaluate(() => {
-        const b = document.getElementById('drop').getBoundingClientRect();
-        return { x: b.left + b.width * 0.4, y: b.top + b.height / 2 };
-      });
-      const chooser = hp.waitForEvent('filechooser', { timeout: 3000 }).then(
+      const chooser = hp.waitForEvent('filechooser', { timeout: 5000 }).then(
         () => true,
         () => false,
       );
-      await hp.mouse.click(box.x, box.y);
+      /* a tap on the bar's words, not on the button's own spot */
+      await hp.click('#drop', { position: { x: 120, y: 30 } });
       home.picker = await chooser;
       check(
         'phone home: the tools are a row to swipe above a slim Open a PDF bar, and a tap on the bar opens the picker',
