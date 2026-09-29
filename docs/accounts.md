@@ -47,7 +47,9 @@ the next step (below). There people sign in with email.
 4. Supabase dashboard > Authentication > Sign In / Providers > **Google**:
    turn on, paste the Client ID and Client Secret, save.
 5. Supabase > Authentication > URL Configuration: Site URL
-   `https://app.adddots.com/`, and add it to the Redirect URLs.
+   `https://app.adddots.com/`, and add it and the test site,
+   `https://staging.adddots.com/`, to the Redirect URLs (without the test
+   site there, signing in on it comes back to the live site).
 
 ### Turning on Apple
 
@@ -154,7 +156,8 @@ and it can only ever reach the caller's own account.
 3. **Authentication > Sign In / Providers > Email**: Email enabled,
    "Confirm email" on, minimum password length 8. **Authentication > URL
    Configuration**: Site URL `https://app.adddots.com`, where the links in
-   the emails lead. Authentication > Settings: email OTP length 6,
+   the emails lead; add `https://staging.adddots.com/**` to the Redirect
+   URLs for the test site. Authentication > Settings: email OTP length 6,
    expiry 3600 s (the defaults).
 4. **Sending email for real users.** Supabase's own mailer is for trying
    things out: it sends only a few emails an hour, and only to the project's

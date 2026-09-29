@@ -29,6 +29,18 @@ npm run build        # apps/web/dist, deployable as a static site
 
 Requires Node 20 or newer. The PHP tests need PHP 8.2: `php legacy/api/tests/unit.php`.
 
+## Sites
+
+| Site | Address                      | What it is for                                                                                                            |
+| ---- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| Live | https://app.adddots.com/     | What people use. The Windows and phone apps share documents through it (`shareServer` in `apps/web/public/js/config.js`). |
+| Test | https://staging.adddots.com/ | Every change goes here first and is tried before it goes live.                                                            |
+
+The browser app works out its own address, so the same build runs on both;
+share links made on the test site point to the test site. Give the test
+site its own `api/config.php` and database, so trying things there never
+touches live documents or links.
+
 ## Deploying the web app (unchanged from v1)
 
-Upload `apps/web/dist/` plus `legacy/api/` (as `api/`) to the host, then follow the Hostinger steps in `legacy/README.md`.
+Upload `apps/web/dist/` plus `legacy/api/` (as `api/`) to the test site first, check it, then to the live site. Follow the Hostinger steps in `legacy/README.md` for each.
