@@ -1,8 +1,11 @@
 /* Accounts: one ADD DOTS account on the web, Windows, Android and iOS
-   (Supabase Auth, email and password).
+   (Supabase Auth: email and password, and on the website Google and Apple).
 
-   Signing in is optional: everything works signed out, and documents never
-   leave the device either way. What is here:
+   An account is free, and with requireSignIn (js/config.js) the app opens to
+   Sign in / Create account and nothing else until one is signed in, as WPS,
+   Acrobat and Google Docs do; a shared review link too. A device that has
+   signed in once stays signed in, offline as well. Documents never leave
+   the device either way. What is here:
    - create an account (email and password), confirmed with a 6-digit code
      sent by email: a code, not a link, so it works the same in a browser and
      in the Windows and phone apps
@@ -26,9 +29,13 @@
 
   var client = null, user = null, email = '', view = 'signin', back = 'signin', busy = false, lastFocus = null;
   var app = document.querySelector('.app');
+  /* the sign-in page the app waits behind (js/config.js requireSignIn) */
+  var GATE = !!cfg.requireSignIn;
+  var gated = false;
 
   var TITLES = {
     signin: ['Sign in', 'Use your ADD DOTS account on every device.'],
+    gate: ['Sign in to ADD DOTS PDF', 'Free. One account for the web, Windows, Android and iOS.'],
     signup: ['Create your account', 'One account for ADD DOTS PDF on the web, Windows, Android and iOS.'],
     verify: ['Check your email', ''],
     forgot: ['Reset your password', 'We will email you a code to set a new password.'],
@@ -69,10 +76,18 @@
     return { type: h.get('type') || '', error: h.get('error_description') || '' };
   })();
 
+  /* a sign-in kept on this device from before: the app opens straight away,
+     offline too, and Supabase renews it when it can */
+  function stored() {
+    try { return !!localStorage.getItem('adpdf.auth'); } catch (e) { return false; }
+  }
+
   function start() {
     $('grpAccount').hidden = false;
     $('hAccount').hidden = false;
     $('hAcctTop').hidden = false;
+    /* nothing kept: the sign-in page at once, before the library is in */
+    if (GATE && !stored() && !link) gate();
     loadLib().then(function () {
       client = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey, {
         auth: {
@@ -85,6 +100,9 @@
       });
       client.auth.onAuthStateChange(function (ev, session) {
         setUser(session ? session.user : null);
+        /* signed out here or elsewhere (a password changed, the account
+           deleted): back to the sign-in page */
+        if (ev === 'SIGNED_OUT' && GATE) setTimeout(gate, 0);
         /* the reset link: signed in for this, the new password next */
         if (ev === 'PASSWORD_RECOVERY') { if (link) link.type = 'recovery'; setTimeout(function () { open('newpw'); }, 0); }
       });
@@ -92,10 +110,65 @@
     }).then(function (r) {
       setUser(r && r.data && r.data.session ? r.data.session.user : null);
       if (link) linkDone();
+      if (GATE && !user) gate();
+      providers();
     }).catch(function (e) {
       health('start', e);
       setUser(null);
+      if (GATE) { gate(); msg('Cannot reach the account service. Check your connection, then reload.', 'bad'); }
     });
+  }
+
+  /* the app waits behind the sign-in page: it cannot be closed, only
+     signed in through (or an account created) */
+  function gate() {
+    if (!GATE || user) return;
+    gated = true;
+    dlg.classList.add('gate');
+    if (dlg.hidden) {
+      lastFocus = document.activeElement;
+      dlg.hidden = false;
+    }
+    if (app) app.inert = true;
+    if (['signin', 'signup', 'verify', 'forgot', 'reset', 'privacy'].indexOf(view) < 0 || !dlg.dataset.shown) show('signin');
+    dlg.dataset.shown = '1';
+  }
+  function ungate() {
+    gated = false;
+    dlg.classList.remove('gate');
+    delete dlg.dataset.shown;
+  }
+
+  /* Google and Apple, on the website, once the project has them on: the
+     project says which (/auth/v1/settings). The Windows and phone apps sign
+     in with email: a provider's page cannot hand the session back to them. */
+  function providers() {
+    if (IN_APP || !window.fetch) return;
+    fetch(cfg.supabaseUrl.replace(/\/$/, '') + '/auth/v1/settings', { headers: { apikey: cfg.supabaseKey } })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (st) {
+        var ext = (st && st.external) || {};
+        Array.prototype.forEach.call(dlg.querySelectorAll('[data-sso]'), function (box) {
+          var any = false;
+          Array.prototype.forEach.call(box.querySelectorAll('[data-provider]'), function (b) {
+            b.hidden = !ext[b.getAttribute('data-provider')];
+            any = any || !b.hidden;
+          });
+          box.hidden = !any;
+        });
+      })
+      .catch(function () { /* offline: email only */ });
+  }
+  function withProvider(p) {
+    if (!client || busy) return;
+    busy = true;
+    msg('Opening ' + (p === 'google' ? 'Google' : 'Apple') + '…', 'good');
+    /* back to this page, where the session in the address signs in */
+    client.auth.signInWithOAuth({ provider: p, options: { redirectTo: location.origin + location.pathname } })
+      .then(function (r) {
+        busy = false;
+        if (r && r.error) { health('oauth ' + p, r.error); msg(friendly(r.error), 'bad'); }
+      }, function (e) { busy = false; health('oauth ' + p, e); msg(friendly(e), 'bad'); });
   }
 
   /* what a link from an email did, said once */
@@ -105,8 +178,15 @@
         ? 'That email link has expired or was already used. Sign in, or ask for a new email.'
         : 'That email link did not work: ' + api.esc(link.error));
     } else if (link.type !== 'recovery' && user) {
-      api.toast('Email confirmed. You are signed in as <b>' + api.esc(user.email) + '</b>');
+      api.toast((link.type === 'signup' || link.type === 'email' ? 'Email confirmed. ' : '') +
+        'You are signed in as <b>' + api.esc(user.email) + '</b>');
     }
+  }
+
+  /* signed in with Google or Apple rather than an email and password */
+  function viaProvider() {
+    var p = user && user.app_metadata && user.app_metadata.provider;
+    return !!p && p !== 'email';
   }
 
   /* ---------- who is signed in, everywhere it shows ---------- */
@@ -139,14 +219,22 @@
     Array.prototype.forEach.call(dlg.querySelectorAll('[data-view]'), function (f) {
       f.hidden = f.getAttribute('data-view') !== v;
     });
-    var t = TITLES[v];
+    var t = TITLES[gated && v === 'signin' ? 'gate' : v];
     $('authTitle').textContent = t[0];
     var sub = t[1];
     if (v === 'verify') sub = 'Enter the code we sent to ' + email + '.';
     if (v === 'reset') sub = 'Enter the code we sent to ' + email + ', then your new password.';
     if (v === 'newpw') sub = user ? 'For ' + user.email + '.' : '';
     if (v === 'account') sub = user ? 'Signed in as ' + user.email : 'Not signed in.';
-    if (v === 'delete') sub = user ? user.email : '';
+    if (v === 'delete') {
+      sub = user ? user.email : '';
+      /* an account made with Google or Apple has no password: its email confirms */
+      var byEmail = viaProvider();
+      $('aDePw').type = byEmail ? 'email' : 'password';
+      $('aDePw').autocomplete = byEmail ? 'off' : 'current-password';
+      $('aDePw').value = '';
+      dlg.querySelector('label[for="aDePw"]').textContent = byEmail ? 'Type your email to confirm' : 'Password';
+    }
     $('authSub').textContent = sub;
     msg('');
     /* the email typed on one form follows to the next */
@@ -192,6 +280,9 @@
   }
   function close() {
     if (dlg.hidden) return;
+    /* the sign-in page stays until an account is signed in */
+    if (gated && !user) return;
+    if (gated) ungate();
     dlg.hidden = true;
     if (app) app.inert = false;
     msg('');
@@ -222,6 +313,7 @@
   /* one request at a time, the button saying what it is doing */
   function run(form, label, fn) {
     if (busy) return;
+    if (!client) { msg('Connecting to the account service…', 'good'); return; }
     busy = true;
     var btn = form.querySelector('button[type=submit]');
     var was = btn.textContent;
@@ -240,6 +332,8 @@
   function code(form) { return val(form, 'code').replace(/\D/g, ''); }
 
   function signedIn(text) {
+    /* signed in: the sign-in page lets the app go */
+    if (gated) ungate();
     close();
     api.toast(text);
   }
@@ -329,12 +423,21 @@
     },
     delete: function (f) {
       var pw = f.elements.password.value;
-      if (!pw) { msg('Enter your password to confirm.', 'bad'); return; }
       var who = user && user.email;
+      var byEmail = viaProvider();
+      if (!pw) { msg(byEmail ? 'Type your email to confirm.' : 'Enter your password to confirm.', 'bad'); return; }
+      if (byEmail && pw.trim().toLowerCase() !== String(who).toLowerCase()) {
+        msg('That is not this account\'s email.', 'bad');
+        return;
+      }
       run(f, 'Deleting…', function () {
-        /* the password proves it is the account's owner at this device, then
-           the account deletes itself (delete_my_account: docs/accounts.md) */
-        return client.auth.signInWithPassword({ email: who, password: pw }).then(ok).then(function () {
+        /* the password proves it is the account's owner at this device (an
+           account from Google or Apple: its session and its email typed),
+           then the account deletes itself (delete_my_account: docs/accounts.md) */
+        var proof = byEmail
+          ? Promise.resolve()
+          : client.auth.signInWithPassword({ email: who, password: pw }).then(ok);
+        return proof.then(function () {
           return client.rpc('delete_my_account');
         }).then(ok).then(function () {
           f.reset();
@@ -345,6 +448,7 @@
           setUser(null);
           close();
           api.toast('Your account <b>' + api.esc(who) + '</b> is deleted');
+          if (GATE) gate();
         });
       });
     },
@@ -366,6 +470,7 @@
           setUser(null);
           close();
           api.toast('Signed out');
+          if (GATE) gate();
         });
       });
     }
@@ -382,6 +487,8 @@
     if (go) { e.preventDefault(); show(go.getAttribute('data-go')); return; }
     if (e.target.closest('[data-resend]')) { e.preventDefault(); resend(); return; }
     if (e.target.closest('[data-back]')) { e.preventDefault(); show(back); return; }
+    var prov = e.target.closest('[data-provider]');
+    if (prov) { e.preventDefault(); withProvider(prov.getAttribute('data-provider')); return; }
     if (e.target === dlg) close();
   });
   $('authClose').addEventListener('click', close);
@@ -395,7 +502,9 @@
 
   /* for the tests, and for the features that will need to know */
   api.account = {
-    user: function () { return user ? { email: user.email, id: user.id } : null; },
+    user: function () { return user ? { email: user.email, id: user.id, provider: viaProvider() ? user.app_metadata.provider : 'email' } : null; },
+    /* the app is waiting behind the sign-in page */
+    gated: function () { return gated; },
     open: open,
     ready: function () { return !!client; }
   };
