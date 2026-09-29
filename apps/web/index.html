@@ -23,6 +23,8 @@
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/pro.css">
 <link rel="stylesheet" href="css/light.css">
+<!-- the ADD DOTS look (design/AD PDF Editor Web): teal, Figtree, rounded -->
+<link rel="stylesheet" href="css/brand.css">
 
 <script src="js/health.js"></script>
 <script src="js/vendor/pdf.min.js"></script>
@@ -92,9 +94,9 @@
   <div class="ribbon" id="ribbon" role="region" aria-label="Ribbon">
     <div class="rpan" id="panView" role="tabpanel" aria-labelledby="ribView">
       <div class="grp" id="grpZoom">
-        <button class="btn" id="btnOut" title="Zoom out (−)" aria-label="Zoom out" data-label="Zoom out"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="8" y1="11" x2="14" y2="11"></line><line x1="16" y1="16" x2="21" y2="21"></line></svg></button>
+        <button class="btn" id="btnOut" title="Zoom out" aria-label="Zoom out" data-label="Zoom out"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="8" y1="11" x2="14" y2="11"></line><line x1="16" y1="16" x2="21" y2="21"></line></svg></button>
         <span class="zoomval" id="zoomVal">100%</span>
-        <button class="btn" id="btnIn" title="Zoom in (+)" aria-label="Zoom in" data-label="Zoom in"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="8" y1="11" x2="14" y2="11"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="16" y1="16" x2="21" y2="21"></line></svg></button>
+        <button class="btn" id="btnIn" title="Zoom in" aria-label="Zoom in" data-label="Zoom in"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="8" y1="11" x2="14" y2="11"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="16" y1="16" x2="21" y2="21"></line></svg></button>
         <button class="btn" id="btnFitW" title="Fit width (W)" data-label="Fit width"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="1.5"></rect><polyline points="4 9 1.5 12 4 15"></polyline><polyline points="20 9 22.5 12 20 15"></polyline></svg><span class="lbl">Width</span></button>
       </div>
       <span class="sep"></span>
@@ -297,6 +299,13 @@
     </aside>
 
     <div class="stage" id="stage" tabindex="0" role="main" aria-label="Document"></div>
+    <div class="zpill" id="zPill" role="region" aria-label="Zoom">
+      <button id="zpOut" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24"><path d="M6 12h12"></path></svg></button>
+      <span id="zpVal">100%</span>
+      <button id="zpIn" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24"><path d="M6 12h12M12 6v12"></path></svg></button>
+      <i aria-hidden="true"></i>
+      <button id="zpFit" class="fit" title="Fit the page to the width of the window">Fit width</button>
+    </div>
 
     <div class="home" id="openPanel">
       <header class="adnav">
@@ -324,7 +333,9 @@
       <div class="hbody">
       <aside class="hnav">
         <div class="brand">
+          <span class="hlogo" aria-hidden="true">AD</span>
           <span class="label">ADD DOTS <em>PDF</em></span>
+          <span class="hname"><b>ADD DOTS</b><small>PDF Editor</small></span>
         </div>
         <nav>
           <button class="on" data-go="hTop"><svg viewBox="0 0 24 24"><path d="M3 11l9-7 9 7"></path><path d="M5 10v10h14V10"></path><path d="M10 20v-6h4v6"></path></svg>Home</button>
@@ -337,28 +348,29 @@
         </div>
         <div class="safe">
           <svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path><polyline points="8.5 12 11 14.5 15.5 9.5"></polyline></svg>
-          <span>Private by design. Your files are opened and edited on this device — nothing is uploaded.</span>
+          <span><b>Private by design</b> Your files are opened and edited on this device — nothing is uploaded.</span>
         </div>
       </aside>
 
       <div class="hmain" id="hMain" role="main" aria-label="Home">
         <div class="hwrap">
           <div class="htop" id="hTop">
-            <div>
+            <div class="hhead">
               <h1 id="hHello">Welcome back</h1>
-              <p>Read, edit, mark up, pin site photos, organize and convert your PDFs.</p>
+              <p>Read, edit, mark up, pin site photos, organise and convert your PDFs.</p>
             </div>
+            <label class="hsearch" id="hSearchBox"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M16 16l5 5"></path></svg><input id="hSearch" type="search" placeholder="Search your PDFs…" aria-label="Search your recent PDFs" autocomplete="off"></label>
             <button class="resume uimode" id="hUi" title="Switch to dark interface"><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg><span id="hUiLbl">Dark mode</span></button>
             <button class="resume hacct-top" id="hAcctTop" aria-haspopup="dialog" hidden=""><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span id="hAcctTopLbl">Sign in</span></button>
             <button class="resume" id="hResume" hidden="">Back to <b id="hResumeName"></b> →</button>
           </div>
 
           <section class="hdrop" id="drop">
-            <div class="art"><span class="pg b"></span><span class="pg f"></span><span class="dot">+</span></div>
+            <div class="art" aria-hidden="true"><span class="pg b"></span><span class="pg f"></span><span class="dot">+</span><svg class="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg></div>
             <div class="txt">
-              <h2>Open a PDF to get started</h2>
+              <h2>Drop a PDF to get started</h2>
               <p>Drag and drop files here, or choose them from your device.
-                 Select several at once to merge them into one document.</p>
+                 Select several at once to merge them into one document, in order.</p>
               <div class="acts">
                 <button class="pick" id="pickBtn"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path></svg>Select files</button>
                 <button class="install" id="btnInstall" hidden=""><svg viewBox="0 0 24 24"><path d="M12 3v12"></path><polyline points="7.5 10.5 12 15 16.5 10.5"></polyline><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"></path></svg>Install app</button>
@@ -1176,6 +1188,7 @@
 <script src="js/books.js"></script>
 <script src="js/toolprops.js"></script>
 <script src="js/share.js"></script>
+<script src="js/inspector.js"></script>
 <script src="js/toolbar.js"></script>
 <script src="js/site-nav.js"></script>
 <script src="js/pwa.js"></script>

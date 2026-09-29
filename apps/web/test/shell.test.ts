@@ -130,3 +130,31 @@ describe('vendored Unicode font support', () => {
     expect(core).toContain("'assets/fonts/NotoEmoji.ttf'");
   });
 });
+
+/* The interface's type (css/brand.css): Figtree and JetBrains Mono, from
+   @fontsource-variable/figtree@5.3.0 (files/figtree-latin-wght-normal.woff2)
+   and @fontsource/jetbrains-mono@5.3.0 (files/jetbrains-mono-latin-500-normal.woff2),
+   copied unchanged. */
+describe('interface fonts', () => {
+  it.each([
+    ['Figtree-latin-wght.woff2', '4ba7d3d096695818fe0686be4f1e82c6b05134e18a22260336130335027462dd'],
+    ['JetBrainsMono-latin-500.woff2', 'cb182feeed4d798ff6961d3c79f7026279448fca0676438aaecb21f3fc39553a'],
+  ])('%s is the pinned file', (name, sha) => {
+    const b = readFileSync(join(app, 'public/assets/fonts', name));
+    expect(createHash('sha256').update(b).digest('hex')).toBe(sha);
+    expect(shell).toContain('assets/fonts/' + name);
+  });
+  it('ships their licences', () => {
+    for (const f of ['OFL-Figtree.txt', 'OFL-JetBrainsMono.txt']) {
+      expect(readFileSync(join(app, 'public/assets/fonts', f), 'utf8')).toMatch(/SIL Open Font License/);
+    }
+  });
+  it('css/brand.css loads them from those paths', () => {
+    const css = readFileSync(join(app, 'public/css/brand.css'), 'utf8');
+    expect(css).toContain('../assets/fonts/Figtree-latin-wght.woff2');
+    expect(css).toContain('../assets/fonts/JetBrainsMono-latin-500.woff2');
+  });
+  it.each(localRefs.filter((u) => u.startsWith('css/')))('%s is cached for offline use', (ref) => {
+    expect(shell).toContain(ref);
+  });
+});

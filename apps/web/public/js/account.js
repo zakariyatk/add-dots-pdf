@@ -120,6 +120,8 @@
     $('hAcctName').textContent = user ? name : 'Sign in';
     $('hAcctSub').textContent = user ? 'Signed in' : 'One account on every device';
     $('hAcctTopLbl').textContent = user ? name : 'Sign in';
+    /* the home screen greets the account by name */
+    if (api.refreshHello) api.refreshHello();
     if (!dlg.hidden && view === 'account') show('account');
   }
 

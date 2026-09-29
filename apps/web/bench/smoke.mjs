@@ -204,6 +204,111 @@ try {
     );
     check('pages stand in order without overlapping', order);
 
+    /* the zoom pill over the pages zooms like the ribbon's buttons */
+    const z0 = await page.evaluate(() => window.ADDPDF.S.scale);
+    await page.click('#zpIn');
+    await page.waitForFunction((z) => window.ADDPDF.S.scale > z * 1.1, z0, { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(400);
+    const zoomed = await page.evaluate(() => ({
+      scale: window.ADDPDF.S.scale,
+      pill: document.getElementById('zpVal').textContent,
+      ribbon: document.getElementById('zoomVal').textContent,
+    }));
+    check(
+      'the zoom pill zooms in, and shows the level the ribbon shows',
+      zoomed.scale > z0 * 1.1 && zoomed.pill === zoomed.ribbon,
+      { z0, ...zoomed },
+    );
+    await page.click('#zpFit');
+    await page.waitForTimeout(400);
+
+    /* the top bar stays one row, down to a tablet: the tabs scroll instead */
+    const rows = {};
+    for (const width of [1440, 1100, 800]) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.waitForTimeout(200);
+      /* on one row when Save and Home share some of their height */
+      rows[width] = await page.evaluate(() => {
+        const a = document.getElementById('btnHome').getBoundingClientRect();
+        const b = document.getElementById('btnSave').getBoundingClientRect();
+        return b.top < a.bottom && a.top < b.bottom;
+      });
+    }
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(300);
+    check('the top bar stays on one row at 1440, 1100 and 800 px', Object.values(rows).every(Boolean), rows);
+
+    /* the panel on the right: the page being read, and Download & share */
+    const insp = await page.evaluate(() => ({
+      shown: !document.getElementById('insp').hidden,
+      title: document.getElementById('inspPgTitle').textContent,
+      tickedOff: (() => {
+        document.querySelector('#insp .iseg [data-k="sel"]').click();
+        const off = document.getElementById('inspGo').disabled;
+        document.querySelector('#insp .iseg [data-k="pdf"]').click();
+        return off;
+      })(),
+    }));
+    await page.click('#inspRotR');
+    const turned = await page.evaluate(() => window.ADDPDF.S.items[window.ADDPDF.S.current - 1].rot);
+    await page.click('#inspRotL');
+    await page.click('#inspGo');
+    const savePop = await page.evaluate(() => !document.getElementById('savePop').hidden);
+    await page.evaluate(() => window.ADDPDF.closePops());
+    const w0 = await page.evaluate(() => document.getElementById('stage').clientWidth);
+    await page.click('#inspClose');
+    await page.waitForTimeout(300);
+    const closedP = await page.evaluate(() => ({
+      hidden: document.getElementById('insp').hidden,
+      wider: document.getElementById('stage').clientWidth,
+    }));
+    await page.click('#ribView');
+    await page.click('#btnInsp');
+    await page.waitForTimeout(300);
+    const back = await page.evaluate(() => !document.getElementById('insp').hidden);
+    check(
+      'the right panel: names the page, turns it, opens Save, closes and comes back',
+      insp.shown &&
+        /^Page \d+ of 60$/.test(insp.title) &&
+        insp.tickedOff &&
+        turned === 90 &&
+        savePop &&
+        closedP.hidden &&
+        closedP.wider > w0 + 200 &&
+        back,
+      { insp, turned, savePop, w0, closedP, back },
+    );
+
+    /* drawing: the quick colour dots and line weights set the tool's colour and width */
+    const was = await page.evaluate(() => ({ c: window.ADDPDF.S.color, w: window.ADDPDF.S.width }));
+    await page.click('#ribDraw');
+    await page.click('#tRect');
+    await page.click('#swatches .sw.quick[data-c="#3B82F6"]');
+    await page.click('.wdquick button[data-w="3"]');
+    const quickPick = await page.evaluate(() => ({
+      color: window.ADDPDF.S.color,
+      width: window.ADDPDF.S.width,
+      dotOn: document.querySelector('#swatches .sw.quick[data-c="#3B82F6"]').classList.contains('on'),
+      drop: document.getElementById('wdDrop').textContent,
+      chipOn: document.querySelector('.wdquick button[data-w="3"]').getAttribute('aria-pressed'),
+    }));
+    await page.evaluate((w) => {
+      const X = window.ADDPDF;
+      X.S.color = w.c;
+      X.S.width = w.w;
+      X.setTool('select');
+      X.setRibbon('ribView');
+    }, was);
+    check(
+      'drawing: a quick colour dot and a quick line weight set the tool',
+      quickPick.color === '#3B82F6' &&
+        quickPick.width === 3 &&
+        quickPick.dotOn &&
+        /3 pt/.test(quickPick.drop) &&
+        quickPick.chipOn === 'true',
+      quickPick,
+    );
+
     await page.evaluate(() => window.ADDPDF.goTo(47));
     await page
       .waitForFunction(() => window.ADDPDF.S.items[46].rendered, null, { timeout: 10000 })
@@ -859,6 +964,34 @@ try {
       done,
     );
 
+    /* the home screen's search box filters the recent files by name */
+    const found = await page.evaluate(async () => {
+      const box = document.getElementById('hSearch');
+      const rows = () => document.querySelectorAll('#recentList .rrow').length;
+      const settle = () => new Promise((r) => setTimeout(r, 300));
+      /* the list is drawn when the home screen shows: draw it now */
+      box.dispatchEvent(new Event('input'));
+      for (let i = 0; i < 50 && !rows(); i++) await settle();
+      const all = rows();
+      box.value = 'FROM-files';
+      box.dispatchEvent(new Event('input'));
+      await settle();
+      const hit = rows();
+      box.value = 'no such file';
+      box.dispatchEvent(new Event('input'));
+      await settle();
+      const miss = rows();
+      const note = document.getElementById('recentList').textContent;
+      box.value = '';
+      box.dispatchEvent(new Event('input'));
+      return { all, hit, miss, note };
+    });
+    check(
+      'home: Search your PDFs filters the recent files by name',
+      found.all >= 1 && found.hit === 1 && found.miss === 0 && /No recent PDF matches/.test(found.note),
+      found,
+    );
+
     /* Share: the app is not served from the web, so it shares through the
        website in js/config.js (shareServer), and its links point there */
     const shareCalls = [];
@@ -1126,6 +1259,12 @@ try {
       'accounts: after a restart the app is still signed in',
       again.user && again.user.email === 'zak@example.com' && again.home === 'zak@example.com',
       again,
+    );
+    const hello = await page.evaluate(() => document.getElementById('hHello').textContent);
+    check(
+      'home: the greeting names the signed-in account',
+      /^Good (morning|afternoon|evening), Zak$/.test(hello),
+      hello,
     );
 
     /* sign out, from the toolbar's account button (behind the home screen: the home entry) */
