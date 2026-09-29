@@ -836,3 +836,25 @@ body:not([data-ui="light"]) .wgo { background: #FFFFFF; color: #06303A }
   .wframe h2 { font-size: 26px }
   .wart { min-height: 150px }
 }
+
+/* ---- phones: Edit tools, five large tiles above the dock (js/edittools.js) ---- */
+.etools { display: none }
+@media (max-width: 760px) {
+  body:not(.no-doc) .etools {
+    flex: none; display: flex; justify-content: space-between; gap: 8px;
+    margin: 0 12px 8px; padding: 8px; border-radius: 22px; background: var(--chrome-2);
+    box-shadow: 0 10px 24px -18px rgba(6, 48, 58, .5);
+  }
+  body[data-ui="light"] .etools { background: #FFFFFF }
+  .etools button {
+    flex: 1; max-width: 64px; height: 52px; border: none; border-radius: 16px; display: grid; place-items: center;
+    background: var(--chrome); color: var(--text); cursor: pointer;
+  }
+  body[data-ui="light"] .etools button { background: #F2F5F6; color: #0B2A31 }
+  .etools button.on,
+  body[data-ui="light"] .etools button.on { background: var(--deep); color: #FFFFFF }
+  body:not([data-ui="light"]) .etools button.on { background: var(--text); color: var(--chrome) }
+  .etools button:disabled { opacity: .4; cursor: default }
+  .etools button:focus-visible { outline: 2px solid var(--teal-bright); outline-offset: 2px }
+  .etools svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
+}

@@ -989,6 +989,29 @@ try {
       { ...dl, dlSave, dlBack },
     );
 
+    /* phones: the Edit tools tiles above the dock press the same tools */
+    const tilesShown = await page.evaluate(() => {
+      const r = document.getElementById('etools').getBoundingClientRect();
+      return r.height > 40 && r.bottom <= document.getElementById('dock').getBoundingClientRect().top + 1;
+    });
+    await page.click('#etools [data-tool="ink"]');
+    const penOn = await page.evaluate(() => ({
+      tool: window.ADDPDF.S.tool,
+      tile: document.querySelector('#etools [data-tool="ink"]').getAttribute('aria-pressed'),
+    }));
+    await page.click('#etools [data-tool="select"]');
+    const tiles = await page.evaluate(() => ({
+      tool: window.ADDPDF.S.tool,
+      undo:
+        document.querySelector('#etools [data-for="btnUndo"]').disabled ===
+        document.getElementById('btnUndo').disabled,
+    }));
+    check(
+      'phone: the Edit tools tiles sit above the dock, pick the tool (shown as on), and follow Undo',
+      tilesShown && penOn.tool === 'ink' && penOn.tile === 'true' && tiles.tool === 'select' && tiles.undo,
+      { tilesShown, penOn, tiles },
+    );
+
     /* the home screen's search box filters the recent files by name */
     const found = await page.evaluate(async () => {
       const box = document.getElementById('hSearch');
