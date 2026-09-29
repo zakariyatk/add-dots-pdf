@@ -162,6 +162,26 @@ try {
 } catch (e) {
   check('the Android app could be driven', false, String((e && e.message) || e).split('\n')[0]);
 } finally {
+  /* on a failure, what the device saw: the app's own errors, and the system
+     log's crashes and WebView messages (a WebView that goes away leaves its
+     reason here) */
+  if (failed) {
+    const health = page
+      ? await page
+          .evaluate(() => (window.ADDPDF_HEALTH ? window.ADDPDF_HEALTH.session() : null))
+          .catch(() => null)
+      : null;
+    if (health) console.log('\napp errors: ' + JSON.stringify(health.slice(0, 10)));
+    const log = await sh('logcat -d -v time -t 4000').catch(() => '');
+    const lines = log
+      .split('\n')
+      .filter((l) =>
+        /FATAL|AndroidRuntime|crash|Crash|chromium|Console|lowmemory|ActivityManager.*(adddots|Killing)|ActivityTaskManager.*adddots/.test(
+          l,
+        ),
+      );
+    console.log('\nlogcat (' + lines.length + ' lines):\n' + lines.slice(-120).join('\n'));
+  }
   await device.close().catch(() => {});
 }
 
