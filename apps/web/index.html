@@ -368,9 +368,9 @@
           <section class="hdrop" id="drop">
             <div class="art" aria-hidden="true"><span class="pg b"></span><span class="pg f"></span><span class="dot">+</span><svg class="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"></path></svg></div>
             <div class="txt">
-              <h2>Drop a PDF to get started</h2>
-              <p>Drag and drop files here, or choose them from your device.
-                 Select several at once to merge them into one document, in order.</p>
+              <h2><span class="lg">Drop a PDF to get started</span><span class="sm">Open a PDF</span></h2>
+              <p><span class="lg">Drag and drop files here, or choose them from your device.
+                 Select several at once to merge them into one document, in order.</span><span class="sm">Pick several to merge them in order</span></p>
               <div class="acts">
                 <button class="pick" id="pickBtn"><svg viewBox="0 0 24 24"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"></path></svg>Select files</button>
                 <button class="install" id="btnInstall" hidden=""><svg viewBox="0 0 24 24"><path d="M12 3v12"></path><polyline points="7.5 10.5 12 15 16.5 10.5"></polyline><path d="M5 17v2a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-2"></path></svg>Install app</button>
@@ -389,31 +389,31 @@
             <div class="tgrid" id="toolGrid">
               <button class="tcard" data-tool="text" style="--c:#3B82F6">
                 <span class="ic"><svg viewBox="0 0 24 24"><polyline points="5 7 5 4 19 4 19 7"></polyline><line x1="12" y1="4" x2="12" y2="20"></line><line x1="9" y1="20" x2="15" y2="20"></line></svg></span>
-                <span><b>Edit text</b><small>Retype a line of the PDF or add new text.</small></span></button>
+                <span><b><span class="lg">Edit text</span><span class="sm">Edit</span></b><small>Retype a line of the PDF or add new text.</small></span></button>
               <button class="tcard" data-tool="mark" style="--c:#E2483D">
                 <span class="ic"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" rx="1"></rect><line x1="4" y1="21" x2="14" y2="21"></line></svg></span>
-                <span><b>Comment &amp; mark up</b><small>Boxes, lines and arrows in any colour.</small></span></button>
+                <span><b><span class="lg">Comment &amp; mark up</span><span class="sm">Mark up</span></b><small>Boxes, lines and arrows in any colour.</small></span></button>
               <button class="tcard" data-tool="pin" style="--c:#E03616">
                 <span class="ic"><svg viewBox="0 0 24 24"><path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"></path><circle cx="12" cy="10" r="2.4"></circle></svg></span>
-                <span><b>PIN site photos</b><small>Numbered pins with photos; export PDF or viewer.</small></span></button>
+                <span><b><span class="lg">PIN site photos</span><span class="sm">PIN</span></b><small>Numbered pins with photos; export PDF or viewer.</small></span></button>
               <button class="tcard" data-tool="merge" style="--c:#8B5CF6">
                 <span class="ic"><svg viewBox="0 0 24 24"><path d="M4 4h7v7H4z"></path><path d="M13 13h7v7h-7z"></path><path d="M11 7.5h4a2 2 0 0 1 2 2V13"></path></svg></span>
-                <span><b>Merge PDFs</b><small>Combine several files into one, in order.</small></span></button>
+                <span><b><span class="lg">Merge PDFs</span><span class="sm">Merge</span></b><small>Combine several files into one, in order.</small></span></button>
               <button class="tcard" data-tool="organize" style="--c:#22A06B">
                 <span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="7" height="9" rx="1"></rect><rect x="14" y="4" width="7" height="9" rx="1"></rect><path d="M6 17v3h12v-3"></path></svg></span>
-                <span><b>Organize pages</b><small>Reorder, rotate, insert or remove pages.</small></span></button>
+                <span><b><span class="lg">Organize pages</span><span class="sm">Organize</span></b><small>Reorder, rotate, insert or remove pages.</small></span></button>
               <button class="tcard" data-tool="extract" style="--c:#0EA5E9">
                 <span class="ic"><svg viewBox="0 0 24 24"><path d="M14 3v5h5"></path><path d="M19 11V8l-5-5H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h4"></path><line x1="17" y1="14" x2="17" y2="21"></line><polyline points="14 18 17 21 20 18"></polyline></svg></span>
-                <span><b>Extract &amp; split</b><small>Pull out pages as one PDF or many.</small></span></button>
+                <span><b><span class="lg">Extract &amp; split</span><span class="sm">Extract</span></b><small>Pull out pages as one PDF or many.</small></span></button>
               <button class="tcard" data-tool="jpg" style="--c:#F59E0B">
                 <span class="ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"></rect><circle cx="8.5" cy="9.5" r="1.4"></circle><polyline points="4 17 9 12 13 16 16 13 20 17"></polyline></svg></span>
-                <span><b>PDF to JPG</b><small>Save pages as images at print quality.</small></span></button>
+                <span><b><span class="lg">PDF to JPG</span><span class="sm">To JPG</span></b><small>Save pages as images at print quality.</small></span></button>
               <button class="tcard" data-tool="crop" style="--c:#14B8A6">
                 <span class="ic"><svg viewBox="0 0 24 24"><path d="M7 2v15h15"></path><path d="M2 7h15v15"></path></svg></span>
-                <span><b>Crop pages</b><small>Trim margins on one page or all of them.</small></span></button>
+                <span><b><span class="lg">Crop pages</span><span class="sm">Crop</span></b><small>Trim margins on one page or all of them.</small></span></button>
               <button class="tcard" data-tool="translate" style="--c:#EC4899">
                 <span class="ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><line x1="3" y1="12" x2="21" y2="12"></line><path d="M12 3a14 14 0 0 1 0 18a14 14 0 0 1 0-18z"></path></svg></span>
-                <span><b>Translate</b><small>Read a translation beside each page.</small></span></button>
+                <span><b><span class="lg">Translate</span><span class="sm">Translate</span></b><small>Read a translation beside each page.</small></span></button>
             </div>
           </section>
 

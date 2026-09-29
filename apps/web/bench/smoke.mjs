@@ -1113,10 +1113,53 @@ try {
       found,
     );
 
+    /* the home screen on a phone ("02 Home"): the tools a row to swipe,
+       then a slim Open a PDF bar, a tap anywhere on which opens the picker */
+    {
+      const hctx = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        serviceWorkers: 'block',
+      });
+      await hctx.addInitScript(() => {
+        try {
+          localStorage.setItem('adpdf-welcomed', '1');
+        } catch (e) {
+          /* private window */
+        }
+      });
+      const hp = await hctx.newPage();
+      await hp.goto(URL);
+      await hp.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+      const home = await hp.evaluate(() => {
+        const r = (id) => document.getElementById(id).getBoundingClientRect();
+        const grid = document.getElementById('toolGrid');
+        const drop = r('drop');
+        return {
+          toolsFirst: r('hTools').bottom <= drop.top,
+          slim: drop.height < 100,
+          row: grid.scrollWidth > grid.clientWidth && r('toolGrid').height < 100,
+          words: document.querySelector('#drop h2').innerText.trim(),
+        };
+      });
+      const chooser = hp.waitForEvent('filechooser', { timeout: 5000 }).then(
+        () => true,
+        () => false,
+      );
+      /* a tap on the bar's words, not on the button's own spot */
+      await hp.click('#drop', { position: { x: 120, y: 30 } });
+      home.picker = await chooser;
+      check(
+        'phone home: the tools are a row to swipe above a slim Open a PDF bar, and a tap on the bar opens the picker',
+        home.toolsFirst && home.slim && home.row && home.words === 'Open a PDF' && home.picker,
+        home,
+      );
+      await hctx.close();
+    }
+
     /* Share: the app is not served from the web, so it shares through the
        website in js/config.js (shareServer), and its links point there */
     const shareCalls = [];
-    await ctx.route('https://app.adddots.com/api/**', async (route) => {
+    await ctx.route('https://www.pdf.adddots.com/api/**', async (route) => {
       const req = route.request();
       const path = new globalThis.URL(req.url()).pathname.replace('/api', '');
       shareCalls.push(req.method() + ' ' + path);
@@ -1148,8 +1191,8 @@ try {
       'phone app: Share uploads to the website in config.js, and its links point there',
       shareCalls.includes('GET /health') &&
         shareCalls.includes('POST /documents') &&
-        owner === 'https://app.adddots.com/?d=d1#k=own3r' &&
-        review === 'https://app.adddots.com/?s=r3view',
+        owner === 'https://www.pdf.adddots.com/?d=d1#k=own3r' &&
+        review === 'https://www.pdf.adddots.com/?s=r3view',
       { owner, review, calls: shareCalls.slice(0, 5) },
     );
     check('no errors on the page', errors.length === 0, errors);

@@ -274,27 +274,89 @@ body:not([data-ui="light"]) .rrow .tag.off { background: #3A2A0B; color: #F7C979
 @media (max-width: 900px) {
   .hmain { padding: 22px 18px 40px }
 }
+/* words for a wide window, and shorter ones for a phone */
+.home .sm { display: none }
+
+/* ---- a phone ("02 Home" in design/AD PDF Editor iOS.dc.html): the greeting
+   with round buttons, search, the tools as a row of small tiles to swipe
+   through, a slim Open a PDF bar, then the recent files ---- */
 @media (max-width: 760px) {
-  .hmain { padding: 16px 16px calc(28px + env(safe-area-inset-bottom)) }
-  .htop { gap: 12px; margin-bottom: 20px }
-  .htop h1 { font-size: 26px }
-  .htop p { font-size: 14px }
+  .home .lg { display: none }
+  .home .sm { display: inline }
+  .hmain { padding: 12px 16px calc(28px + env(safe-area-inset-bottom)) }
+  .hwrap { display: flex; flex-direction: column }
+  .htop { order: 0; gap: 12px; margin-bottom: 16px; align-items: center }
+  #hTools { order: 1 }
+  #drop { order: 2 }
+  #hRecover, #hRecent { order: 3 }
+  #hHealth { order: 4 }
+  .hhead { min-width: 0 }
+  .htop h1 { font-size: 28px; line-height: 1.12 }
+  .htop p { display: none }
   .hsearch { flex: 1 1 100%; order: 3; height: 46px }
-  .htop .resume { height: 46px }
-  #hResume { flex: 1 1 100%; order: 2; justify-content: center }
-  .htop .resume.uimode { width: 46px }
-  .hdrop, body[data-ui="light"] .hdrop { padding: 30px 22px; gap: 16px; border-radius: 26px }
-  .hdrop::before { inset: 10px; border-radius: 18px }
-  .hdrop .txt { display: block }
-  .hdrop .acts { justify-content: center; margin-top: 16px }
-  .hdrop .or { text-align: center }
-  .hdrop .pick, .hdrop .install,
-  body[data-ui="light"] :is(.hdrop .pick, .hdrop .install) { height: 48px; font-size: 15px }
-  .hsec h3, body[data-ui="light"] .hsec h3 { font-size: 19px }
-  .tgrid { grid-template-columns: 1fr 1fr; gap: 10px }
-  .tcard { padding: 14px; gap: 10px; border-radius: 20px }
-  .tcard b { font-size: 14.5px }
-  .rlist, body[data-ui="light"] .rlist { padding: 4px 14px; border-radius: 20px }
+  #hResume { flex: 1 1 100%; order: 2; justify-content: center; height: 46px }
+  /* round buttons beside the greeting: the light switch and the account */
+  .htop .resume.uimode,
+  .htop .resume.hacct-top:not([hidden]) { width: 52px; height: 52px; padding: 0; justify-content: center; border-radius: 26px }
+  .htop .resume.hacct-top svg { width: 20px; height: 20px; stroke-width: 2 }
+  .htop .resume.hacct-top span {
+    position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap;
+  }
+
+  /* the tools: a row to swipe, a tile each with its name under it */
+  #hTools { margin: 0 -16px 18px }
+  #hTools h3 { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0) }
+  .tgrid {
+    display: flex; gap: 8px; padding: 0 16px 4px; overflow-x: auto; scrollbar-width: none;
+    scroll-padding-inline: 16px; scroll-snap-type: x proximity; overscroll-behavior-x: contain;
+  }
+  .tgrid::-webkit-scrollbar { display: none }
+  .tcard, body[data-ui="light"] .tcard {
+    flex: 0 0 72px; align-items: center; gap: 6px; padding: 0; border-radius: 0; background: none;
+    box-shadow: none; scroll-snap-align: start;
+  }
+  .tcard:hover, body[data-ui="light"] .tcard:hover { transform: none; background: none; box-shadow: none }
+  .tcard .ic, body[data-ui="light"] .tcard .ic { width: 64px; height: 46px; border-radius: 23px; background: #FFFFFF }
+  body:not([data-ui="light"]) .tcard .ic { background: var(--chrome) }
+  body:not([data-ui="light"]) :is(.htop .resume.uimode, .htop .resume.hacct-top) { background: var(--chrome-2) }
+  .tcard .ic svg { width: 21px; height: 21px }
+  .tcard b { display: block; margin: 0; font-size: 12px; font-weight: 500; text-align: center; white-space: nowrap }
+  .tcard small { display: none }
+  .tcard:focus-visible { outline: none }
+  .tcard:focus-visible .ic { outline: 2px solid var(--teal-bright); outline-offset: 2px }
+
+  /* Open a PDF: one slim dark bar, the whole of it picks files */
+  .hdrop, body[data-ui="light"] .hdrop {
+    position: relative; display: flex; flex-direction: row; align-items: center; gap: 14px; margin-bottom: 22px;
+    text-align: left;
+    padding: 12px 44px 12px 12px; border-radius: 22px;
+  }
+  .hdrop::before { display: none }
+  .hdrop::after {
+    content: ""; position: absolute; right: 20px; top: 50%; width: 9px; height: 9px; margin-top: -5px;
+    border: solid #FFFFFF; border-width: 2px 2px 0 0; transform: rotate(45deg); pointer-events: none;
+  }
+  .hdrop .art { flex: none; width: 52px; height: 52px; border-radius: 16px }
+  .hdrop .art .plus { width: 24px; height: 24px }
+  .hdrop .txt { display: block; min-width: 0 }
+  .hdrop h2, body[data-ui="light"] .hdrop h2 { margin: 0 0 2px; font-size: 18px }
+  .hdrop p { font-size: 13px; line-height: 1.35 }
+  .hdrop .acts { margin: 0 }
+  .hdrop .acts .or, .hdrop .install { display: none }
+  /* the button covers the bar, so a tap anywhere on it opens the picker */
+  .hdrop .acts .pick, body[data-ui="light"] .hdrop .acts .pick {
+    position: absolute; inset: 0; width: auto; height: auto; padding: 0; border-radius: 22px;
+    background: transparent; color: transparent; font-size: 0; z-index: 1;
+  }
+  .hdrop .acts .pick svg { display: none }
+  .hdrop .acts .pick:hover, body[data-ui="light"] .hdrop .acts .pick:hover:not(:disabled) { background: rgba(255, 255, 255, .06) }
+  .hdrop .acts .pick:focus-visible { outline: 2px solid var(--teal-bright); outline-offset: 2px }
+  /* a password asked for, or a file refused: shown under the bar, above the cover */
+  .hdrop .pw, .hdrop .err { position: relative; z-index: 2; margin-top: 10px }
+
+  .hsec { margin-bottom: 22px }
+  .hsec h3, body[data-ui="light"] .hsec h3 { font-size: 20px; margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between }
+  .rlist, body[data-ui="light"] .rlist { padding: 4px 14px; border-radius: 22px }
 }
 
 /* ================================================================
