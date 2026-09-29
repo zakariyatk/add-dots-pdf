@@ -964,6 +964,31 @@ try {
       done,
     );
 
+    /* phones: Download & share is a page of its own, from the top of the More sheet */
+    await page.click('#btnMore');
+    await page.waitForTimeout(300);
+    await page.click('#moreDl');
+    await page.waitForTimeout(300);
+    const dl = await page.evaluate(() => {
+      const el = document.getElementById('insp');
+      const r = el.getBoundingClientRect();
+      return {
+        open: !el.hidden && el.classList.contains('phone'),
+        full: r.width >= 380 && r.height >= 800,
+        name: document.getElementById('inspFileName').textContent,
+      };
+    });
+    await page.click('#inspGo');
+    const dlSave = await page.evaluate(() => !document.getElementById('savePop').hidden);
+    await page.evaluate(() => window.ADDPDF.closePops());
+    await page.click('#inspBack');
+    const dlBack = await page.evaluate(() => document.getElementById('insp').hidden);
+    check(
+      'phone: Download & share opens full screen from More, names the file, opens Save, and Back closes it',
+      dl.open && dl.full && dl.name === 'from-files.pdf' && dlSave && dlBack,
+      { ...dl, dlSave, dlBack },
+    );
+
     /* the home screen's search box filters the recent files by name */
     const found = await page.evaluate(async () => {
       const box = document.getElementById('hSearch');

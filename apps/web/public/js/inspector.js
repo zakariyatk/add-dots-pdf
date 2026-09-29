@@ -31,7 +31,8 @@
       zip: '<path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7"/>',
       word: '<path d="M14 3v5h5"/><path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z"/><path d="M8 12l1.5 6 2.5-4.5 2.5 4.5 1.5-6"/>',
       close: '<path d="M6 6l12 12M18 6 6 18"/>',
-      panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/>'
+      panel: '<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="15" y1="4" x2="15" y2="20"/>',
+      back: '<path d="M15 5 8 12l7 7"/>'
     };
     const svg = function (k) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + ICONS[k] + '</svg>'; };
 
@@ -40,6 +41,10 @@
     el.className = 'insp'; el.id = 'insp';
     el.setAttribute('aria-label', 'Page and download');
     el.innerHTML =
+      /* on a phone it is a page of its own: a way back, and the file */
+      '<div class="iphone ihead"><button type="button" class="iback" id="inspBack" aria-label="Back to the document">' +
+        svg('back') + '</button><h2>Download &amp; share</h2></div>' +
+      '<div class="iphone ifile"><i aria-hidden="true">PDF</i><div><b id="inspFileName"></b><small id="inspFileMeta"></small></div></div>' +
       '<section class="icard" id="inspPage">' +
         '<header><h2 id="inspPgTitle">Page</h2><span class="itag" id="inspPgSize"></span>' +
           '<button class="ix" id="inspClose" type="button" title="Close this panel" aria-label="Close this panel">' + svg('close') + '</button></header>' +
@@ -99,18 +104,51 @@
     const view = $('grpView');
     if (view) view.appendChild(btn);
 
+    /* on a phone it opens from the More sheet, over the whole screen */
+    let phoneOpen = false;
     function sync() {
-      const shown = WIDE.matches && !closed && !!S.items.length;
+      const doc = !!S.items.length;
+      const phone = !WIDE.matches && phoneOpen && doc;
+      if (!doc || WIDE.matches) phoneOpen = false;
+      const shown = (WIDE.matches && !closed && doc) || phone;
       const was = !el.hidden;
       el.hidden = !shown;
-      document.body.classList.toggle('insp-on', shown);
+      el.classList.toggle('phone', phone);
+      if (phone) { el.setAttribute('role', 'dialog'); el.setAttribute('aria-modal', 'true'); }
+      else { el.removeAttribute('role'); el.removeAttribute('aria-modal'); }
+      document.body.classList.toggle('insp-on', shown && !phone);
       btn.classList.toggle('on', shown);
       btn.setAttribute('aria-pressed', shown ? 'true' : 'false');
       btn.hidden = !WIDE.matches;
       if (shown) render();
       /* the pages fit to what is left of the window */
-      if (was !== shown && S.items.length && S.fit) X.relayout();
+      if (was !== shown && !phone && WIDE.matches && S.items.length && S.fit) X.relayout();
     }
+    function openPhone() {
+      if (!S.items.length) return;
+      phoneOpen = true; sync();
+      $('inspBack').focus({ preventScroll: true });
+    }
+    function closePhone() {
+      if (!phoneOpen) return;
+      phoneOpen = false; X.closePops(); sync();
+      $('stage').focus({ preventScroll: true });
+    }
+    $('inspBack').addEventListener('click', closePhone);
+    el.addEventListener('keydown', function (e) {
+      /* Escape closes a popover first, and the page after */
+      if (e.key === 'Escape' && phoneOpen && !document.querySelector('.pop:not([hidden])')) closePhone();
+    });
+    /* the way in: first in the More sheet */
+    const more = $('moreSheet'), entry = document.createElement('button');
+    entry.type = 'button'; entry.className = 'btn dlopen'; entry.id = 'moreDl';
+    entry.innerHTML = svg('down') + '<span>Download &amp; share</span>';
+    entry.addEventListener('click', function () {
+      if ($('moreClose')) $('moreClose').click();
+      openPhone();
+    });
+    if (more && $('moreBody')) more.insertBefore(entry, $('moreBody'));
+    X.openDownload = openPhone;
     function setClosed(v) {
       closed = v;
       try { localStorage.setItem(KEY, v ? 'off' : 'on'); } catch (e) { /* private window */ }
@@ -146,6 +184,10 @@
       if (it && it.added) bits.push('added');
       $('inspPgNote').textContent = bits.length ? bits.join(' · ') : 'As it came in the file';
       $('inspDel').disabled = n <= 1;
+      /* the file, for the phone's page */
+      const m = $('meta'), nm = m && m.querySelector('b');
+      $('inspFileName').textContent = nm ? nm.textContent : '';
+      $('inspFileMeta').textContent = nm ? m.textContent.slice(nm.textContent.length).replace(/^\s*·\s*/, '') : '';
       renderOut();
     }
 
