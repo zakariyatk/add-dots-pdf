@@ -484,8 +484,11 @@ body[data-ui="light"] .pagebox.cur .tick { color: var(--teal) }
   background: var(--deep); color: #FFFFFF; font-size: 13.5px; font-weight: 600; white-space: nowrap;
   box-shadow: 0 12px 28px -14px rgba(6, 48, 58, .7);
 }
-/* centred on the pages, not on the window, when the side panel is open */
-.main:has(> .rail:not([hidden])) .zpill { left: calc(50% + (var(--rail) + 16px) / 2) }
+/* centred on the pages, not on the window, when a side panel is open */
+.main { --rl: 0px; --rr: 0px }
+.main:has(> .rail:not([hidden])) { --rl: calc(var(--rail) + 16px) }
+.main:has(> .insp:not([hidden])) { --rr: calc(var(--insp) + 16px) }
+.zpill { left: calc(50% + (var(--rl) - var(--rr)) / 2) }
 .zpill button {
   height: 32px; min-width: 32px; padding: 0; border: none; border-radius: 16px; background: transparent;
   color: inherit; font: inherit; cursor: pointer; display: grid; place-items: center;
@@ -533,3 +536,90 @@ body.no-doc .zpill { display: none }
   .bar #btnSave { height: 40px; padding: 0 15px }
   .bar #btnMore { width: 40px; padding: 0 }
 }
+
+/* ---- the panel on the right: this page, and Download & share (js/inspector.js) ---- */
+:root { --insp: 300px }
+.insp {
+  width: var(--insp); flex: none; margin: 0 16px 16px 0; min-height: 0; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 16px; overscroll-behavior: contain; scrollbar-width: thin;
+}
+@media (max-width: 1279px) { .insp { display: none !important } }
+.icard {
+  flex: none; display: flex; flex-direction: column; gap: 14px; padding: 18px;
+  border-radius: 24px; background: var(--chrome-2); color: var(--text);
+}
+body[data-ui="light"] .icard { background: #FFFFFF }
+.icard.grow { flex: 1 0 auto }
+.icard header { display: flex; align-items: center; gap: 10px; min-height: 28px }
+.icard h2 { margin: 0; flex: 1; min-width: 0; font-size: 16px; font-weight: 700; color: var(--text) }
+.icard h3 { margin: 4px 0 -4px; font-size: 13px; font-weight: 500; color: var(--text-dim) }
+.itag { font: 500 11px/1 var(--mono); letter-spacing: .04em; text-transform: uppercase; color: var(--text-dim); white-space: nowrap }
+body[data-ui="light"] .itag { color: #51686E }
+.inote { margin: -6px 0 0; font-size: 13px; line-height: 1.45; color: var(--text-dim) }
+.ix {
+  flex: none; width: 30px; height: 30px; margin: -4px -6px -4px 0; padding: 0; border: none; border-radius: 15px;
+  display: grid; place-items: center; background: transparent; color: var(--text-dim); cursor: pointer;
+}
+.ix:hover { background: var(--hover, rgba(255, 255, 255, .08)); color: var(--text) }
+.insp svg { width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
+
+/* the page's four actions, two by two */
+.igrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px }
+.igrid button {
+  height: 44px; border: none; border-radius: 14px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--chrome); color: var(--text); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer;
+}
+body[data-ui="light"] .igrid button { background: #F2F5F6; color: var(--text) }
+body[data-ui="light"] .igrid button:hover:not(:disabled) { background: #E2F4F8 }
+body:not([data-ui="light"]) .igrid button:hover:not(:disabled) { background: #222 }
+.igrid button.danger { color: #E27C68 }
+body[data-ui="light"] .igrid button.danger { background: #FDECEC; color: #C8241F }
+body[data-ui="light"] .igrid button.danger:hover:not(:disabled) { background: #FAD9D8 }
+.igrid button:disabled { opacity: .45; cursor: default }
+
+/* PDF / JPG pages / Ticked */
+.iseg { display: flex; gap: 2px; padding: 4px; border-radius: 14px; background: var(--chrome) }
+body[data-ui="light"] .iseg { background: #F2F5F6 }
+.iseg button {
+  flex: 1; height: 34px; border: none; border-radius: 10px; background: transparent; cursor: pointer;
+  font: inherit; font-size: 13px; font-weight: 600; color: var(--text-dim);
+}
+.iseg button[aria-checked="true"] { background: var(--chrome-2); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .25) }
+body[data-ui="light"] .iseg button[aria-checked="true"] { background: #FFFFFF; box-shadow: 0 1px 3px rgba(6, 48, 58, .12) }
+
+/* a switch drawn over a real checkbox */
+.itoggle { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; cursor: pointer; position: relative }
+.itoggle input { position: absolute; opacity: 0; width: 42px; height: 26px; right: 0; margin: 0; cursor: pointer }
+.itoggle i {
+  flex: none; width: 42px; height: 26px; border-radius: 13px; padding: 2px; display: flex;
+  background: #8FA2A6; transition: background .15s;
+}
+.itoggle i::after { content: ""; width: 22px; height: 22px; border-radius: 11px; background: #FFFFFF; transition: transform .15s }
+.itoggle input:checked + i { background: var(--teal-bright) }
+.itoggle input:checked + i::after { transform: translateX(16px) }
+.itoggle input:focus-visible + i { outline: 2px solid var(--teal-bright); outline-offset: 2px }
+
+/* the one big button */
+.igo {
+  height: 48px; border: none; border-radius: 24px; display: flex; align-items: center; justify-content: center; gap: 8px;
+  background: var(--text); color: var(--chrome); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+body[data-ui="light"] .igo { background: var(--deep); color: #FFFFFF }
+body[data-ui="light"] .igo:hover:not(:disabled) { background: var(--deep-hover) }
+.igo:disabled { opacity: .45; cursor: default }
+.igo svg { width: 17px; height: 17px }
+
+/* more ways to send it: a coloured tile each */
+.iapps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px }
+.iapps button {
+  display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 0; border: none; border-radius: 12px;
+  background: transparent; color: var(--text-dim); font: inherit; font-size: 12px; cursor: pointer;
+}
+body[data-ui="light"] .iapps button { color: #34494E }
+.iapps button:hover:not(:disabled) i { transform: translateY(-2px) }
+.iapps button:disabled { opacity: .45; cursor: default }
+.iapps i { width: 46px; height: 46px; border-radius: 14px; display: grid; place-items: center; color: #FFFFFF; transition: transform .15s }
+.iapps i svg { width: 21px; height: 21px }
+.iapps span { white-space: nowrap }
+/* the dark tile would vanish on the dark interface */
+body:not([data-ui="light"]) .iapps [data-for="btnPrint"] i { background: #3A5A62 !important }

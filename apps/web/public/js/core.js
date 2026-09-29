@@ -5976,6 +5976,7 @@
   }
 
   let curMarked = null;
+  let lastCurrent = 0;          /* 'current' is told only when the page changes */
   function setCurrent(n) {
     S.current = Math.max(1, Math.min(S.items.length, n));
     $('pageIn').value = String(S.current);
@@ -5990,6 +5991,7 @@
       it.box && it.box.classList.add('cur');
     }
     curMarked = it || null;
+    if (S.current !== lastCurrent) { lastCurrent = S.current; EXT.emit('current', S.current); }
     if (it && it.thumb && !rail.hidden) {
       const host = $('railPages'), t = it.thumb.offsetTop;
       if (t < host.scrollTop || t > host.scrollTop + host.clientHeight - 70) host.scrollTop = t - 40;
@@ -7208,6 +7210,8 @@
         e.target.closest('#btnExtract') || e.target.closest('#btnJpg') ||
         e.target.closest('#pinExpGo')) return;
     if (e.target.closest('[data-a="add"]')) return;
+    /* a button elsewhere that opens one of these (js/inspector.js) */
+    if (e.target.closest('[data-opens-pop]')) return;
     /* the same courtesy for a popover a module owns */
     if (EXT_POPS.some(function (x) {
       return typeof x.anchor === 'string' && x.anchor && e.target.closest('#' + x.anchor);

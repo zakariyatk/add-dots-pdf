@@ -238,6 +238,47 @@ try {
     await page.waitForTimeout(300);
     check('the top bar stays on one row at 1440, 1100 and 800 px', Object.values(rows).every(Boolean), rows);
 
+    /* the panel on the right: the page being read, and Download & share */
+    const insp = await page.evaluate(() => ({
+      shown: !document.getElementById('insp').hidden,
+      title: document.getElementById('inspPgTitle').textContent,
+      tickedOff: (() => {
+        document.querySelector('#insp .iseg [data-k="sel"]').click();
+        const off = document.getElementById('inspGo').disabled;
+        document.querySelector('#insp .iseg [data-k="pdf"]').click();
+        return off;
+      })(),
+    }));
+    await page.click('#inspRotR');
+    const turned = await page.evaluate(() => window.ADDPDF.S.items[window.ADDPDF.S.current - 1].rot);
+    await page.click('#inspRotL');
+    await page.click('#inspGo');
+    const savePop = await page.evaluate(() => !document.getElementById('savePop').hidden);
+    await page.evaluate(() => window.ADDPDF.closePops());
+    const w0 = await page.evaluate(() => document.getElementById('stage').clientWidth);
+    await page.click('#inspClose');
+    await page.waitForTimeout(300);
+    const closedP = await page.evaluate(() => ({
+      hidden: document.getElementById('insp').hidden,
+      wider: document.getElementById('stage').clientWidth,
+    }));
+    await page.click('#ribView');
+    await page.click('#btnInsp');
+    await page.waitForTimeout(300);
+    const back = await page.evaluate(() => !document.getElementById('insp').hidden);
+    check(
+      'the right panel: names the page, turns it, opens Save, closes and comes back',
+      insp.shown &&
+        /^Page \d+ of 60$/.test(insp.title) &&
+        insp.tickedOff &&
+        turned === 90 &&
+        savePop &&
+        closedP.hidden &&
+        closedP.wider > w0 + 200 &&
+        back,
+      { insp, turned, savePop, w0, closedP, back },
+    );
+
     await page.evaluate(() => window.ADDPDF.goTo(47));
     await page
       .waitForFunction(() => window.ADDPDF.S.items[46].rendered, null, { timeout: 10000 })
