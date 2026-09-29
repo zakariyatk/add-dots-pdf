@@ -859,6 +859,34 @@ body:not([data-ui="light"]) .wgo { background: #FFFFFF; color: #06303A }
   .etools svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
 }
 
+/* ---- Edit, Copy and Delete under the selected mark (core.js syncSelBar) ---- */
+.selbar {
+  position: fixed; z-index: 12; display: flex; gap: 2px; padding: 4px;
+  border-radius: 14px; background: var(--chrome-2); color: var(--text);
+  box-shadow: 0 12px 28px -10px rgba(6, 48, 58, .45), 0 1px 3px rgba(6, 48, 58, .12);
+}
+.selbar[hidden] { display: none }
+body[data-ui="light"] .selbar { background: #FFFFFF; color: #34494E }
+.selbar button {
+  display: flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px; border: none; border-radius: 10px;
+  background: none; color: inherit; font: 500 13px/1 var(--sans); cursor: pointer;
+}
+.selbar button[hidden] { display: none }
+.selbar button:hover { background: var(--chrome) }
+body[data-ui="light"] .selbar button:hover { background: #F2F5F6 }
+.selbar button.danger { color: #E5484D }
+.selbar button:focus-visible { outline: 2px solid var(--teal-bright); outline-offset: -2px }
+.selbar svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
+body.editing .selbar { display: none }
+@media (max-width: 760px) {
+  /* fingertip-sized, the icon over its word */
+  .selbar { padding: 6px; border-radius: 18px }
+  .selbar button { flex-direction: column; justify-content: center; gap: 4px; height: 52px; min-width: 60px; padding: 0 10px; font-size: 12px }
+  .selbar svg { width: 18px; height: 18px }
+  /* the dock keeps its height with the Edit tools above it */
+  .dock { flex: none }
+}
+
 /* ---- the sign-in page the app waits behind (js/account.js, requireSignIn) ---- */
 .authdlg.gate { background: linear-gradient(180deg, #8DDCEA 0%, #C4ECF2 30%, #EEF2F3 60%, #F2F4F5 100%) #F2F4F5 }
 body:not([data-ui="light"]) .authdlg.gate { background: linear-gradient(180deg, #0A3E4A 0%, #06303A 30%, #0B0F10 70%) #0B0F10 }

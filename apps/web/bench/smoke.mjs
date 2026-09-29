@@ -166,6 +166,63 @@ const misSized = (page) =>
       .filter(Boolean);
   });
 
+/* draws a box on page 1 and picks it up: the bar under it (Edit, Copy,
+   Delete) shows, Copy places a copy, Delete takes it away and the bar goes */
+async function selBarCheck(page, label) {
+  await page.evaluate(() => window.ADDPDF.goTo(1));
+  await page.waitForTimeout(300);
+  const at = await page.evaluate(() => {
+    const r = window.ADDPDF.S.items[0].anno.getBoundingClientRect();
+    return { x: r.left + r.width * 0.3, y: Math.max(r.top, 0) + 140 };
+  });
+  await page.evaluate(() => window.ADDPDF.setTool('rect'));
+  await page.mouse.move(at.x, at.y);
+  await page.mouse.down();
+  await page.mouse.move(at.x + 100, at.y + 70, { steps: 5 });
+  await page.mouse.up();
+  await page.evaluate(() => window.ADDPDF.setTool('select'));
+  const n0 = await page.evaluate(() => window.ADDPDF.S.items[0].shapes.length);
+  /* on the box's top edge: the line is the mark (its inside is the page) */
+  const edge = await page.evaluate((n) => {
+    const r = window.ADDPDF.S.items[0].anno.children[n - 1].getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top, bottom: r.bottom };
+  }, n0);
+  await page.mouse.click(edge.x, edge.y);
+  await page.waitForTimeout(300);
+  const bar = await page.evaluate(() => {
+    const el = document.getElementById('selBar');
+    const r = el.getBoundingClientRect();
+    return {
+      shown: !el.hidden && r.height > 30,
+      top: r.top,
+      edit: !document.getElementById('sbEdit').hidden,
+    };
+  });
+  await page.click('#sbCopy');
+  const copied = await page.evaluate(() => window.ADDPDF.S.items[0].shapes.length);
+  await page.click('#sbDel');
+  const after = await page.evaluate(() => ({
+    n: window.ADDPDF.S.items[0].shapes.length,
+    hidden: document.getElementById('selBar').hidden,
+  }));
+  /* and the box itself, the same way, so the page is as it was */
+  await page.mouse.click(edge.x, edge.y);
+  await page.waitForTimeout(200);
+  await page.click('#sbDel');
+  const left = await page.evaluate(() => window.ADDPDF.S.items[0].shapes.length);
+  check(
+    label + 'a picked-up mark has Edit, Copy and Delete under it: Copy places a copy, Delete removes it',
+    bar.shown &&
+      bar.top >= edge.bottom &&
+      !bar.edit &&
+      copied === n0 + 1 &&
+      after.n === n0 &&
+      after.hidden &&
+      left === n0 - 1,
+    { n0, edge, bar, copied, after, left },
+  );
+}
+
 await ensureCorpus();
 const MIXED = join(CORPUS_DIR, 'smoke-mixed-60p.pdf');
 const PREFILLED = join(CORPUS_DIR, 'smoke-prefilled-400p.pdf');
@@ -234,6 +291,7 @@ try {
     );
     await page.click('#zpFit');
     await page.waitForTimeout(400);
+    await selBarCheck(page, '');
 
     /* the top bar stays one row, down to a tablet: the tabs scroll instead */
     const rows = {};
@@ -1005,7 +1063,8 @@ try {
     /* phones: the Edit tools tiles above the dock press the same tools */
     const tilesShown = await page.evaluate(() => {
       const r = document.getElementById('etools').getBoundingClientRect();
-      return r.height > 40 && r.bottom <= document.getElementById('dock').getBoundingClientRect().top + 1;
+      const dock = document.getElementById('dock').getBoundingClientRect();
+      return r.height > 40 && r.bottom <= dock.top + 1 && dock.height >= 60;
     });
     await page.click('#etools [data-tool="ink"]');
     const penOn = await page.evaluate(() => ({
@@ -1024,6 +1083,7 @@ try {
       tilesShown && penOn.tool === 'ink' && penOn.tile === 'true' && tiles.tool === 'select' && tiles.undo,
       { tilesShown, penOn, tiles },
     );
+    await selBarCheck(page, 'phone: ');
 
     /* the home screen's search box filters the recent files by name */
     const found = await page.evaluate(async () => {
