@@ -660,3 +660,56 @@ body[data-ui="light"] .wdquick button.on { background: #FFFFFF; box-shadow: 0 1p
   .sw.quick, .wdquick { display: none }
 }
 body:not([data-ui="light"]) #panTool #modeBar #modeDone { background: var(--text); color: var(--chrome) }
+
+/* ================================================================
+   Phones (design/AD PDF Editor iOS.dc.html, "03 Editor")
+   ================================================================ */
+@media (max-width: 760px) {
+  /* the pages float on the sky, with round corners */
+  body[data-ui="light"] .page { border-radius: 10px }
+
+  /* the dock: a white sheet with round top corners; the tool that is on, a dark teal tile */
+  .dock {
+    border-top: none; border-radius: 24px 24px 0 0; padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 24px -16px rgba(6, 48, 58, .35);
+  }
+  body[data-ui="light"] .dock { background: #FFFFFF }
+  body:not([data-ui="light"]) .dock { background: var(--chrome-2) }
+  .dock .btn { height: 54px; border: none; border-radius: 16px; gap: 4px }
+  .dock .btn svg { width: 20px; height: 20px; stroke-width: 2 }
+  .dock .btn::after { font-family: var(--sans); font-size: 11px; font-weight: 500; letter-spacing: 0 }
+  body[data-ui="light"] .dock .btn:not(.on) { color: #34494E }
+  body[data-ui="light"] .dock .btn:not(.on)::after { color: #34494E }
+  body[data-ui="light"] .dock .btn.on,
+  body[data-ui="light"] .dock .btn.on::after { background: var(--deep); color: #FFFFFF }
+  body[data-ui="light"] .dock .btn.on::after { background: none }
+  body:not([data-ui="light"]) .dock .btn.on { background: var(--text); color: var(--chrome) }
+  body:not([data-ui="light"]) .dock .btn.on::after { color: var(--chrome) }
+
+  /* the tool's settings above the dock: a white card */
+  body[data-ui="light"] .modebar.show { background: transparent; border-bottom: none }
+  .modebar.show { padding: 8px 12px; gap: 8px }
+  .modebar #modeDone { height: 36px; border-radius: 18px; padding: 0 16px; border: none }
+  body[data-ui="light"] .modebar #modeDone { background: var(--deep); color: #FFFFFF }
+  body:not([data-ui="light"]) .modebar #modeDone { background: var(--text); color: var(--chrome) }
+  body[data-ui="light"] :is(.modebar .swmore, .modebar .wdrop) { background: #FFFFFF; border-color: transparent }
+
+  /* the More sheet: round, with round buttons */
+  .sheet { border-top: none; border-radius: 28px 28px 0 0; padding-left: 16px; padding-right: 16px }
+  body[data-ui="light"] .sheet { background: #FFFFFF; box-shadow: 0 -14px 40px rgba(6, 48, 58, .25) }
+  .sheet .grab { width: 44px; height: 5px; background: #C9D3D5 }
+  .sheet h2 { font-family: var(--sans); font-size: 17px; font-weight: 700; letter-spacing: 0; text-transform: none; color: var(--text) }
+  .sheet .grp .btn { height: 50px; border: none; border-radius: 16px; font-size: 14.5px; font-weight: 500 }
+  body[data-ui="light"] .sheet .grp .btn { background: #F2F5F6; color: var(--text) }
+  body[data-ui="light"] .sheet .grp .btn.on { background: var(--deep); color: #FFFFFF }
+  #moreClose { height: 50px !important; border-radius: 25px; border: none !important; font-weight: 600 }
+  body[data-ui="light"] #moreClose { background: var(--deep); color: #FFFFFF }
+  .sheet .meta { font-family: var(--sans); font-size: 13px }
+  .sheet .meta b { font-size: 15px }
+
+  /* popovers: round cards */
+  .pop { border-radius: 20px; padding: 12px }
+  body[data-ui="light"] .pop { border-color: transparent }
+  .pop .btn { border-radius: 14px }
+  body[data-ui="light"] .pop .btn.primary { background: var(--deep); color: #FFFFFF }
+}
