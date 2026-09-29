@@ -1060,6 +1060,61 @@ try {
     await ctx.close();
   }
 
+  /* ---- phones, the first time: the welcome pages (js/welcome.js) ---- */
+  {
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+    const page = await ctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    const first = await page.evaluate(() => {
+      const w = document.getElementById('welcome');
+      return {
+        shown: !!w,
+        title: w && document.getElementById('wTitle').textContent,
+        focus: document.activeElement.id,
+      };
+    });
+    await page.addScriptTag({
+      content: readFileSync(createRequire(import.meta.url).resolve('axe-core/axe.min.js'), 'utf8'),
+    });
+    const axeW = await page.evaluate(async () =>
+      (
+        await window.axe.run('#welcome', {
+          runOnly: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'],
+        })
+      ).violations.map((v) => v.id),
+    );
+    const titles = [];
+    for (let i = 0; i < 3; i++) {
+      titles.push(await page.textContent('#wTitle'));
+      await page.click('#wGo');
+    }
+    const gone = await page.evaluate(() => ({
+      gone: !document.getElementById('welcome'),
+      kept: localStorage.getItem('adpdf-welcomed'),
+    }));
+    await page.reload();
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await page.waitForTimeout(300);
+    const again = await page.evaluate(() => !!document.getElementById('welcome'));
+    check(
+      'phone, first run: the welcome pages show, pass axe, page through to Get Started, and stay away after',
+      first.shown &&
+        /Mark Up Any PDF/.test(first.title) &&
+        first.focus === 'wGo' &&
+        axeW.length === 0 &&
+        new Set(titles).size === 3 &&
+        gone.gone &&
+        gone.kept === '1' &&
+        !again,
+      { first, axeW, titles, gone, again },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- accounts: sign up with a code, stay signed in, sign out, sign in,
      reset the password (js/account.js against a fake Supabase Auth) ---- */
   {

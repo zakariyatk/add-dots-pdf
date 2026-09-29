@@ -765,3 +765,74 @@ body:not([data-ui="light"]) #panTool #modeBar #modeDone { background: var(--text
   .insp.phone .igo { height: 56px; border-radius: 28px; font-size: 17px }
   .insp.phone .iapps i { width: 52px; height: 52px; border-radius: 16px }
 }
+
+/* ---- phones, the first time: welcome (js/welcome.js; "01 Onboarding") ---- */
+.welcome {
+  position: fixed; inset: 0; z-index: 60; display: flex; flex-direction: column; overflow: hidden;
+  padding: calc(16px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, #8DDCEA 0%, #BFEAF1 34%, #EEF2F3 62%, #F2F4F5 100%) #F2F4F5;
+  color: #0B2A31; font-family: var(--sans);
+}
+body:not([data-ui="light"]) .welcome { background: linear-gradient(180deg, #0A3E4A 0%, #06303A 34%, #0B0F10 70%) #0B0F10; color: #E4E4E4 }
+.wskip {
+  position: absolute; right: 16px; top: calc(12px + env(safe-area-inset-top)); height: 40px; padding: 0 16px;
+  border: none; border-radius: 20px; background: rgba(255, 255, 255, .6); color: inherit;
+  font: inherit; font-size: 15px; font-weight: 600; cursor: pointer;
+}
+body:not([data-ui="light"]) .wskip { background: rgba(255, 255, 255, .12) }
+.whead { padding: 40px 10px 0; display: flex; flex-direction: column; align-items: center; gap: 18px }
+/* the title in a selection frame, as a mark would be */
+.wframe { position: relative; border: 1.5px solid #2FA9BF; padding: 14px 18px }
+.wframe i { position: absolute; width: 10px; height: 10px; background: #FFFFFF; border: 1.5px solid #2FA9BF }
+.wframe i:nth-child(1) { left: -6px; top: -6px }
+.wframe i:nth-child(2) { right: -6px; top: -6px }
+.wframe i:nth-child(3) { left: -6px; bottom: -6px }
+.wframe i:nth-child(4) { right: -6px; bottom: -6px }
+.wframe h2 { margin: 0; font-size: 32px; font-weight: 700; line-height: 1.12; letter-spacing: -.02em; text-align: center; text-wrap: balance }
+.wtext { margin: 0; display: flex; gap: 8px; max-width: 300px; font-size: 15px; line-height: 1.45; color: #3E565C }
+body:not([data-ui="light"]) .wtext { color: #A9C4C9 }
+.wtext span:first-child { font-size: 18px; line-height: 1 }
+/* a marked-up page, with the tools floating round it */
+.wart { position: relative; flex: 1; min-height: 200px; margin: 22px 6px 0 }
+.wpage {
+  position: absolute; inset: 36px 40px 16px; border-radius: 18px; background: #FFFFFF; padding: 22px 20px;
+  display: flex; flex-direction: column; gap: 8px; box-shadow: 0 24px 50px -26px rgba(6, 48, 58, .5);
+}
+.wpage b { height: 9px; width: 64%; border-radius: 3px; background: #0B2A31 }
+.wpage u { height: 5px; width: 88%; border-radius: 3px; background: #D5DDDF }
+.wpage u:nth-of-type(2) { width: 72% }
+.wpage em {
+  flex: 1; min-height: 40px; margin: 6px 0; border-radius: 8px; position: relative;
+  background: repeating-linear-gradient(135deg, #F1F4F5 0 8px, #FAFBFB 8px 16px); border: 1px solid #E3E9EA;
+}
+.wpage s { position: absolute; left: 14%; top: 18%; width: 42%; height: 56%; border: 2px solid #E2483D; border-radius: 3px }
+.wchip {
+  position: absolute; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 16px;
+  background: #FFFFFF; color: #0B2A31; font-size: 13px; font-weight: 600; white-space: nowrap;
+  box-shadow: 0 12px 24px -10px rgba(6, 48, 58, .3);
+}
+.wchip i { width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center }
+.wchip svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round }
+.wchip.c0 { left: 0; top: 14px; transform: rotate(-8deg) }
+.wchip.c1 { right: 4px; top: 0; transform: rotate(7deg) }
+.wchip.c2 { left: -6px; bottom: 70px; transform: rotate(6deg) }
+.wchip.c3 { right: -4px; bottom: 100px; transform: rotate(-6deg) }
+.wfoot { padding-top: 18px; display: flex; flex-direction: column; align-items: center; gap: 14px }
+.wdots { display: flex; gap: 6px }
+.wdots i { width: 6px; height: 6px; border-radius: 3px; background: rgba(6, 48, 58, .2); transition: width .2s }
+.wdots i.on { width: 22px; background: #06303A }
+body:not([data-ui="light"]) .wdots i { background: rgba(255, 255, 255, .25) }
+body:not([data-ui="light"]) .wdots i.on { background: #FFFFFF }
+.wgo {
+  width: 100%; height: 60px; border: none; border-radius: 30px; display: flex; align-items: center; justify-content: center; gap: 12px;
+  background: #06303A; color: #FFFFFF; font: inherit; font-size: 18px; font-weight: 600; cursor: pointer;
+}
+body:not([data-ui="light"]) .wgo { background: #FFFFFF; color: #06303A }
+.wgo:focus-visible, .wskip:focus-visible { outline: 3px solid var(--teal-bright); outline-offset: 3px }
+.wgo span { font-size: 20px }
+/* short phones: a smaller title, the art gives way */
+@media (max-height: 700px) {
+  .whead { padding-top: 24px }
+  .wframe h2 { font-size: 26px }
+  .wart { min-height: 150px }
+}
