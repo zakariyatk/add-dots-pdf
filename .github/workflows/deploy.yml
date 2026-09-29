@@ -1,0 +1,102 @@
+name: Publish
+
+# Puts the web app on the server (Hostinger, over FTP).
+#
+#   - after CI passes on main:        the test site, https://staging.adddots.com/
+#   - Actions -> Publish -> Run workflow, "live":  https://www.pdf.adddots.com/
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions):
+#   FTP_SERVER        the FTP host from hPanel -> Files -> FTP Accounts
+#   FTP_USERNAME      that account's user
+#   FTP_PASSWORD      and password
+#   FTP_DIR_STAGING   the test site's folder as that account sees it, ending in /
+#   FTP_DIR_LIVE      the live site's folder, ending in /
+# Optional repository variable FTP_PROTOCOL: ftps (the default) or ftp.
+#
+# What goes up is apps/web/dist plus the share server, legacy/api. Never
+# api/config.php (each site keeps its own, with its database password) and
+# never api/setup.php (run once by hand, then deleted: docs in README.md).
+# Only files this workflow uploaded before are ever removed from the server.
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Where to publish
+        type: choice
+        options: [staging, live]
+        default: staging
+
+concurrency:
+  group: publish-${{ github.event.inputs.target || 'staging' }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to ${{ github.event.inputs.target || 'staging' }}
+    # after CI, only when CI passed on a push to main
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.target == 'live' && 'live' || 'staging' }}
+    env:
+      TARGET: ${{ github.event.inputs.target || 'staging' }}
+      SITE_URL: ${{ github.event.inputs.target == 'live' && 'https://www.pdf.adddots.com/' || 'https://staging.adddots.com/' }}
+      FTP_DIR: ${{ github.event.inputs.target == 'live' && secrets.FTP_DIR_LIVE || secrets.FTP_DIR_STAGING }}
+      HAS_FTP: ${{ secrets.FTP_SERVER != '' && secrets.FTP_USERNAME != '' && secrets.FTP_PASSWORD != '' }}
+    steps:
+      - name: FTP details present?
+        if: env.HAS_FTP != 'true' || env.FTP_DIR == ''
+        run: |
+          echo "::warning::Not published: add the FTP_* secrets (see .github/workflows/deploy.yml)."
+      - uses: actions/checkout@v4
+        if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
+        with:
+          # after CI: exactly the commit CI checked
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v4
+        if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
+        with:
+          node-version: 24
+          cache: npm
+      - name: Build
+        if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
+        run: |
+          npm ci
+          npm run build -w @adddots/web
+          mkdir -p site/api
+          cp -r apps/web/dist/. site/
+          rsync -a --exclude tests --exclude config.php --exclude setup.php legacy/api/ site/api/
+          echo "Publishing $(git rev-parse --short HEAD) to $TARGET ($SITE_URL)"
+          grep -m1 "VERSION =" site/sw.js
+      - name: Upload
+        if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
+          local-dir: ./site/
+          server-dir: ${{ env.FTP_DIR }}
+          # everything else on the server (config.php, .htaccess, uploads) is left alone
+          exclude: |
+            **/.git*
+            **/.git*/**
+      - name: Check the site answers
+        if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
+        run: |
+          want=$(grep -m1 -o "VERSION = '[^']*'" site/sw.js)
+          for i in 1 2 3 4 5 6; do
+            got=$(curl -fsS "${SITE_URL}sw.js?check=$GITHUB_RUN_ID" | grep -m1 -o "VERSION = '[^']*'" || true)
+            [ "$got" = "$want" ] && break
+            sleep 10
+          done
+          echo "sw.js on the server: ${got:-nothing} (built: $want)"
+          [ "$got" = "$want" ] || { echo "::error::$SITE_URL does not serve what was just uploaded"; exit 1; }
+          curl -fsS "${SITE_URL}api/health" && echo || echo "::warning::${SITE_URL}api/health did not answer: the share server needs api/config.php (first time: README.md, Publishing)"
