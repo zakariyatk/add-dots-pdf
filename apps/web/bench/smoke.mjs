@@ -1113,6 +1113,52 @@ try {
       found,
     );
 
+    /* the home screen on a phone ("02 Home"): the tools a row to swipe,
+       then a slim Open a PDF bar, a tap anywhere on which opens the picker */
+    {
+      const hctx = await browser.newContext({
+        viewport: { width: 390, height: 844 },
+        serviceWorkers: 'block',
+      });
+      await hctx.addInitScript(() => {
+        try {
+          localStorage.setItem('adpdf-welcomed', '1');
+        } catch (e) {
+          /* private window */
+        }
+      });
+      const hp = await hctx.newPage();
+      await hp.goto(URL);
+      await hp.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+      const home = await hp.evaluate(() => {
+        const r = (id) => document.getElementById(id).getBoundingClientRect();
+        const grid = document.getElementById('toolGrid');
+        const drop = r('drop');
+        return {
+          toolsFirst: r('hTools').bottom <= drop.top,
+          slim: drop.height < 100,
+          row: grid.scrollWidth > grid.clientWidth && r('toolGrid').height < 100,
+          words: document.querySelector('#drop h2').innerText.trim(),
+        };
+      });
+      const box = await hp.evaluate(() => {
+        const b = document.getElementById('drop').getBoundingClientRect();
+        return { x: b.left + b.width * 0.4, y: b.top + b.height / 2 };
+      });
+      const chooser = hp.waitForEvent('filechooser', { timeout: 3000 }).then(
+        () => true,
+        () => false,
+      );
+      await hp.mouse.click(box.x, box.y);
+      home.picker = await chooser;
+      check(
+        'phone home: the tools are a row to swipe above a slim Open a PDF bar, and a tap on the bar opens the picker',
+        home.toolsFirst && home.slim && home.row && home.words === 'Open a PDF' && home.picker,
+        home,
+      );
+      await hctx.close();
+    }
+
     /* Share: the app is not served from the web, so it shares through the
        website in js/config.js (shareServer), and its links point there */
     const shareCalls = [];
