@@ -162,6 +162,28 @@ try {
 } catch (e) {
   check('the Android app could be driven', false, String((e && e.message) || e).split('\n')[0]);
 } finally {
+  /* on a failure, what the device saw: the app's own errors, and the system
+     log's crashes and WebView messages (a WebView that goes away leaves its
+     reason here) */
+  if (failed) {
+    const health = page
+      ? await page
+          .evaluate(() => (window.ADDPDF_HEALTH ? window.ADDPDF_HEALTH.session() : null))
+          .catch(() => null)
+      : null;
+    if (health) console.log('\napp errors: ' + JSON.stringify(health.slice(0, 10)));
+    /* the crash buffer holds the whole report of any crash, Java or native */
+    const crashes = await sh('logcat -d -b crash -v time').catch(() => '');
+    console.log('\ncrash log:\n' + (crashes.split('\n').slice(-150).join('\n') || '(empty)'));
+    const log = await sh('logcat -d -v time').catch(() => '');
+    const lines = log
+      .split('\n')
+      .filter((l) =>
+        /fatal|crash|chromium|cr_|webview|renderer|sandboxed|lowmemory|lmkd|killing|adddots|console/i.test(l),
+      )
+      .filter((l) => !/AiAiEcho|DynamiteModule/.test(l));
+    console.log('\nlogcat (' + lines.length + ' lines):\n' + lines.slice(-150).join('\n'));
+  }
   await device.close().catch(() => {});
 }
 

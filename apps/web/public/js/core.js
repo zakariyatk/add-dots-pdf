@@ -2368,7 +2368,7 @@
 
   function syncMarkPop() {
     const pop = $('markPop'), s = selShape();
-    if (!s || dragOn) { pop.hidden = true; closeSwatches(); return; }
+    if (!s || dragOn) { pop.hidden = true; closeSwatches(); syncSelBar(); return; }
     buildMarkPop();
     const isText = s.t === 'text';
     const isBox = s.t === 'rect';
@@ -2417,6 +2417,7 @@
 
     pop.hidden = false;
     placeMarkPop();
+    syncSelBar();
   }
 
   /* park it just clear of the mark, kept inside the window */
@@ -2443,7 +2444,67 @@
     pop.style.left = left + 'px';
     pop.style.top = top + 'px';
   }
-  function hideMarkPop() { const p = $('markPop'); if (p) p.hidden = true; closeSwatches(); }
+  function hideMarkPop() { const p = $('markPop'); if (p) p.hidden = true; closeSwatches(); syncSelBar(); }
+
+  /* Edit, Copy and Delete in a small bar just under the selected mark (the
+     design's "Web Editor" and "03 Editor"): what a finger or a mouse wants
+     next without reaching for the keyboard. Edit retypes a text mark; the
+     rest of a mark's settings are in the Drawing Tool tab, or above the
+     tools on a phone. */
+  function selBounds(s, it) {
+    const vp = it.vp;
+    const q = s.t === 'text' ? textQuad(s, vp)
+            : s.t === 'rect' ? rectCorners(s).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); })
+            : s.pts ? s.pts.map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); })
+            : [s.a, s.b, s.m].filter(Boolean).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+    const b = { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity };
+    q.forEach(function (p) {
+      b.x1 = Math.min(b.x1, p[0]); b.y1 = Math.min(b.y1, p[1]);
+      b.x2 = Math.max(b.x2, p[0]); b.y2 = Math.max(b.y2, p[1]);
+    });
+    return b;
+  }
+  function syncSelBar() {
+    const bar = $('selBar');
+    if (!bar) return;
+    const s = selShape();
+    if (!s || dragOn || S.editing || !S.sel.it.vp || !S.sel.it.anno) { bar.hidden = true; return; }
+    $('sbEdit').hidden = !(s.t === 'text' && selList().length === 1);
+    bar.hidden = false;
+    placeSelBar();
+  }
+  function placeSelBar() {
+    const bar = $('selBar'), s = selShape();
+    if (!bar || bar.hidden || !s) return;
+    const it = S.sel.it, r = it.anno.getBoundingClientRect(), b = selBounds(s, it);
+    if (!isFinite(b.x1)) { bar.hidden = true; return; }
+    const view = stage.getBoundingClientRect();
+    const w = bar.offsetWidth, h = bar.offsetHeight;
+    let left = r.left + (b.x1 + b.x2) / 2 - w / 2;
+    left = Math.max(view.left + 8, Math.min(view.right - w - 8, left));
+    let top = r.top + b.y2 + 12;
+    if (top + h > view.bottom - 8) top = r.top + b.y1 - h - 34;      /* above, clear of the turn grip */
+    top = Math.max(view.top + 8, Math.min(view.bottom - h - 8, top));
+    bar.style.left = left + 'px';
+    bar.style.top = top + 'px';
+  }
+  (function () {
+    const bar = $('selBar');
+    if (!bar) return;
+    bar.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    $('sbEdit').addEventListener('click', function () {
+      if (!S.sel || !selShape()) return;
+      openEditor(S.sel.it, null, S.sel.i);
+      syncSelBar();
+    });
+    $('sbCopy').addEventListener('click', function () {
+      if (EXT.duplicateMarks) EXT.duplicateMarks();
+    });
+    $('sbDel').addEventListener('click', function () {
+      deleteSelected();
+      stage.focus({ preventScroll: true });
+    });
+  })();
 
   /* the grab points drawn on the selected mark */
   function handlesEl(it, s, vp, idx) {
@@ -2766,7 +2827,7 @@
   function trackMarkPop() {
     if ($('markPop').hidden) return;
     if (mpTick) return;
-    mpTick = requestAnimationFrame(function () { mpTick = 0; placeMarkPop(); });
+    mpTick = requestAnimationFrame(function () { mpTick = 0; placeMarkPop(); placeSelBar(); });
   }
   stage.addEventListener('scroll', trackMarkPop, { passive: true });
   window.addEventListener('resize', trackMarkPop);
@@ -5121,6 +5182,7 @@
     S.editing = null;
     document.body.classList.remove('editing');
     ed.box.remove();
+    syncSelBar();
 
     if (!commit) { drawShapes(ed.it); return; }
     if (!WINANSI_OK.test(val)) {
@@ -5225,6 +5287,7 @@
     it.inner.appendChild(wrapEl);
     document.body.classList.add('editing');
     S.editing = { it: it, item: item, idx: idx, box: wrapEl, at: Date.now() };
+    syncSelBar();
 
     /* hide the live item while its editor is open */
     if (idx >= 0) {
@@ -8122,7 +8185,7 @@
     S: S, SVGNS: SVGNS, COLORS: COLORS, WIDTHS: WIDTHS, FONTS: FONTS,
     $: $, toast: toast, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
     snapLine: snapLine, snapBox: snapBox, constrainPt: constrainPt,
-    selList: selList, setGroup: setGroup,
+    selList: selList, setGroup: setGroup, syncMarkPop: syncMarkPop,
     snapshot: snapshot, setUndoState: setUndoState,
     drawShapes: drawShapes, drawThumb: drawThumb, drawVisibleThumbs: drawVisibleThumbs,
     relayout: relayout, syncAll: syncAll, applyLayout: applyLayout,
