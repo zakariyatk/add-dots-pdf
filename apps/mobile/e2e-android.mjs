@@ -44,11 +44,23 @@ if (!device) {
 const sh = async (cmd) => (await device.shell(cmd)).toString().trim();
 
 let page = null;
+/* A step the emulator never answers (an adb shell, an install) would wait for
+   ever: after ten minutes, say where it stopped and fail. */
+let step = 'start';
+const watchdog = setTimeout(
+  () => {
+    console.log('FAIL the Android run finished in time  ' + JSON.stringify({ stuckAt: step }));
+    process.exit(1);
+  },
+  10 * 60 * 1000,
+);
 try {
+  step = 'install';
   console.log('device: ' + device.model() + ', installing ' + APK);
   await device.installApk(APK);
   await sh('am force-stop ' + PKG);
 
+  step = 'copy the PDFs to the device';
   /* the PDFs, in the app's own files (run-as works on a debug build) */
   for (const [name, n, label] of [
     ['first.pdf', 3, 'First'],
@@ -68,6 +80,7 @@ try {
       PKG +
       '/.MainActivity',
   );
+  step = 'open the first PDF and find the WebView';
   const webview = await device.webView({ pkg: PKG }, { timeout: 60000 });
   page = await webview.page();
   const until = async (fn, ms = 60000) => {
@@ -112,6 +125,7 @@ try {
     shell,
   );
 
+  step = 'open a second PDF';
   /* another PDF while the app is open (file://): reaches the same app */
   await sh(
     'am start -a android.intent.action.VIEW -t application/pdf -d file:///data/data/' +
@@ -128,6 +142,7 @@ try {
   });
   check('a second PDF opened while the app is open replaces the first', !!got && got.pages === 5, got);
 
+  step = 'save';
   /* Save */
   await page.evaluate(() => {
     window.ADDDOTS_TEST_SAVE = true;
@@ -185,6 +200,7 @@ try {
     console.log('\nlogcat (' + lines.length + ' lines):\n' + lines.slice(-150).join('\n'));
   }
   await device.close().catch(() => {});
+  clearTimeout(watchdog);
 }
 
 console.log(failed ? '\n' + failed + ' check(s) failed' : '\nall checks passed');
