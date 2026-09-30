@@ -126,6 +126,8 @@ jobs:
             **/.git*/**
       - name: Check the site answers
         if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
+        env:
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           want=$(grep -m1 -o "VERSION = '[^']*'" site/sw.js)
           for i in 1 2 3 4 5 6; do
@@ -144,6 +146,10 @@ jobs:
               fi
             done
             echo "::error::$SITE_URL does not serve what was just uploaded, nor under public_html/ or pdf/. The site's folder is somewhere else: check the folder of pdf.adddots.com in hPanel -> Domains -> Subdomains (or Websites)."
+            # what the FTP account sees, two levels down (folder names only)
+            list() { curl -s --max-time 20 --ssl-reqd --insecure --list-only --user "$FTP_USER:$FTP_PASSWORD" "ftp://$FTP_HOST:$FTP_PORT/$1" | tr -d '\r' | grep -v '^\.\.\?$' | sort | head -40; }
+            echo "--- the FTP account's top folder:"; list "" | sed 's/^/  /'
+            for d in $(list ""); do case "$d" in *.*) ;; *) echo "--- $d/:"; list "$d/" | sed 's/^/  /' ;; esac; done
             exit 1
           fi
           curl -fsS "${SITE_URL}api/health" && echo || echo "::warning::${SITE_URL}api/health did not answer: the share server needs api/config.php (first time: README.md, Publishing)"
