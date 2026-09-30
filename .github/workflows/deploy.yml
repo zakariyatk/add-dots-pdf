@@ -47,9 +47,44 @@ jobs:
     env:
       TARGET: ${{ github.event.inputs.target || 'staging' }}
       SITE_URL: ${{ github.event.inputs.target == 'live' && 'https://pdf.adddots.com/' || 'https://staging.adddots.com/' }}
-      FTP_DIR: ${{ github.event.inputs.target == 'live' && secrets.FTP_DIR_LIVE || secrets.FTP_DIR_STAGING }}
+      FTP_DIR_GIVEN: ${{ github.event.inputs.target == 'live' && secrets.FTP_DIR_LIVE || secrets.FTP_DIR_STAGING }}
+      FTP_SERVER_GIVEN: ${{ secrets.FTP_SERVER }}
+      FTP_USER_GIVEN: ${{ secrets.FTP_USERNAME }}
       HAS_FTP: ${{ secrets.FTP_SERVER != '' && secrets.FTP_USERNAME != '' && secrets.FTP_PASSWORD != '' }}
     steps:
+      # the folder as typed into the secret, tidied: no spaces or line breaks
+      # round it, and ending in / as the upload needs
+      - name: Folder on the server
+        run: |
+          dir=$(printf '%s' "$FTP_DIR_GIVEN" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          if [ -n "$dir" ]; then case "$dir" in */) ;; *) dir="$dir/" ;; esac; fi
+          echo "::add-mask::$dir"
+          echo "FTP_DIR=$dir" >> "$GITHUB_ENV"
+      # the server as typed into the secret, tidied: ftp://, a path, a port
+      # and spaces taken off. What it looks like is printed (never the value),
+      # so a typo shows in the log.
+      - name: The FTP server
+        if: env.HAS_FTP == 'true'
+        run: |
+          raw=$(printf '%s' "$FTP_SERVER_GIVEN" | tr -d '\r\n')
+          host=$(printf '%s' "$raw" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^[A-Za-z]*://##' -e 's#/.*$##')
+          port=21
+          case "$host" in *:*) port=${host##*:}; host=${host%%:*} ;; esac
+          echo "::add-mask::$host"
+          notes=""
+          [ "$raw" != "$host" ] && notes="$notes; tidied (it had spaces, a scheme like ftp://, a / or a :port)"
+          if printf '%s' "$host" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then kind="an IP address"
+          elif printf '%s' "$host" | grep -Eq '^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then kind="a name with $(printf '%s' "$host" | tr -cd . | wc -c) dot(s)"
+          else kind="NOT an address: it has characters an address cannot have"; fi
+          if getent hosts "$host" >/dev/null 2>&1 || printf '%s' "$host" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then found="found on the internet"; else found="NOT found on the internet"; fi
+          echo "FTP_SERVER: ${#host} characters, $kind, $found, port $port$notes"
+          user=$(printf '%s' "$FTP_USER_GIVEN" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          echo "::add-mask::$user"
+          echo "FTP_USERNAME: ${#user} characters$( [ "$user" != "$FTP_USER_GIVEN" ] && echo ', spaces taken off')"
+          echo "FTP_HOST=$host" >> "$GITHUB_ENV"
+          echo "FTP_PORT=$port" >> "$GITHUB_ENV"
+          echo "FTP_USER=$user" >> "$GITHUB_ENV"
+          case "$found" in NOT*) echo "::error::FTP_SERVER is not an address that exists. Use the FTP IP from hPanel -> Files -> FTP Accounts (numbers like 153.92.1.2), nothing else."; exit 1 ;; esac
       - name: FTP details present?
         if: env.HAS_FTP != 'true' || env.FTP_DIR == ''
         run: |
@@ -68,9 +103,14 @@ jobs:
         if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
         run: |
           npm ci
-          npm run build -w @adddots/web
+          # the web app and what it is built from: packages/engine makes
+          # js/engine.js, which every tool needs
+          npx turbo run build --filter=@adddots/web...
           mkdir -p site/api
           cp -r apps/web/dist/. site/
+          for f in index.html js/engine.js js/core.js js/vendor/pdf.min.js js/vendor/pdf-lib.min.js; do
+            [ -s "site/$f" ] || { echo "::error::The build has no $f: not publishing a site that cannot work"; exit 1; }
+          done
           rsync -a --exclude tests --exclude config.php --exclude setup.php legacy/api/ site/api/
           echo "Publishing $(git rev-parse --short HEAD) to $TARGET ($SITE_URL)"
           grep -m1 "VERSION =" site/sw.js
@@ -78,8 +118,9 @@ jobs:
         if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
+          server: ${{ env.FTP_HOST }}
+          port: ${{ env.FTP_PORT }}
+          username: ${{ env.FTP_USER }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
           local-dir: ./site/
@@ -90,6 +131,8 @@ jobs:
             **/.git*/**
       - name: Check the site answers
         if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
+        env:
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
         run: |
           want=$(grep -m1 -o "VERSION = '[^']*'" site/sw.js)
           for i in 1 2 3 4 5 6; do
@@ -98,5 +141,30 @@ jobs:
             sleep 10
           done
           echo "sw.js on the server: ${got:-nothing} (built: $want)"
-          [ "$got" = "$want" ] || { echo "::error::$SITE_URL does not serve what was just uploaded"; exit 1; }
+          if [ "$got" != "$want" ]; then
+            # where did the upload land, as the site sees it? Try the folder
+            # names it could have gone one or two levels too deep into.
+            for sub in public_html/ pdf/ public_html/pdf/ domains/pdf.adddots.com/public_html/; do
+              if curl -fsS "${SITE_URL}${sub}sw.js?check=$GITHUB_RUN_ID" 2>/dev/null | grep -q "$want"; then
+                echo "::error::The files went one level too deep: the site shows them at ${SITE_URL}${sub}. Take '${sub}' off the end of FTP_DIR_LIVE (if that leaves it empty, use ./)."
+                exit 1
+              fi
+            done
+            echo "::error::$SITE_URL does not serve what was just uploaded, nor under public_html/ or pdf/. The site's folder is somewhere else: check the folder of pdf.adddots.com in hPanel -> Domains -> Subdomains (or Websites)."
+            # what the FTP account sees, two levels down (folder names only)
+            list() { curl -s --max-time 20 --ssl-reqd --insecure --list-only --user "$FTP_USER:$FTP_PASSWORD" "ftp://$FTP_HOST:$FTP_PORT/$1" | tr -d '\r' | grep -v '^\.\.\?$' | sort | head -40; }
+            echo "--- the FTP account's top folder:"; list "" | sed 's/^/  /'
+            for d in $(list ""); do case "$d" in *.*) ;; *) echo "--- $d/:"; list "$d/" | sed 's/^/  /' ;; esac; done
+            exit 1
+          fi
+          # the files every tool needs: served whole, as JavaScript, the same
+          # bytes as built (a cut-off upload, a block or an HTML error page
+          # in their place leaves the page up but every tool dead)
+          bad=0
+          for f in index.html js/vendor/pdf.min.js js/vendor/pdf-lib.min.js js/vendor/pdf.worker.min.js js/engine.js js/core.js js/config.js css/app.css; do
+            code=$(curl -s -o /tmp/got -w '%{http_code} %{content_type}' "${SITE_URL}${f}?check=$GITHUB_RUN_ID")
+            if cmp -s /tmp/got "site/$f"; then echo "ok        $f ($code)"
+            else echo "DIFFERENT $f: server $code, $(wc -c < /tmp/got) bytes, built $(wc -c < "site/$f") bytes; starts: $(head -c 120 /tmp/got | tr -d '\n\r')"; bad=1; fi
+          done
+          [ "$bad" = 0 ] || { echo "::error::Some files on $SITE_URL are not what was uploaded (see above)"; exit 1; }
           curl -fsS "${SITE_URL}api/health" && echo || echo "::warning::${SITE_URL}api/health did not answer: the share server needs api/config.php (first time: README.md, Publishing)"
