@@ -15,7 +15,7 @@ window.ADDDOTS_CONFIG = Object.assign({
   /* the website the Windows and phone apps share documents through: share
      links point here, and its API is at <shareServer>api. The browser app
      uses wherever it is served from instead. */
-  shareServer: 'https://www.pdf.adddots.com/',
+  shareServer: 'https://pdf.adddots.com/',
   /* the app opens to Sign in / Create account, and nothing else, until an
      account is signed in (free). Continue with Google and Continue with
      Apple show on the website once the project has them turned on

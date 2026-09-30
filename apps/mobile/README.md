@@ -24,7 +24,7 @@ does nothing outside the app.
 - Files cross between the page and the plugin as base64.
 
 - **Share links** go through the website set in `js/config.js`
-  (`shareServer`, https://www.pdf.adddots.com/): the document is uploaded to its
+  (`shareServer`, https://pdf.adddots.com/): the document is uploaded to its
   API, and the links handed out open there, in any browser. The server must
   allow the apps' origins (`cors_origins` in `legacy/api/config.php`:
   `https://localhost` for Android, `capacitor://localhost` for iOS,

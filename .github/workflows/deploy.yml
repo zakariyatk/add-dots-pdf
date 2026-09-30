@@ -3,7 +3,7 @@ name: Publish
 # Puts the web app on the server (Hostinger, over FTP).
 #
 #   - after CI passes on main:        the test site, https://staging.adddots.com/
-#   - Actions -> Publish -> Run workflow, "live":  https://www.pdf.adddots.com/
+#   - Actions -> Publish -> Run workflow, "live":  https://pdf.adddots.com/
 #
 # Repository secrets (Settings -> Secrets and variables -> Actions):
 #   FTP_SERVER        the FTP host from hPanel -> Files -> FTP Accounts
@@ -46,7 +46,7 @@ jobs:
     environment: ${{ github.event.inputs.target == 'live' && 'live' || 'staging' }}
     env:
       TARGET: ${{ github.event.inputs.target || 'staging' }}
-      SITE_URL: ${{ github.event.inputs.target == 'live' && 'https://www.pdf.adddots.com/' || 'https://staging.adddots.com/' }}
+      SITE_URL: ${{ github.event.inputs.target == 'live' && 'https://pdf.adddots.com/' || 'https://staging.adddots.com/' }}
       FTP_DIR_GIVEN: ${{ github.event.inputs.target == 'live' && secrets.FTP_DIR_LIVE || secrets.FTP_DIR_STAGING }}
       FTP_SERVER_GIVEN: ${{ secrets.FTP_SERVER }}
       FTP_USER_GIVEN: ${{ secrets.FTP_USERNAME }}

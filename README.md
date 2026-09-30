@@ -33,7 +33,7 @@ Requires Node 20 or newer. The PHP tests need PHP 8.2: `php legacy/api/tests/uni
 
 | Site | Address                      | What it is for                                                                                                            |
 | ---- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
-| Live | https://www.pdf.adddots.com/ | What people use. The Windows and phone apps share documents through it (`shareServer` in `apps/web/public/js/config.js`). |
+| Live | https://pdf.adddots.com/     | What people use. The Windows and phone apps share documents through it (`shareServer` in `apps/web/public/js/config.js`). |
 | Test | https://staging.adddots.com/ | Every change goes here first and is tried before it goes live.                                                            |
 
 The browser app works out its own address, so the same build runs on both;
@@ -56,11 +56,9 @@ checks that the site serves what was uploaded.
 
 ### Setting it up (once)
 
-1. **Hostinger, per site:** hPanel → Domains → Subdomains: `www.pdf` (and
+1. **Hostinger, per site:** hPanel → Domains → Subdomains: `pdf` (and
    `staging`), each with its own folder; hPanel → Security → SSL: a
-   certificate for each. Add `pdf.adddots.com` too, redirecting to
-   `https://www.pdf.adddots.com/` (hPanel → Domains → Redirects), so both
-   addresses work.
+   certificate for each.
 2. **GitHub secrets** (Settings → Secrets and variables → Actions):
    `FTP_SERVER`, `FTP_USERNAME`, `FTP_PASSWORD` from hPanel → Files → FTP
    Accounts, and `FTP_DIR_LIVE` / `FTP_DIR_STAGING`: each site's folder as
@@ -74,7 +72,7 @@ checks that the site serves what was uploaded.
    `AddType application/manifest+json .webmanifest`, so browsers offer to
    install the app.
 5. **Supabase** → Authentication → URL Configuration: Site URL
-   `https://www.pdf.adddots.com`, and both sites in the Redirect URLs
+   `https://pdf.adddots.com`, and both sites in the Redirect URLs
    (`docs/accounts.md`).
 
 To protect the live site, add required reviewers to the `live` environment
