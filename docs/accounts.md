@@ -42,12 +42,12 @@ the next step (below). There people sign in with email.
 2. Authorised redirect URI:
    `https://jrdbuifhcxwyjxgyaowz.supabase.co/auth/v1/callback`
 3. OAuth consent screen: app name "ADD DOTS PDF", support email, the
-   privacy policy link (`https://www.pdf.adddots.com/privacy.html`), and publish
+   privacy policy link (`https://pdf.adddots.com/privacy.html`), and publish
    it.
 4. Supabase dashboard > Authentication > Sign In / Providers > **Google**:
    turn on, paste the Client ID and Client Secret, save.
 5. Supabase > Authentication > URL Configuration: Site URL
-   `https://www.pdf.adddots.com/`, and add it and the test site,
+   `https://pdf.adddots.com/`, and add it and the test site,
    `https://staging.adddots.com/`, to the Redirect URLs (without the test
    site there, signing in on it comes back to the live site).
 
@@ -155,7 +155,7 @@ and it can only ever reach the caller's own account.
    - Leave out `{{ .ConfirmationURL }}`: the app uses the code only.
 3. **Authentication > Sign In / Providers > Email**: Email enabled,
    "Confirm email" on, minimum password length 8. **Authentication > URL
-   Configuration**: Site URL `https://www.pdf.adddots.com`, where the links in
+   Configuration**: Site URL `https://pdf.adddots.com`, where the links in
    the emails lead; add `https://staging.adddots.com/**` to the Redirect
    URLs for the test site. Authentication > Settings: email OTP length 6,
    expiry 3600 s (the defaults).
@@ -191,7 +191,7 @@ checks run with sign-in not required.
 - On phones the session can move from the app's storage to the system's
   secure storage (Keychain, Keystore) if needed.
 - Google and Apple inside the Windows and phone apps: an app link
-  (`com.adddots.pdf://auth`, or a universal link on `www.pdf.adddots.com`) that
+  (`com.adddots.pdf://auth`, or a universal link on `pdf.adddots.com`) that
   the provider's page returns to, with the Capacitor App plugin and Tauri's
   deep-link plugin handing the session to the app.
 - Microsoft sign-in, the same way, if wanted.
