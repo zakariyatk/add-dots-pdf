@@ -1,11 +1,12 @@
 /* Accounts: one ADD DOTS account on the web, Windows, Android and iOS
    (Supabase Auth: email and password, and on the website Google and Apple).
 
-   An account is free, and with requireSignIn (js/config.js) the app opens to
-   Sign in / Create account and nothing else until one is signed in, as WPS,
-   Acrobat and Google Docs do; a shared review link too. A device that has
-   signed in once stays signed in, offline as well. Documents never leave
-   the device either way. What is here:
+   An account is free, with every tool. With requireSignIn: 'save'
+   (js/config.js) the app is open to everyone, and saving a file asks for an
+   account first, as Acrobat online does; with requireSignIn: true the app
+   opens to Sign in / Create account and nothing else until one is signed in.
+   A device that has signed in once stays signed in, offline as well.
+   Documents never leave the device either way. What is here:
    - create an account (email and password), confirmed with a 6-digit code
      sent by email: a code, not a link, so it works the same in a browser and
      in the Windows and phone apps
@@ -30,13 +31,20 @@
   var client = null, user = null, email = '', view = 'signin', back = 'signin', busy = false, lastFocus = null;
   var app = document.querySelector('.app');
   /* the sign-in page the app waits behind (js/config.js requireSignIn) */
-  var GATE = !!cfg.requireSignIn;
+  var GATE = cfg.requireSignIn === true;
   var gated = false;
+  /* saves waiting for an account (requireSignIn: 'save'): each resolves
+     true once one is signed in, false if the popup is closed */
+  var waiting = [];
+  var started, startedP = new Promise(function (r) { started = r; });
 
   var TITLES = {
     signin: ['Sign in', 'Use your ADD DOTS account on every device.'],
     gate: ['Sign in to ADD DOTS PDF', 'Free. One account for the web, Windows, Android and iOS.'],
     signup: ['Create your account', 'One account for ADD DOTS PDF on the web, Windows, Android and iOS.'],
+    /* the popup a save opens (requireSignIn: 'save') */
+    saveSignin: ['Sign in to save', 'Welcome back. Your PDF saves as soon as you are signed in.'],
+    saveSignup: ['Create your free account', 'Sign up free to save your PDF. It takes a minute.'],
     verify: ['Check your email', ''],
     forgot: ['Reset your password', 'We will email you a code to set a new password.'],
     reset: ['Set a new password', ''],
@@ -112,11 +120,39 @@
       if (link) linkDone();
       if (GATE && !user) gate();
       providers();
+      started();
     }).catch(function (e) {
       health('start', e);
       setUser(null);
       if (GATE) { gate(); msg('Cannot reach the account service. Check your connection, then reload.', 'bad'); }
+      started();
     });
+  }
+
+  /* ---------- saving asks for an account (requireSignIn: 'save') ----------
+     Resolves true when the save may go ahead: signed in already, or signed
+     in (or signed up) in the popup it opens; false when the popup is
+     closed. Read at the time of the save, so a test can turn it off. The
+     account service out of reach (offline, never signed in here) never
+     holds a document back: the save goes ahead. */
+  function need() {
+    if ((window.ADDDOTS_CONFIG || cfg).requireSignIn !== 'save' || user) return Promise.resolve(true);
+    return startedP.then(function () {
+      if (user || !client) return true;
+      return new Promise(function (res) {
+        waiting.push(res);
+        if (waiting.length === 1) {
+          dlg.classList.add('save');
+          open('signup');
+        }
+      });
+    });
+  }
+  function settle(ok) {
+    var w = waiting;
+    waiting = [];
+    dlg.classList.remove('save');
+    w.forEach(function (res) { res(ok); });
   }
 
   /* the app waits behind the sign-in page: it cannot be closed, only
@@ -163,8 +199,13 @@
     if (!client || busy) return;
     busy = true;
     msg('Opening ' + (p === 'google' ? 'Google' : 'Apple') + '…', 'good');
-    /* back to this page, where the session in the address signs in */
-    client.auth.signInWithOAuth({ provider: p, options: { redirectTo: location.origin + location.pathname } })
+    /* the provider's page replaces this one: a document waiting to be saved
+       is kept first, and offered again on the way back (crash recovery) */
+    var keep = waiting.length && api.recoverNow ? Promise.resolve(api.recoverNow()).catch(function () {}) : Promise.resolve();
+    keep.then(function () {
+      /* back to this page, where the session in the address signs in */
+      return client.auth.signInWithOAuth({ provider: p, options: { redirectTo: location.origin + location.pathname } });
+    })
       .then(function (r) {
         busy = false;
         if (r && r.error) { health('oauth ' + p, r.error); msg(friendly(r.error), 'bad'); }
@@ -203,6 +244,9 @@
     /* the home screen greets the account by name */
     if (api.refreshHello) api.refreshHello();
     if (!dlg.hidden && view === 'account') show('account');
+    /* signed in some other way while a save waits (an email's link, in
+       another tab): the save goes ahead */
+    if (user && waiting.length) { settle(true); close(); }
   }
 
   /* ---------- the dialog ---------- */
@@ -219,7 +263,10 @@
     Array.prototype.forEach.call(dlg.querySelectorAll('[data-view]'), function (f) {
       f.hidden = f.getAttribute('data-view') !== v;
     });
-    var t = TITLES[gated && v === 'signin' ? 'gate' : v];
+    var saving = waiting.length > 0;
+    var t = TITLES[gated && v === 'signin' ? 'gate'
+      : saving && v === 'signin' ? 'saveSignin'
+        : saving && v === 'signup' ? 'saveSignup' : v];
     $('authTitle').textContent = t[0];
     var sub = t[1];
     if (v === 'verify') sub = 'Enter the code we sent to ' + email + '.';
@@ -283,6 +330,8 @@
     /* the sign-in page stays until an account is signed in */
     if (gated && !user) return;
     if (gated) ungate();
+    /* a save waiting for an account: closed without one, it does not happen */
+    if (waiting.length) settle(!!user);
     dlg.hidden = true;
     if (app) app.inert = false;
     msg('');
@@ -332,8 +381,9 @@
   function code(form) { return val(form, 'code').replace(/\D/g, ''); }
 
   function signedIn(text) {
-    /* signed in: the sign-in page lets the app go */
+    /* signed in: the sign-in page lets the app go, and a waiting save goes ahead */
     if (gated) ungate();
+    if (waiting.length) settle(true);
     close();
     api.toast(text);
   }
@@ -505,6 +555,8 @@
     user: function () { return user ? { email: user.email, id: user.id, provider: viaProvider() ? user.app_metadata.provider : 'email' } : null; },
     /* the app is waiting behind the sign-in page */
     gated: function () { return gated; },
+    /* before a file is saved (js/core.js download) */
+    need: need,
     open: open,
     ready: function () { return !!client; }
   };

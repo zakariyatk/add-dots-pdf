@@ -5699,7 +5699,10 @@
 
   /* Resolves false only when the reader turned the save down (the desktop
      app's Save dialog, cancelled); a browser download cannot say. */
-  function download(bytes, name, type) {
+  async function download(bytes, name, type) {
+    /* saving asks for a free account first (js/account.js, requireSignIn:
+       'save'); the popup closed, nothing is saved */
+    if (EXT.account && EXT.account.need && !(await EXT.account.need())) return false;
     /* the browser is copying the file out and writing it to disk: thumbnails,
        drawn in a worker alongside, wait until that is done rather than
        compete with it */

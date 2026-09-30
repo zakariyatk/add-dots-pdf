@@ -954,6 +954,47 @@ body.editing .selbar { display: none }
 body:not([data-ui="light"]) .authdlg.gate { background: linear-gradient(180deg, #0A3E4A 0%, #06303A 30%, #0B0F10 70%) #0B0F10 }
 .authdlg.gate .authx { display: none }
 .authdlg.gate .authcard { box-shadow: 0 30px 60px -30px rgba(6, 48, 58, .45) }
+/* ---- the popup a save opens (js/account.js, requireSignIn: 'save') ----
+   what a free account gives, beside the forms; above them on a phone */
+.authpromo { display: none }
+.authdlg.save .authcard {
+  width: min(820px, 100%); padding: 0; display: grid; grid-template-columns: 330px minmax(0, 1fr);
+  grid-auto-rows: min-content; column-gap: 0; align-content: start;
+}
+.authdlg.save .authcard > :not(.authpromo):not(.authx) { grid-column: 2; margin-left: 32px; margin-right: 32px }
+.authdlg.save .authcard > .authbrand { margin-top: 32px }
+.authdlg.save .authcard > form { margin-bottom: 28px }
+.authdlg.save .authpromo {
+  display: block; grid-column: 1; grid-row: 1 / span 30; padding: 32px 28px;
+  background: linear-gradient(160deg, #0A3E4A 0%, #0E5A66 55%, #13808C 100%); color: #FFFFFF;
+  border-radius: 14px 0 0 14px;
+}
+.authfree {
+  display: inline-block; padding: 5px 10px; border-radius: 999px; background: #FFFFFF; color: #0A3E4A;
+  font: 700 11px/1 var(--sans); letter-spacing: .12em;
+}
+.authpromo h3 { margin: 18px 0 8px; font-size: 22px; line-height: 1.25; font-weight: 700 }
+.authpromo p { margin: 0 0 16px; font-size: 14px; line-height: 1.5; color: rgba(255, 255, 255, .86) }
+.authpromo ul { list-style: none; margin: 0 0 18px; padding: 0 }
+.authpromo li { position: relative; padding: 0 0 10px 28px; font-size: 14px; line-height: 1.4 }
+.authpromo li::before {
+  content: ""; position: absolute; left: 0; top: 1px; width: 18px; height: 18px; border-radius: 50%;
+  background: #8DDCEA url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M6 12.5l4 4 8-9' fill='none' stroke='%230A3E4A' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center / 12px no-repeat;
+}
+.authpromo .authsafe { margin: 0; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, .22); font-size: 12.5px }
+@media (max-width: 760px) {
+  .authdlg.save .authcard { display: block; width: 100% }
+  .authdlg.save .authcard > :not(.authpromo):not(.authx) { margin-left: 20px; margin-right: 20px }
+  .authdlg.save .authcard > .authbrand { margin-top: 20px }
+  .authdlg.save .authpromo { border-radius: 16px 16px 0 0; padding: 22px 20px 16px }
+  .authdlg.save .authpromo h3 { margin: 12px 0 6px; font-size: 19px }
+  .authdlg.save .authpromo ul { display: none }
+  .authdlg.save .authpromo .authsafe { padding-top: 10px }
+  .authdlg.save .authx { color: #FFFFFF }
+}
+@media (min-width: 761px) and (max-width: 900px) { .authdlg.save .authcard { width: calc(100% - 32px) } }
+.authdlg.save .authx { z-index: 1 }
+
 /* Continue with Google / Apple, and "or with email" under them */
 .authsso { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 6px }
 .authsso[hidden], .authprov[hidden] { display: none }
