@@ -103,9 +103,14 @@ jobs:
         if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
         run: |
           npm ci
-          npm run build -w @adddots/web
+          # the web app and what it is built from: packages/engine makes
+          # js/engine.js, which every tool needs
+          npx turbo run build --filter=@adddots/web...
           mkdir -p site/api
           cp -r apps/web/dist/. site/
+          for f in index.html js/engine.js js/core.js js/vendor/pdf.min.js js/vendor/pdf-lib.min.js; do
+            [ -s "site/$f" ] || { echo "::error::The build has no $f: not publishing a site that cannot work"; exit 1; }
+          done
           rsync -a --exclude tests --exclude config.php --exclude setup.php legacy/api/ site/api/
           echo "Publishing $(git rev-parse --short HEAD) to $TARGET ($SITE_URL)"
           grep -m1 "VERSION =" site/sw.js
