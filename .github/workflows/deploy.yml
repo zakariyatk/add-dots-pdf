@@ -48,6 +48,8 @@ jobs:
       TARGET: ${{ github.event.inputs.target || 'staging' }}
       SITE_URL: ${{ github.event.inputs.target == 'live' && 'https://www.pdf.adddots.com/' || 'https://staging.adddots.com/' }}
       FTP_DIR_GIVEN: ${{ github.event.inputs.target == 'live' && secrets.FTP_DIR_LIVE || secrets.FTP_DIR_STAGING }}
+      FTP_SERVER_GIVEN: ${{ secrets.FTP_SERVER }}
+      FTP_USER_GIVEN: ${{ secrets.FTP_USERNAME }}
       HAS_FTP: ${{ secrets.FTP_SERVER != '' && secrets.FTP_USERNAME != '' && secrets.FTP_PASSWORD != '' }}
     steps:
       # the folder as typed into the secret, tidied: no spaces or line breaks
@@ -58,6 +60,31 @@ jobs:
           if [ -n "$dir" ]; then case "$dir" in */) ;; *) dir="$dir/" ;; esac; fi
           echo "::add-mask::$dir"
           echo "FTP_DIR=$dir" >> "$GITHUB_ENV"
+      # the server as typed into the secret, tidied: ftp://, a path, a port
+      # and spaces taken off. What it looks like is printed (never the value),
+      # so a typo shows in the log.
+      - name: The FTP server
+        if: env.HAS_FTP == 'true'
+        run: |
+          raw=$(printf '%s' "$FTP_SERVER_GIVEN" | tr -d '\r\n')
+          host=$(printf '%s' "$raw" | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' -e 's#^[A-Za-z]*://##' -e 's#/.*$##')
+          port=21
+          case "$host" in *:*) port=${host##*:}; host=${host%%:*} ;; esac
+          echo "::add-mask::$host"
+          notes=""
+          [ "$raw" != "$host" ] && notes="$notes; tidied (it had spaces, a scheme like ftp://, a / or a :port)"
+          if printf '%s' "$host" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then kind="an IP address"
+          elif printf '%s' "$host" | grep -Eq '^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'; then kind="a name with $(printf '%s' "$host" | tr -cd . | wc -c) dot(s)"
+          else kind="NOT an address: it has characters an address cannot have"; fi
+          if getent hosts "$host" >/dev/null 2>&1 || printf '%s' "$host" | grep -Eq '^[0-9]+(\.[0-9]+){3}$'; then found="found on the internet"; else found="NOT found on the internet"; fi
+          echo "FTP_SERVER: ${#host} characters, $kind, $found, port $port$notes"
+          user=$(printf '%s' "$FTP_USER_GIVEN" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          echo "::add-mask::$user"
+          echo "FTP_USERNAME: ${#user} characters$( [ "$user" != "$FTP_USER_GIVEN" ] && echo ', spaces taken off')"
+          echo "FTP_HOST=$host" >> "$GITHUB_ENV"
+          echo "FTP_PORT=$port" >> "$GITHUB_ENV"
+          echo "FTP_USER=$user" >> "$GITHUB_ENV"
+          case "$found" in NOT*) echo "::error::FTP_SERVER is not an address that exists. Use the FTP IP from hPanel -> Files -> FTP Accounts (numbers like 153.92.1.2), nothing else."; exit 1 ;; esac
       - name: FTP details present?
         if: env.HAS_FTP != 'true' || env.FTP_DIR == ''
         run: |
@@ -86,8 +113,9 @@ jobs:
         if: env.HAS_FTP == 'true' && env.FTP_DIR != ''
         uses: SamKirkland/FTP-Deploy-Action@v4.3.5
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
+          server: ${{ env.FTP_HOST }}
+          port: ${{ env.FTP_PORT }}
+          username: ${{ env.FTP_USER }}
           password: ${{ secrets.FTP_PASSWORD }}
           protocol: ${{ vars.FTP_PROTOCOL || 'ftps' }}
           local-dir: ./site/
