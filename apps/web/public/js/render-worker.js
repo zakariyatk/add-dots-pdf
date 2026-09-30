@@ -68,12 +68,22 @@ yieldCh.port1.onmessage = function () { const next = yieldQ.shift(); if (next) n
 function yieldThen(next) { yieldQ.push(next); yieldCh.port2.postMessage(0); }
 
 const docs = new Map();      /* key -> { task, promise, file, raw, slow, vector, fx } */
+
+/* pdf.js shares one parser worker between documents, and opening one while
+   another is still being destroyed throws ("PDFWorker.fromPort - the worker
+   is being destroyed"): every destroy goes through here, and an open waits
+   for those before it. */
+let destroying = Promise.resolve();
+function destroyTask(task) {
+  const done = task.destroy().catch(function () {});
+  destroying = Promise.all([destroying, done]);
+}
 const renders = new Map();   /* rid -> pdf.js RenderTask, or null while it starts */
 
 function openDoc(m) {
   /* the same key again: reopened, say now with its password */
   const old = docs.get(m.key);
-  if (old && old.task) old.task.destroy().catch(function () {});
+  if (old && old.task) destroyTask(old.task);
   /* a file is read here; bytes arrive already read */
   const data = m.file ? m.file.arrayBuffer().then(function (b) { return new Uint8Array(b); })
     : Promise.resolve(m.bytes);
@@ -82,7 +92,8 @@ function openDoc(m) {
   const entry = { task: null, promise: null, file: m.file || null, raw: m.file ? null : m.bytes,
                   password: m.password || null, slow: new Map(), vector: new Map(), fx: null };
   if (old) closePdfium(old);
-  entry.promise = data.then(function (bytes) {
+  entry.promise = Promise.all([data, destroying]).then(function (got) {
+    const bytes = got[0];
     if (docs.get(m.key) !== entry) throw new Error('closed');
     entry.task = openTask(m, entry.raw ? bytes.slice(0) : bytes);
     return entry.task.promise;
@@ -324,7 +335,7 @@ function tryOpen(ms) {
   return new Promise(function (res) {
     let task = null;
     const timer = setTimeout(function () {
-      if (task) task.destroy().catch(function () {});
+      if (task) destroyTask(task);
       res(false);
     }, ms);
     try {
@@ -337,7 +348,7 @@ function tryOpen(ms) {
         return page.render({ canvasContext: ctx, viewport: page.getViewport({ scale: 1 }) }).promise;
       }).then(function () {
         clearTimeout(timer);
-        task.destroy().catch(function () {});
+        destroyTask(task);
         res(true);
       }, function () { clearTimeout(timer); res(false); });
     } catch (e) { clearTimeout(timer); res(false); }
@@ -368,7 +379,7 @@ self.onmessage = function (e) {
     const entry = docs.get(m.key);
     docs.delete(m.key);
     if (entry) closePdfium(entry);
-    if (entry && entry.task) entry.task.destroy().catch(function () {});
+    if (entry && entry.task) destroyTask(entry.task);
     return;
   }
   if (m.op === 'cancel') {

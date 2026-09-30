@@ -1826,6 +1826,99 @@ try {
     );
     check('no errors on the page', gerr.length === 0, gerr);
     await gctx.close();
+
+    /* sign-in when saving (the app as shipped, requireSignIn: 'save'): every
+       tool is open, and Save asks for a free account first; closed, nothing
+       is saved; signed in, the save goes ahead by itself */
+    const sctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: 'block',
+      acceptDownloads: true,
+    });
+    await sctx.addInitScript((url) => {
+      window.ADDDOTS_CONFIG = { supabaseUrl: url, supabaseKey: 'sb_publishable_test', requireSignIn: 'save' };
+    }, SB);
+    await sctx.route(SB + '/auth/v1/**', authRoute);
+    const sp = await sctx.newPage();
+    const serr = [];
+    sp.on('pageerror', (e) => serr.push(e.message));
+    await sp.goto(URL);
+    await sp.waitForFunction(
+      () => window.ADDPDF && window.ADDPDF.account && window.ADDPDF.account.ready(),
+      null,
+      {
+        timeout: 20000,
+      },
+    );
+    await sp.waitForTimeout(300);
+    const sState = () =>
+      sp.evaluate(() => ({
+        open: !document.getElementById('authDlg').hidden,
+        save: document.getElementById('authDlg').classList.contains('save'),
+        gate: document.getElementById('authDlg').classList.contains('gate'),
+        promo: getComputedStyle(document.querySelector('.authpromo')).display !== 'none',
+        inert: document.querySelector('.app').inert,
+        title: document.getElementById('authTitle').textContent,
+        view: (Array.from(document.querySelectorAll('#authDlg [data-view]')).find((f) => !f.hidden) || {})
+          .dataset?.view,
+        user: window.ADDPDF.account.user(),
+      }));
+    const sStart = await sState();
+    await open(sp, MIXED);
+    const downloads = [];
+    sp.on('download', (d) => downloads.push(d));
+    await sp.click('#btnSave');
+    await sp.click('#saveGo');
+    await sp
+      .waitForFunction(() => !document.getElementById('authDlg').hidden, null, { timeout: 30000 })
+      .catch(() => {});
+    const asked = await sState();
+    await sp.keyboard.press('Escape');
+    await sp.waitForTimeout(500);
+    const closedNoSave = { ...(await sState()), downloads: downloads.length };
+    users.set('save@example.com', {
+      id: 'u31',
+      email: 'save@example.com',
+      password: 'save password 1',
+      confirmed: true,
+    });
+    /* the Save popover stays open after the popup was closed */
+    if (!(await sp.isVisible('#saveGo'))) await sp.click('#btnSave');
+    const [sdl] = await Promise.all([
+      sp.waitForEvent('download', { timeout: 60000 }).catch(() => null),
+      (async () => {
+        await sp.click('#saveGo');
+        await sp.waitForFunction(() => !document.getElementById('authDlg').hidden, null, { timeout: 30000 });
+        await sp.click('#authDlg form[data-view="signup"] [data-go="signin"]');
+        await sp.fill('#aSiEmail', 'save@example.com');
+        await sp.fill('#aSiPw', 'save password 1');
+        await sp.click('#authDlg form[data-view="signin"] button[type=submit]');
+      })(),
+    ]);
+    const signedSave = await sState();
+    const sPages = sdl ? (await PDFDocument.load(readFileSync(await sdl.path()))).getPageCount() : null;
+    check(
+      'sign-in when saving: the app opens with no sign-in; Save opens the free-account popup; closed, nothing saves; signed in, the PDF saves',
+      !sStart.open &&
+        !sStart.inert &&
+        asked.open &&
+        asked.save &&
+        !asked.gate &&
+        asked.promo &&
+        asked.view === 'signup' &&
+        asked.title === 'Create your free account' &&
+        !closedNoSave.open &&
+        !closedNoSave.inert &&
+        closedNoSave.downloads === 0 &&
+        !signedSave.open &&
+        !signedSave.save &&
+        signedSave.user &&
+        signedSave.user.email === 'save@example.com' &&
+        sPages === 60,
+      { sStart, asked, closedNoSave, signedSave, sPages },
+    );
+    check('no errors on the page', serr.length === 0, serr);
+    await sctx.close();
   }
 
   /* ---- without a project configured, no account UI at all ---- */

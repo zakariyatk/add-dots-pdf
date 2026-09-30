@@ -1,13 +1,30 @@
 # Accounts (Stage I): Sign In / Sign Up with Supabase Auth
 
 One ADD DOTS account on the web, Windows, Android and iOS. An account is
-free, and **signing in is required**: the app opens to "Sign in to ADD DOTS
-PDF" (and Create account) and nothing else until an account is signed in, as
-WPS, Acrobat and Google Docs do. Documents still stay on the device.
+free, with every tool. **Saving asks for one**: everyone can open and edit
+PDFs with every tool, and saving a file asks to sign in or create a free
+account first, as Acrobat online does. Documents still stay on the device.
 
-## Sign-in required (`requireSignIn`)
+## When an account is asked for (`requireSignIn`)
 
-`requireSignIn: true` in `apps/web/public/js/config.js` (the default):
+`requireSignIn` in `apps/web/public/js/config.js` is one of:
+
+- `'save'` (the default): nothing asks for an account until a file is saved.
+  Save, and every other way a file comes out of the app (extracting pages,
+  converting, compressing, exporting images or text), first opens a popup:
+  "Your PDF is ready to save", what a free account gives (every tool, no
+  payment, no card, no trial) beside Create your free account, with Sign in,
+  Continue with Google and Continue with Apple. Signed in or signed up, the
+  save goes ahead by itself; closed, nothing is saved and the document stays
+  open as it was. A device already signed in saves straight away. With the
+  account service out of reach (offline, never signed in on this device),
+  the save goes ahead rather than hold the document back. Continue with
+  Google or Apple leaves the page for the provider's: the document is kept
+  first, and offered again (crash recovery) on the way back.
+- `true`: the app opens behind a sign-in page, below.
+- `false`: signing in is optional.
+
+With `requireSignIn: true`:
 
 - With no sign-in kept on this device, the app starts behind a full-screen
   sign-in page: Sign in, Create account, Forgot password and the privacy
@@ -19,7 +36,6 @@ WPS, Acrobat and Google Docs do. Documents still stay on the device.
 - Signing out, deleting the account, or the session ending elsewhere (a
   password changed on another device) brings the sign-in page back.
 - On a phone's first run the welcome pages come first, then the sign-in page.
-- `requireSignIn: false` makes signing in optional again, as before.
 
 ## Continue with Google and Continue with Apple
 
@@ -181,8 +197,10 @@ no project is configured. And the sign-in page itself, as shipped
 outside do not close it, Continue with Google shows when the project has
 Google on (and Apple does not when it is off), signing in lets the app
 through, signing out brings the page back, and Continue with Google goes to
-the project's Google sign-in with this page as the way back. The other
-checks run with sign-in not required.
+the project's Google sign-in with this page as the way back. And sign-in when
+saving (`requireSignIn: 'save'`): the app opens with no sign-in, Save opens
+the free-account popup, closing it saves nothing, and signing in saves the
+PDF. The other checks run with sign-in not required.
 
 ## Later
 

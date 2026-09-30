@@ -16,9 +16,13 @@ window.ADDDOTS_CONFIG = Object.assign({
      links point here, and its API is at <shareServer>api. The browser app
      uses wherever it is served from instead. */
   shareServer: 'https://pdf.adddots.com/',
-  /* the app opens to Sign in / Create account, and nothing else, until an
-     account is signed in (free). Continue with Google and Continue with
-     Apple show on the website once the project has them turned on
-     (docs/accounts.md). */
-  requireSignIn: true
+  /* when an account is asked for (it is free, with every tool):
+     'save'  every tool works without one; saving a file (Save, extract,
+             convert, export) asks to sign in or create a free account first
+     true    the app opens to Sign in / Create account, and nothing else,
+             until an account is signed in
+     false   never; signing in is optional
+     Continue with Google and Continue with Apple show on the website once
+     the project has them turned on (docs/accounts.md). */
+  requireSignIn: 'save'
 }, window.ADDDOTS_CONFIG || {});

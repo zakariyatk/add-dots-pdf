@@ -146,6 +146,8 @@ try {
   /* Save */
   await page.evaluate(() => {
     window.ADDDOTS_TEST_SAVE = true;
+    /* the run has no account: saving without one (js/config.js requireSignIn) */
+    window.ADDDOTS_CONFIG.requireSignIn = false;
     window.ADDPDF.S.items[0].shapes.push({
       t: 'rect',
       a: [60, 60],
