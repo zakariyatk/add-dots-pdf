@@ -134,5 +134,16 @@ jobs:
             sleep 10
           done
           echo "sw.js on the server: ${got:-nothing} (built: $want)"
-          [ "$got" = "$want" ] || { echo "::error::$SITE_URL does not serve what was just uploaded"; exit 1; }
+          if [ "$got" != "$want" ]; then
+            # where did the upload land, as the site sees it? Try the folder
+            # names it could have gone one or two levels too deep into.
+            for sub in public_html/ pdf/ public_html/pdf/ domains/pdf.adddots.com/public_html/; do
+              if curl -fsS "${SITE_URL}${sub}sw.js?check=$GITHUB_RUN_ID" 2>/dev/null | grep -q "$want"; then
+                echo "::error::The files went one level too deep: the site shows them at ${SITE_URL}${sub}. Take '${sub}' off the end of FTP_DIR_LIVE (if that leaves it empty, use ./)."
+                exit 1
+              fi
+            done
+            echo "::error::$SITE_URL does not serve what was just uploaded, nor under public_html/ or pdf/. The site's folder is somewhere else: check the folder of pdf.adddots.com in hPanel -> Domains -> Subdomains (or Websites)."
+            exit 1
+          fi
           curl -fsS "${SITE_URL}api/health" && echo || echo "::warning::${SITE_URL}api/health did not answer: the share server needs api/config.php (first time: README.md, Publishing)"
