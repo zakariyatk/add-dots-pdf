@@ -1159,7 +1159,7 @@ try {
     /* Share: the app is not served from the web, so it shares through the
        website in js/config.js (shareServer), and its links point there */
     const shareCalls = [];
-    await ctx.route('https://www.pdf.adddots.com/api/**', async (route) => {
+    await ctx.route('https://pdf.adddots.com/api/**', async (route) => {
       const req = route.request();
       const path = new globalThis.URL(req.url()).pathname.replace('/api', '');
       shareCalls.push(req.method() + ' ' + path);
@@ -1191,8 +1191,8 @@ try {
       'phone app: Share uploads to the website in config.js, and its links point there',
       shareCalls.includes('GET /health') &&
         shareCalls.includes('POST /documents') &&
-        owner === 'https://www.pdf.adddots.com/?d=d1#k=own3r' &&
-        review === 'https://www.pdf.adddots.com/?s=r3view',
+        owner === 'https://pdf.adddots.com/?d=d1#k=own3r' &&
+        review === 'https://pdf.adddots.com/?s=r3view',
       { owner, review, calls: shareCalls.slice(0, 5) },
     );
     check('no errors on the page', errors.length === 0, errors);
