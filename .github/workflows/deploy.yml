@@ -47,9 +47,17 @@ jobs:
     env:
       TARGET: ${{ github.event.inputs.target || 'staging' }}
       SITE_URL: ${{ github.event.inputs.target == 'live' && 'https://www.pdf.adddots.com/' || 'https://staging.adddots.com/' }}
-      FTP_DIR: ${{ github.event.inputs.target == 'live' && secrets.FTP_DIR_LIVE || secrets.FTP_DIR_STAGING }}
+      FTP_DIR_GIVEN: ${{ github.event.inputs.target == 'live' && secrets.FTP_DIR_LIVE || secrets.FTP_DIR_STAGING }}
       HAS_FTP: ${{ secrets.FTP_SERVER != '' && secrets.FTP_USERNAME != '' && secrets.FTP_PASSWORD != '' }}
     steps:
+      # the folder as typed into the secret, tidied: no spaces or line breaks
+      # round it, and ending in / as the upload needs
+      - name: Folder on the server
+        run: |
+          dir=$(printf '%s' "$FTP_DIR_GIVEN" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+          if [ -n "$dir" ]; then case "$dir" in */) ;; *) dir="$dir/" ;; esac; fi
+          echo "::add-mask::$dir"
+          echo "FTP_DIR=$dir" >> "$GITHUB_ENV"
       - name: FTP details present?
         if: env.HAS_FTP != 'true' || env.FTP_DIR == ''
         run: |
