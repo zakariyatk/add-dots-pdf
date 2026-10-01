@@ -34,7 +34,7 @@ updates from inside the app.
 npm ci                                       # once, at the repo root
 cd apps/desktop
 npx tauri dev                                # the app over Vite, with reload
-npx tauri build                              # installers: src-tauri/target/release/bundle/{nsis,msi}
+npx tauri build                              # installer: src-tauri/target/release/bundle/nsis/*-setup.exe
 npx tauri build --debug --no-bundle && node e2e.mjs   # end-to-end test
 cargo test --manifest-path src-tauri/Cargo.toml       # the Rust side's tests
 ```
@@ -58,13 +58,19 @@ app's WebView2), or `tauri-driver` (WebDriver) on Linux:
 - Save writes a PDF with every page (`ADDDOTS_SAVE_TO` stands in for the Save
   dialog)
 
-CI runs it on `windows-latest` against the release build, then uploads the
-installers as the `windows-installers` artifact.
+CI on `windows-latest` installs the release build from its setup `.exe` the
+way a reader does: it checks the installer runs as the user (no administrator,
+like WPS), puts the app under `%LOCALAPPDATA%` for this user only, runs this
+test against the installed app, then uninstalls it. The setup `.exe` is
+uploaded as the `windows-installer` artifact. There is no `.msi`: an MSI
+installs for the whole computer and asks for an administrator.
 
 ## Signing
 
-The installers are not signed yet: Windows SmartScreen warns before running
-them ("Windows protected your PC", then "More info" and "Run anyway"). Signing
+The installer is not signed yet: Windows SmartScreen warns before running
+it ("Windows protected your PC", then "More info" and "Run anyway"), and a computer whose
+IT only lets signed programs run (AppLocker, Smart App Control) refuses it
+with "Windows cannot access the specified device, path, or file". Signing
 needs a code-signing certificate; with one, Tauri signs during `tauri build`
 (`bundle.windows.certificateThumbprint`, or a signing command for a cloud
 certificate), from secrets added to GitHub.
