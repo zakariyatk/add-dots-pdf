@@ -18,7 +18,8 @@ window.ADDDOTS_CONFIG = Object.assign({
   shareServer: 'https://pdf.adddots.com/',
   /* when an account is asked for (it is free, with every tool):
      'save'  every tool works without one; saving a file (Save, extract,
-             convert, export) asks to sign in or create a free account first
+             convert, export) asks to sign in or create a free account first,
+             and no Sign in button shows until then
      true    the app opens to Sign in / Create account, and nothing else,
              until an account is signed in
      false   never; signing in is optional

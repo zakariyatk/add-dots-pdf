@@ -9,7 +9,9 @@ account first, as Acrobat online does. Documents still stay on the device.
 
 `requireSignIn` in `apps/web/public/js/config.js` is one of:
 
-- `'save'` (the default): nothing asks for an account until a file is saved.
+- `'save'` (the default): nothing asks for an account until a file is saved,
+  and no Sign in button shows on the home screen or the toolbar while signed
+  out (signed in, the account button shows, for the account and Sign out).
   Save, and every other way a file comes out of the app (extracting pages,
   converting, compressing, exporting images or text), first opens a popup:
   "Your PDF is ready to save", what a free account gives (every tool, no
