@@ -1862,6 +1862,8 @@ try {
         view: (Array.from(document.querySelectorAll('#authDlg [data-view]')).find((f) => !f.hidden) || {})
           .dataset?.view,
         user: window.ADDPDF.account.user(),
+        /* the Sign in buttons: home screen, its top bar, the toolbar */
+        buttons: ['hAccount', 'hAcctTop', 'grpAccount'].filter((id) => !document.getElementById(id).hidden),
       }));
     const sStart = await sState();
     await open(sp, MIXED);
@@ -1898,9 +1900,10 @@ try {
     const signedSave = await sState();
     const sPages = sdl ? (await PDFDocument.load(readFileSync(await sdl.path()))).getPageCount() : null;
     check(
-      'sign-in when saving: the app opens with no sign-in; Save opens the free-account popup; closed, nothing saves; signed in, the PDF saves',
+      'sign-in when saving: the app opens with no sign-in and no Sign in button; Save opens the free-account popup; closed, nothing saves; signed in, the PDF saves',
       !sStart.open &&
         !sStart.inert &&
+        sStart.buttons.length === 0 &&
         asked.open &&
         asked.save &&
         !asked.gate &&
@@ -1914,6 +1917,7 @@ try {
         !signedSave.save &&
         signedSave.user &&
         signedSave.user.email === 'save@example.com' &&
+        signedSave.buttons.length === 3 &&
         sPages === 60,
       { sStart, asked, closedNoSave, signedSave, sPages },
     );

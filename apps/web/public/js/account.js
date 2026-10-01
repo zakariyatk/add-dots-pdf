@@ -33,6 +33,9 @@
   /* the sign-in page the app waits behind (js/config.js requireSignIn) */
   var GATE = cfg.requireSignIn === true;
   var gated = false;
+  /* requireSignIn: 'save': no Sign in button anywhere while signed out; the
+     popup a save opens is the only way in. Signed in, the account shows. */
+  var ON_SAVE = cfg.requireSignIn === 'save';
   /* saves waiting for an account (requireSignIn: 'save'): each resolves
      true once one is signed in, false if the popup is closed */
   var waiting = [];
@@ -90,10 +93,15 @@
     try { return !!localStorage.getItem('adpdf.auth'); } catch (e) { return false; }
   }
 
+  function buttons() {
+    var off = ON_SAVE && !user;
+    $('grpAccount').hidden = off;
+    $('hAccount').hidden = off;
+    $('hAcctTop').hidden = off;
+  }
+
   function start() {
-    $('grpAccount').hidden = false;
-    $('hAccount').hidden = false;
-    $('hAcctTop').hidden = false;
+    buttons();
     /* nothing kept: the sign-in page at once, before the library is in */
     if (GATE && !stored() && !link) gate();
     loadLib().then(function () {
@@ -241,6 +249,7 @@
     $('hAcctName').textContent = user ? name : 'Sign in';
     $('hAcctSub').textContent = user ? 'Signed in' : 'One account on every device';
     $('hAcctTopLbl').textContent = user ? name : 'Sign in';
+    buttons();
     /* the home screen greets the account by name */
     if (api.refreshHello) api.refreshHello();
     if (!dlg.hidden && view === 'account') show('account');
