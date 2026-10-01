@@ -30,7 +30,7 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis", "msi"],
+    "targets": ["nsis"],
     "publisher": "ADD DOTS",
     "category": "Productivity",
     "shortDescription": "Read, edit and mark up PDFs",

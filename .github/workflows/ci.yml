@@ -71,18 +71,58 @@ jobs:
       # builds the web app first (beforeBuildCommand), then the installers
       - run: npx tauri build
         working-directory: apps/desktop
-      # the app driven end to end: Playwright over WebView2's DevTools port
+      # the setup .exe as a reader runs it: it must not ask for an
+      # administrator (asInvoker, like WPS), and it installs for this user
+      # only, under %LOCALAPPDATA%, never Program Files
+      - name: Install from the setup .exe
+        shell: pwsh
+        run: |
+          $setup = Get-ChildItem apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          if (-not $setup) { throw 'no setup .exe was built' }
+          $text = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($setup.FullName))
+          if ($text -notmatch 'requestedExecutionLevel level="asInvoker"') { throw "$($setup.Name) asks Windows for an administrator: its manifest is not asInvoker" }
+          "ok  $($setup.Name) runs as the user (asInvoker)"
+          $p = Start-Process $setup.FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "the installer exited with $($p.ExitCode)" }
+          # where it went, as Windows records it: this user's list of
+          # installed programs (HKCU), not the computer's (HKLM)
+          $keys = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
+          $mine = Get-ItemProperty "HKCU:\$keys" -ErrorAction SilentlyContinue | Where-Object DisplayName -like 'ADD DOTS PDF*'
+          $all = Get-ItemProperty "HKLM:\$keys", "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue | Where-Object DisplayName -like 'ADD DOTS PDF*'
+          if ($all) { throw 'installed for the whole computer (HKLM): that needs an administrator' }
+          if (-not $mine) { throw 'not in this user''s installed programs' }
+          $dir = ($mine | Select-Object -First 1).InstallLocation
+          if (-not $dir) { $dir = Split-Path ((($mine | Select-Object -First 1).UninstallString) -replace '"', '') }
+          $dir = $dir.Trim('"')
+          if (-not $dir.StartsWith($env:LOCALAPPDATA)) { throw "installed at $dir, not under this user's %LOCALAPPDATA%" }
+          $app = Get-ChildItem $dir -Filter *.exe | Where-Object Name -notlike 'uninstall*' | Select-Object -First 1
+          if (-not $app) { Get-ChildItem $dir; throw "no app in $dir" }
+          "ok  installed for this user: $($app.FullName)"
+          "INSTALLED_APP=$($app.FullName)" >> $env:GITHUB_ENV
+          "INSTALLED_DIR=$dir" >> $env:GITHUB_ENV
+      # the installed app driven end to end: Playwright over WebView2's
+      # DevTools port
       - run: node e2e.mjs
         working-directory: apps/desktop
         env:
-          APP: ${{ github.workspace }}\apps\desktop\src-tauri\target\release\adddots-pdf.exe
-      # unsigned test installers: Windows SmartScreen warns before running them
+          APP: ${{ env.INSTALLED_APP }}
+      - name: Uninstall
+        shell: pwsh
+        run: |
+          $un = Join-Path $env:INSTALLED_DIR 'uninstall.exe'
+          $p = Start-Process $un -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "the uninstaller exited with $($p.ExitCode)" }
+          # the silent uninstaller hands off to a copy of itself: give it a moment
+          for ($i = 0; $i -lt 30 -and (Test-Path $env:INSTALLED_APP); $i++) { Start-Sleep 1 }
+          if (Test-Path $env:INSTALLED_APP) { throw 'the app is still there after uninstalling' }
+          'ok  uninstalled'
+      # the unsigned test installer: Windows SmartScreen warns before running
+      # it. One setup .exe for this user, no administrator (no .msi: an MSI
+      # installs for the whole computer and asks for one)
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-installers
-          path: |
-            apps/desktop/src-tauri/target/release/bundle/nsis/*.exe
-            apps/desktop/src-tauri/target/release/bundle/msi/*.msi
+          name: windows-installer
+          path: apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
           retention-days: 14
 
   android:
