@@ -192,6 +192,8 @@ const browser = await chromium.launch({ channel: process.env.BENCH_CHANNEL || un
     const c = await newContext(opts);
     await c.addInitScript(() => {
       window.ADDDOTS_CONFIG = Object.assign({ requireSignIn: false }, window.ADDDOTS_CONFIG || {});
+      /* file after file in one page: each replaces the last, no tabs */
+      window.ADDDOTS_NO_TABS = true;
     });
     return c;
   };
@@ -2577,6 +2579,231 @@ try {
 
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
+  }
+
+  /* ---- WPS round: blank-page dialog, area highlight, tables, OCR, tabs, look ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, MIXED);
+    const n = () => page.evaluate(() => window.ADDPDF.S.items.length);
+
+    check(
+      'accounts are off: no Sign in anywhere',
+      await page.evaluate(() => {
+        const vis = (id) => {
+          const e = document.getElementById(id);
+          return !!e && e.offsetParent !== null;
+        };
+        return !vis('btnAccount') && !vis('hAcctBtn');
+      }),
+    );
+    check(
+      'the WPS look is on, with its status bar',
+      await page.evaluate(
+        () =>
+          document.body.dataset.skin === 'wps' &&
+          getComputedStyle(document.getElementById('statusBar')).display !== 'none',
+      ),
+    );
+
+    /* Insert Blank Page: A3 landscape, two before pages 1 and 3, then one at the end */
+    const n0 = await n();
+    await page.evaluate(() => window.ADDPDF.openBlankPageDialog());
+    await page.selectOption('#blankSize', 'a3');
+    await page.selectOption('#blankOrient', 'l');
+    const wh = await page.evaluate(() => [
+      document.getElementById('blankW').value,
+      document.getElementById('blankH').value,
+    ]);
+    await page.fill('#blankQty', '2');
+    await page.fill('#blankPages', '1,3');
+    await page.selectOption('#blankPos', 'before');
+    await page.click('#blankGo');
+    await page
+      .waitForFunction((k) => window.ADDPDF.S.items.length === k + 4, n0, { timeout: 15000 })
+      .catch(() => {});
+    const at = await page.evaluate(() =>
+      window.ADDPDF.S.items.map((it, i) => (it.src.synthetic ? i + 1 : 0)).filter(Boolean),
+    );
+    check(
+      'Insert Blank Page puts A3 landscape pages before pages 1 and 3',
+      wh.join('x') === '420x297' && JSON.stringify(at) === '[1,2,5,6]',
+      { wh, at },
+    );
+    await page.evaluate(() => window.ADDPDF.openBlankPageDialog());
+    await page.check('input[name="blankWhere"][value="end"]');
+    await page.click('#blankGo');
+    await page
+      .waitForFunction((k) => window.ADDPDF.S.items.length === k + 5, n0, { timeout: 15000 })
+      .catch(() => {});
+    check(
+      'and at the end',
+      await page.evaluate(() => {
+        const it = window.ADDPDF.S.items;
+        return !!it[it.length - 1].src.synthetic;
+      }),
+    );
+
+    /* area highlight: a box dragged over the page */
+    await page.evaluate(() => window.ADDPDF.goTo(1));
+    await page.evaluate(() => window.ADDPDF.setTool('hlarea'));
+    const box = await page.evaluate(() => {
+      const s = document.getElementById('stage');
+      s.style.scrollBehavior = 'auto';
+      const b = window.ADDPDF.S.items[0].box;
+      s.scrollTop += b.getBoundingClientRect().top - 120;
+      const r = b.getBoundingClientRect();
+      return { x: r.left, y: r.top };
+    });
+    await page.waitForTimeout(400);
+    await page.mouse.move(box.x + 80, box.y + 80);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 260, box.y + 160, { steps: 6 });
+    await page.mouse.up();
+    check(
+      'Area highlight marks a dragged box',
+      await page.evaluate(() =>
+        window.ADDPDF.S.items[0].shapes.some((s) => s.t === 'markup' && s.k === 'highlight' && s.area),
+      ),
+    );
+
+    /* a table: click a cell and type, Tab to the next */
+    await page.evaluate(() => {
+      const X = window.ADDPDF,
+        it = X.S.items[0];
+      it.shapes.push({
+        t: 'table',
+        id: 'smk',
+        rows: 2,
+        cols: 2,
+        cells: [
+          ['', ''],
+          ['', ''],
+        ],
+        a: [100, 300],
+        b: [300, 360],
+        c: '#8A8F98',
+        w: 1,
+      });
+      X.drawShapes(it);
+      X.setTool('select');
+    });
+    await page.waitForTimeout(400);
+    const cell = await page.evaluate(() => {
+      const s = document.getElementById('stage');
+      const g = [...document.querySelectorAll('.ins-mk')].pop();
+      s.scrollTop += g.getBoundingClientRect().top - 300;
+      const r = g.getBoundingClientRect();
+      return { x: r.left + r.width * 0.25, y: r.top + r.height * 0.75 };
+    });
+    await page.waitForTimeout(400);
+    await page.mouse.click(cell.x, cell.y);
+    await page.waitForSelector('.tabled td:focus', { timeout: 5000 }).catch(() => {});
+    await page.keyboard.type('Door');
+    await page.keyboard.press('Tab');
+    await page.keyboard.type('D1');
+    await page.mouse.click(1380, 140);
+    const cells = await page.evaluate(
+      () => window.ADDPDF.S.items[0].shapes.find((s) => s.id === 'smk').cells,
+    );
+    check(
+      'typing straight into a table cell, Tab to the next',
+      JSON.stringify(cells) === '[["",""],["Door","D1"]]',
+      cells,
+    );
+
+    /* OCR a page that is only a picture of text */
+    {
+      const shot = await ctx.newPage();
+      await shot.setViewportSize({ width: 1240, height: 1754 });
+      await shot.setContent(
+        '<body style="margin:120px;font:48px Arial;background:#fff;color:#111"><h1 style="font-size:76px">Site Inspection Report</h1><p>Christmas tree cover for the mall atrium.</p></body>',
+      );
+      const png = await shot.screenshot();
+      await shot.close();
+      const d = await PDFDocument.create();
+      const img = await d.embedPng(png);
+      d.addPage([595, 842]).drawImage(img, { x: 0, y: 0, width: 595, height: 842 });
+      const SCAN = join(CORPUS_DIR, 'smoke-scan.pdf');
+      writeFileSync(SCAN, await d.save());
+      await open(page, SCAN);
+      await page.evaluate(() => window.ADDPDF.openOcr());
+      await page.click('#ocrGo');
+      await page
+        .waitForFunction(
+          () => /read on|could not/.test(document.getElementById('ocrNote').textContent),
+          null,
+          { timeout: 120000 },
+        )
+        .catch(() => {});
+      const note = await page.textContent('#ocrNote');
+      const words = await page.evaluate(() => {
+        const s = window.ADDPDF.S.items[0].shapes.find((x) => x.t === 'ocr');
+        return s ? s.words.map((w) => w[5]).join(' ') : '';
+      });
+      check('OCR reads the text on a scanned page', /Inspection/.test(words) && /atrium/.test(words), {
+        note,
+        words,
+      });
+      await page.click('#ocrCancel');
+      const bytes = await page.evaluate(async () => {
+        const X = window.ADDPDF;
+        return Array.from(await X.buildPdf(X.S.items, new Map(), {}));
+      });
+      const saved = await page.evaluate(async (b) => {
+        const doc = await window.pdfjsLib.getDocument({ data: new Uint8Array(b) }).promise;
+        const tc = await (await doc.getPage(1)).getTextContent();
+        return tc.items.map((i) => i.str).join(' ');
+      }, bytes);
+      check('and the saved PDF can be searched for it', /atrium/.test(saved), saved.slice(0, 120));
+    }
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- tabs: a second PDF opens in a tab of its own ---- */
+  {
+    const tctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: 'block',
+    });
+    await tctx.addInitScript(() => {
+      window.ADDDOTS_NO_TABS = false;
+    });
+    const page = await tctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await open(page, MIXED);
+    await page.setInputFiles('#fileIn', COLUMNS);
+    await page
+      .waitForFunction(() => window.ADDPDF.tabs.list().length === 2, null, { timeout: 20000 })
+      .catch(() => {});
+    const frame = page.frames().filter((f) => /[?&]tab=/.test(f.url()))[0];
+    let inTab = 0;
+    if (frame) {
+      await frame
+        .waitForFunction(() => window.ADDPDF && window.ADDPDF.S.items.length > 0, null, { timeout: 30000 })
+        .catch(() => {});
+      inTab = await frame.evaluate(() => window.ADDPDF.S.items.length);
+    }
+    const tabs = await page.evaluate(() => window.ADDPDF.tabs.list());
+    check(
+      'a second PDF opens in its own tab, the first stays open',
+      tabs.length === 2 &&
+        inTab > 0 &&
+        (await page.evaluate(() => window.ADDPDF.S.items.length)) === 60 &&
+        !(await page.evaluate(() => document.getElementById('docTabs').hidden)),
+      { tabs, inTab },
+    );
+    await page.click('.dtab[data-id="0"]');
+    check(
+      'clicking a tab shows its document',
+      await page.evaluate(() => document.getElementById('docFrames').hidden),
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await tctx.close();
   }
 } finally {
   await browser.close();

@@ -1959,7 +1959,7 @@
      matches — same page, same number of marks, and S.sel one of them — so any
      code that simply sets S.sel to a single mark ends a group without having
      to know groups exist. */
-  const NOT_SELECTABLE = { pin: 1, wm: 1, hf: 1, bates: 1 };
+  const NOT_SELECTABLE = { pin: 1, wm: 1, hf: 1, bates: 1, ocr: 1 };
   function selList() {
     if (!S.sel || !S.sel.it) return [];
     const m = S.multi;
@@ -2794,7 +2794,8 @@
     if (!it || !it.shapes.length) return;
     /* first, and alone: plain A is the Arrow tool's shortcut */
     e.preventDefault(); e.stopImmediatePropagation();
-    setGroup(it, it.shapes.map(function (_, i) { return i; }));
+    setGroup(it, it.shapes.map(function (s, i) { return NOT_SELECTABLE[s.t] ? -1 : i; })
+      .filter(function (i) { return i >= 0; }));
     redrawAll();
     if (S.sel) syncMarkPop();
   }, true);
@@ -6155,7 +6156,7 @@
 
   async function textOf(it) {
     const key = it.src.id + ':' + it.num;
-    if (S.textCache.has(key)) return S.textCache.get(key);
+    if (S.textCache.has(key)) return withOcr(it, S.textCache.get(key));
     /* a page pdf.js cannot load reads as empty, and is tried again next time */
     try { await ensurePage(it); } catch (e) { return ''; }
     let s = '';
@@ -6164,7 +6165,12 @@
       s = tc.items.map(function (x) { return x.str; }).join(' ');
     } catch (e) {}
     S.textCache.set(key, s);
-    return s;
+    return withOcr(it, s);
+  }
+  /* and the text OCR read on the page (js/ocr.js), never cached: it changes */
+  function withOcr(it, s) {
+    const o = EXT.ocrText ? EXT.ocrText(it) : '';
+    return o ? (s ? s + ' ' + o : o) : s;
   }
 
   let findTimer;
@@ -7569,8 +7575,10 @@
   function okToReplace() {
     return !isDirty() || confirm('Open another file? Unsaved changes to "' + docName() + '" will be lost.');
   }
+  /* with a document open, another one opens in a tab of its own (js/tabs.js) */
+  function inNewTab() { return !!(S.items.length && EXT.tabs && EXT.tabs.available()); }
   function pickNew(tool) {
-    if (!okToReplace()) return;
+    if (!inNewTab() && !okToReplace()) return;
     pendingTool = tool || null;
     $('fileIn').click();
   }
@@ -7732,6 +7740,7 @@
      desktop app hands PDFs here when the operating system opens one with it. */
   async function takeFiles(files) {
     if (!files.length) return;
+    if (inNewTab() && files.some(isPdf)) { EXT.tabs.openFiles(files); return; }
     const pdfs = files.filter(isPdf);
     const tool = pendingTool; pendingTool = null;
     const proj = await takeProjectFiles(files);
@@ -7747,11 +7756,15 @@
       return;
     }
     if (!(await openFile(pdfs[0]))) return;
-    /* everything else merges on, non-PDFs included so they show up in the tally */
+    /* the other PDFs each open in a tab of their own, as in Acrobat and WPS;
+       without tabs (an app shell that has none) they merge on, non-PDFs
+       included so they show up in the tally */
     const rest = files.filter(function (f) {
       return f !== pdfs[0] && !isProjectFile(f) && !isImageFile(f);
     });
-    if (rest.length && S.items.length) await insertPdfs(rest, S.items.length);
+    if (rest.length && S.items.length && EXT.tabs && EXT.tabs.available() && rest.some(isPdf)) {
+      EXT.tabs.openFiles(rest.filter(isPdf));
+    } else if (rest.length && S.items.length) await insertPdfs(rest, S.items.length);
     if (proj && S.items.length) await applyProject(proj.d, proj.pool, proj.name);
     else flushProject();
     if (tool) setTimeout(function () { runTool(tool); }, 60);
@@ -7778,6 +7791,7 @@
     const dropped = e.dataTransfer && e.dataTransfer.files;
     if (!dropped || !dropped.length) return;
     if (S.items.length && !homeShown()) { insertPdfs(dropped, S.current); return; }
+    if (inNewTab() && Array.prototype.some.call(dropped, isPdf)) { EXT.tabs.openFiles(Array.prototype.slice.call(dropped)); return; }
     if (S.items.length && !okToReplace()) return;
 
     /* nothing open yet: the first PDF becomes the document, the rest merge onto it */
@@ -7871,62 +7885,6 @@
       case '/': e.preventDefault(); setRail(true); switchTab('find'); break;
     }
   });
-
-  /* Space held: the hand, as in Acrobat and WPS. Dragging moves the view and
-     nothing else, whatever tool is on; letting go of Space gives the tool
-     back. Not while typing, and not over a dialog. */
-  const SP = { held: false, drag: null };
-  function spaceOk(e) {
-    const t = e.target, tag = (t.tagName || '').toLowerCase();
-    if (tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable) return false;
-    return S.items.length && !homeShown() && !S.editing && !overlayOpen();
-  }
-  function spaceEnd() {
-    SP.held = false; SP.drag = null;
-    stage.classList.remove('spacepan', 'spacegrab');
-    stage.style.scrollBehavior = '';
-  }
-  document.addEventListener('keydown', function (e) {
-    if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (!SP.held && !spaceOk(e)) return;
-    /* no page scroll, and no click on a focused toolbar button */
-    e.preventDefault(); e.stopPropagation();
-    if (SP.held) return;                               /* key repeat */
-    SP.held = true;
-    stage.classList.add('spacepan');
-  }, true);
-  document.addEventListener('keyup', function (e) {
-    if (e.key !== ' ' || !SP.held) return;
-    e.preventDefault(); e.stopPropagation();
-    spaceEnd();
-  }, true);
-  window.addEventListener('blur', function () { if (SP.held) spaceEnd(); });
-  /* capture on the document: before any tool or mark sees the press */
-  document.addEventListener('pointerdown', function (e) {
-    if (!SP.held || e.button !== 0 || !stage.contains(e.target)) return;
-    e.preventDefault(); e.stopPropagation();
-    SP.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, l: stage.scrollLeft, t: stage.scrollTop };
-    stage.style.scrollBehavior = 'auto';
-    stage.classList.add('spacegrab');
-  }, true);
-  document.addEventListener('pointermove', function (e) {
-    if (!SP.drag || e.pointerId !== SP.drag.id) return;
-    e.preventDefault(); e.stopPropagation();
-    stage.scrollLeft = SP.drag.l - (e.clientX - SP.drag.x);
-    stage.scrollTop = SP.drag.t - (e.clientY - SP.drag.y);
-  }, true);
-  ['pointerup', 'pointercancel'].forEach(function (type) {
-    document.addEventListener(type, function (e) {
-      if (!SP.drag || e.pointerId !== SP.drag.id) return;
-      e.preventDefault(); e.stopPropagation();
-      SP.drag = null;
-      stage.classList.remove('spacegrab');
-    }, true);
-  });
-  /* the click that ends a pan is not a click on the page */
-  document.addEventListener('click', function (e) {
-    if (SP.held && stage.contains(e.target)) { e.preventDefault(); e.stopPropagation(); }
-  }, true);
 
   stage.addEventListener('wheel', function (e) {
     if (!e.ctrlKey || !S.items.length) return;
@@ -8273,6 +8231,12 @@
     isMobile: isMobile,
     openFiles: takeFiles,
     okToReplace: okToReplace,
+    isDirty: isDirty, docName: docName, homeShown: homeShown, showHome: showHome,
+    /* the zoom, for the status bar (js/skin.js): read it, or glide to one */
+    zoom: function () { return glideTarget(); }, zoomTo: function (v) { zoomGlide(v); },
+    ZOOM_MIN: ZOOM_MIN, ZOOM_MAX: ZOOM_MAX,
+    /* the document put away (its tab closed): back to the home screen */
+    closeDocument: function () { hardReset(); updateMeta(); showHome(); },
     hasDoc: function () { return !!S.items.length; }
   });
   EXT.emit('ready');

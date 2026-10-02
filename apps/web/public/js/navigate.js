@@ -209,21 +209,29 @@
                                           borrowed — the wheel handler below
                                           needs this one regardless */
 
+    /* a dialog or sheet over the page keeps Space for its own buttons */
+    function overlayUp() {
+      return !!document.querySelector('.sigmodal:not([hidden]), .orgview:not([hidden]), [role="dialog"]:not([hidden]):not(.pop)');
+    }
     document.addEventListener('keydown', function (e) {
-      if (e.code !== 'Space' || e.repeat) return;
-      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if ((e.code !== 'Space' && e.key !== ' ') || e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target;
       if (el && el.matches && el.matches('input,textarea,select,[contenteditable]')) return;
-      /* a focused button should still activate on Space */
-      if (el && el.matches && el.matches('button,a')) return;
-      if (!S.items.length) return;
+      if (el && el.isContentEditable) return;
+      if (!S.items.length || S.editing) return;
+      /* the toolbar button clicked last keeps focus; Space is still the
+         hand, as in Acrobat and WPS, not a second click on that button */
+      if (el && el.matches && el.matches('button,a')) {
+        if (overlayUp() || !el.closest('.ribbon, .rbar, #ribbon, .toolbar, .rail, #stage, .top, header')) return;
+        el.blur();
+      }
+      e.preventDefault();               /* otherwise the page jumps a screen */
+      if (e.repeat) return;
       spaceDown = true;
       if (S.tool === 'pan') return;
-
-      e.preventDefault();               /* otherwise the page jumps a screen */
       borrowedFrom = S.tool;
       X.setTool('pan');
-    });
+    }, true);
 
     function handBack() {
       spaceDown = false;
@@ -234,8 +242,11 @@
       X.setTool(back);
     }
     document.addEventListener('keyup', function (e) {
-      if (e.code === 'Space') handBack();
-    });
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      /* no click on a button left focused, now the key comes up */
+      if (spaceDown || borrowedFrom !== null) e.preventDefault();
+      handBack();
+    }, true);
     /* if focus leaves mid-hold the keyup never arrives, and the hand would
        stay borrowed for good */
     window.addEventListener('blur', function () {

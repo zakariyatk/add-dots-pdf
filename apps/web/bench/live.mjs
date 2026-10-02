@@ -91,7 +91,7 @@ for (const f of [
 }
 
 const browser = await chromium.launch({ channel: process.env.BENCH_CHANNEL || undefined });
-const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, acceptDownloads: true });
 const page = await ctx.newPage();
 const errors = [];
 const bad = [];
@@ -207,17 +207,22 @@ try {
   const rot = await page.evaluate(() => window.ADDPDF.S.items[window.ADDPDF.S.current - 1].rot);
   check('Page > Rotate turns the page', rot === 90, rot);
 
-  /* Save opens its popover, and Save there asks for a free account */
+  /* Save opens its popover, and Save there downloads the file: no account */
   await page.click('#btnSave');
   await page.waitForTimeout(300);
   const savePop = await page.evaluate(() => !document.getElementById('savePop').hidden);
-  await page.click('#saveGo').catch(() => {});
-  await page.waitForTimeout(1500);
-  const acct = await page.evaluate(() => {
+  const dl = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.click('#saveGo')])
+    .then((r) => r[0])
+    .catch(() => null);
+  const asked = await page.evaluate(() => {
     const a = document.getElementById('authDlg');
-    return { shown: !!a && !a.hidden, title: a && document.getElementById('authTitle').textContent };
+    return !!a && !a.hidden;
   });
-  check('Save opens, and saving asks for the free account', savePop && acct.shown, { savePop, ...acct });
+  check('Save opens, and saving downloads the PDF without asking for an account', savePop && !!dl && !asked, {
+    savePop,
+    file: dl && dl.suggestedFilename(),
+    asked,
+  });
   await page.screenshot({ path: join(OUT, 'save.png') });
 } catch (e) {
   check('the check ran to the end', false, String((e && e.message) || e).split('\n')[0]);

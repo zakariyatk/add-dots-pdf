@@ -17,6 +17,7 @@ import { drawFontNeeds, drawPainters } from './painters/draw';
 import { fieldsFinish, type FieldValues } from './painters/fields';
 import { formsPainters, insertPainters, prepareSignatures, prepareInsert } from './painters/insert';
 import { leaderPainters } from './painters/leader';
+import { ocrFontNeeds, ocrPainters } from './painters/ocr';
 import { pinHooks, type PinLocation } from './pins';
 import type { SaveHooks } from './save';
 import type { UnicodeFontSource } from './text';
@@ -80,13 +81,14 @@ export function saveHooks(state: SaveState, env: SaveEnv): SaveHooks {
   return {
     measure: env.measure,
     unicode: env.unicode || null,
-    fontNeeds: { ...annotateFontNeeds, ...drawFontNeeds, ...docopsFontNeeds },
+    fontNeeds: { ...annotateFontNeeds, ...drawFontNeeds, ...docopsFontNeeds, ...ocrFontNeeds },
     shapePainters: {
       ...annotatePainters,
       ...drawPainters(() => scale),
       ...formsPainters,
       ...insertPainters,
       leader: leaderPainters.leader!,
+      ...ocrPainters,
       ...docopsPainters(doc),
       /* a mark someone else is still drawing, live: not saved */
       remote: () => {},
