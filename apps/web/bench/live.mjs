@@ -33,17 +33,22 @@ const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } })
 const page = await ctx.newPage();
 const errors = [];
 const bad = [];
-page.on('pageerror', (e) => errors.push('page: ' + e.message));
+page.on('pageerror', (e) => errors.push('page: ' + (e.stack || e.message)));
 page.on('console', (m) => {
-  if (m.type() === 'error') errors.push('console: ' + m.text());
+  if (m.type() === 'error') errors.push('console: ' + m.text() + ' @ ' + (m.location() || {}).url);
 });
-page.on('response', (r) => {
+ctx.on('response', (r) => {
   if (r.status() >= 400) bad.push(r.status() + ' ' + r.url());
 });
 page.on('requestfailed', (r) => bad.push('failed ' + r.url() + ' ' + (r.failure() || {}).errorText));
 
 try {
-  await page.goto(SITE + '?sitecheck=' + Date.now(), { waitUntil: 'load', timeout: 60000 });
+  const res = await page.goto(SITE, { waitUntil: 'load', timeout: 60000 });
+  const html = await res.text();
+  writeFileSync(join(OUT, 'index.html'), html);
+  console.log('page: ' + res.status() + ' ' + page.url() + ', ' + html.length + ' bytes, server ' + (res.headers().server || '?'));
+  if (res.status() !== 200) console.log('page starts: ' + html.slice(0, 600).replace(/\s+/g, ' '));
+  await page.waitForTimeout(2000);
   const boot = await page
     .waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc, null, { timeout: 30000 })
     .then(

@@ -40,5 +40,7 @@ jobs:
         if: always()
         with:
           name: sitecheck-screens
-          path: ${{ runner.temp }}/sitecheck/*.png
+          path: |
+            ${{ runner.temp }}/sitecheck/*.png
+            ${{ runner.temp }}/sitecheck/*.html
           retention-days: 7
