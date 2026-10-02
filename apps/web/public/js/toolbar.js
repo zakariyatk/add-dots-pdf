@@ -27,7 +27,7 @@
        reach for most sit first, and grouped by what they are for. */
     const DRAW_GROUPS = [
       { ids: ['tDrawPan', 'tDrawSelect'] },
-      { ids: ['tRect', 'tEllipse', 'tLine', 'tArrow', 'tLeader'] },
+      { ids: ['tRect', 'tEllipse', 'tLine', 'tArrow'] },
       { ids: ['tArc', 'tCloud'] },
       { ids: ['tText'] },
       { ids: ['tDim', 'tDimC', 'tDimR', 'tDimD', 'tDimA'] }

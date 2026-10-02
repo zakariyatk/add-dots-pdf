@@ -184,6 +184,23 @@
   .thumb .tickbox.on svg{opacity:1}
   .thumb.picked .shell{border-color:var(--marker);box-shadow:0 0 0 2px rgba(255,255,255,.22)}
 
+  /* pages selected in the sidebar: what can be done to them (core.js) */
+  .pickbar{flex:none;border-top:1px solid var(--line);background:var(--chrome);padding:8px 10px;
+           display:flex;flex-direction:column;gap:6px}
+  #railPages[hidden] + .pickbar{display:none}
+  .pickbar .pickhead{display:flex;align-items:center;gap:4px;font-size:12px}
+  .pickbar .pickhead .btn{height:24px;font-size:11.5px;padding:0 8px}
+  .pickbar .pickacts{display:flex;gap:4px}
+  .pickbar .pickacts .btn{flex:1 1 auto;height:28px;font-size:11.5px;padding:0 6px;min-width:0;justify-content:center}
+  .pickbar .pickacts svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;
+                         stroke-linecap:round;stroke-linejoin:round}
+  .pickbar .btn.del:hover{color:var(--danger);border-color:var(--danger)}
+  .pickbar .grow{flex:1}
+  /* a placed signature's own controls on the properties panel (forms.js) */
+  .sigprops{display:flex;flex-direction:column;gap:6px}
+  .sigprops .row{display:flex;align-items:center;gap:6px}
+  .sigprops .btn{height:28px;font-size:11.5px;justify-content:center}
+  .sigprops .sw.on{border-color:var(--marker)}
   /* count of ticked pages, riding on the Extract button */
   .btn .cnt{display:inline-flex;align-items:center;justify-content:center;min-width:16px;height:16px;
             padding:0 4px;margin-left:5px;border-radius:8px;background:var(--marker);color:#050505;
@@ -207,6 +224,9 @@
   .stage{position:relative;flex:1 1 auto;overflow:auto;padding:22px 16px 70px;
          display:flex;flex-direction:column;align-items:center;gap:18px;scroll-behavior:smooth;
          overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
+  /* Space held: the hand (core.js); every mark and tool under it waits */
+  .stage.spacepan,.stage.spacepan *{cursor:grab!important}
+  .stage.spacegrab,.stage.spacegrab *{cursor:grabbing!important;user-select:none}
   .pagebox{position:relative;flex:none}
   /* a page's content, taken out of the document while the page is far off
      screen (core.js mountPage); lays out as if it were the box itself */

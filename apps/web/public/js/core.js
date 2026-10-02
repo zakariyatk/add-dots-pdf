@@ -252,7 +252,7 @@
      Marks they invent are ordinary entries in it.shapes, so undo, save, the
      JPG export and the thumbnails all keep working with no extra wiring. */
   const EXT = window.ADDPDF || (window.ADDPDF = {
-    shapeRenderers: {}, handleKind: {},
+    shapeRenderers: {}, handleKind: {}, keepRatio: {},
     markPop: {},                 /* mark type -> {el, sync}: extra controls on the properties popover */
     /* before a save: promises to wait for (forms reading the file's values) */
     beforeSave: [],
@@ -504,10 +504,7 @@
     const tc = document.createElement('canvas'); shell.appendChild(tc);
     const no = document.createElement('div'); no.className = 'no';
     hit.appendChild(shell); hit.appendChild(no);
-    hit.addEventListener('click', function () {
-      goTo(S.items.indexOf(it) + 1);
-      if (isMobile()) setRail(false);
-    });
+    hit.addEventListener('click', function (e) { thumbClick(it, e); });
     tbody.appendChild(hit);
     th.addEventListener('pointerenter', function () { ensureThumbTools(it); });
     th.addEventListener('focusin', function () { ensureThumbTools(it); });
@@ -590,6 +587,7 @@
     tick2.addEventListener('click', function (e) {
       e.stopPropagation();
       it.pick = !it.pick;
+      pickAnchor = S.items.indexOf(it);
       syncPicks();
     });
     th.appendChild(tick2);
@@ -1882,7 +1880,7 @@
         el.addEventListener('dblclick', function (e) {
           if (S.tool !== 'select') return;
           e.stopPropagation();
-          openEditor(it, null, idx);
+          openEditor(it, null, idx, true);
         });
       }
       return el;
@@ -2047,7 +2045,9 @@
     hideMarkPop();                               /* it comes back when the drag ends */
   }
 
-  function resizeBox(s, o, ci, p, square) {
+  /* ratio: keep the box's own proportions (a signature or a picture), the
+     pulled corner deciding how big */
+  function resizeBox(s, o, ci, p, square, ratio) {
     const b = boxOf(o), c0 = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2], r = o.r || 0;
     const corners = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
     const fix = corners[(ci + 2) % 4];
@@ -2058,6 +2058,12 @@
       const side = Math.max(x2 - x1, y2 - y1);
       if (loc[0] < fix[0]) x1 = fix[0] - side; else x2 = fix[0] + side;
       if (loc[1] < fix[1]) y1 = fix[1] - side; else y2 = fix[1] + side;
+    } else if (ratio) {
+      const w0 = Math.max(1, b.x2 - b.x1), h0 = Math.max(1, b.y2 - b.y1);
+      const k = Math.max(4 / Math.min(w0, h0), (x2 - x1) / w0, (y2 - y1) / h0);
+      const w = w0 * k, h = h0 * k;
+      if (loc[0] < fix[0]) { x1 = fix[0] - w; x2 = fix[0]; } else { x1 = fix[0]; x2 = fix[0] + w; }
+      if (loc[1] < fix[1]) { y1 = fix[1] - h; y2 = fix[1]; } else { y1 = fix[1]; y2 = fix[1] + h; }
     }
     const w = Math.max(1, x2 - x1), h = Math.max(1, y2 - y1);
     const c1 = rotPt([(x1 + x2) / 2, (y1 + y2) / 2], c0, r);
@@ -2116,7 +2122,11 @@
     } else if (d.mode === 'pb') {
       s.b = [p[0], p[1]];
     } else if (d.mode === 'corner') {
-      resizeBox(s, o, d.extra, p, e.shiftKey);
+      /* a mark that keeps its proportions (EXT.keepRatio) frees them with
+         Shift; any other box squares up with Shift */
+      const kr = EXT.keepRatio[o.t] ? !!EXT.keepRatio[o.t](o) : false;
+      if (EXT.keepRatio[o.t]) resizeBox(s, o, d.extra, p, false, kr !== e.shiftKey);
+      else resizeBox(s, o, d.extra, p, e.shiftKey);
     } else if (d.mode === 'turn') {
       turnShape(s, o, d, p, e.shiftKey);
     } else if (d.mode === 'size') {
@@ -2363,6 +2373,7 @@
     buildMarkPop();
     const isText = s.t === 'text';
     const isBox = s.t === 'rect';
+    const isPic = s.t === 'sig';              /* a picture: no line to style */
     const count = selList().length;
     $('mpTitle').textContent = count > 1 ? count + ' marks' : (MARK_NAME[s.t] || 'Mark');
 
@@ -2372,9 +2383,10 @@
     $('mpStrokeChip').style.background = s.c;
     $('mpStrokeLbl').textContent = isText ? 'Text' : isBox ? 'Border' : 'Colour';
 
-    $('mpStyleWrap').hidden = isText;
-    $('mpWidthWrap').hidden = isText;
-    $('mpCapWrap').hidden = isText;
+    $('mpStrokeBtn').hidden = isPic;
+    $('mpStyleWrap').hidden = isText || isPic;
+    $('mpWidthWrap').hidden = isText || isPic;
+    $('mpCapWrap').hidden = isText || isPic;
     $('mpJoinWrap').hidden = !isBox;
     $('mpText').hidden = !isText;
 
@@ -2662,6 +2674,40 @@
     if (i < 0 || i >= it.shapes.length || NOT_SELECTABLE[it.shapes[i].t]) return null;
     return { it: it, i: i };
   }
+
+  /* Double-click a text box to type in it again, from Select or Text. The
+     first click selects it and redraws the marks, so the element the second
+     click lands on is a new one: this looks at what is under the pointer
+     now, rather than relying on a listener on the old element. */
+  function textUnder(e) {
+    const under = document.elementFromPoint(e.clientX, e.clientY) || e.target;
+    const hit = markUnder(under) || markUnder(e.target);
+    return hit && hit.it.shapes[hit.i].t === 'text' ? hit : null;
+  }
+  /* The browser only fires dblclick when both clicks land on the same
+     element, and a redraw between them gives it a different one — so the
+     second press is matched here by itself: same text box, close in time
+     and place. Capture, so the press never also starts a drag. */
+  let lastPress = null;
+  stage.addEventListener('pointerdown', function (e) {
+    if ((S.tool !== 'select' && S.tool !== 'text') || S.editing || e.button !== 0) { lastPress = null; return; }
+    const hit = textUnder(e);
+    if (!hit) { lastPress = null; return; }
+    const shape = hit.it.shapes[hit.i], now = Date.now();
+    const again = lastPress && lastPress.shape === shape && now - lastPress.t < 500 &&
+                  Math.hypot(e.clientX - lastPress.x, e.clientY - lastPress.y) < 6;
+    lastPress = again ? null : { shape: shape, t: now, x: e.clientX, y: e.clientY };
+    if (!again) return;
+    e.preventDefault(); e.stopPropagation();
+    openEditor(hit.it, null, hit.i, true);
+  }, true);
+  stage.addEventListener('dblclick', function (e) {
+    if ((S.tool !== 'select' && S.tool !== 'text') || S.editing) return;
+    const hit = textUnder(e);
+    if (!hit) return;
+    e.preventDefault(); e.stopPropagation();
+    openEditor(hit.it, null, hit.i, true);
+  });
 
   /* Ctrl+click adds a mark to the selection, or takes it out. Capture phase,
      so it runs before the mark's own handler starts a drag. */
@@ -5140,7 +5186,9 @@
     return isMobile() ? Math.max(16, px) : px;
   }
 
-  function openEditor(it, pt, idx) {
+  /* caretEnd: opened by a double-click, to carry on typing in the text
+     rather than replace it */
+  function openEditor(it, pt, idx, caretEnd) {
     if (S.editing) closeEditor(true);
     const vp = it.vp;
     if (!vp) return;
@@ -5234,7 +5282,9 @@
       if ((e.key === 'Enter' || e.key === 'Return') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); closeEditor(true); }
       if (e.key === 'Escape') { e.preventDefault(); closeEditor(false); }
     });
-    ta.focus(); ta.select(); grow();
+    ta.focus();
+    if (caretEnd) ta.setSelectionRange(ta.value.length, ta.value.length); else ta.select();
+    grow();
   }
 
   /* ---------------- crop ---------------- */
@@ -5674,6 +5724,91 @@
     });
   }
 
+  /* Selecting pages in the sidebar, as in Acrobat and WPS: a click goes to
+     the page, Ctrl/Cmd+click adds a page or takes it out, Shift+click takes
+     the run from the last one clicked. The selection is the same set the
+     ticks, Extract and Organize use (it.pick). */
+  let pickAnchor = -1;
+  function thumbClick(it, e) {
+    const i = S.items.indexOf(it);
+    if (i < 0) return;
+    const add = e.ctrlKey || e.metaKey;
+    if (e.shiftKey) {
+      const a = pickAnchor >= 0 && pickAnchor < S.items.length ? pickAnchor : S.current - 1;
+      const lo = Math.min(a, i), hi = Math.max(a, i);
+      S.items.forEach(function (x, k) {
+        if (k >= lo && k <= hi) x.pick = true;
+        else if (!add) x.pick = false;
+      });
+      syncPicks();
+      return;
+    }
+    if (add) {
+      /* the page last clicked (else the one on screen) counts as picked */
+      const cur = S.items[pickAnchor >= 0 && pickAnchor < S.items.length ? pickAnchor : S.current - 1];
+      if (!pickedPages().length && cur && cur !== it) cur.pick = true;
+      it.pick = !it.pick;
+      pickAnchor = i;
+      syncPicks();
+      return;
+    }
+    pickAnchor = i;
+    if (pickedPages().length) setPicks([]);
+    goTo(i + 1);
+    if (isMobile()) setRail(false);
+  }
+
+  /* the bar under the thumbnails while pages are selected */
+  const pickBar = document.createElement('div');
+  pickBar.className = 'pickbar'; pickBar.id = 'pickBar'; pickBar.hidden = true;
+  pickBar.innerHTML =
+    '<div class="pickhead"><b id="pickN"></b><span class="grow"></span>' +
+    '<button class="btn" data-a="all" title="Select every page (Ctrl+A)">All</button>' +
+    '<button class="btn" data-a="none" title="Clear the selection (Esc)">Clear</button></div>' +
+    '<div class="pickacts">' +
+    '<button class="btn" data-a="rotl" title="Rotate the selected pages left">' + icon(ICON.rotL) + '</button>' +
+    '<button class="btn" data-a="rotr" title="Rotate the selected pages right">' + icon(ICON.rotR) + '</button>' +
+    '<button class="btn" data-a="dup" title="Duplicate the selected pages">Duplicate</button>' +
+    '<button class="btn" data-a="ext" title="Save the selected pages as a new PDF">Extract</button>' +
+    '<button class="btn del" data-a="del" title="Remove the selected pages (Delete)">' + icon(ICON.del) + '</button>' +
+    '</div>';
+  $('railPages').after(pickBar);
+  pickBar.addEventListener('click', function (e) {
+    const b = e.target.closest('button'); if (!b) return;
+    const O = EXT.organize || {};
+    const a = b.dataset.a;
+    if (a === 'all') setPicks(allPages());
+    if (a === 'none') setPicks([]);
+    if (a === 'rotl' && O.rotateSelected) O.rotateSelected(-90);
+    if (a === 'rotr' && O.rotateSelected) O.rotateSelected(90);
+    if (a === 'dup' && O.duplicateSelected) O.duplicateSelected();
+    if (a === 'ext' && O.extractSelected) O.extractSelected(b);
+    if (a === 'del' && O.removeSelected) O.removeSelected();
+  });
+
+  /* keys for the selection while the sidebar's pages are what was last used */
+  let railHot = false;
+  document.addEventListener('pointerdown', function (e) {
+    railHot = !!(e.target.closest && e.target.closest('#railPages, #pickBar'));
+  }, true);
+  /* on the window, so it comes before the page's own Ctrl+A for marks */
+  window.addEventListener('keydown', function (e) {
+    if (!railHot || $('railPages').hidden || !S.items.length) return;
+    const t = e.target, tag = (t.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable) return;
+    const mod = e.ctrlKey || e.metaKey, n = pickedPages().length;
+    if (mod && e.key.toLowerCase() === 'a') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      setPicks(allPages());
+    } else if (!mod && n && e.key === 'Escape') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      setPicks([]);
+    } else if (!mod && n && (e.key === 'Delete' || e.key === 'Backspace')) {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (EXT.organize && EXT.organize.removeSelected) EXT.organize.removeSelected();
+    }
+  }, true);
+
   /* pages ticked in the sidebar */
   function syncPicks() {
     let n = 0;
@@ -5690,6 +5825,8 @@
     c.textContent = n ? String(n) : '';
     c.hidden = !n;
     $('btnExtract').classList.toggle('on', n > 0);
+    pickBar.hidden = !n;
+    $('pickN').textContent = n + (n === 1 ? ' page' : ' pages') + ' selected';
     if (!$('extractPop').hidden) exUpdate();
     if (!$('jpgPop').hidden) jpgUpdate();
     return n;
@@ -7735,6 +7872,62 @@
     }
   });
 
+  /* Space held: the hand, as in Acrobat and WPS. Dragging moves the view and
+     nothing else, whatever tool is on; letting go of Space gives the tool
+     back. Not while typing, and not over a dialog. */
+  const SP = { held: false, drag: null };
+  function spaceOk(e) {
+    const t = e.target, tag = (t.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || t.isContentEditable) return false;
+    return S.items.length && !homeShown() && !S.editing && !overlayOpen();
+  }
+  function spaceEnd() {
+    SP.held = false; SP.drag = null;
+    stage.classList.remove('spacepan', 'spacegrab');
+    stage.style.scrollBehavior = '';
+  }
+  document.addEventListener('keydown', function (e) {
+    if (e.key !== ' ' || e.ctrlKey || e.metaKey || e.altKey) return;
+    if (!SP.held && !spaceOk(e)) return;
+    /* no page scroll, and no click on a focused toolbar button */
+    e.preventDefault(); e.stopPropagation();
+    if (SP.held) return;                               /* key repeat */
+    SP.held = true;
+    stage.classList.add('spacepan');
+  }, true);
+  document.addEventListener('keyup', function (e) {
+    if (e.key !== ' ' || !SP.held) return;
+    e.preventDefault(); e.stopPropagation();
+    spaceEnd();
+  }, true);
+  window.addEventListener('blur', function () { if (SP.held) spaceEnd(); });
+  /* capture on the document: before any tool or mark sees the press */
+  document.addEventListener('pointerdown', function (e) {
+    if (!SP.held || e.button !== 0 || !stage.contains(e.target)) return;
+    e.preventDefault(); e.stopPropagation();
+    SP.drag = { id: e.pointerId, x: e.clientX, y: e.clientY, l: stage.scrollLeft, t: stage.scrollTop };
+    stage.style.scrollBehavior = 'auto';
+    stage.classList.add('spacegrab');
+  }, true);
+  document.addEventListener('pointermove', function (e) {
+    if (!SP.drag || e.pointerId !== SP.drag.id) return;
+    e.preventDefault(); e.stopPropagation();
+    stage.scrollLeft = SP.drag.l - (e.clientX - SP.drag.x);
+    stage.scrollTop = SP.drag.t - (e.clientY - SP.drag.y);
+  }, true);
+  ['pointerup', 'pointercancel'].forEach(function (type) {
+    document.addEventListener(type, function (e) {
+      if (!SP.drag || e.pointerId !== SP.drag.id) return;
+      e.preventDefault(); e.stopPropagation();
+      SP.drag = null;
+      stage.classList.remove('spacegrab');
+    }, true);
+  });
+  /* the click that ends a pan is not a click on the page */
+  document.addEventListener('click', function (e) {
+    if (SP.held && stage.contains(e.target)) { e.preventDefault(); e.stopPropagation(); }
+  }, true);
+
   stage.addEventListener('wheel', function (e) {
     if (!e.ctrlKey || !S.items.length) return;
     e.preventDefault();
@@ -8055,6 +8248,7 @@
     setRibbon: function (id) { setRibbon(id); },
     setRail: setRail, openSheet: openSheet,
     removeItem: removeItem, moveItem: moveItem, rotateItem: rotateItem,
+    syncPicks: syncPicks, setPicks: setPicks,
     newItem: newItem, ensureEls: ensureEls,
     buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource, saveError: saveError, selectedText: selectedText,
     insertBlank: insertBlank, ensurePage: ensurePage, ensureAllPages: ensureAllPages, renderIdle: renderIdle,
