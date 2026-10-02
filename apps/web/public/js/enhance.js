@@ -137,47 +137,6 @@
     }
     function freshId(t) { return (t || 'mk') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
 
-    /* the selected marks, pins left out */
-    function selectedMarks() {
-      const it = S.sel && S.sel.it;
-      if (!it) return [];
-      return X.selList().map(function (i) { return it.shapes[i]; })
-        .filter(function (s) { return s && s.t !== 'pin'; });
-    }
-    function copyMarks() {
-      const shapes = selectedMarks();
-      if (!shapes.length) return 0;
-      clipboard = { shapes: JSON.parse(JSON.stringify(shapes)) };
-      return shapes.length;
-    }
-    /* a copy of each, a little down and to the right, picked up together */
-    function placeCopies(target, shapes) {
-      X.snapshot();
-      const startLen = target.shapes.length;
-      shapes.forEach(function (s0) {
-        const s = JSON.parse(JSON.stringify(s0));
-        if (s.id) s.id = freshId(s.t);
-        nudgeShape(s, 14, 14);
-        target.shapes.push(s);
-      });
-      const placed = [];
-      for (let i = startLen; i < target.shapes.length; i++) placed.push(i);
-      X.setGroup(target, placed);
-      X.drawShapes(target); X.drawThumb(target); X.updateMeta();
-      if (S.sel) X.syncMarkPop();
-      return placed.length;
-    }
-
-    /* the Copy button under a selected mark: a copy beside it, straight away
-       (a phone has no Paste) — and Ctrl+V places more */
-    X.duplicateMarks = function () {
-      const it = S.sel && S.sel.it;
-      if (!it || !copyMarks()) return 0;
-      const n = placeCopies(it, clipboard.shapes);
-      X.toast(n > 1 ? (n + ' marks copied') : 'Mark copied');
-      return n;
-    };
-
     document.addEventListener('keydown', function (e) {
       if (!(e.ctrlKey || e.metaKey)) return;
       const key = e.key.toLowerCase();
@@ -187,15 +146,32 @@
       if (el && el.matches && el.matches('input,textarea,select,[contenteditable]')) return;
 
       if (key === 'c') {
-        const n = copyMarks();
-        if (n) X.toast(n > 1 ? (n + ' marks copied') : 'Mark copied');
+        const it = S.sel && S.sel.it;
+        if (!it) return;
+        const idx = X.selList();
+        const shapes = idx.map(function (i) { return it.shapes[i]; })
+          .filter(function (s) { return s && s.t !== 'pin'; });
+        if (!shapes.length) return;
+        clipboard = { shapes: JSON.parse(JSON.stringify(shapes)) };
+        X.toast(shapes.length > 1 ? (shapes.length + ' marks copied') : 'Mark copied');
       } else {
         if (!clipboard || !clipboard.shapes.length) return;
         const target = (S.sel && S.sel.it) || S.items[S.current - 1];
         if (!target) return;
         e.preventDefault();
-        const n = placeCopies(target, clipboard.shapes);
-        X.toast(n > 1 ? (n + ' marks pasted') : 'Mark pasted');
+        X.snapshot();
+        const startLen = target.shapes.length;
+        clipboard.shapes.forEach(function (s0) {
+          const s = JSON.parse(JSON.stringify(s0));
+          if (s.id) s.id = freshId(s.t);
+          nudgeShape(s, 14, 14);
+          target.shapes.push(s);
+        });
+        const pasted = [];
+        for (let i = startLen; i < target.shapes.length; i++) pasted.push(i);
+        X.setGroup(target, pasted);
+        X.drawShapes(target); X.drawThumb(target); X.updateMeta();
+        X.toast(pasted.length > 1 ? (pasted.length + ' marks pasted') : 'Mark pasted');
       }
     });
 

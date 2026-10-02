@@ -1,0 +1,57 @@
+/* Accounts: the popup a save opens, and Continue with Google / Apple
+   (js/account.js). In the app's own colours: app.css and light.css. */
+
+/* the sign-in page the app waits behind (requireSignIn: true) */
+.authdlg.gate { background: var(--stage) }
+.authdlg.gate .authx { display: none }
+
+/* the popup a save opens (requireSignIn: 'save'): what a free account
+   gives, beside the forms; above them on a phone */
+.authpromo { display: none }
+.authdlg.save .authcard {
+  width: min(780px, 100%); padding: 0; display: grid; grid-template-columns: 300px minmax(0, 1fr);
+  grid-auto-rows: min-content; column-gap: 0; align-content: start;
+}
+.authdlg.save .authcard > :not(.authpromo):not(.authx) { grid-column: 2; margin-left: 28px; margin-right: 28px }
+.authdlg.save .authcard > .authbrand { margin-top: 28px }
+.authdlg.save .authcard > form { margin-bottom: 24px }
+.authdlg.save .authpromo {
+  display: block; grid-column: 1; grid-row: 1 / span 30; padding: 28px 24px;
+  background: var(--chrome-2, #181818); color: var(--text); border-right: 1px solid var(--line);
+  border-radius: 14px 0 0 14px;
+}
+body[data-ui="light"] .authdlg.save .authpromo { background: #F3F4F6 }
+.authfree {
+  display: inline-block; padding: 4px 9px; border-radius: 4px; background: var(--marker); color: var(--accent-ink, #050505);
+  font: 700 11px/1 var(--sans); letter-spacing: .1em;
+}
+.authpromo h3 { margin: 16px 0 8px; font-size: 20px; line-height: 1.25; font-weight: 650 }
+.authpromo p { margin: 0 0 14px; font-size: 14px; line-height: 1.5; color: var(--text-dim) }
+.authpromo ul { list-style: none; margin: 0 0 16px; padding: 0 }
+.authpromo li { position: relative; padding: 0 0 9px 22px; font-size: 14px; line-height: 1.4 }
+.authpromo li::before { content: "✓"; position: absolute; left: 0; top: 0; color: var(--marker-ink); font-weight: 700 }
+.authpromo .authsafe { margin: 0; padding-top: 12px; border-top: 1px solid var(--line); font-size: 12.5px }
+@media (max-width: 760px) {
+  .authdlg.save .authcard { display: block; width: 100% }
+  .authdlg.save .authcard > :not(.authpromo):not(.authx) { margin-left: 20px; margin-right: 20px }
+  .authdlg.save .authcard > .authbrand { margin-top: 20px }
+  .authdlg.save .authpromo { border-right: none; border-bottom: 1px solid var(--line); border-radius: 16px 16px 0 0; padding: 20px 20px 14px }
+  .authdlg.save .authpromo h3 { margin: 10px 0 6px; font-size: 18px }
+  .authdlg.save .authpromo ul { display: none }
+}
+.authdlg.save .authx { z-index: 1 }
+
+/* Continue with Google / Apple, and "or with email" under them */
+.authsso { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 6px }
+.authsso[hidden], .authprov[hidden] { display: none }
+.authprov {
+  height: 42px; border-radius: 9px; display: flex; align-items: center; justify-content: center; gap: 10px;
+  border: 1px solid var(--line); background: var(--chrome); color: var(--text);
+  font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.authprov:hover { border-color: var(--text-dim) }
+.authprov:focus-visible { outline: 2px solid var(--marker); outline-offset: 2px }
+.authprov svg { width: 18px; height: 18px; flex: none }
+.authprov[data-provider="apple"] { background: #000000; color: #FFFFFF; border-color: #000000 }
+.author { display: flex; align-items: center; gap: 10px; margin: 6px 0 0; font-size: 13px; color: var(--text-dim) }
+.author::before, .author::after { content: ""; flex: 1; height: 1px; background: var(--line) }
