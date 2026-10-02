@@ -28,6 +28,66 @@ for (let i = 1; i <= 3; i++)
 const PDF = join(OUT, 'sitecheck.pdf');
 writeFileSync(PDF, await d.save());
 
+/* what the server hands out for a plain address (what a visitor's browser
+   asks for) next to a fresh one with a query: different bytes mean a cache in
+   front of the site is serving an old copy */
+const UA =
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
+for (const f of [
+  '',
+  'sw.js',
+  'js/core.js',
+  'js/toolbar.js',
+  'js/config.js',
+  'css/app.css',
+  'js/render-worker.js',
+]) {
+  const get = async (u) => {
+    try {
+      const r = await fetch(u, { headers: { 'user-agent': UA } });
+      const h = {};
+      for (const k of [
+        'cache-control',
+        'age',
+        'expires',
+        'etag',
+        'last-modified',
+        'server',
+        'x-cache',
+        'platform',
+        'panel',
+        'x-hcdn-cache-status',
+        'x-hcdn-request-id',
+        'x-litespeed-cache',
+        'cf-cache-status',
+      ])
+        if (r.headers.get(k)) h[k] = r.headers.get(k);
+      return { status: r.status, body: await r.text(), h };
+    } catch (e) {
+      return { status: 'error ' + e.message, body: '', h: {} };
+    }
+  };
+  const plain = await get(SITE + f);
+  const fresh = await get(SITE + f + '?fresh=' + Date.now());
+  const same = plain.body === fresh.body;
+  if (!same) failed++;
+  console.log(
+    (same ? 'same      ' : 'STALE     ') +
+      (f || '/') +
+      ': plain ' +
+      plain.status +
+      ' ' +
+      plain.body.length +
+      ' bytes, fresh ' +
+      fresh.status +
+      ' ' +
+      fresh.body.length +
+      ' bytes',
+  );
+  console.log('          plain ' + JSON.stringify(plain.h));
+  console.log('          fresh ' + JSON.stringify(fresh.h));
+}
+
 const browser = await chromium.launch({ channel: process.env.BENCH_CHANNEL || undefined });
 const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 } });
 const page = await ctx.newPage();
