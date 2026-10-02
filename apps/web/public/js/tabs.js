@@ -11,7 +11,8 @@
    are two tabs. A tab says what it holds (name, unsaved changes) to the bar;
    closing one with unsaved changes asks first.
 
-   Tests that open file after file in one page set window.ADDDOTS_NO_TABS. */
+   Tests that open file after file in one page set window.ADDDOTS_NO_TABS.
+   The Windows and phone apps have none: one document to a window there. */
 (function () {
   'use strict';
 
@@ -20,7 +21,11 @@
 
   const tabParam = /[?&]tab=(\d+)/.exec(location.search);
   const inTab = !!tabParam && window.parent !== window;
-  const off = function () { return !!window.ADDDOTS_NO_TABS; };
+  /* The Windows and phone apps keep one document to a window: a PDF the
+     system hands them replaces the one open, as their own tests expect. */
+  const IN_APP = !!window.__TAURI__ ||
+    !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const off = function () { return !!window.ADDDOTS_NO_TABS || IN_APP; };
 
   /* ================= inside a tab ================= */
 
