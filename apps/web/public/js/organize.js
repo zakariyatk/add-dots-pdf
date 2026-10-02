@@ -217,6 +217,8 @@
         it.thumb.draggable = true;
         it.thumb.addEventListener('dragstart', function (e) {
           drag = { from: indexOfThumb(it.thumb), host: 'rail' };
+          /* a selected page carries the whole selection with it */
+          if (it.pick && selected().length > 1) drag.many = selected();
           it.thumb.classList.add('dragging');
           e.dataTransfer.effectAllowed = 'move';
           try { e.dataTransfer.setData('text/plain', String(drag.from)); } catch (err) {}
@@ -255,7 +257,7 @@
         clearDropMarks(host);
         if (!t) return;
         let to = list.indexOf(t.el) + (t.after ? 1 : 0);
-        moveTo(drag.from, to);
+        if (drag.many) moveMany(drag.many, to); else moveTo(drag.from, to);
       });
     }
 
@@ -289,6 +291,25 @@
       X.goTo(to + 1);
       X.toast('Page moved to <b>' + (to + 1) + '</b> · <b>Ctrl+Z</b> to undo');
       if (!org.hidden) paintOrganize();
+    }
+
+    /* several pages, in their order, to the gap before index `to` */
+    async function moveMany(idx, to) {
+      const set = {};
+      idx.forEach(function (i) { set[i] = 1; });
+      const moving = idx.map(function (i) { return S.items[i]; });
+      const before = idx.filter(function (i) { return i < to; }).length;
+      const rest = S.items.filter(function (_, i) { return !set[i]; });
+      const at = to - before;
+      const next = rest.slice(0, at).concat(moving, rest.slice(at));
+      if (next.every(function (it, i) { return it === S.items[i]; })) return;
+      X.snapshot();
+      S.items.splice.apply(S.items, [0, S.items.length].concat(next));
+      X.invalidateSearch();
+      await X.syncAll();
+      X.goTo(at + 1);
+      X.toast(moving.length + ' pages moved to <b>' + (at + 1) + '</b> · <b>Ctrl+Z</b> to undo');
+      repaint();
     }
 
     /* ---------------- Organize Pages grid ---------------- */
@@ -431,6 +452,7 @@
       const c = $('exCount');
       c.textContent = n ? String(n) : ''; c.hidden = !n;
       $('btnExtract').classList.toggle('on', n > 0);
+      if (X.syncPicks) X.syncPicks();    /* the sidebar's selection bar */
     }
 
     $('orgAll').addEventListener('click', function () {
@@ -454,12 +476,12 @@
       X.relayout().then(function () {
         X.drawVisibleThumbs();
         X.updateMeta();
-        setTimeout(paintOrganize, 400);
+        setTimeout(repaint, 400);
       });
       X.toast(sel.length + ' page' + (sel.length === 1 ? '' : 's') + ' rotated');
     }
 
-    $('orgDel').addEventListener('click', async function () {
+    async function removeSelected() {
       const sel = selected(); if (!sel.length) return;
       if (sel.length >= S.items.length) { X.toast('A PDF needs at least one page'); return; }
       X.snapshot();
@@ -471,11 +493,12 @@
       });
       X.invalidateSearch();
       await X.syncAll();
-      paintOrganize();
+      repaint();
       X.toast(sel.length + ' page' + (sel.length === 1 ? '' : 's') + ' removed · <b>Ctrl+Z</b> to undo');
-    });
+    }
+    $('orgDel').addEventListener('click', removeSelected);
 
-    $('orgDup').addEventListener('click', async function () {
+    async function duplicateSelected() {
       const sel = selected(); if (!sel.length) return;
       X.snapshot();
       sel.slice().reverse().forEach(function (i) {
@@ -487,14 +510,16 @@
       });
       X.invalidateSearch();
       await X.syncAll();
-      paintOrganize();
+      repaint();
       X.toast(sel.length + ' page' + (sel.length === 1 ? '' : 's') + ' duplicated');
-    });
+    }
+    $('orgDup').addEventListener('click', duplicateSelected);
 
-    $('orgExtract').addEventListener('click', async function () {
+    /* btn: the button that asked, which reads Building… meanwhile */
+    async function extractSelected(btn) {
       const sel = selected(); if (!sel.length) return;
-      const btn = $('orgExtract');
-      btn.disabled = true; btn.textContent = 'Building…';
+      const label = btn ? btn.innerHTML : '';
+      if (btn) { btn.disabled = true; btn.textContent = 'Building…'; }
       try {
         const items = sel.map(function (i) { return S.items[i]; });
         const bytes = await X.buildPdf(items, new Map(), {});
@@ -505,9 +530,16 @@
       } catch (e) {
         X.toast(X.esc(X.saveError(e, 'These pages could not be extracted')));
       } finally {
-        btn.disabled = false; btn.textContent = 'Extract';
+        if (btn) { btn.disabled = false; btn.innerHTML = label; }
       }
-    });
+    }
+    $('orgExtract').addEventListener('click', function () { extractSelected($('orgExtract')); });
+
+    /* after a change from the sidebar or the grid: both show the same picks */
+    function repaint() {
+      if (!org.hidden) paintOrganize();
+      if (X.syncPicks) X.syncPicks();
+    }
 
     /* ---------------- keyboard ---------------- */
 
@@ -527,6 +559,11 @@
     X.on('reset', closeOrganize);
     wireThumbs();
 
-    X.organize = { open: openOrganize, close: closeOrganize, moveTo: moveTo, parseRanges: parseRanges };
+    X.organize = {
+      open: openOrganize, close: closeOrganize, moveTo: moveTo, moveMany: moveMany, parseRanges: parseRanges,
+      /* the ticked pages (it.pick), from the sidebar's selection bar too */
+      rotateSelected: rotateSelected, removeSelected: removeSelected,
+      duplicateSelected: duplicateSelected, extractSelected: extractSelected
+    };
   });
 })();

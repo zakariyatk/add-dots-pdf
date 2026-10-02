@@ -244,11 +244,17 @@ const sig: Painter = (p, s: ImageMark, ctx) => {
   const sigs = ctx.extra.sigs as Record<string, PDFImage> | undefined;
   const img = sigs && sigs[s.url];
   if (!img) return;
+  /* turned about its own centre and see-through, as placed (forms.js) */
+  const bx = boxOf(s),
+    o0 = exportCorner(s);
   p.drawImage(img, {
-    x: Math.min(s.a[0], s.b[0]),
-    y: Math.min(s.a[1], s.b[1]),
-    width: Math.abs(s.b[0] - s.a[0]),
-    height: Math.abs(s.b[1] - s.a[1]),
+    x: o0[0],
+    y: o0[1],
+    width: bx.x2 - bx.x1,
+    height: bx.y2 - bx.y1,
+    rotate: degrees(s.r || 0),
+    /* only when set: an opaque one draws exactly as before */
+    ...(s.o == null ? {} : { opacity: s.o }),
   });
 };
 

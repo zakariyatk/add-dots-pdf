@@ -3,8 +3,9 @@
    Everything from the second feedback pass that isn't a new Insert-tab mark
    (those extend js/insert.js instead): the blank-page dialog, copy/paste for
    selected marks, text-box polish (double-click to edit, alignment,
-   background fill), and the Leader tool. Same plugin pattern as every other
-   module — reaches the rest of the app only through window.ADDPDF. */
+   background fill), and how Leader marks from older documents are drawn.
+   Same plugin pattern as every other module — reaches the rest of the app
+   only through window.ADDPDF. */
 (function () {
   'use strict';
 
@@ -77,12 +78,17 @@
       return [w, h];
     }
 
+    const BLANK_MAX = 2000;
     async function addBlankPages() {
       const it = S.items[S.current - 1];
       if (!it) { X.toast('Open a PDF first'); return; }
       await X.ensurePage(it);
       const [w, h] = blankPageSize();
-      const qty = Math.max(1, Math.min(50, parseInt($('blankQty').value, 10) || 1));
+      /* as many as asked for; a cap only stops a typo (50000) from
+         freezing the tab, and says so instead of quietly adding fewer */
+      const asked = Math.max(1, parseInt($('blankQty').value, 10) || 1);
+      const qty = Math.min(BLANK_MAX, asked);
+      if (asked > qty) X.toast('At most <b>' + BLANK_MAX + '</b> blank pages at a time: adding ' + BLANK_MAX);
       const color = blankColor();
       const fill = color.toUpperCase() === '#FFFFFF' ? null : X.hexRgb(color);
 
@@ -175,12 +181,12 @@
       }
     });
 
-    /* ================= Leader tool ================= */
+    /* ================= Leader marks ================= */
     /* Arrowhead (or dot) at the tip, a diagonal leader line, then a
        horizontal landing line — a callout, not a rectangle, so it gets its
-       own three point-handles rather than the generic box corners. */
-
-    let leaderHead = 'arrow';
+       own three point-handles rather than the generic box corners. The tool
+       that drew them is gone; documents that already have one still show
+       and edit it. */
 
     function leaderPoly(a, m, b, wScreen) {
       const wing = X.arrowHead(m[0], m[1], a[0], a[1], wScreen);
@@ -257,54 +263,6 @@
       }
       return g;
     };
-    function leaderGhost(a, m, b) { return { t: 'leader', a: a, m: m, b: b, c: S.color, w: S.width, head: leaderHead }; }
-    function commitLeader(it, a, m, b) {
-      X.snapshot();
-      it.shapes.push({ t: 'leader', id: freshId('ldr'), a: a, m: m, b: b, c: S.color, w: S.width, head: leaderHead });
-      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
-      X.toast('Leader placed');
-    }
-
-    let leaderPick = null;   /* {it, stage, a, m} — stage: dragFirst | waitSecond | dragSecond */
-    X.hints.leader = 'Drag from the point to the elbow, then drag the landing line.';
-    X.tools.leader = {
-      colors: true, widths: true,
-      down: function (it, at) {
-        const p = it.vp.convertToPdfPoint(at[0], at[1]);
-        if (!leaderPick || leaderPick.it !== it) leaderPick = { it: it, stage: 'dragFirst' };
-        if (leaderPick.stage === 'dragFirst') leaderPick.a = p;
-        else if (leaderPick.stage === 'waitSecond') leaderPick.stage = 'dragSecond';
-      },
-      move: function (it, at, e) {
-        if (!leaderPick || leaderPick.it !== it) return;
-        const p = it.vp.convertToPdfPoint(at[0], at[1]);
-        if (leaderPick.stage === 'dragFirst' && leaderPick.a) {
-          X.drawShapes(it, leaderGhost(leaderPick.a, p, p));
-        } else if (leaderPick.stage === 'waitSecond') {
-          X.drawShapes(it, leaderGhost(leaderPick.a, leaderPick.m, leaderPick.m));
-        } else if (leaderPick.stage === 'dragSecond') {
-          const b = (e && e.shiftKey) ? p : [p[0], leaderPick.m[1]];
-          X.drawShapes(it, leaderGhost(leaderPick.a, leaderPick.m, b));
-        }
-      },
-      up: function (it, at, e) {
-        if (!leaderPick || leaderPick.it !== it) return;
-        const p = it.vp.convertToPdfPoint(at[0], at[1]);
-        if (leaderPick.stage === 'dragFirst') {
-          if (Math.hypot(p[0] - leaderPick.a[0], p[1] - leaderPick.a[1]) < 2) { leaderPick = null; X.drawShapes(it); return; }
-          leaderPick.m = p;
-          leaderPick.stage = 'waitSecond';
-          X.drawShapes(it, leaderGhost(leaderPick.a, leaderPick.m, leaderPick.m));
-          X.toast('Now drag the landing line');
-        } else if (leaderPick.stage === 'dragSecond') {
-          const b = (e && e.shiftKey) ? p : [p[0], leaderPick.m[1]];
-          commitLeader(it, leaderPick.a, leaderPick.m, b);
-          leaderPick = null;
-        }
-      },
-      cancel: function () { leaderPick = null; }
-    };
-    X.on('tool', function (t) { if (t !== 'leader') leaderPick = null; });
 
     /* head-style toggle on the properties popover, the same extension point
        Insert's image Crop button uses */
@@ -331,6 +289,5 @@
       el.querySelector('#mpLeaderDot').addEventListener('click', function (e) { e.stopPropagation(); setHead('dot'); });
     })();
 
-    $('tLeader') && $('tLeader').addEventListener('click', function () { X.toggleTool('leader'); });
   });
 })();

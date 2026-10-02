@@ -416,9 +416,12 @@
       });
     }
 
-    function openSign(it, field, kind) {
+    let sigReplace = null;       /* {it, shape} when a placed one is being changed */
+
+    function openSign(it, field, kind, replacing) {
       /* the Sign and Initials buttons toggle their own modal */
-      if (!sigModal.hidden && !it && (kind || 'sig') === sigKind) { closeSign(); return; }
+      if (!replacing) sigReplace = null;
+      if (!sigModal.hidden && !it && !replacing && (kind || 'sig') === sigKind) { closeSign(); return; }
       sigTarget = it ? { it: it, field: field } : null;
       sigKind = kind || 'sig';
       $('sigTitle').textContent = sigKind === 'initials' ? 'Add your initials' : 'Add your signature';
@@ -430,7 +433,7 @@
       }
       syncApply();
     }
-    function closeSign() { sigModal.hidden = true; sigTarget = null; }
+    function closeSign() { sigModal.hidden = true; sigTarget = null; sigReplace = null; }
 
     function remembered() {
       try { return localStorage.getItem('adddots.sig.' + sigKind) || null; }
@@ -451,7 +454,9 @@
       sigData = trimmed;
       if ($('sigRemember').checked) remember(trimmed.url);
 
-      if (sigTarget) {
+      if (sigReplace) {
+        replaceSig(sigReplace.it, sigReplace.shape, trimmed);
+      } else if (sigTarget) {
         placeInField(sigTarget.it, sigTarget.field, trimmed);
       } else {
         placeOnPage(trimmed);
@@ -465,13 +470,28 @@
       const k = Math.min(w / img.w, h / img.h);
       const dw = img.w * k, dh = img.h * k;
       it.shapes.push({
-        t: 'sig', id: 'sig' + Date.now().toString(36),
+        t: 'sig', id: 'sig' + Date.now().toString(36), kind: sigKind,
         url: img.url, iw: img.w, ih: img.h,
         a: [field.rect[0] + (w - dw) / 2, field.rect[1] + (h - dh) / 2],
         b: [field.rect[0] + (w + dw) / 2, field.rect[1] + (h + dh) / 2]
       });
       X.drawShapes(it); X.drawThumb(it); X.updateMeta();
       X.toast('Signature placed');
+    }
+
+    /* the new picture where the old one was: same height and centre, its
+       own width; turn, opacity and the rest stay */
+    function replaceSig(it, s, img) {
+      if (it.shapes.indexOf(s) < 0) return;
+      X.snapshot();
+      const x1 = Math.min(s.a[0], s.b[0]), x2 = Math.max(s.a[0], s.b[0]);
+      const y1 = Math.min(s.a[1], s.b[1]), y2 = Math.max(s.a[1], s.b[1]);
+      const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, h = y2 - y1, w = h * img.w / img.h;
+      s.url = img.url; s.iw = img.w; s.ih = img.h;
+      delete s.ink; delete s.free;
+      s.a = [cx - w / 2, cy - h / 2]; s.b = [cx + w / 2, cy + h / 2];
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      X.toast('Signature changed');
     }
 
     function placeOnPage(img) {
@@ -486,7 +506,7 @@
       /* park it low and right, where a signature usually goes */
       const x = v[0] + pw * 0.58, y = v[1] + ph * 0.12;
       it.shapes.push({
-        t: 'sig', id: 'sig' + Date.now().toString(36),
+        t: 'sig', id: 'sig' + Date.now().toString(36), kind: sigKind,
         url: img.url, iw: img.w, ih: img.h,
         a: [x, y], b: [x + dw, y + dh]
       });
@@ -506,30 +526,146 @@
 
     /* ---------------- the signature as a mark ---------------- */
 
+    /* Placed, it is a mark like a picture, as in Acrobat and WPS: drag it,
+       pull a corner to scale it (its proportions held; Shift frees them),
+       turn it by the round grip, and the properties panel changes the rest. */
+    X.handleKind.sig = 'rect';
+    X.keepRatio.sig = function (s) { return !s.free; };
+
     X.shapeRenderers.sig = function (it, s, vp, idx) {
       const a = vp.convertToViewportPoint(s.a[0], s.a[1]);
       const b = vp.convertToViewportPoint(s.b[0], s.b[1]);
+      const x = Math.min(a[0], b[0]), y = Math.min(a[1], b[1]);
+      const w = Math.abs(b[0] - a[0]), h = Math.abs(b[1] - a[1]);
       const g = document.createElementNS(X.SVGNS, 'g');
       g.setAttribute('class', 'sig-mk');
+      if (s.r) {
+        const mid = X.shapeMid(s);
+        g.setAttribute('transform', 'rotate(' + X.dirAngle(vp, mid[0], mid[1], s.r) + ',' + (x + w / 2) + ',' + (y + h / 2) + ')');
+      }
       const im = document.createElementNS(X.SVGNS, 'image');
-      im.setAttribute('x', Math.min(a[0], b[0]));
-      im.setAttribute('y', Math.min(a[1], b[1]));
-      im.setAttribute('width', Math.abs(b[0] - a[0]));
-      im.setAttribute('height', Math.abs(b[1] - a[1]));
+      im.setAttribute('x', x); im.setAttribute('y', y);
+      im.setAttribute('width', w); im.setAttribute('height', h);
       im.setAttribute('preserveAspectRatio', 'none');
       im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', s.url);
       im.setAttribute('href', s.url);
+      if (s.o != null) im.setAttribute('opacity', s.o);
       g.appendChild(im);
       g.style.pointerEvents = 'all';
-      if (idx >= 0) g.addEventListener('pointerdown', function (e) {
-        if (S.tool === 'select') {
-          e.stopPropagation();
-          S.sel = { it: it, i: idx };
-          S.items.forEach(function (x) { X.drawShapes(x); });
-        }
-      });
+      if (idx >= 0) g.addEventListener('pointerdown', function (e) { X.beginDrag(it, idx, e, 'move'); });
       return g;
     };
+
+    /* ink colours a placed signature can be switched to */
+    const SIG_INKS = ['#0B0B0B', '#1B2A4A', '#123C8C', '#B3261E'];
+
+    /* every dark pixel of the picture in the new ink, its edges kept soft */
+    function recolour(url, hex) {
+      return new Promise(function (res) {
+        const img = new Image();
+        img.onload = function () {
+          const c = document.createElement('canvas');
+          c.width = img.width; c.height = img.height;
+          const g = c.getContext('2d');
+          g.drawImage(img, 0, 0);
+          let d;
+          try { d = g.getImageData(0, 0, c.width, c.height); } catch (e) { res(null); return; }
+          const n = parseInt(hex.slice(1), 16), r = (n >> 16) & 255, gg = (n >> 8) & 255, bb = n & 255;
+          const px = d.data;
+          for (let i = 0; i < px.length; i += 4) {
+            if (!px[i + 3]) continue;
+            px[i] = r; px[i + 1] = gg; px[i + 2] = bb;
+          }
+          g.putImageData(d, 0, 0);
+          res(c.toDataURL('image/png'));
+        };
+        img.onerror = function () { res(null); };
+        img.src = url;
+      });
+    }
+
+    function selSig() {
+      if (!S.sel) return null;
+      const s = S.sel.it.shapes[S.sel.i];
+      return s && s.t === 'sig' ? s : null;
+    }
+    function sigEdit(fn) {
+      const s = selSig(); if (!s) return;
+      X.snapshot();
+      fn(s);
+      const it = S.sel.it;
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+    }
+
+    (function () {
+      const el = document.createElement('div');
+      el.className = 'sigprops';
+      el.innerHTML =
+        '<div class="row" style="gap:6px"><button class="btn" id="mpSigChange" style="flex:1">Change…</button>' +
+        '<button class="btn" id="mpSigAll" style="flex:1" title="Put a copy in the same place on every other page">All pages</button></div>' +
+        '<div class="row sigink"><span class="anno-lbl">Ink</span>' +
+        SIG_INKS.map(function (c) {
+          return '<button class="sw" data-ink="' + c + '" style="background:' + c + '" title="Ink ' + c + '"></button>';
+        }).join('') + '</div>' +
+        '<div class="row" style="gap:6px">' +
+        '<button class="btn" id="mpSigLock" style="flex:1" title="Corners keep the proportions (Shift does the opposite)">Keep proportions</button>' +
+        '<button class="btn" id="mpSigReset" style="flex:1" title="Back to the signature\'s own proportions">Original shape</button></div>';
+      X.markPop.sig = {
+        el: el,
+        sync: function (s) {
+          el.querySelector('#mpSigLock').classList.toggle('on', !s.free);
+          Array.prototype.forEach.call(el.querySelectorAll('[data-ink]'), function (b) {
+            b.classList.toggle('on', (s.ink || '') === b.dataset.ink);
+          });
+        }
+      };
+      el.addEventListener('click', function (e) { e.stopPropagation(); });
+      el.querySelector('#mpSigLock').addEventListener('click', function () {
+        sigEdit(function (s) { if (s.free) delete s.free; else s.free = true; });
+        X.markPop.sig.sync(selSig());
+      });
+      el.querySelector('#mpSigReset').addEventListener('click', function () {
+        sigEdit(function (s) {
+          if (!s.iw || !s.ih) return;
+          const bx = { x1: Math.min(s.a[0], s.b[0]), y1: Math.min(s.a[1], s.b[1]), x2: Math.max(s.a[0], s.b[0]), y2: Math.max(s.a[1], s.b[1]) };
+          const cx = (bx.x1 + bx.x2) / 2, cy = (bx.y1 + bx.y2) / 2;
+          const w = bx.x2 - bx.x1, h = w * s.ih / s.iw;
+          s.a = [cx - w / 2, cy - h / 2]; s.b = [cx + w / 2, cy + h / 2];
+        });
+      });
+      el.querySelector('.sigink').addEventListener('click', async function (e) {
+        const b = e.target.closest('[data-ink]'); if (!b) return;
+        const s = selSig(); if (!s) return;
+        const url = await recolour(s.url, b.dataset.ink);
+        if (!url) { X.toast('That signature could not be recoloured'); return; }
+        sigEdit(function (m) { m.url = url; m.ink = b.dataset.ink; });
+        X.markPop.sig.sync(selSig());
+      });
+      el.querySelector('#mpSigChange').addEventListener('click', function () {
+        const s = selSig(); if (!s) return;
+        sigReplace = { it: S.sel.it, shape: s };
+        openSign(null, null, s.kind || 'sig', true);
+      });
+      el.querySelector('#mpSigAll').addEventListener('click', function () {
+        const s = selSig(); if (!s) return;
+        const from = S.sel.it;
+        X.snapshot();
+        let n = 0;
+        S.items.forEach(function (it) {
+          if (it === from) return;
+          /* not twice in the same place on a page that already has it */
+          if (it.shapes.some(function (m) { return m.t === 'sig' && m.url === s.url && m.a[0] === s.a[0] && m.a[1] === s.a[1]; })) return;
+          const c = JSON.parse(JSON.stringify(s));
+          c.id = 'sig' + Date.now().toString(36) + (n++);
+          it.shapes.push(c);
+          if (it.anno) X.drawShapes(it);
+          X.drawThumb(it);
+        });
+        X.updateMeta();
+        X.toast(n ? 'Signature added to <b>' + n + '</b> more page' + (n === 1 ? '' : 's') + ' · <b>Ctrl+Z</b> to undo'
+                  : 'Every page already has it');
+      });
+    })();
 
     /* ---------------- writing the filled values into the PDF ---------------- */
 

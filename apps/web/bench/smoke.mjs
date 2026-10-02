@@ -2390,6 +2390,194 @@ try {
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }
+
+  /* ---- as in Acrobat and WPS: signature, text, Space, pages ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, MIXED);
+    const stage = () =>
+      page.evaluate(() => {
+        const s = document.getElementById('stage');
+        s.style.scrollBehavior = 'auto';
+        return s;
+      });
+    /* the element scrolled to the middle of the stage, and its box */
+    const onScreen = (sel) =>
+      page.evaluate((sel) => {
+        const s = document.getElementById('stage');
+        s.style.scrollBehavior = 'auto';
+        s.scrollTop += document.querySelector(sel).getBoundingClientRect().top - 300;
+        const r = document.querySelector(sel).getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width, h: r.height };
+      }, sel);
+    await stage();
+
+    check('the Leader tool is gone', (await page.$('#tLeader')) === null);
+
+    /* signature: placed, then moved, scaled in proportion and turned */
+    await page.evaluate(() => document.getElementById('btnSign').click());
+    await page.click('#sigModal [data-m="type"]');
+    await page.fill('#sigName', 'Smoke Signer');
+    await page.click('#sigApply');
+    await page.waitForFunction(() => window.ADDPDF.S.items[0].shapes.some((s) => s.t === 'sig'));
+    const sig = () =>
+      page.evaluate(() => {
+        const s = window.ADDPDF.S.items[0].shapes.find((x) => x.t === 'sig');
+        return { a: s.a, b: s.b, r: s.r || 0, o: s.o, w: s.b[0] - s.a[0], h: s.b[1] - s.a[1] };
+      });
+    const s0 = await sig();
+    let at = await onScreen('.sig-mk image');
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.mouse.move(at.x - 120, at.y - 60, { steps: 6 });
+    await page.mouse.up();
+    const s1 = await sig();
+    check('a placed signature drags to a new place', Math.abs(s1.a[0] - s0.a[0]) > 20, { s0, s1 });
+    at = await onScreen('.sig-mk image');
+    await page.mouse.click(at.x, at.y);
+    const knobs = await page.evaluate(() =>
+      [...document.querySelectorAll('.hnd .kn:not(.turn)')].map((k) => {
+        const r = k.getBoundingClientRect();
+        return [r.left + r.width / 2, r.top + r.height / 2];
+      }),
+    );
+    check('a selected signature has corner handles and its own panel', knobs.length === 4, {
+      knobs: knobs.length,
+      panel: await page.textContent('#mpTitle'),
+    });
+    if (knobs.length === 4) {
+      const br = knobs.reduce((m, k) => (k[0] + k[1] > m[0] + m[1] ? k : m));
+      await page.mouse.move(br[0], br[1]);
+      await page.mouse.down();
+      await page.mouse.move(br[0] + 90, br[1] + 5, { steps: 6 });
+      await page.mouse.up();
+    }
+    const s2 = await sig();
+    check(
+      'a corner scales it and keeps its proportions',
+      s2.w > s1.w * 1.2 && Math.abs(s2.w / s2.h - s1.w / s1.h) < 0.05,
+      { before: [s1.w, s1.h], after: [s2.w, s2.h] },
+    );
+    await page.fill('#mpAngle', '20');
+    await page.press('#mpAngle', 'Enter');
+    await page.fill('#mpOpacity', '70');
+    await page.press('#mpOpacity', 'Enter');
+    const s3 = await sig();
+    check('its angle and opacity change from the panel', s3.r === 20 && s3.o === 0.7, s3);
+    await page.click('#mpSigAll');
+    check(
+      'All pages puts it on every page',
+      await page.evaluate(() => window.ADDPDF.S.items.every((it) => it.shapes.some((s) => s.t === 'sig'))),
+    );
+    await page.keyboard.press('Escape');
+
+    /* text: placed, then a double-click from Select opens it again */
+    /* the tool itself (its button can sit in an overflow on a narrow ribbon) */
+    await page.evaluate(() => {
+      window.ADDPDF.goTo(1);
+      window.ADDPDF.setTool('text');
+    });
+    at = await onScreen('.pagebox');
+    await page.mouse.click(at.x - at.w / 4, at.y - at.h / 2 + 200); /* clear of the toasts at the bottom */
+    await page.waitForFunction(() => window.ADDPDF.S.editing);
+    await page.keyboard.type('Double click me');
+    /* its OK button keeps it (Escape would throw it away) */
+    await page.evaluate(() => document.querySelector('.texted .acts [data-a="ok"]').click());
+    await page.waitForFunction(() => !window.ADDPDF.S.editing);
+    await page.keyboard.press('v');
+    const tx = await page.evaluate(() => {
+      const it = window.ADDPDF.S.items.find((i) =>
+        i.shapes.some((s) => s.t === 'text' && s.text === 'Double click me'),
+      );
+      const el = it && it.anno.querySelector('text');
+      if (!el) return null;
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    if (tx) await page.mouse.dblclick(tx.x, tx.y);
+    const opened = await page
+      .waitForFunction(() => !!window.ADDPDF.S.editing, null, { timeout: 3000 })
+      .then(() => true)
+      .catch(() => false);
+    check('a double-click on placed text, with Select, opens it to edit', !!tx && opened, {
+      tx,
+      under:
+        tx &&
+        (await page.evaluate((t) => {
+          const e = document.elementFromPoint(t.x, t.y);
+          return e && e.tagName + '.' + e.getAttribute('class');
+        }, tx)),
+      tool: await page.evaluate(() => window.ADDPDF.S.tool),
+    });
+    await page.keyboard.press('Escape');
+
+    /* Space held: dragging moves the view and draws nothing */
+    await page.evaluate(() => window.ADDPDF.setTool('rect'));
+    const marks = () => page.evaluate(() => window.ADDPDF.S.items.reduce((n, i) => n + i.shapes.length, 0));
+    const m0 = await marks();
+    const top0 = await page.evaluate(() => document.getElementById('stage').scrollTop);
+    await page.mouse.move(720, 500);
+    await page.keyboard.down(' ');
+    await page.mouse.down();
+    await page.mouse.move(720, 250, { steps: 6 });
+    await page.mouse.up();
+    await page.keyboard.up(' ');
+    const top1 = await page.evaluate(() => document.getElementById('stage').scrollTop);
+    check('Space and a drag pan the page, with no mark drawn', top1 - top0 > 150 && (await marks()) === m0, {
+      scrolled: top1 - top0,
+      tool: await page.evaluate(() => window.ADDPDF.S.tool),
+    });
+    await page.keyboard.press('Escape');
+
+    /* more than 50 blank pages at once: every one of them */
+    const n0 = await page.evaluate(() => window.ADDPDF.S.items.length);
+    await page.evaluate(() => window.ADDPDF.openBlankPageDialog());
+    await page.fill('#blankQty', '75');
+    await page.click('#blankGo');
+    await page
+      .waitForFunction((n) => window.ADDPDF.S.items.length >= n + 75, n0, { timeout: 30000 })
+      .catch(() => {});
+    check(
+      '75 blank pages in one go are all added',
+      (await page.evaluate(() => window.ADDPDF.S.items.length)) === n0 + 75,
+      {
+        before: n0,
+        after: await page.evaluate(() => window.ADDPDF.S.items.length),
+      },
+    );
+
+    /* the page list selects as Acrobat's does */
+    await page.evaluate(() => window.ADDPDF.setRail(true));
+    const thumb = async (i) => {
+      await page.evaluate((i) => window.ADDPDF.S.items[i].thumb.scrollIntoView({ block: 'center' }), i);
+      return page.locator('#railPages .thumb').nth(i).locator('.hitbox');
+    };
+    const picks = () =>
+      page.evaluate(() => window.ADDPDF.S.items.map((it, i) => (it.pick ? i + 1 : 0)).filter(Boolean));
+    await (await thumb(1)).click();
+    await (await thumb(3)).click({ modifiers: ['Control'] });
+    check('Ctrl+click picks a second page', JSON.stringify(await picks()) === '[2,4]', await picks());
+    await (await thumb(6)).click({ modifiers: ['Shift'] });
+    check('Shift+click picks the run', JSON.stringify(await picks()) === '[4,5,6,7]', await picks());
+    check('the selection bar shows', await page.evaluate(() => !document.getElementById('pickBar').hidden));
+    await page.keyboard.press('Control+a');
+    const all = await page.evaluate(() => window.ADDPDF.S.items.length);
+    check('Ctrl+A in the page list picks every page', (await picks()).length === all);
+    await page.keyboard.press('Escape');
+    await (await thumb(0)).click();
+    await (await thumb(2)).click({ modifiers: ['Shift'] });
+    await page.click('#pickBar [data-a="del"]');
+    await page
+      .waitForFunction((n) => window.ADDPDF.S.items.length === n - 3, all, { timeout: 10000 })
+      .catch(() => {});
+    check(
+      'the bar removes the picked pages',
+      (await page.evaluate(() => window.ADDPDF.S.items.length)) === all - 3,
+    );
+
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
 } finally {
   await browser.close();
   server.kill();
