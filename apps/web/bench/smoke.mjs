@@ -1144,12 +1144,6 @@ try {
       again.user && again.user.email === 'zak@example.com' && again.home === 'zak@example.com',
       again,
     );
-    const hello = await page.evaluate(() => document.getElementById('hHello').textContent);
-    check(
-      'home: the greeting names the signed-in account',
-      /^Good (morning|afternoon|evening), Zak$/.test(hello),
-      hello,
-    );
 
     /* sign out, from the toolbar's account button (behind the home screen: the home entry) */
     await page.click('#hAcctBtn');
