@@ -24,13 +24,14 @@
 <link rel="stylesheet" href="css/pro.css">
 <link rel="stylesheet" href="css/light.css">
 <link rel="stylesheet" href="css/account.css">
+<link rel="stylesheet" href="css/wps.css">
 
 <script src="js/health.js"></script>
 <script src="js/vendor/pdf.min.js"></script>
 <script src="js/vendor/pdf-lib.min.js"></script>
 <script src="js/engine.js"></script>
 </head>
-<body data-theme="paper" data-tool="select" data-ui="light">
+<body data-theme="paper" data-tool="select" data-ui="light" data-skin="wps">
 <script>
   /* light or dark interface, set before anything draws so it never flashes */
   (function () {
@@ -561,32 +562,42 @@
   </button>
 </div>
 
-<div class="pop" id="blankPop" role="dialog" aria-label="Blank pages" hidden="">
-  <label for="blankSize">Page size</label>
-  <select id="blankSize" aria-label="Page size">
-    <option value="same">Same as the current page</option>
-    <option value="a4">A4</option>
-    <option value="letter">Letter</option>
-    <option value="a3">A3</option>
-    <option value="custom">Custom…</option>
-  </select>
-  <div class="row" id="blankCustomRow" style="margin-top:8px;gap:8px" hidden="">
-    <label style="flex:1">Width (mm)<input id="blankW" value="210" inputmode="decimal"></label>
-    <label style="flex:1">Height (mm)<input id="blankH" value="297" inputmode="decimal"></label>
+<div class="pop blankdlg" id="blankPop" role="dialog" aria-label="Insert blank page" hidden="">
+  <header class="bdhead"><b>Insert Blank Page</b><span class="grow"></span>
+    <button class="x" id="blankX" type="button" aria-label="Close">&times;</button></header>
+  <h4>Blank page settings</h4>
+  <div class="bdgrid">
+    <label for="blankSize">Size</label>
+    <select id="blankSize" aria-label="Page size"></select>
+    <label for="blankW">Width</label>
+    <span class="unit"><input id="blankW" type="number" min="10" max="5000" step="1" inputmode="decimal"><i>mm</i></span>
+    <label for="blankH">Height</label>
+    <span class="unit"><input id="blankH" type="number" min="10" max="5000" step="1" inputmode="decimal"><i>mm</i></span>
+    <label for="blankOrient">Orientation</label>
+    <select id="blankOrient"><option value="p">Portrait</option><option value="l">Landscape</option></select>
+    <label for="blankQty">Number of pages</label>
+    <input id="blankQty" type="number" min="1" max="2000" value="1" inputmode="numeric">
+    <label>Background</label>
+    <div class="row" id="blankColors" style="gap:6px"></div>
   </div>
-  <div class="row" style="margin-top:8px">
-    <button class="btn" id="blankPortrait" data-o="p" style="flex:1">Portrait</button>
-    <button class="btn" id="blankLandscape" data-o="l" style="flex:1">Landscape</button>
+  <h4>Insert to</h4>
+  <div class="bdwhere">
+    <label class="rad"><input type="radio" name="blankWhere" value="start"> At start</label>
+    <label class="rad"><input type="radio" name="blankWhere" value="end"> At end</label>
+    <div class="bdpages">
+      <label class="rad"><input type="radio" name="blankWhere" value="pages" checked=""> Pages</label>
+      <input id="blankPages" value="1" aria-label="Pages" spellcheck="false">
+      <span class="of" id="blankOf">/1</span>
+      <span class="eg">Example: 1,8,1-10</span>
+    </div>
+    <div class="bdpos"><label for="blankPos">Position</label>
+      <select id="blankPos"><option value="after">After</option><option value="before">Before</option></select></div>
   </div>
-  <label style="margin-top:8px">Background colour</label>
-  <div class="row" id="blankColors" style="gap:6px"></div>
-  <div class="row" style="margin-top:8px;gap:8px">
-    <label style="flex:1">Quantity<input id="blankQty" value="1" inputmode="numeric"></label>
-  </div>
-  <div class="row" style="margin-top:10px">
-    <button class="btn primary" id="blankGo" style="flex:1">Add page(s)</button>
+  <p class="bdnote" id="blankNote"></p>
+  <footer>
+    <button class="btn primary" id="blankGo">Confirm</button>
     <button class="btn" id="blankCancel">Cancel</button>
-  </div>
+  </footer>
 </div>
 
 <div class="pop" id="trPop" role="dialog" aria-label="Translate" hidden="">
@@ -1196,6 +1207,9 @@
 <script src="js/enhance.js"></script>
 <script src="js/docops.js"></script>
 <script src="js/convert.js"></script>
+<script src="js/ocr.js"></script>
+<script src="js/tabs.js"></script>
+<script src="js/skin.js"></script>
 <script src="js/books.js"></script>
 <script src="js/toolprops.js"></script>
 <script src="js/share.js"></script>

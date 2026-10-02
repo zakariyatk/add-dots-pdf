@@ -6,9 +6,13 @@
    can set window.ADDDOTS_CONFIG before this runs: what it sets wins, the
    rest comes from here. */
 window.ADDDOTS_CONFIG = Object.assign({
-  /* Supabase project "add-dots-pdf" (organisation adddots, Mumbai) */
-  supabaseUrl: 'https://jrdbuifhcxwyjxgyaowz.supabase.co',
-  supabaseKey: 'sb_publishable_LD1GNGGp9Q9aHwcws71gRQ_C76ri7J9',
+  /* Accounts are off: no Sign in anywhere, and every tool and every save
+     works without one. To turn them back on, put back the Supabase project
+     "add-dots-pdf" (organisation adddots, Mumbai):
+       supabaseUrl: 'https://jrdbuifhcxwyjxgyaowz.supabase.co',
+       supabaseKey: 'sb_publishable_LD1GNGGp9Q9aHwcws71gRQ_C76ri7J9', */
+  supabaseUrl: '',
+  supabaseKey: '',
   /* the privacy policy's contact address (privacy.html); empty until the
      support address exists */
   contactEmail: '',
@@ -25,5 +29,5 @@ window.ADDDOTS_CONFIG = Object.assign({
      false   never; signing in is optional
      Continue with Google and Continue with Apple show on the website once
      the project has them turned on (docs/accounts.md). */
-  requireSignIn: 'save'
+  requireSignIn: false
 }, window.ADDDOTS_CONFIG || {});

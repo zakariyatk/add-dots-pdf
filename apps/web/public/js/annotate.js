@@ -43,6 +43,9 @@
     const TOOLS = [
       { t: 'highlight', id: 'tHighlight', label: 'Highlight', key: 'H', shift: true,
         path: '<path d="M4 20h5l10-10-5-5L4 15z"/><line x1="14" y1="6" x2="18" y2="10"/><line x1="3" y1="21" x2="11" y2="21"/>' },
+      /* a box dragged anywhere, text or not (a drawing, a scan) */
+      { t: 'hlarea', id: 'tHlArea', label: 'Area highlight', key: 'G', shift: true,
+        path: '<rect x="3" y="6" width="18" height="12" rx="1.5" stroke-dasharray="3 2"/><rect x="6" y="9" width="12" height="6" fill="currentColor" stroke="none" opacity=".45"/>' },
       { t: 'underline', id: 'tUnderline', label: 'Underline', key: 'U',
         path: '<path d="M7 4v7a5 5 0 0 0 10 0V4"/><line x1="5" y1="20" x2="19" y2="20"/>' },
       { t: 'strike', id: 'tStrike', label: 'Strike out', key: 'D',
@@ -68,6 +71,7 @@
       X.toolBtn[T.t] = T.id;
       X.hints[T.t] = {
         highlight: 'Select text on a page to highlight it. Click a highlight to comment on it.',
+        hlarea: 'Drag a box over any part of the page to highlight it. Click a highlight to comment on it.',
         underline: 'Select text on a page to underline it.',
         strike: 'Select text on a page to strike it out.',
         ink: 'Draw freehand on the page. Each stroke is one mark, so <b>Ctrl+Z</b> undoes it whole. Hold <b>Shift</b> for a straight stroke.',
@@ -119,11 +123,11 @@
     }
 
     X.on('tool', function (t) {
-      const isMarkup = !!MARKUP[t];
+      const isMarkup = !!MARKUP[t] || t === 'hlarea';
       mkCtl.hidden = !isMarkup;
       inkCtl.hidden = t !== 'ink';
       stampCtl.hidden = t !== 'stamp';
-      if (isMarkup) paintMarkupSwatches(t);
+      if (isMarkup) paintMarkupSwatches(t === 'hlarea' ? 'highlight' : t);
       /* our tools bring their own colour row, so hide the core one */
       if (isMarkup || t === 'ink' || t === 'stamp' || t === 'note') {
         $('swatches').style.display = (t === 'ink') ? 'flex' : 'none';
@@ -408,6 +412,44 @@
         const idx = it.shapes.length - 1;
         renderComments();
         openThread(it, idx, true);
+      }
+    };
+
+    /* Area highlight: the same highlight mark as text gets, with the one
+       quad dragged out by hand, so it saves, comments and lists the same */
+    let areaDrag = null;
+    function areaQuad(a, b) {
+      return [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+    }
+    X.tools.hlarea = {
+      down: function (it, at) {
+        if (!it.vp) return;
+        areaDrag = { it: it, a: it.vp.convertToPdfPoint(at[0], at[1]) };
+      },
+      move: function (it, at) {
+        if (!areaDrag || areaDrag.it !== it) return;
+        const b = it.vp.convertToPdfPoint(at[0], at[1]);
+        X.drawShapes(it, { t: 'markup', k: 'highlight', quads: [areaQuad(areaDrag.a, b)],
+                           c: markupColor.highlight, o: MARKUP.highlight.op });
+      },
+      cancel: function (it) {
+        if (!areaDrag) return;
+        areaDrag = null;
+        X.drawShapes(it);
+      },
+      up: function (it, at) {
+        if (!areaDrag || areaDrag.it !== it) return;
+        const q = areaQuad(areaDrag.a, it.vp.convertToPdfPoint(at[0], at[1]));
+        areaDrag = null;
+        if (q[2] - q[0] < 3 || q[3] - q[1] < 3) { X.drawShapes(it); return; }   /* a click, not a box */
+        X.snapshot();
+        it.shapes.push({
+          t: 'markup', k: 'highlight', id: nextId(), area: true,
+          quads: [q], c: markupColor.highlight, o: MARKUP.highlight.op,
+          quote: '', note: null, created: Date.now()
+        });
+        X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+        renderComments();
       }
     };
 

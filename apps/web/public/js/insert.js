@@ -119,20 +119,27 @@
       r.style.stroke = s.c; r.style.strokeWidth = Math.max(0.6, (s.w || 0) * S.scale);
       return r;
     }
-    /* click without drag: mirrors the pointerdown(move) + click(action) pair
-       core.js's own text tool uses, so a drag never also fires the action */
+    /* click without drag. The press selects the mark, redraws it and takes
+       the pointer for the drag, so neither a click nor the release ever
+       reaches this element: the release is watched for once, on the window,
+       and one close to the press is the click. */
     function moveAndClick(g, it, idx, onClick) {
       g.style.pointerEvents = 'all';
-      let downAt = null;
-      if (idx >= 0) g.addEventListener('pointerdown', function (e) {
-        downAt = [e.clientX, e.clientY];
+      if (idx < 0) return;
+      g.addEventListener('pointerdown', function (e) {
+        /* where in the mark it was pressed, as fractions of its box (before
+           the drag redraws it): the selection bar can shift the page before
+           the release */
+        const r = g.getBoundingClientRect();
         X.beginDrag(it, idx, e, 'move');
-      });
-      if (onClick) g.addEventListener('click', function (e) {
-        if (S.tool !== 'select') return;
-        if (downAt && Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 4) return;
-        e.stopPropagation();
-        onClick(e);
+        if (!onClick || e.button !== 0 || S.tool !== 'select') return;
+        const x = e.clientX, y = e.clientY;
+        const at = { fx: (x - r.left) / (r.width || 1), fy: (y - r.top) / (r.height || 1) };
+        window.addEventListener('pointerup', function up(ev) {
+          window.removeEventListener('pointerup', up, true);
+          if (S.tool !== 'select' || Math.hypot(ev.clientX - x, ev.clientY - y) > 4) return;
+          setTimeout(function () { onClick(at); }, 0);   /* after the drag has let go */
+        }, true);
       });
     }
 
@@ -676,7 +683,7 @@
           g.appendChild(t);
         }
       }
-      moveAndClick(g, it, idx, function () { openTableEditor(it, s, idx); });
+      moveAndClick(g, it, idx, function (e) { openTableEditor(it, s, idx, e); });
       if (selected) {
         for (let c = 1; c < cols; c++) {
           const h = document.createElementNS(SVGNS, 'rect');
@@ -760,31 +767,20 @@
       $(id).addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Enter') $('insTableGo').click(); });
     });
 
-    /* ---- editing a placed table: a floating HTML table over the mark,
-       mirroring how the text tool opens a textarea over its own box.
-       `tableEditing` carries everything close needs, so close never reaches
-       into a stale invocation's own local variables. ---- */
+    /* ---- typing in a placed table, as in WPS: the cells themselves turn
+       editable, laid exactly over the drawn ones, with the caret in the
+       cell that was clicked. Tab / Shift+Tab, Enter and the arrows move
+       between cells (Tab past the last adds a row); a click anywhere else
+       keeps what was typed, Escape drops it. The small bar under the table
+       adds and removes rows and columns. `tableEditing` carries everything
+       close needs. ---- */
     let tableEditing = null;
 
-    function buildTableEl(rows, cols, data) {
-      const t = document.createElement('table');
-      for (let r = 0; r < rows; r++) {
-        const tr = document.createElement('tr');
-        for (let c = 0; c < cols; c++) {
-          const td = document.createElement('td');
-          td.contentEditable = 'true';
-          td.textContent = (data[r] && data[r][c]) || '';
-          tr.appendChild(td);
-        }
-        t.appendChild(tr);
-      }
-      return t;
-    }
     function readTableCells(tEl) {
       const out = [];
       tEl.querySelectorAll('tr').forEach(function (tr) {
         const rowVals = [];
-        tr.querySelectorAll('td').forEach(function (td) { rowVals.push(td.textContent); });
+        tr.querySelectorAll('td').forEach(function (td) { rowVals.push(td.textContent.replace(/\s+/g, ' ').trim()); });
         out.push(rowVals);
       });
       return out;
@@ -792,67 +788,160 @@
     function closeTableEditor(commit) {
       const st = tableEditing; if (!st) return;
       tableEditing = null;
+      document.removeEventListener('pointerdown', st.outside, true);
       if (commit) {
         const data = readTableCells(st.tEl);
         const rows = data.length, cols = rows ? data[0].length : st.s.cols;
-        X.snapshot();
-        st.s.rows = rows; st.s.cols = cols; st.s.cells = data;
+        const changed = JSON.stringify(data) !== JSON.stringify(st.s.cells) || rows !== st.s.rows || cols !== st.s.cols;
+        if (changed) {
+          X.snapshot();
+          /* a new row or column takes an even share; the rest keep theirs */
+          if (cols !== st.s.cols) st.s.colW = null;
+          if (rows !== st.s.rows) st.s.rowH = null;
+          st.s.rows = rows; st.s.cols = cols; st.s.cells = data;
+        }
       }
       st.wrap.remove();
       X.drawShapes(st.it); X.drawThumb(st.it); X.updateMeta();
     }
-    function openTableEditor(it, s, idx) {
+
+    function openTableEditor(it, s, idx, e) {
       if (tableEditing) closeTableEditor(true);
       const vp = it.vp; if (!vp) return;
       const box = boxViewport(vp, s);
       const wrap = document.createElement('div');
       wrap.className = 'tabled';
       wrap.style.left = box.x + 'px'; wrap.style.top = box.y + 'px';
+      wrap.style.width = box.w + 'px';
+      const fs = Math.max(8, Math.min(13, box.h / s.rows * 0.42));
 
-      let tEl = buildTableEl(s.rows, s.cols, s.cells);
-      wrap.appendChild(tEl);
+      let tEl = null;
+      function build(rows, cols, data, colW, rowH) {
+        const t = document.createElement('table');
+        const cg = document.createElement('colgroup');
+        (colW || Array(cols).fill(1 / cols)).forEach(function (f) {
+          const c = document.createElement('col'); c.style.width = (f * 100) + '%'; cg.appendChild(c);
+        });
+        t.appendChild(cg);
+        const fr = rowH || Array(rows).fill(1 / rows);
+        for (let r = 0; r < rows; r++) {
+          const tr = document.createElement('tr');
+          tr.style.height = Math.max(fs * 1.6, fr[r] * box.h) + 'px';
+          for (let c = 0; c < cols; c++) {
+            const td = document.createElement('td');
+            td.contentEditable = 'true';
+            td.spellcheck = false;
+            td.style.fontSize = fs + 'px';
+            td.textContent = (data[r] && data[r][c]) || '';
+            tr.appendChild(td);
+          }
+          t.appendChild(tr);
+        }
+        if (tEl) wrap.replaceChild(t, tEl); else wrap.appendChild(t);
+        tEl = t;
+        if (tableEditing) tableEditing.tEl = t;
+      }
+      build(s.rows, s.cols, s.cells, s.colW && s.colW.length === s.cols ? s.colW : null,
+            s.rowH && s.rowH.length === s.rows ? s.rowH : null);
 
-      const row = document.createElement('div');
-      row.className = 'trow';
-      row.innerHTML =
-        '<label>Columns <input id="ted_c" value="' + s.cols + '" inputmode="numeric"></label>' +
-        '<label>Rows <input id="ted_r" value="' + s.rows + '" inputmode="numeric"></label>';
-      wrap.appendChild(row);
-
-      const acts = document.createElement('div');
-      acts.className = 'acts';
-      acts.innerHTML = '<button class="ok" data-a="ok">Apply</button><button data-a="no">Cancel</button>';
-      wrap.appendChild(acts);
+      const bar = document.createElement('div');
+      bar.className = 'tbar';
+      bar.innerHTML =
+        '<button data-a="row+" title="Add a row">+ Row</button>' +
+        '<button data-a="col+" title="Add a column">+ Column</button>' +
+        '<button data-a="row-" title="Remove the last row">− Row</button>' +
+        '<button data-a="col-" title="Remove the last column">− Column</button>' +
+        '<span class="grow"></span><button class="ok" data-a="ok" title="Keep (or click outside the table)">Done</button>';
+      wrap.appendChild(bar);
 
       it.inner.appendChild(wrap);
       tableEditing = { it: it, s: s, idx: idx, wrap: wrap, tEl: tEl };
 
-      function resize() {
-        const rows = Math.max(1, Math.min(24, parseInt(row.querySelector('#ted_r').value, 10) || s.rows));
-        const cols = Math.max(1, Math.min(12, parseInt(row.querySelector('#ted_c').value, 10) || s.cols));
+      function cells() { return Array.prototype.slice.call(tEl.querySelectorAll('td')); }
+      function dims() { const rws = tEl.querySelectorAll('tr'); return [rws.length, rws[0] ? rws[0].children.length : 0]; }
+      function focusCell(td) {
+        if (!td) return;
+        td.focus();
+        const r = document.createRange(); r.selectNodeContents(td); r.collapse(false);
+        const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      }
+      function reshape(rows, cols) {
+        rows = Math.max(1, Math.min(60, rows)); cols = Math.max(1, Math.min(20, cols));
         const data = readTableCells(tEl);
         const fresh = blankCells(rows, cols);
         for (let r = 0; r < Math.min(rows, data.length); r++)
           for (let c = 0; c < Math.min(cols, data[r].length); c++) fresh[r][c] = data[r][c];
-        const nt = buildTableEl(rows, cols, fresh);
-        wrap.replaceChild(nt, tEl);
-        tEl = nt;
-        tableEditing.tEl = nt;
+        build(rows, cols, fresh, null, null);
       }
-      row.querySelector('#ted_r').addEventListener('change', resize);
-      row.querySelector('#ted_c').addEventListener('change', resize);
-      [row.querySelector('#ted_r'), row.querySelector('#ted_c')].forEach(function (inp) {
-        inp.addEventListener('keydown', function (e) { e.stopPropagation(); });
-      });
-      wrap.addEventListener('keydown', function (e) { e.stopPropagation(); if (e.key === 'Escape') { e.preventDefault(); closeTableEditor(false); } });
-      acts.addEventListener('click', function (e) {
-        const b = e.target.closest('button'); if (!b) return;
-        e.stopPropagation();
-        closeTableEditor(b.dataset.a === 'ok');
+      bar.addEventListener('pointerdown', function (ev) { ev.preventDefault(); });   /* keep the caret */
+      bar.addEventListener('click', function (ev) {
+        const b = ev.target.closest('button'); if (!b) return;
+        ev.stopPropagation();
+        const d = dims(), a = b.dataset.a;
+        if (a === 'ok') { closeTableEditor(true); return; }
+        if (a === 'row+') reshape(d[0] + 1, d[1]);
+        if (a === 'col+') reshape(d[0], d[1] + 1);
+        if (a === 'row-') reshape(d[0] - 1, d[1]);
+        if (a === 'col-') reshape(d[0], d[1] - 1);
+        focusCell(cells()[0]);
       });
 
-      const firstCell = tEl.querySelector('td');
-      if (firstCell) firstCell.focus();
+      wrap.addEventListener('keydown', function (ev) {
+        ev.stopPropagation();
+        const td = ev.target.closest && ev.target.closest('td');
+        if (ev.key === 'Escape') { ev.preventDefault(); closeTableEditor(false); return; }
+        if (!td) return;
+        const list = cells(), i = list.indexOf(td), d = dims(), cols = d[1];
+        const caretAt = function (end) {
+          const sel = window.getSelection();
+          if (!sel.rangeCount || !sel.isCollapsed) return false;
+          const len = td.textContent.length;
+          const r = sel.getRangeAt(0).cloneRange(); r.selectNodeContents(td); r.setEnd(sel.anchorNode, sel.anchorOffset);
+          const pos = r.toString().length;
+          return end ? pos >= len : pos === 0;
+        };
+        let to = -1;
+        if (ev.key === 'Tab') {
+          to = ev.shiftKey ? i - 1 : i + 1;
+          if (!ev.shiftKey && to >= list.length) { reshape(d[0] + 1, cols); focusCell(cells()[to]); ev.preventDefault(); return; }
+        } else if (ev.key === 'Enter') to = ev.shiftKey ? i - cols : i + cols;
+        else if (ev.key === 'ArrowUp') to = i - cols;
+        else if (ev.key === 'ArrowDown') to = i + cols;
+        else if (ev.key === 'ArrowLeft' && caretAt(false)) to = i - 1;
+        else if (ev.key === 'ArrowRight' && caretAt(true)) to = i + 1;
+        else return;
+        ev.preventDefault();
+        if (to >= 0 && to < list.length) focusCell(list[to]);
+      });
+      /* one line per cell, as it is drawn and saved */
+      wrap.addEventListener('paste', function (ev) {
+        const t = (ev.clipboardData || window.clipboardData).getData('text');
+        if (t == null) return;
+        ev.preventDefault();
+        document.execCommand('insertText', false, t.replace(/\s+/g, ' '));
+      });
+
+      /* a click outside the table keeps what was typed */
+      tableEditing.outside = function (ev) {
+        if (wrap.contains(ev.target)) return;
+        closeTableEditor(true);
+      };
+      setTimeout(function () {
+        if (tableEditing && tableEditing.wrap === wrap) document.addEventListener('pointerdown', tableEditing.outside, true);
+      }, 0);
+
+      /* the caret in the cell that was clicked */
+      let start = cells()[0];
+      if (e && e.fx != null) {
+        const pick = function (fracs, f) {
+          const cum = cumFracs(fracs);
+          for (let i = 0; i < fracs.length; i++) if (f < cum[i + 1]) return i;
+          return fracs.length - 1;
+        };
+        const r = pick(rowFracs(s), e.fy), c = pick(colFracs(s), e.fx);
+        start = cells()[r * s.cols + c] || start;
+      }
+      focusCell(start);
     }
   });
 })();

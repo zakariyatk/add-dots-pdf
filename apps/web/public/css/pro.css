@@ -298,20 +298,19 @@ body:not([data-tool="select"]) .formlayer { display: none }
 /* ---------------------------------------------------------------
    Insert: editable table overlay (mirrors .texted)
    --------------------------------------------------------------- */
-.tabled { position: absolute; z-index: 6; background: var(--chrome-2); border: 1px solid var(--marker);
-          border-radius: 6px; padding: 6px; box-shadow: 0 10px 30px rgba(0,0,0,.45) }
-.tabled table { border-collapse: collapse }
-.tabled td { border: 1px solid var(--line); min-width: 44px; height: 26px; padding: 2px 5px;
-             font-size: 12.5px; color: var(--text); outline: none }
-.tabled td:focus { background: rgba(59,130,246,.12) }
-.tabled .trow { display: flex; gap: 8px; align-items: center; margin-top: 8px }
-.tabled .trow label { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--text-dim) }
-.tabled .trow input { width: 42px; height: 24px; text-align: center; background: var(--chrome);
-                       border: 1px solid var(--line); border-radius: 5px; color: var(--text) }
-.tabled .acts { display: flex; gap: 6px; margin-top: 8px }
-.tabled .acts .ok { background: var(--marker); color: #050505; border-color: transparent; font-weight: 700 }
-.tabled .acts button { flex: 1; height: 30px; border-radius: 6px; border: 1px solid var(--line);
-                        background: var(--chrome); color: var(--text); cursor: pointer; font-size: 12.5px }
+.tabled { position: absolute; z-index: 6; box-sizing: border-box }
+.tabled table { border-collapse: collapse; width: 100%; table-layout: fixed;
+                background: rgba(255,255,255,.96); outline: 2px solid var(--marker); outline-offset: 0 }
+.tabled td { border: 1px solid #8A8F98; padding: 0 4px; color: #1C1F24; font-family: Helvetica, Arial, sans-serif;
+             white-space: nowrap; overflow: hidden; vertical-align: middle; cursor: text; outline: none }
+.tabled td:focus { background: rgba(20,115,230,.10); box-shadow: inset 0 0 0 2px #1473E6 }
+.tabled .tbar { display: flex; gap: 4px; align-items: center; margin-top: 6px; padding: 4px;
+                background: var(--chrome); border: 1px solid var(--line); border-radius: 7px;
+                box-shadow: 0 6px 18px rgba(0,0,0,.18); width: max-content; min-width: 100% }
+.tabled .tbar .grow { flex: 1 }
+.tabled .tbar button { height: 26px; padding: 0 9px; border-radius: 5px; border: 1px solid var(--line);
+                       background: var(--chrome-2); color: var(--text); font-size: 11.5px; cursor: pointer; white-space: nowrap }
+.tabled .tbar .ok { background: var(--marker); color: var(--marker-ink, #050505); border-color: transparent; font-weight: 700 }
 
 /* ---------------------------------------------------------------
    Document operations
@@ -539,6 +538,8 @@ body[data-tool="pan"] .stage { scroll-behavior: auto }
 /* promote only while a drag is actually happening — a compositing layer per
    page would otherwise cost real memory on a long document */
 body.panning #stage > .pagebox { will-change: transform }
+/* the drag sets the scroll position every move: animated, it trails the hand */
+body.panning #stage, body.midpan #stage { scroll-behavior: auto }
 /* the journey back is worth animating; the drag itself must not be */
 #stage.pan-ease > .pagebox { transition: transform .2s ease-out }
 @media (prefers-reduced-motion: reduce) {

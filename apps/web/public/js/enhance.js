@@ -17,14 +17,18 @@
 
     /* ================= blank page dialog ================= */
 
+    /* As WPS lays it out: a size (the current page's by default, or a
+       standard one, or typed in mm), orientation, how many, and where —
+       at the start, at the end, or before or after any list of pages. */
     const MM = 72 / 25.4;
-    const SIZES = {
-      a4: [210 * MM, 297 * MM],
-      letter: [215.9 * MM, 279.4 * MM],
-      a3: [297 * MM, 420 * MM]
-    };
-    let blankOrient = 'p';
+    const SIZES = [
+      ['a4', 'A4 (210x297 mm)', 210, 297], ['a3', 'A3 (297x420 mm)', 297, 420],
+      ['a5', 'A5 (148x210 mm)', 148, 210], ['letter', 'Letter (216x279 mm)', 215.9, 279.4],
+      ['legal', 'Legal (216x356 mm)', 215.9, 355.6], ['tabloid', 'Tabloid (279x432 mm)', 279.4, 431.8]
+    ];
     const BLANK_COLORS = ['#FFFFFF', '#F5F5F0', '#FDF6E3', '#EAF2FF', '#111214'];
+    const BLANK_MAX = 2000;
+    const mm = function (pt) { return Math.round(pt / MM); };
 
     function paintBlankColors() {
       const host = $('blankColors');
@@ -32,8 +36,8 @@
       BLANK_COLORS.forEach(function (c, i) {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'sw' + (i === 0 ? ' on' : '');
-        b.style.cssText = 'width:26px;height:26px;border-radius:6px;border:1px solid var(--line);background:' + c;
-        b.dataset.c = c;
+        b.style.cssText = 'width:24px;height:24px;border-radius:6px;border:1px solid var(--line);background:' + c;
+        b.dataset.c = c; b.title = c;
         b.addEventListener('click', function () {
           host.querySelectorAll('.sw').forEach(function (x) { x.classList.remove('on'); });
           b.classList.add('on');
@@ -46,49 +50,81 @@
       return on ? on.dataset.c : '#FFFFFF';
     }
 
-    $('blankSize').addEventListener('change', function () {
-      $('blankCustomRow').hidden = this.value !== 'custom';
-    });
-    function setOrient(o) {
-      blankOrient = o;
-      $('blankPortrait').classList.toggle('primary', o === 'p');
-      $('blankLandscape').classList.toggle('primary', o === 'l');
-    }
-    $('blankPortrait').addEventListener('click', function () { setOrient('p'); });
-    $('blankLandscape').addEventListener('click', function () { setOrient('l'); });
-
     function currentPageSize() {
       const it = S.items[S.current - 1];
       if (!it || !it.page) return [612, 792];
       const v = it.page.view;
-      return [v[2] - v[0], v[3] - v[1]];
+      const w = v[2] - v[0], h = v[3] - v[1];
+      return (it.page.rotate + (it.rot || 0)) % 180 ? [h, w] : [w, h];
     }
 
-    function blankPageSize() {
-      let wh;
-      const choice = $('blankSize').value;
-      if (choice === 'same') wh = currentPageSize();
-      else if (choice === 'custom') {
-        const w = parseFloat($('blankW').value) || 210, h = parseFloat($('blankH').value) || 297;
-        wh = [w * MM, h * MM];
-      } else wh = SIZES[choice] || SIZES.a4;
-      let [w, h] = wh;
-      if (blankOrient === 'l' && w < h) { const t = w; w = h; h = t; }
-      if (blankOrient === 'p' && w > h) { const t = w; w = h; h = t; }
-      return [w, h];
+    /* the size list, its first entry the page on screen */
+    function fillSizes() {
+      const cur = currentPageSize();
+      $('blankSize').innerHTML =
+        '<option value="default">Default (' + mm(cur[0]) + 'x' + mm(cur[1]) + ' mm)</option>' +
+        SIZES.map(function (z) { return '<option value="' + z[0] + '">' + z[1] + '</option>'; }).join('') +
+        '<option value="custom">Custom</option>';
+    }
+    function sizeMm(v) {
+      if (v === 'default') { const c = currentPageSize(); return [c[0] / MM, c[1] / MM]; }
+      const z = SIZES.filter(function (x) { return x[0] === v; })[0];
+      return z ? [z[2], z[3]] : null;
+    }
+    /* a size picked: its numbers, turned to the orientation chosen */
+    function applySize() {
+      const wh = sizeMm($('blankSize').value);
+      if (!wh) return;
+      let w = wh[0], h = wh[1];
+      if ($('blankSize').value === 'default') $('blankOrient').value = w > h ? 'l' : 'p';
+      else if (($('blankOrient').value === 'l') !== (w > h)) { const t = w; w = h; h = t; }
+      $('blankW').value = Math.round(w); $('blankH').value = Math.round(h);
+    }
+    $('blankSize').addEventListener('change', applySize);
+    $('blankOrient').addEventListener('change', function () {
+      const w = +$('blankW').value, h = +$('blankH').value;
+      if (($('blankOrient').value === 'l') !== (w > h)) { $('blankW').value = h; $('blankH').value = w; }
+    });
+    ['blankW', 'blankH'].forEach(function (id) {
+      $(id).addEventListener('input', function () {
+        $('blankSize').value = 'custom';
+        $('blankOrient').value = +$('blankW').value > +$('blankH').value ? 'l' : 'p';
+      });
+    });
+    function where() {
+      const r = document.querySelector('input[name="blankWhere"]:checked');
+      return r ? r.value : 'pages';
+    }
+    $('blankPages').addEventListener('focus', function () {
+      document.querySelector('input[name="blankWhere"][value="pages"]').checked = true;
+    });
+
+    /* the gaps to fill, as indexes into S.items, from the last back */
+    function insertAt() {
+      const n = S.items.length, w = where();
+      if (w === 'start') return [0];
+      if (w === 'end') return [n];
+      const pages = window.ADDPDFEngine.parseRanges($('blankPages').value, n);
+      const after = $('blankPos').value === 'after';
+      const seen = {};
+      return pages.filter(function (p) { return p >= 1 && p <= n; })
+        .map(function (p) { return after ? p : p - 1; })
+        .filter(function (i) { if (seen[i]) return false; seen[i] = 1; return true; })
+        .sort(function (a, b) { return b - a; });
     }
 
-    const BLANK_MAX = 2000;
     async function addBlankPages() {
       const it = S.items[S.current - 1];
-      if (!it) { X.toast('Open a PDF first'); return; }
+      if (!it) { X.toast('Open a PDF first'); return false; }
       await X.ensurePage(it);
-      const [w, h] = blankPageSize();
-      /* as many as asked for; a cap only stops a typo (50000) from
-         freezing the tab, and says so instead of quietly adding fewer */
+      const wmm = parseFloat($('blankW').value), hmm = parseFloat($('blankH').value);
+      if (!(wmm >= 10 && hmm >= 10 && wmm <= 5000 && hmm <= 5000)) { $('blankNote').textContent = 'Width and height: 10 to 5000 mm.'; return false; }
+      const gaps = insertAt();
+      if (!gaps.length) { $('blankNote').textContent = 'Type page numbers that are in this document, like 1,8,1-10.'; return false; }
+      /* as many as asked for; a cap only stops a typo (50000) freezing the tab */
       const asked = Math.max(1, parseInt($('blankQty').value, 10) || 1);
       const qty = Math.min(BLANK_MAX, asked);
-      if (asked > qty) X.toast('At most <b>' + BLANK_MAX + '</b> blank pages at a time: adding ' + BLANK_MAX);
+      const w = wmm * MM, h = hmm * MM;
       const color = blankColor();
       const fill = color.toUpperCase() === '#FFFFFF' ? null : X.hexRgb(color);
 
@@ -98,33 +134,48 @@
         if (fill) page.drawRectangle({ x: 0, y: 0, width: w, height: h, color: fill });
       }
       const bytes = await d.save();
-      const doc = await X.pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+      const src = await X.addSource('Blank page', bytes, true);
 
       X.snapshot();
-      const src = { id: 'blank' + Date.now().toString(36), name: 'Blank page', bytes: bytes, doc: doc, synthetic: true };
-      S.sources.push(src);
-      for (let i = 0; i < qty; i++) S.items.splice(S.current + i, 0, X.newItem(src, i + 1, 0, true));
+      gaps.forEach(function (at) {
+        const add = [];
+        for (let i = 0; i < qty; i++) add.push(X.newItem(src, i + 1, 0, true));
+        S.items.splice.apply(S.items, [at, 0].concat(add));
+      });
+      X.invalidateSearch();
       await X.syncAll();
-      X.goTo(S.current + 1);
-      X.toast(qty > 1 ? (qty + ' blank pages added') : 'Blank page added');
+      const first = gaps[gaps.length - 1];
+      X.goTo(Math.min(S.items.length, first + 1));
+      const total = qty * gaps.length;
+      X.toast((total > 1 ? total + ' blank pages added' : 'Blank page added') +
+        (asked > qty ? ' · at most ' + BLANK_MAX + ' at a time' : ''));
+      return true;
     }
 
-    $('btnAdd') && X.registerPop && X.registerPop('blankPop', 'btnAdd');
     X.openBlankPageDialog = function () {
       paintBlankColors();
-      setOrient('p');
+      fillSizes();
+      $('blankSize').value = 'default';
+      applySize();
       $('blankQty').value = '1';
-      $('blankSize').value = 'same';
-      $('blankCustomRow').hidden = true;
+      $('blankPages').value = String(S.current || 1);
+      $('blankOf').textContent = '/' + S.items.length;
+      $('blankPos').value = 'after';
+      document.querySelector('input[name="blankWhere"][value="pages"]').checked = true;
+      $('blankNote').textContent = '';
       X.openPop ? X.openPop('blankPop', $('btnAdd')) : ($('blankPop').hidden = false);
     };
+    $('btnAdd') && X.registerPop && X.registerPop('blankPop', 'btnAdd');
     $('blankCancel').addEventListener('click', function () { X.closePops(); });
-    $('blankGo').addEventListener('click', function () {
-      X.closePops();
-      addBlankPages();
+    $('blankX').addEventListener('click', function () { X.closePops(); });
+    $('blankGo').addEventListener('click', async function () {
+      if (await addBlankPages()) X.closePops();
     });
-    ['blankW', 'blankH', 'blankQty'].forEach(function (id) {
-      $(id).addEventListener('keydown', function (e) { e.stopPropagation(); });
+    ['blankW', 'blankH', 'blankQty', 'blankPages'].forEach(function (id) {
+      $(id).addEventListener('keydown', function (e) {
+        e.stopPropagation();
+        if (e.key === 'Enter') $('blankGo').click();
+      });
     });
 
     /* ================= copy / paste for selected marks ================= */

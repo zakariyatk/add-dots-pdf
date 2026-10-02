@@ -1,0 +1,90 @@
+/* ---------------------------------------------------------------
+   WPS look
+   The light interface dressed the way WPS Office's PDF editor is: a
+   soft blue-grey desk, the ribbon a white card floating on it, the tab
+   in use in WPS red, actions in WPS blue, and a status bar along the
+   bottom with the page and the zoom (js/skin.js). The layout and every
+   button stay where they are: this is colour, shape and spacing only.
+   View > Look switches back to the plain light interface.
+   --------------------------------------------------------------- */
+
+body[data-ui="light"][data-skin="wps"] {
+  --chrome: #FFFFFF;
+  --chrome-2: #F4F6F9;
+  --stage: #E9ECF1;
+  --line: #E1E4EA;
+  --text: #1F2329;
+  --text-dim: #575E6A;
+  --marker: #2563EB;          /* WPS blue, deep enough for white text (5.2:1) */
+  --marker-ink: #1D4ED8;
+  --wps-red: #C8262C;         /* WPS red, 5:1 on the desk */
+  --wps-desk: #F2F4F8;
+  --hover: rgba(47, 107, 255, .07);
+}
+
+/* ---- the top strip: tabs in the middle, red for the one in use ---- */
+body[data-ui="light"][data-skin="wps"] .bar { background: var(--wps-desk); border-bottom: none; padding-top: 7px; padding-bottom: 5px }
+body[data-ui="light"][data-skin="wps"] .tabs .tab { font-size: 14px; color: #3B414B; padding: 0 16px }
+body[data-ui="light"][data-skin="wps"] .tabs .tab:hover { color: var(--wps-red) }
+body[data-ui="light"][data-skin="wps"] .tabs .tab.on { color: var(--wps-red); font-weight: 600 }
+body[data-ui="light"][data-skin="wps"] .tabs .tab.on::after { background: var(--wps-red); left: 16px; right: 16px; bottom: -6px; height: 2.5px }
+body[data-ui="light"][data-skin="wps"] .bar .btn:hover:not(:disabled) { background: rgba(0, 0, 0, .05) }
+body[data-ui="light"][data-skin="wps"] #btnHome { background: #FFFFFF; border-color: var(--line) }
+body[data-ui="light"][data-skin="wps"] .pager input { background: #FFFFFF; border-color: var(--line) }
+
+/* ---- the ribbon: a white card on the desk ---- */
+body[data-ui="light"][data-skin="wps"] .ribbon {
+  background: #FFFFFF; border-bottom: none; margin: 0 12px 10px; border-radius: 10px; padding: 6px 10px;
+  box-shadow: 0 1px 2px rgba(31, 35, 41, .06), 0 2px 10px rgba(31, 35, 41, .06), 0 0 0 1px rgba(31, 35, 41, .04);
+}
+body[data-ui="light"][data-skin="wps"] .app { background: var(--wps-desk) }
+body[data-ui="light"][data-skin="wps"] .ribbon .btn { height: 56px; border-radius: 7px; gap: 5px }
+body[data-ui="light"][data-skin="wps"] .ribbon .btn svg { width: 22px; height: 22px; color: #3A404A }
+body[data-ui="light"][data-skin="wps"] .ribbon .btn::after { font-size: 12px; color: #3A404A }
+body[data-ui="light"][data-skin="wps"] .ribbon .btn:hover:not(:disabled) { background: #F1F4FA; border-color: transparent }
+body[data-ui="light"][data-skin="wps"] .ribbon .btn.on { background: #EAF0FF; border-color: #CFDCFF }
+body[data-ui="light"][data-skin="wps"] .ribbon .btn.on svg, body[data-ui="light"][data-skin="wps"] .ribbon .btn.on::after { color: var(--marker-ink) }
+body[data-ui="light"][data-skin="wps"] .ribbon .sep { background: #E6E9EE }
+body[data-ui="light"][data-skin="wps"] .modebar { background: var(--wps-desk); border-bottom-color: transparent }
+
+/* ---- buttons that do the thing ---- */
+body[data-ui="light"][data-skin="wps"] .btn.primary { background: var(--marker); border-color: transparent; color: #FFFFFF; border-radius: 6px }
+body[data-ui="light"][data-skin="wps"] .btn.primary:hover:not(:disabled) { background: #1D4ED8 }
+
+/* ---- the side panel and the desk ---- */
+body[data-ui="light"][data-skin="wps"] .rail { background: #FFFFFF; border-right: 1px solid var(--line) }
+body[data-ui="light"][data-skin="wps"] .rail-tabs .btn { border-radius: 6px; font-size: 12.5px }
+body[data-ui="light"][data-skin="wps"] .rail-tabs .btn.on { background: #EAF0FF; color: var(--marker-ink); border-color: transparent }
+body[data-ui="light"][data-skin="wps"] .stage { background: var(--stage) }
+body[data-ui="light"][data-skin="wps"] .page { box-shadow: 0 1px 2px rgba(0, 0, 0, .10), 0 4px 16px rgba(31, 35, 41, .10) }
+body[data-ui="light"][data-skin="wps"] .thumb.active .shell, body[data-ui="light"][data-skin="wps"] .thumb.picked .shell {
+  border-color: var(--marker); box-shadow: 0 0 0 2px rgba(37, 99, 235, .25);
+}
+body[data-ui="light"][data-skin="wps"] .doctabs { background: #E9ECF2 }
+body[data-ui="light"][data-skin="wps"] .doctabs .dtab.on { background: var(--wps-desk); border-color: transparent }
+
+/* ---- the status bar (js/skin.js) ---- */
+.statusbar { display: none }
+body[data-ui="light"][data-skin="wps"] .statusbar {
+  display: flex; align-items: center; gap: 4px; flex: none; height: 32px; padding: 0 10px;
+  background: #FFFFFF; border-top: 1px solid var(--line); font-size: 12.5px; color: #3A404A; user-select: none;
+}
+body[data-ui="light"][data-skin="wps"] .statusbar[hidden] { display: none }
+.statusbar button {
+  width: 28px; height: 26px; border: none; background: none; border-radius: 5px; color: inherit;
+  display: inline-flex; align-items: center; justify-content: center; cursor: pointer; padding: 0;
+}
+.statusbar button:hover:not(:disabled) { background: #EEF1F6 }
+.statusbar button:disabled { opacity: .35; cursor: default }
+.statusbar button.on { background: #EAF0FF; color: var(--marker-ink) }
+.statusbar svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
+.statusbar .sbsep { width: 1px; height: 16px; background: var(--line); margin: 0 6px }
+.statusbar .sbgrow { flex: 1 }
+.statusbar .sbpage { display: inline-flex; align-items: center; gap: 4px }
+.statusbar .sbpage input {
+  width: 52px; height: 22px; border: 1px solid var(--line); border-radius: 4px; text-align: center;
+  font: inherit; background: #FFFFFF; color: inherit; padding: 0 4px;
+}
+.statusbar .sbzoom { width: 120px; accent-color: var(--marker); margin: 0 4px }
+.statusbar .sbpct { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums }
+@media (max-width: 900px) { body[data-ui="light"][data-skin="wps"] .statusbar { display: none } }
