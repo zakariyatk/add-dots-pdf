@@ -111,6 +111,9 @@ jobs:
           for f in index.html js/engine.js js/core.js js/vendor/pdf.min.js js/vendor/pdf-lib.min.js; do
             [ -s "site/$f" ] || { echo "::error::The build has no $f: not publishing a site that cannot work"; exit 1; }
           done
+          # every address of the app's code carries this commit, so a cache in
+          # front of the site (Hostinger's CDN) cannot pair new and old files
+          node apps/web/scripts/stamp.mjs site "$(git rev-parse --short HEAD)"
           rsync -a --exclude tests --exclude config.php --exclude setup.php legacy/api/ site/api/
           echo "Publishing $(git rev-parse --short HEAD) to $TARGET ($SITE_URL)"
           grep -m1 "VERSION =" site/sw.js
@@ -167,4 +170,12 @@ jobs:
             else echo "DIFFERENT $f: server $code, $(wc -c < /tmp/got) bytes, built $(wc -c < "site/$f") bytes; starts: $(head -c 120 /tmp/got | tr -d '\n\r')"; bad=1; fi
           done
           [ "$bad" = 0 ] || { echo "::error::Some files on $SITE_URL are not what was uploaded (see above)"; exit 1; }
+          # and the page as a visitor gets it, with no query: it must name this
+          # build's files, or a cache is still handing out the old page
+          stamp=$(git rev-parse --short HEAD)
+          for i in 1 2 3 4 5 6; do
+            curl -fsS "$SITE_URL" | grep -q "js/core.js?v=$stamp" && { echo "ok        the page visitors get names build $stamp"; break; }
+            [ "$i" = 6 ] && echo "::warning::$SITE_URL still hands out an older page (a cache in front of the site). It clears by itself; to clear it now: hPanel -> Websites -> pdf.adddots.com -> Performance -> CDN -> Flush cache."
+            sleep 10
+          done
           curl -fsS "${SITE_URL}api/health" && echo || echo "::warning::${SITE_URL}api/health did not answer: the share server needs api/config.php (first time: README.md, Publishing)"

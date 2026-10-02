@@ -53,7 +53,9 @@
     try {
       if (typeof OffscreenCanvas !== 'undefined' && typeof createImageBitmap === 'function') {
         /* ?rwfake=1 (tests): pdf.js's worker code in the render worker's own thread */
-        worker = new Worker('js/render-worker.js' + (/[?&]rwfake=1\b/.test(location.search) ? '?fake=1' : ''));
+        /* the address may already carry ?v= (the website's, see scripts/stamp.mjs) */
+        const rw = 'js/render-worker.js';
+        worker = new Worker(rw + (/[?&]rwfake=1\b/.test(location.search) ? (rw.indexOf('?') < 0 ? '?' : '&') + 'fake=1' : ''));
         api.state = 'wait';
         api.ready = new Promise(function (res) {
           /* A worker that has not answered in 20 s is not coming. Pages are
