@@ -352,7 +352,7 @@
 
     S.baseName = (file.name || 'document').replace(/\.pdf$/i, '');
     S.baseCount = doc.numPages;
-    S.metaBase = '<b>' + esc(file.name) + '</b>' + META_SEP + bytesLabel(file.size);
+    S.metaBase = '<b>' + esc(file.name) + '</b> · ' + bytesLabel(file.size);
     $('meta').innerHTML = S.metaBase;
     $('saveName').value = S.baseName + '-edited.pdf';
 
@@ -715,17 +715,13 @@
     loadRestPages();
   }
 
-  /* between the file's name and its details: the top bar puts the details on
-     a second line under the name and leaves the dot out (brand.css) */
-  const META_SEP = '<i class="msep"> · </i>';
   function updateMeta() {
     const n = S.items.length;
     const changed = n !== S.baseCount || S.items.some(function (it) {
       return it.rot || it.added || it.crop || it.shapes.length;
     });
     const m = $('meta');
-    m.innerHTML = S.metaBase + ' · ' + n + (n === 1 ? ' page' : ' pages') +
-      (changed ? ' <span class="dirty">· edited</span>' : '');
+    m.innerHTML = S.metaBase + ' · ' + n + 'p' + (changed ? ' <span class="dirty">· edited</span>' : '');
     m.title = m.textContent;   /* the bar truncates it on narrow screens */
     $('docTitle').textContent = n ? docName() + ', ' + n + (n === 1 ? ' page' : ' pages') : 'ADD DOTS PDF';
   }
@@ -862,7 +858,7 @@
     try { await ensurePage(first); } catch (e) { return; }
     if (S.items[0] !== first) return;
     computeFit();
-    showZoom();
+    $('zoomVal').textContent = Math.round(S.scale * 100) + '%';
     /* after a zoom, the pages away from the screen take their new size now:
        keep the page being read where it is */
     const hold = opts && opts.hold ? holdMiddle() : null;
@@ -880,20 +876,13 @@
     detailSoon(0);
   }
 
-  /* the zoom level, in the ribbon and on the floating zoom pill */
-  function showZoom() {
-    const z = Math.round(S.scale * 100) + '%';
-    $('zoomVal').textContent = z;
-    $('zpVal').textContent = z;
-  }
-
   /* ---------------- smooth zooming ----------------
      The live part only resizes and keeps the scroll anchored on whatever the
      reader is looking at; the sharp repaint is debounced to the end. */
   let zoomTimer = null, zoomRaf = 0;
   function zoomPreview() {
     applySizes(true);
-    showZoom();
+    $('zoomVal').textContent = Math.round(S.scale * 100) + '%';
   }
   /* Hold on to whatever page is under the fingers and put it back under them
      afterwards. Doing it off the real element beats scroll arithmetic, which
@@ -2368,7 +2357,7 @@
 
   function syncMarkPop() {
     const pop = $('markPop'), s = selShape();
-    if (!s || dragOn) { pop.hidden = true; closeSwatches(); syncSelBar(); return; }
+    if (!s || dragOn) { pop.hidden = true; closeSwatches(); return; }
     buildMarkPop();
     const isText = s.t === 'text';
     const isBox = s.t === 'rect';
@@ -2417,7 +2406,6 @@
 
     pop.hidden = false;
     placeMarkPop();
-    syncSelBar();
   }
 
   /* park it just clear of the mark, kept inside the window */
@@ -2444,67 +2432,7 @@
     pop.style.left = left + 'px';
     pop.style.top = top + 'px';
   }
-  function hideMarkPop() { const p = $('markPop'); if (p) p.hidden = true; closeSwatches(); syncSelBar(); }
-
-  /* Edit, Copy and Delete in a small bar just under the selected mark (the
-     design's "Web Editor" and "03 Editor"): what a finger or a mouse wants
-     next without reaching for the keyboard. Edit retypes a text mark; the
-     rest of a mark's settings are in the Drawing Tool tab, or above the
-     tools on a phone. */
-  function selBounds(s, it) {
-    const vp = it.vp;
-    const q = s.t === 'text' ? textQuad(s, vp)
-            : s.t === 'rect' ? rectCorners(s).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); })
-            : s.pts ? s.pts.map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); })
-            : [s.a, s.b, s.m].filter(Boolean).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
-    const b = { x1: Infinity, y1: Infinity, x2: -Infinity, y2: -Infinity };
-    q.forEach(function (p) {
-      b.x1 = Math.min(b.x1, p[0]); b.y1 = Math.min(b.y1, p[1]);
-      b.x2 = Math.max(b.x2, p[0]); b.y2 = Math.max(b.y2, p[1]);
-    });
-    return b;
-  }
-  function syncSelBar() {
-    const bar = $('selBar');
-    if (!bar) return;
-    const s = selShape();
-    if (!s || dragOn || S.editing || !S.sel.it.vp || !S.sel.it.anno) { bar.hidden = true; return; }
-    $('sbEdit').hidden = !(s.t === 'text' && selList().length === 1);
-    bar.hidden = false;
-    placeSelBar();
-  }
-  function placeSelBar() {
-    const bar = $('selBar'), s = selShape();
-    if (!bar || bar.hidden || !s) return;
-    const it = S.sel.it, r = it.anno.getBoundingClientRect(), b = selBounds(s, it);
-    if (!isFinite(b.x1)) { bar.hidden = true; return; }
-    const view = stage.getBoundingClientRect();
-    const w = bar.offsetWidth, h = bar.offsetHeight;
-    let left = r.left + (b.x1 + b.x2) / 2 - w / 2;
-    left = Math.max(view.left + 8, Math.min(view.right - w - 8, left));
-    let top = r.top + b.y2 + 12;
-    if (top + h > view.bottom - 8) top = r.top + b.y1 - h - 34;      /* above, clear of the turn grip */
-    top = Math.max(view.top + 8, Math.min(view.bottom - h - 8, top));
-    bar.style.left = left + 'px';
-    bar.style.top = top + 'px';
-  }
-  (function () {
-    const bar = $('selBar');
-    if (!bar) return;
-    bar.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-    $('sbEdit').addEventListener('click', function () {
-      if (!S.sel || !selShape()) return;
-      openEditor(S.sel.it, null, S.sel.i);
-      syncSelBar();
-    });
-    $('sbCopy').addEventListener('click', function () {
-      if (EXT.duplicateMarks) EXT.duplicateMarks();
-    });
-    $('sbDel').addEventListener('click', function () {
-      deleteSelected();
-      stage.focus({ preventScroll: true });
-    });
-  })();
+  function hideMarkPop() { const p = $('markPop'); if (p) p.hidden = true; closeSwatches(); }
 
   /* the grab points drawn on the selected mark */
   function handlesEl(it, s, vp, idx) {
@@ -2827,7 +2755,7 @@
   function trackMarkPop() {
     if ($('markPop').hidden) return;
     if (mpTick) return;
-    mpTick = requestAnimationFrame(function () { mpTick = 0; placeMarkPop(); placeSelBar(); });
+    mpTick = requestAnimationFrame(function () { mpTick = 0; placeMarkPop(); });
   }
   stage.addEventListener('scroll', trackMarkPop, { passive: true });
   window.addEventListener('resize', trackMarkPop);
@@ -4926,7 +4854,7 @@
     S.baseName = d.baseName || 'project';
     S.baseCount = S.items.length;
     const nPins = livePins().length;
-    S.metaBase = '<b>' + esc(S.baseName) + '</b>' + META_SEP + 'project';
+    S.metaBase = '<b>' + esc(S.baseName) + '</b> · project';
     $('meta').innerHTML = S.metaBase;
     $('saveName').value = S.baseName + '-edited.pdf';
 
@@ -5182,7 +5110,6 @@
     S.editing = null;
     document.body.classList.remove('editing');
     ed.box.remove();
-    syncSelBar();
 
     if (!commit) { drawShapes(ed.it); return; }
     if (!WINANSI_OK.test(val)) {
@@ -5287,7 +5214,6 @@
     it.inner.appendChild(wrapEl);
     document.body.classList.add('editing');
     S.editing = { it: it, item: item, idx: idx, box: wrapEl, at: Date.now() };
-    syncSelBar();
 
     /* hide the live item while its editor is open */
     if (idx >= 0) {
@@ -6042,7 +5968,6 @@
   }
 
   let curMarked = null;
-  let lastCurrent = 0;          /* 'current' is told only when the page changes */
   function setCurrent(n) {
     S.current = Math.max(1, Math.min(S.items.length, n));
     $('pageIn').value = String(S.current);
@@ -6057,7 +5982,6 @@
       it.box && it.box.classList.add('cur');
     }
     curMarked = it || null;
-    if (S.current !== lastCurrent) { lastCurrent = S.current; EXT.emit('current', S.current); }
     if (it && it.thumb && !rail.hidden) {
       const host = $('railPages'), t = it.thumb.offsetTop;
       if (t < host.scrollTop || t > host.scrollTop + host.clientHeight - 70) host.scrollTop = t - 40;
@@ -6352,9 +6276,7 @@
     S.items.forEach(function (x) { drawShapes(x); });
   }
 
-  /* the tool's colour: five quick dots, and the whole palette behind "Colour" */
-  const QUICK_COLORS = [['#E2483D', 'Red'], ['#3B82F6', 'Blue'], ['#22A06B', 'Green'],
-                        ['#F59E0B', 'Amber'], ['#0B2A31', 'Ink']];
+  /* the tool's colour: ten quick squares, and "More" for the whole palette */
   function pickToolColor(c) {
     S.color = c;
     Array.prototype.forEach.call($('swatches').querySelectorAll('.sw'), function (x) {
@@ -6372,17 +6294,8 @@
     more.className = 'swmore'; more.id = 'swMore'; more.type = 'button';
     more.title = 'Colour';
     more.innerHTML = '<i id="swMoreChip"></i><span>Colour</span><b>▾</b>';
-    /* the design's five quick colours, round, before the full palette */
-    QUICK_COLORS.forEach(function (q) {
-      const b = document.createElement('button');
-      b.type = 'button'; b.className = 'sw quick'; b.dataset.c = q[0];
-      b.title = q[1]; b.setAttribute('aria-label', q[1]);
-      b.style.background = q[0];
-      b.addEventListener('click', function () { pickToolColor(q[0]); });
-      $('swatches').appendChild(b);
-    });
     $('swatches').appendChild(more);
-    pickToolColor(S.color);
+    $('swMoreChip').style.background = S.color;
     const pop = document.createElement('div');
     pop.className = 'swpop palette'; pop.id = 'toolPalette'; pop.hidden = true;
     document.body.appendChild(pop);
@@ -6407,19 +6320,6 @@
     function linePx(w) { return Math.max(1, Math.min(6, Math.round(w * 1.2 * 2) / 2)); }
     const btn = document.createElement('button');
     btn.className = 'wdrop'; btn.id = 'wdDrop'; btn.type = 'button'; btn.title = 'Line width';
-    /* three quick weights, as in the design, before the full list */
-    const quick = document.createElement('div');
-    quick.className = 'wdquick'; quick.setAttribute('role', 'group'); quick.setAttribute('aria-label', 'Line width');
-    quick.innerHTML = [1, 3, 5].map(function (w) {
-      return '<button type="button" data-w="' + w + '" aria-pressed="false" title="' + w + ' pt line">' +
-        '<i style="height:' + linePx(w) + 'px"></i>' + w + 'pt</button>';
-    }).join('');
-    quick.addEventListener('click', function (e) {
-      const o = e.target.closest('button'); if (!o) return;
-      S.width = parseFloat(o.dataset.w);
-      paint();
-    });
-    $('widths').appendChild(quick);
     $('widths').appendChild(btn);
     const menu = document.createElement('div');
     menu.className = 'wdmenu'; menu.id = 'wdMenu'; menu.hidden = true;
@@ -6427,11 +6327,6 @@
     document.body.appendChild(menu);
     function paint() {
       btn.innerHTML = '<i style="height:' + linePx(S.width) + 'px"></i><span>' + S.width + ' pt</span><b>▾</b>';
-      Array.prototype.forEach.call(quick.children, function (q) {
-        const on = parseFloat(q.dataset.w) === S.width;
-        q.classList.toggle('on', on);
-        q.setAttribute('aria-pressed', on ? 'true' : 'false');
-      });
     }
     paint();
     btn.addEventListener('click', function (e) {
@@ -7305,8 +7200,6 @@
         e.target.closest('#btnExtract') || e.target.closest('#btnJpg') ||
         e.target.closest('#pinExpGo')) return;
     if (e.target.closest('[data-a="add"]')) return;
-    /* a button elsewhere that opens one of these (js/inspector.js) */
-    if (e.target.closest('[data-opens-pop]')) return;
     /* the same courtesy for a popover a module owns */
     if (EXT_POPS.some(function (x) {
       return typeof x.anchor === 'string' && x.anchor && e.target.closest('#' + x.anchor);
@@ -7319,10 +7212,6 @@
   $('btnIn').addEventListener('click', function () { setZoom(1.2); });
   $('btnOut').addEventListener('click', function () { setZoom(1 / 1.2); });
   $('btnFitW').addEventListener('click', function () { S.fit = 'width'; relayout(); });
-  /* the floating zoom pill over the pages does the same as the ribbon's buttons */
-  $('zpIn').addEventListener('click', function () { setZoom(1.2); });
-  $('zpOut').addEventListener('click', function () { setZoom(1 / 1.2); });
-  $('zpFit').addEventListener('click', function () { S.fit = 'width'; relayout(); });
   $('btnRotL').addEventListener('click', function (e) { e.shiftKey ? rotateAll(-90) : rotateItem(S.current - 1, -90); });
   $('btnRotR').addEventListener('click', function (e) { e.shiftKey ? rotateAll(90) : rotateItem(S.current - 1, 90); });
   $('btnDel').addEventListener('click', function () { if (S.items.length) removeItem(S.current - 1); });
@@ -7461,15 +7350,6 @@
       $(r[1]).hidden = !on;
     });
     closePops();
-    /* a narrow window scrolls the tab strip sideways: keep the open tab in
-       sight (the Drawing Tool tab shows itself at the end of the strip) */
-    requestAnimationFrame(function () {
-      const t = $(tab), strip = t && t.parentNode;
-      if (!strip || t.hidden || strip.scrollWidth <= strip.clientWidth) return;
-      const l = t.offsetLeft - strip.offsetLeft, r = l + t.offsetWidth;
-      if (l < strip.scrollLeft) strip.scrollLeft = l - 4;
-      else if (r > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = r - strip.clientWidth + 4;
-    });
   }
   RIBBON.forEach(function (r) {
     $(r[0]).addEventListener('click', function () { setRibbon(r[0]); });
@@ -7652,18 +7532,7 @@
     return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
-  /* "Good morning", and the account's name when signed in */
-  function helloText() {
-    const h = new Date().getHours();
-    const part = h < 5 ? 'Good evening' : h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-    const who = EXT.account && EXT.account.user && EXT.account.user();
-    if (who && who.email) {
-      const first = who.email.split('@')[0].split(/[._\-+]/)[0];
-      if (first) return part + ', ' + first.charAt(0).toUpperCase() + first.slice(1);
-    }
-    return recentRecs.length ? part : 'Welcome to ADD DOTS PDF';
-  }
-  function refreshHello() { $('hHello').textContent = helloText(); }
+  function refreshHello() { $('hHello').textContent = recentRecs.length ? 'Welcome back' : 'Welcome to Add Dots PDF'; }
 
   let recentToken = 0, recentRecs = [];
   async function renderRecent() {
@@ -7678,31 +7547,18 @@
       list.innerHTML = '<div class="rempty">Files you open will appear here, so you can pick up where you left off.</div>';
       return;
     }
-    /* the search box above filters the list by name */
-    const q = ($('hSearch').value || '').trim().toLowerCase();
-    const rows = all.map(function (r, i) {
-      if (q && r.name.toLowerCase().indexOf(q) < 0) return '';
-      const bits = [];
+    list.innerHTML = all.map(function (r, i) {
+      const bits = [bytesLabel(r.size)];
       if (r.pages) bits.push(r.pages + (r.pages === 1 ? ' page' : ' pages'));
-      bits.push(bytesLabel(r.size));
+      if (!r.blob) bits.push('select again to open');
       return '<div class="rrow" role="button" tabindex="0" data-i="' + i + '">' +
         '<span class="fi"></span>' +
         '<span class="nm"><b>' + esc(r.name) + '</b><small>' + esc(bits.join(' · ')) + '</small></span>' +
         '<span class="when">' + esc(whenLabel(r.time)) + '</span>' +
-        '<span class="sz">' + esc(bytesLabel(r.size)) + '</span>' +
-        (r.blob
-          ? '<span class="tag">On this device</span>'
-          : '<span class="tag off" title="Too large to keep here: select it again to open">Select again</span>') +
         '<button class="x" data-x="' + i + '" title="Remove from list" aria-label="Remove ' + esc(r.name) + ' from list">&times;</button>' +
         '</div>';
     }).join('');
-    list.innerHTML = rows || '<div class="rempty">No recent PDF matches “' + esc(q) + '”.</div>';
   }
-  $('hSearch').addEventListener('input', function () {
-    renderRecent();
-    /* searching is about the list: bring it into view */
-    if (this.value) $('hRecent').scrollIntoView({ block: 'nearest' });
-  });
 
   async function openRecent(i) {
     const r = recentRecs[i]; if (!r) return;
@@ -8101,7 +7957,7 @@
     if (await openProject(d)) {
       /* it lives in this tab now */
       await dropRecord(r.tab);
-      S.metaBase = '<b>' + esc(r.name || S.baseName) + '</b>' + META_SEP + 'restored';
+      S.metaBase = '<b>' + esc(r.name || S.baseName) + '</b> · restored';
       $('meta').innerHTML = S.metaBase;
       toast('Restored your unsaved work on <b>' + esc(r.name || S.baseName) + '</b>');
     }
@@ -8188,7 +8044,7 @@
     S: S, SVGNS: SVGNS, COLORS: COLORS, WIDTHS: WIDTHS, FONTS: FONTS,
     $: $, toast: toast, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
     snapLine: snapLine, snapBox: snapBox, constrainPt: constrainPt,
-    selList: selList, setGroup: setGroup, syncMarkPop: syncMarkPop,
+    selList: selList, setGroup: setGroup,
     snapshot: snapshot, setUndoState: setUndoState,
     drawShapes: drawShapes, drawThumb: drawThumb, drawVisibleThumbs: drawVisibleThumbs,
     relayout: relayout, syncAll: syncAll, applyLayout: applyLayout,
