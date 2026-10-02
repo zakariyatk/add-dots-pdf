@@ -31,7 +31,9 @@ writeFileSync(PDF, await d.save());
 
 /* what the server hands out for a plain address (what a visitor's browser
    asks for) next to a fresh one with a query: different bytes mean a cache in
-   front of the site is serving an old copy */
+   front of the site is serving an old copy. For information only: the
+   website asks for its files with ?v=<build> (scripts/stamp.mjs), so an old
+   copy under a plain address no longer reaches anyone. */
 const UA =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36';
 for (const f of [
@@ -71,7 +73,6 @@ for (const f of [
   const plain = await get(SITE + f);
   const fresh = await get(SITE + f + '?fresh=' + Date.now());
   const same = plain.body === fresh.body;
-  if (!same) failed++;
   console.log(
     (same ? 'same      ' : 'STALE     ') +
       (f || '/') +
