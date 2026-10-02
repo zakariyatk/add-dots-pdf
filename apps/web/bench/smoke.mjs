@@ -2472,13 +2472,11 @@ try {
     await page.keyboard.press('Escape');
 
     /* text: placed, then a double-click from Select opens it again */
+    /* the tool itself (its button can sit in an overflow on a narrow ribbon) */
     await page.evaluate(() => {
       window.ADDPDF.goTo(1);
-      const pan = document.getElementById('tText').closest('.rpan');
-      const tab = pan && document.getElementById(pan.getAttribute('aria-labelledby'));
-      if (tab) tab.click();
+      window.ADDPDF.setTool('text');
     });
-    await page.click('#tText');
     at = await onScreen('.pagebox');
     await page.mouse.click(at.x - at.w / 4, at.y - at.h / 2 + 200); /* clear of the toasts at the bottom */
     await page.waitForFunction(() => window.ADDPDF.S.editing);
