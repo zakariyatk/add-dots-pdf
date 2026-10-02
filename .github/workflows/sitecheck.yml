@@ -1,0 +1,41 @@
+name: Site check
+
+# Opens the live site in Chrome as a visitor would, opens a PDF and uses the
+# main tools (box, text, rotate, save), and lists every error and every file
+# that failed to load (apps/web/bench/live.mjs).
+
+on:
+  workflow_dispatch:
+    inputs:
+      site:
+        description: Address to check
+        default: https://pdf.adddots.com/
+  workflow_run:
+    workflows: [Publish]
+    types: [completed]
+
+jobs:
+  check:
+    name: Check ${{ github.event.inputs.site || 'https://pdf.adddots.com/' }}
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: node bench/live.mjs
+        working-directory: apps/web
+        env:
+          SITE: ${{ github.event.inputs.site || 'https://pdf.adddots.com/' }}
+          BENCH_CHANNEL: chrome
+          OUT: ${{ runner.temp }}/sitecheck
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sitecheck-screens
+          path: ${{ runner.temp }}/sitecheck/*.png
+          retention-days: 7
