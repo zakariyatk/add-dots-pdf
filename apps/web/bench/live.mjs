@@ -16,6 +16,7 @@ const OUT = process.env.OUT || join(tmpdir(), 'sitecheck');
 mkdirSync(OUT, { recursive: true });
 
 let failed = 0;
+let challenged = false;
 const check = (name, ok, detail) => {
   if (!ok) failed++;
   console.log((ok ? 'PASS ' : 'FAIL ') + name + (detail === undefined ? '' : '  ' + JSON.stringify(detail)));
@@ -117,6 +118,12 @@ try {
       (res.headers().server || '?'),
   );
   if (res.status() !== 200) console.log('page starts: ' + html.slice(0, 600).replace(/\s+/g, ' '));
+  /* Hostinger's CDN first answers a new browser with a 403 "Checking your
+     browser" page that reloads into the app: expected, not a fault */
+  if (res.status() === 403 && /Checking your browser/.test(html)) {
+    console.log("(the CDN's browser check answered first; the app loaded after it)");
+    challenged = true;
+  }
   await page.waitForTimeout(2000);
   const boot = await page
     .waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc, null, { timeout: 30000 })
@@ -217,6 +224,12 @@ try {
 
 console.log('\nfiles that failed (' + bad.length + '):\n' + bad.slice(0, 40).join('\n'));
 console.log('\nerrors on the page (' + errors.length + '):\n' + errors.slice(0, 40).join('\n'));
+/* the browser check's own 403, and the favicon its page asks for */
+if (challenged) {
+  const ours = (x) => !(x.includes(SITE) && /\b403\b/.test(x)) && !x.includes('favicon.ico');
+  errors.splice(0, errors.length, ...errors.filter(ours));
+  bad.splice(0, bad.length, ...bad.filter(ours));
+}
 check('no errors on the page', errors.length === 0);
 check('no files failed to load', bad.length === 0);
 await browser.close();

@@ -34,6 +34,8 @@ const files = [...walk(join(dir, 'js')), ...walk(join(dir, 'css'))]
 /* as the page names them (js/core.js) and as a worker in js/ does (engine.js) */
 const names = new Set(files);
 for (const f of files) if (f.startsWith('js/')) names.add(f.slice(3));
+/* and the service worker, which the CDN keeps for a week like the rest */
+if (existsSync(join(dir, 'sw.js'))) names.add('sw.js');
 const quoted = new RegExp(
   '([\'"])(' + [...names].map((n) => n.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&')).join('|') + ')\\1',
   'g',
