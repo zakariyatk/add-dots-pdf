@@ -13,11 +13,14 @@ on:
   workflow_run:
     workflows: [Publish]
     types: [completed]
+  # a change to the check itself checks the live site too
+  pull_request:
+    paths: [apps/web/bench/live.mjs, .github/workflows/sitecheck.yml]
 
 jobs:
   check:
     name: Check ${{ github.event.inputs.site || 'https://pdf.adddots.com/' }}
-    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
