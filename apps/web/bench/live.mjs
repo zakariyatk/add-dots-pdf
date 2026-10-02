@@ -44,7 +44,7 @@ for (const f of [
 ]) {
   const get = async (u) => {
     try {
-      const r = await fetch(u, { headers: { 'user-agent': UA } });
+      const r = await fetch(u, { headers: { 'user-agent': UA }, signal: AbortSignal.timeout(20000) });
       const h = {};
       for (const k of [
         'cache-control',
