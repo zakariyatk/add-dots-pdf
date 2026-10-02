@@ -46,7 +46,16 @@ try {
   const res = await page.goto(SITE, { waitUntil: 'load', timeout: 60000 });
   const html = await res.text();
   writeFileSync(join(OUT, 'index.html'), html);
-  console.log('page: ' + res.status() + ' ' + page.url() + ', ' + html.length + ' bytes, server ' + (res.headers().server || '?'));
+  console.log(
+    'page: ' +
+      res.status() +
+      ' ' +
+      page.url() +
+      ', ' +
+      html.length +
+      ' bytes, server ' +
+      (res.headers().server || '?'),
+  );
   if (res.status() !== 200) console.log('page starts: ' + html.slice(0, 600).replace(/\s+/g, ' '));
   await page.waitForTimeout(2000);
   const boot = await page
