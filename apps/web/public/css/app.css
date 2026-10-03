@@ -169,19 +169,9 @@
   .thumb .tools button:hover{background:var(--chrome-2)}
   .thumb .tools button.del:hover{color:var(--danger);border-color:var(--danger)}
   .thumb .tools svg{width:12px;height:12px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-  .thumb .badge{position:absolute;left:30px;top:4px;font-family:var(--mono);font-size:9px;
+  .thumb .badge{position:absolute;left:4px;top:4px;font-family:var(--mono);font-size:9px;
                 background:rgba(255,255,255,.9);color:#050505;border-radius:4px;padding:1px 4px;font-weight:700}
 
-  /* tick a page in the sidebar to line it up for extracting */
-  .thumb .tickbox{position:absolute;left:4px;top:4px;width:22px;height:22px;padding:0;display:flex;
-                  align-items:center;justify-content:center;background:rgba(10,10,10,.86);
-                  border:1px solid var(--line);border-radius:5px;cursor:pointer;
-                  opacity:0;transition:opacity .12s,background .12s}
-  .thumb:hover .tickbox,.thumb:focus-within .tickbox,body.picking .thumb .tickbox{opacity:1}
-  .thumb .tickbox svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2.8;
-                      stroke-linecap:round;stroke-linejoin:round;opacity:.28}
-  .thumb .tickbox.on{opacity:1;background:var(--marker);border-color:var(--marker);color:#050505}
-  .thumb .tickbox.on svg{opacity:1}
   .thumb.picked .shell{border-color:var(--marker);box-shadow:0 0 0 2px rgba(255,255,255,.22)}
 
   /* pages selected in the sidebar: what can be done to them (core.js) */
@@ -983,8 +973,6 @@
     .txctl select,.txctl input,.txctl .tg{height:32px}
     .thumb .tools,.ptools{opacity:1}
     .thumb .tools button{width:26px;height:26px}
-    .thumb .tickbox{opacity:1;width:26px;height:26px}
-    .thumb .badge{left:34px}
   }
 
   /* the narrowest phones (320–374px): slimmer icon buttons in the top bar */
@@ -1044,9 +1032,6 @@
     .thumb .tools{opacity:1}
     .thumb .tools button{width:28px;height:28px}
     .thumb .tools svg{width:14px;height:14px}
-    .thumb .tickbox{opacity:1;width:28px;height:28px}
-    .thumb .tickbox svg{width:15px;height:15px}
-    .thumb .badge{left:36px}
     .pop .chip{height:32px;padding:0 12px;font-size:12.5px}
 
     .stage{padding:12px 8px calc(96px + env(safe-area-inset-bottom));gap:14px}
@@ -1103,73 +1088,5 @@
   /* out of layout, not only hidden, while a zoom glides: the words' places follow
      the zoom (--sf), and laying them out every frame slowed the glide */
   body.zooming .textLayer{display:none}
-
-  /* ---------- account: the button, the home entry, the sign-in dialog ---------- */
-  .btn.acct .lbl{font-size:12.5px}
-  .btn.acct.in{width:32px;padding:0;justify-content:center;border-radius:50%;background:var(--marker);
-               color:var(--accent-ink,#050505);font-weight:650}
-  .btn.acct.in svg{display:none}
-  .btn.acct.in .lbl{display:inline;font-size:13px}
-  .hacct{margin:10px 0}
-  /* phones: the side menu is hidden, so the home screen's top row has it */
-  .resume.hacct-top{display:none}
-  @media (max-width:900px){ .resume.hacct-top:not([hidden]){display:inline-flex} }
-  .resume.hacct-top svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7}
-  .resume.hacct-top span{max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .hacct-btn{display:flex;align-items:center;gap:10px;width:100%;padding:10px 12px;border-radius:9px;cursor:pointer;
-             background:none;border:1px solid var(--line);color:var(--text);text-align:left}
-  .hacct-btn:hover{background:var(--chrome-2)}
-  .hacct-btn svg{width:20px;height:20px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7}
-  .hacct-btn span{min-width:0}
-  .hacct-btn b{display:block;font-size:13px;font-weight:650;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .hacct-btn small{display:block;font-size:11.5px;color:var(--text-dim);margin-top:2px}
-
-  .authdlg{position:fixed;inset:0;z-index:120;display:flex;align-items:center;justify-content:center;padding:16px;
-           background:rgba(10,12,16,.55)}
-  .authdlg[hidden]{display:none}
-  .authcard{position:relative;width:min(400px,100%);max-height:calc(100dvh - 32px);overflow-y:auto;
-            background:var(--chrome);color:var(--text);border:1px solid var(--line);border-radius:14px;
-            box-shadow:0 24px 60px rgba(0,0,0,.45);padding:28px 28px 22px}
-  .authx{position:absolute;top:10px;right:10px;width:34px;height:34px;border:none;border-radius:8px;
-         background:none;color:var(--text-dim);cursor:pointer;display:flex;align-items:center;justify-content:center}
-  .authx:hover{background:var(--chrome-2);color:var(--text)}
-  .authx svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
-  .authbrand{font-family:var(--mono);font-size:11px;letter-spacing:.34em;color:var(--text-dim);margin-bottom:14px}
-  .authbrand em{font-style:normal;color:var(--marker-ink)}
-  .authcard h2{margin:0 0 6px;font-size:21px;font-weight:650}
-  .authsub{margin:0 0 16px;font-size:13px;line-height:1.5;color:var(--text-dim);overflow-wrap:anywhere}
-  .authmsg{margin:0 0 14px;padding:10px 12px;border-radius:8px;font-size:13px;line-height:1.45;
-           background:var(--chrome-2);border:1px solid var(--line)}
-  .authmsg.bad{border-color:var(--danger);color:var(--text)}
-  .authmsg.good{border-color:var(--marker)}
-  .authcard form label{display:block;font-size:12.5px;font-weight:600;margin:12px 0 6px}
-  .authcard form input{width:100%;height:42px;padding:0 12px;border-radius:9px;border:1px solid var(--line);
-                       background:var(--chrome-2);color:var(--text);font-size:15px}
-  .authcard form input:focus{outline:2px solid var(--marker);outline-offset:1px;border-color:var(--marker)}
-  .authcard .authcode{font-family:var(--mono);font-size:22px;letter-spacing:.35em;text-align:center}
-  .authhint{margin:6px 2px 0;font-size:12px;color:var(--text-dim)}
-  .authnote{margin:0 0 6px;font-size:13px;line-height:1.5;color:var(--text-dim)}
-  .authgo{width:100%;height:44px;margin-top:18px;border:none;border-radius:9px;cursor:pointer;
-          background:var(--marker);color:var(--accent-ink,#050505);font-size:14.5px;font-weight:650}
-  .authgo[disabled]{opacity:.6;cursor:default}
-  .authlinks{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:14px;font-size:13px}
-  .authlinks span{color:var(--text-dim)}
-  .authlinks a{color:var(--marker-ink);text-decoration:none;font-weight:600}
-  .authlinks a:hover{text-decoration:underline}
-  .authhint a{color:var(--marker-ink);font-weight:600}
-  .authdanger{background:none;border:1.5px solid var(--danger);color:var(--text)}
-  .authpolicy{max-height:min(52vh,460px);overflow:auto;padding:2px 4px 2px 0;font-size:13.5px;line-height:1.55}
-  .authpolicy:focus-visible{outline:2px solid var(--marker);outline-offset:2px}
-  .authpolicy h1,.authpolicy .dim:first-of-type{display:none}
-  .authpolicy h2{font-size:14.5px;margin:16px 0 4px}
-  .authpolicy h2:first-of-type{margin-top:0}
-  .authpolicy p,.authpolicy ul{margin:0 0 8px}
-  .authpolicy ul{padding-left:18px}
-  @media (max-width:560px){
-    .authdlg{align-items:flex-end;padding:0}
-    .authcard{width:100%;border-radius:16px 16px 0 0;padding:24px 20px calc(20px + env(safe-area-inset-bottom))}
-    .authcard form input{height:48px;font-size:16px}
-    .authgo{height:50px}
-  }
 
   @media (prefers-reduced-motion:reduce){*{transition:none!important}.stage{scroll-behavior:auto}}

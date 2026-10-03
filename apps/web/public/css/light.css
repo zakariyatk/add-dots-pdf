@@ -68,10 +68,10 @@ body[data-ui="light"] .rail { background: #FAFAFB }
 body[data-ui="light"] .thumb .shell { box-shadow: 0 1px 3px rgba(0, 0, 0, .12) }
 body[data-ui="light"] .thumb.active .shell,
 body[data-ui="light"] .thumb.picked .shell { box-shadow: 0 0 0 2px rgba(20, 115, 230, .28) }
-body[data-ui="light"] :is(.thumb .tools button, .thumb .tickbox, .ptools button) {
+body[data-ui="light"] :is(.thumb .tools button, .ptools button) {
   background: rgba(255, 255, 255, .96); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
 }
-body[data-ui="light"] :is(.thumb .tickbox.on, .btn .cnt, .texted .acts button.ok) { color: var(--accent-ink) }
+body[data-ui="light"] :is(.btn .cnt, .texted .acts button.ok) { color: var(--accent-ink) }
 body[data-ui="light"] .thumb .badge,
 body[data-ui="light"] .pagebox.added .ptools::before { background: var(--marker); color: var(--accent-ink) }
 body[data-ui="light"] .hit-item mark { background: rgba(255, 196, 0, .45); color: inherit }
@@ -114,7 +114,7 @@ body[data-ui="light"] :is(.anno-sw .sw, .sigcolors .sw) { border-color: rgba(0, 
 body[data-ui="light"] .orgshell.pending { background: repeating-linear-gradient(45deg, #EEEFF1 0 8px, #F6F7F8 8px 16px) }
 body[data-ui="light"] .hdrop .install:hover { border-color: #AEB4BC; color: var(--text) }
 body[data-ui="light"] .instpop .txt b { color: var(--text) }
-body[data-ui="light"] :is(.sigmodal, .docmodal, .sharemodal) > * { box-shadow: var(--shadow-pop) }
+body[data-ui="light"] :is(.sigmodal, .docmodal) > * { box-shadow: var(--shadow-pop) }
 
 /* ---- the switch itself: a sun in the dark, a moon in the light ---- */
 .resume.uimode svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8;

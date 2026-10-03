@@ -560,7 +560,7 @@
 
   }
 
-  /* move and remove, and the tick for extracting, over the thumbnail */
+  /* move and remove, over the thumbnail; a picked page shows by its border */
   function ensureThumbTools(it) {
     if (it.thumbTools || !it.thumb) return;
     const th = it.thumbContent;
@@ -578,22 +578,6 @@
     });
     th.appendChild(tt);
     it.thumbTools = tt;
-
-    const tick2 = document.createElement('button');
-    tick2.className = 'tickbox'; tick2.type = 'button';
-    tick2.title = 'Tick this page for extracting';
-    tick2.setAttribute('aria-pressed', 'false');
-    tick2.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="5 13 10 18 19 6"/></svg>';
-    tick2.addEventListener('click', function (e) {
-      e.stopPropagation();
-      it.pick = !it.pick;
-      pickAnchor = S.items.indexOf(it);
-      syncPicks();
-    });
-    th.appendChild(tick2);
-    it.tickbox = tick2;
-    tick2.classList.toggle('on', !!it.pick);
-    tick2.setAttribute('aria-pressed', it.pick ? 'true' : 'false');
   }
 
   async function ensurePage(it) {
@@ -5679,9 +5663,6 @@
   /* Resolves false only when the reader turned the save down (the desktop
      app's Save dialog, cancelled); a browser download cannot say. */
   async function download(bytes, name, type) {
-    /* saving asks for a free account first (js/account.js, requireSignIn:
-       'save'); the popup closed, nothing is saved */
-    if (EXT.account && EXT.account.need && !(await EXT.account.need())) return false;
     /* the browser is copying the file out and writing it to disk: thumbnails,
        drawn in a worker alongside, wait until that is done rather than
        compete with it */
@@ -5728,7 +5709,7 @@
   /* Selecting pages in the sidebar, as in Acrobat and WPS: a click goes to
      the page, Ctrl/Cmd+click adds a page or takes it out, Shift+click takes
      the run from the last one clicked. The selection is the same set the
-     ticks, Extract and Organize use (it.pick). */
+     border marks, and Extract and Organize use (it.pick). */
   let pickAnchor = -1;
   function thumbClick(it, e) {
     const i = S.items.indexOf(it);
@@ -5810,15 +5791,11 @@
     }
   }, true);
 
-  /* pages ticked in the sidebar */
+  /* pages selected in the sidebar */
   function syncPicks() {
     let n = 0;
     S.items.forEach(function (it) {
       if (it.pick) n++;
-      if (it.tickbox) {
-        it.tickbox.classList.toggle('on', !!it.pick);
-        it.tickbox.setAttribute('aria-pressed', it.pick ? 'true' : 'false');
-      }
       if (it.thumb) it.thumb.classList.toggle('picked', !!it.pick);
     });
     document.body.classList.toggle('picking', n > 0);
@@ -5860,7 +5837,7 @@
     $('exNote').innerHTML = p.length
       ? '<b>' + p.length + '</b> of ' + n + ' pages \u00b7 ' + esc(formatRanges(p)) +
         '<br>Numbers follow the order shown in the sidebar.'
-      : 'Type page numbers \u2014 <b>1-3, 7, 12-15</b> \u2014 or tick pages in the sidebar.';
+      : 'Type page numbers \u2014 <b>1-3, 7, 12-15</b> \u2014 or Ctrl+click pages in the sidebar.';
   }
 
   function prepExtract() {
@@ -6030,7 +6007,7 @@
         esc(formatRanges(p)) +
         (p.length === 1 ? '<br>One .jpg, at the size you pick above.'
                         : '<br>One .jpg per page, delivered together in a .zip.')
-      : 'Type page numbers \u2014 <b>1-3, 7, 12-15</b> \u2014 or tick pages in the sidebar.';
+      : 'Type page numbers \u2014 <b>1-3, 7, 12-15</b> \u2014 or Ctrl+click pages in the sidebar.';
   }
 
   function prepJpg() {
@@ -6508,7 +6485,7 @@
   /* Anything a module has put on top of the page and that owns Escape itself. */
   function overlayOpen() {
     const on = document.querySelector(
-      '.sigmodal:not([hidden]), .docmodal:not([hidden]), .sharemodal:not([hidden]), ' +
+      '.sigmodal:not([hidden]), .docmodal:not([hidden]), ' +
       '.orgview:not([hidden]), .cthread:not([hidden]), .sheet.show, .pop:not([hidden])'
     );
     return !!on;

@@ -381,74 +381,6 @@ body[data-tool="select"] .anno .redact-mk { cursor: move }
 .docnote .bad { color: var(--danger) }
 .docbox .btn:disabled { opacity: .45; cursor: default }
 
-/* ---------------------------------------------------------------
-   Share & review
-   --------------------------------------------------------------- */
-
-.livebadge {
-  font-size: 11px; letter-spacing: .04em; text-transform: uppercase;
-  padding: 3px 9px; border-radius: 999px; margin-right: 8px;
-  border: 1px solid var(--line); color: var(--text-dim); white-space: nowrap;
-}
-.livebadge[data-tone="ok"]     { color: #3FB950; border-color: #1F5B2E }
-.livebadge[data-tone="review"] { color: #D9A441; border-color: #6B4E12 }
-
-.sharemodal {
-  position: fixed; inset: 0; z-index: 93; background: rgba(0,0,0,.62);
-  display: flex; align-items: center; justify-content: center; padding: 18px;
-}
-.sharemodal[hidden] { display: none }
-.sharebox {
-  width: min(620px, 100%); max-height: calc(100vh - 36px);
-  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 12px;
-  box-shadow: 0 24px 60px rgba(0,0,0,.6); color: var(--text);
-  display: flex; flex-direction: column;
-}
-.sharebox header {
-  display: flex; align-items: center; gap: 9px;
-  padding: 12px 14px; border-bottom: 1px solid var(--line);
-}
-.sharebox .grow { flex: 1 }
-.sharebox .x {
-  background: none; border: 0; color: var(--text-dim); font-size: 22px;
-  line-height: 1; cursor: pointer; padding: 0 4px;
-}
-.sharebox .x:hover { color: var(--text) }
-.sharebody { padding: 14px; overflow: auto; display: flex; flex-direction: column; gap: 10px }
-.sharebody h4 { margin: 2px 0; font-size: 13px }
-.sharebody hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; width: 100% }
-.shnote { margin: 0; font-size: 12.5px; color: var(--text-dim); line-height: 1.55 }
-.shnote.small { font-size: 11.5px }
-.shnote .bad, .shwarn { color: var(--danger) }
-.shwarn { margin: 0; font-size: 12.5px }
-.shrow, .shfresh { display: flex; align-items: center; gap: 8px; flex-wrap: wrap }
-.shfresh { flex-direction: row; margin-top: 8px }
-.shfresh .shnote { flex-basis: 100%; margin-top: 4px }
-.shlab {
-  font-size: 11px; text-transform: uppercase; letter-spacing: .04em;
-  color: var(--text-dim); width: 78px; flex: none;
-}
-.shrow input, .shfresh input {
-  flex: 1; min-width: 160px; background: var(--stage); color: var(--text);
-  border: 1px solid var(--line); border-radius: 7px; padding: 7px 9px;
-  font: inherit; font-size: 12px;
-}
-.shgrid { display: flex; flex-direction: column; gap: 8px }
-.shacts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 4px }
-.shacts.spread { justify-content: space-between }
-.shcount { color: var(--text-dim); font-weight: 400; font-size: 12px }
-.shlist { display: flex; flex-direction: column; gap: 7px }
-.shitem {
-  display: flex; align-items: center; gap: 9px;
-  border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px;
-}
-.shitem.off { opacity: .5 }
-.shmeta { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0 }
-.shmeta b { font-size: 13px }
-.shmeta span { font-size: 11.5px; color: var(--text-dim) }
-.shviews { font-size: 11px !important }
-.sharebox .btn.del:hover { color: var(--danger); border-color: var(--danger) }
-
 /* --- loading / fatal splash --- */
 .shsplash {
   position: fixed; inset: 0; z-index: 96; background: var(--chrome);
@@ -589,7 +521,7 @@ body.panning .panhome { opacity: 0; pointer-events: none }
   .drow select, .drow input, .cbar select { min-height: 38px }
   .anno-sw .sw, .sigcolors .sw { width: 28px; height: 28px }
   .cthread .lnk, .rcitem footer .lnk { padding: 7px 8px }
-  .shitem .btn, .sharebox .btn, .docbox .btn { min-height: 40px }
+  .docbox .btn { min-height: 40px }
   /* hover-only affordances have to be permanently visible on a touch screen */
   .thumb .tools, .ptools { opacity: 1 }
   .panhome { padding: 12px 18px }
@@ -663,7 +595,7 @@ body.panning .panhome { opacity: 0; pointer-events: none }
 @media (max-width: 900px) and (max-height: 480px) {
   .dock .btn { height: 40px }
   .panhome { bottom: calc(52px + env(safe-area-inset-bottom)); padding: 8px 12px }
-  .sigbox, .docbox, .sharebox { max-height: calc(100vh - 20px) }
+  .sigbox, .docbox { max-height: calc(100vh - 20px) }
   #sigCanvas { height: 130px }
 }
 
@@ -1001,6 +933,20 @@ body.props-in-ribbon #panTool .markpop[hidden] { display: none }
 body.props-in-ribbon #panTool .markpop .mtitle,
 body.props-in-ribbon #panTool .markpop .mtitle + .mdiv { display: none }
 #panTool .toolprops[hidden] { display: none }
+/* a mark's own controls (a signature's Change / Ink / Keep proportions, a
+   leader's Arrow / Dot, an image's Crop) stack in rows on the floating panel;
+   in the ribbon they run in one row, so the tab keeps the height it has for
+   every other tool */
+body.props-in-ribbon #panTool #mpExt,
+body.props-in-ribbon #panTool #mpExt > div,
+body.props-in-ribbon #panTool #mpExt .row {
+  display: flex; flex-direction: row; align-items: center; flex-wrap: nowrap; gap: 8px;
+}
+body.props-in-ribbon #panTool #mpExt .btn {
+  height: 30px; width: auto !important; flex: none !important; min-width: 0; max-width: none;
+  flex-direction: row; padding: 0 12px; border-radius: 7px; white-space: nowrap;
+}
+#panTool #mpExt .btn::after { content: none }
 
 /* ---------- Illustrator-style cursors ----------
    Thin black lines on a white halo, so they read on light and dark drawings.
@@ -1280,3 +1226,10 @@ body:not([data-ui="light"]) .pgrid .psq { border-color: rgba(255,255,255,.25) }
 .wdmenu button:hover { background: rgba(127,127,127,.14) }
 .wdmenu button.on { background: rgba(20,115,230,.12); color: var(--marker-ink) }
 .wdmenu button i { display: block; width: 54px; background: currentColor; border-radius: 1px; flex: none }
+
+/* The Drawing Tool tab joins the row when a tool or a mark is picked up. The
+   tabs close up a little then, so the bar stays on one row and the ribbon
+   does not drop down and change size between tools. */
+@media (min-width: 761px) and (max-width: 1600px) {
+  .tabs:has(.tab.ctx:not([hidden])) .tab { padding: 0 9px }
+}
