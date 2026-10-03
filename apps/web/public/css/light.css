@@ -75,6 +75,7 @@ body[data-ui="light"] :is(.btn .cnt, .texted .acts button.ok) { color: var(--acc
 body[data-ui="light"] .thumb .badge,
 body[data-ui="light"] .pagebox.added .ptools::before { background: var(--marker); color: var(--accent-ink) }
 body[data-ui="light"] .hit-item mark { background: rgba(255, 196, 0, .45); color: inherit }
+body[data-ui="light"] .hit-item.active mark { background: rgba(255, 120, 0, .4) }
 body[data-ui="light"] .pined figure { background: #F1F2F4 }
 
 /* ---- the pages on the desk ---- */

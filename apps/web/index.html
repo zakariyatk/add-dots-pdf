@@ -277,7 +277,10 @@
       <div class="rail-body" id="railFind" hidden="">
         <div class="search-wrap">
           <input class="search-in" id="findIn" placeholder="Search this document" aria-label="Search this document">
+          <button class="btn findstep" id="findPrev" type="button" title="Previous match (Shift+Enter)" aria-label="Previous match" disabled=""><svg viewBox="0 0 24 24"><polyline points="6 15 12 9 18 15"></polyline></svg></button>
+          <button class="btn findstep" id="findNext" type="button" title="Next match (Enter)" aria-label="Next match" disabled=""><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
         </div>
+        <div class="findnow" id="findNow" hidden=""></div>
         <div class="hitcount" id="hitCount"></div>
         <div id="hitList"></div>
       </div>

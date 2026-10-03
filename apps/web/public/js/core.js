@@ -6127,7 +6127,7 @@
   });
 
   /* ---------------- search ---------------- */
-  function invalidateSearch() { S.hits = []; S.hitIndex = -1; $('hitList').innerHTML = ''; hitsShown = 0; if (S.query) runSearch(); }
+  function invalidateSearch() { S.hits = []; S.hitIndex = -1; $('hitList').innerHTML = ''; hitsShown = 0; showFindNow(); if (S.query) runSearch(); }
 
   async function textOf(it) {
     const key = it.src.id + ':' + it.num;
@@ -6155,6 +6155,18 @@
   $('findIn').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); if (S.hits.length) stepHit(e.shiftKey ? -1 : 1); }
   });
+  $('findPrev').addEventListener('click', function () { stepHit(-1); });
+  $('findNext').addEventListener('click', function () { stepHit(1); });
+  /* where you are in the matches, big enough to read at a glance, as in Foxit */
+  function showFindNow() {
+    const n = S.hits.length, h = S.hits[S.hitIndex];
+    $('findPrev').disabled = $('findNext').disabled = n < 2;
+    $('findNow').hidden = !h;
+    if (h) {
+      $('findNow').innerHTML = '<b>' + (S.hitIndex + 1).toLocaleString() + '</b> of ' + n.toLocaleString() +
+        (n >= MAX_HITS ? '+' : '') + '<span>Page ' + h.page + '</span>';
+    }
+  }
 
   async function runSearch() {
     thumbsPause();
@@ -6164,7 +6176,7 @@
   async function searchNow() {
     const q = $('findIn').value.trim();
     S.query = q; S.hits = []; S.hitIndex = -1;
-    $('hitList').innerHTML = ''; hitsShown = 0; revealFor = null; clearMarks();
+    $('hitList').innerHTML = ''; hitsShown = 0; revealFor = null; clearMarks(); showFindNow();
     if (q.length < 2) { $('hitCount').textContent = q ? 'Type at least two characters' : ''; return; }
     $('hitCount').textContent = 'Reading text…';
     const needle = q.toLowerCase();
@@ -6247,6 +6259,7 @@
     const was = $('hitList').children[S.hitIndex];
     if (was) was.classList.remove('active');
     S.hitIndex = i;
+    showFindNow();
     showHits(i + 1);                              /* a step past the rows written so far */
     const el = $('hitList').children[i];
     if (el) el.classList.add('active');
