@@ -302,7 +302,7 @@ try {
         after: page.workers().map((w) => w.url().replace(/^.*\//, '')),
       },
     );
-    await page.click('#btnSave');
+    await page.click('#btnSaveAs');
     const [dl] = await Promise.all([
       page.waitForEvent('download', { timeout: 60000 }),
       page.click('#saveGo'),
@@ -611,7 +611,7 @@ try {
     );
     /* saved: nothing is kept any more */
     await page.evaluate(() => window.ADDPDF.recoverNow());
-    await page.click('#btnSave');
+    await page.click('#btnSaveAs');
     const [dl] = await Promise.all([
       page.waitForEvent('download', { timeout: 60000 }),
       page.click('#saveGo'),
@@ -749,8 +749,8 @@ try {
     await open(page, MIXED);
     found.document = await audit();
     const title = await page.textContent('#docTitle');
-    /* Save from the keyboard: focus goes into the popover, Escape brings it back */
-    await page.focus('#btnSave');
+    /* Save as… from the keyboard: focus goes into the popover, Escape brings it back */
+    await page.focus('#btnSaveAs');
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => !document.getElementById('savePop').hidden);
     found.save = await audit();
@@ -779,7 +779,7 @@ try {
     );
     check(
       'a popover opened from the keyboard takes the focus, and Escape gives it back',
-      inSave === 'saveName' && backSave === 'btnSave' && inAdd === 'addPdf' && backAdd === 'btnAdd',
+      inSave === 'saveName' && backSave === 'btnSaveAs' && inAdd === 'addPdf' && backAdd === 'btnAdd',
       { inSave, backSave, inAdd, backAdd },
     );
     check('no errors on the page', errors.length === 0, errors);
@@ -847,7 +847,7 @@ try {
         id: 'm1',
       });
     });
-    await page.click('#btnSave');
+    await page.click('#btnSaveAs');
     await page.click('#saveGo');
     await page.waitForFunction(() => window.__saved.length === 1);
     await page.waitForTimeout(300);
@@ -1019,7 +1019,7 @@ try {
       window.ADDPDF.S.items[1].shapes.push({ t: 'rect', a: [60, 60], b: [260, 160], c: '#E2483D', w: 3 }),
     );
     const save = async () => {
-      await page.click('#btnSave');
+      await page.click('#btnSaveAs');
       const [dl] = await Promise.all([
         page.waitForEvent('download', { timeout: 60000 }),
         page.click('#saveGo'),
@@ -1049,7 +1049,7 @@ try {
       { pages: now.getPageCount(), annots: annots(now), contents: [contents(was), contents(now)] },
     );
     /* with "Flatten markups" on, the box is painted into the page */
-    await page.click('#btnSave');
+    await page.click('#btnSaveAs');
     await page.check('#saveFlat');
     const [dlFlat] = await Promise.all([
       page.waitForEvent('download', { timeout: 60000 }),
@@ -1064,7 +1064,7 @@ try {
         contents: contents(flat),
       },
     );
-    await page.click('#btnSave');
+    await page.click('#btnSaveAs');
     await page.uncheck('#saveFlat');
     await page.click('#saveCancel');
     /* and the app opens it again */
@@ -1321,7 +1321,7 @@ try {
     });
 
     await open(page, PREFILLED);
-    await page.click('#btnSave');
+    await page.click('#btnSaveAs');
     const [dl] = await Promise.all([
       page.waitForEvent('download', { timeout: 60000 }),
       page.click('#saveGo'),
@@ -1594,7 +1594,7 @@ try {
         worker: await page.evaluate(() => window.ADDPDF.renderWorker()),
       },
     );
-    await page.click('#btnSave');
+    await page.click('#btnSaveAs');
     let dl = null;
     page.once('download', (d) => (dl = d));
     await page.click('#saveGo');
@@ -1615,7 +1615,7 @@ try {
     await page.keyboard.press('Escape');
     /* the one that opens without a password but is still encrypted */
     await open(page, join(FIX, 'encrypted-open.pdf'));
-    await page.click('#btnSave');
+    await page.click('#btnSaveAs');
     await page.click('#saveGo');
     await page
       .waitForFunction(
@@ -1669,7 +1669,7 @@ try {
       .then(() => true)
       .catch(() => false);
     check('search over it completes', done, await page.textContent('#hitCount'));
-    await page.click('#btnSave');
+    await page.click('#btnSaveAs');
     const dl = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.click('#saveGo')])
       .then((r) => r[0])
       .catch(() => null);
@@ -2197,6 +2197,40 @@ try {
       'area highlight, pen and stamp: selected, moved and scaled after placing',
       Object.values(results).every((x) => x.selected && x.moved && x.scaled),
       results,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- Save goes straight to the system's Save dialog, with no popover first ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, MIXED);
+    await page.evaluate(() => {
+      window.__saved = null;
+      /* the browser's own Save dialog, answered: a file in the folder picked */
+      window.showSaveFilePicker = async (o) => {
+        window.__asked = o.suggestedName;
+        return {
+          name: o.suggestedName,
+          createWritable: async () => ({
+            write: async (b) => (window.__saved = b.size || b.byteLength),
+            close: async () => {},
+          }),
+        };
+      };
+    });
+    await page.click('#btnQSave');
+    await page.waitForFunction(() => window.__saved, null, { timeout: 30000 }).catch(() => {});
+    const q = await page.evaluate(() => ({
+      asked: window.__asked,
+      bytes: window.__saved,
+      popover: !document.getElementById('savePop').hidden,
+    }));
+    check(
+      'Save opens the system Save dialog at once and writes the PDF there, no popover',
+      q.asked === 'smoke-mixed-60p-edited.pdf' && q.bytes > 1000 && !q.popover,
+      q,
     );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();

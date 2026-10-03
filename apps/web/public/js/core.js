@@ -5746,6 +5746,86 @@
     }
   }
 
+  /* Save in one step. Where the browser can (Chrome, Edge), its own Save
+     dialog asks for the folder and the name first — it has to open while
+     the click still counts — and the PDF is built and written there. The
+     Windows and phone apps have their own dialog (EXT.saveFile, in
+     download()); other browsers save it as a download, which goes where
+     the browser keeps them (or asks, if it is set to). */
+  let saving = false;
+  async function quickSave() {
+    if (!S.items.length || saving) return;
+    closePops();
+    const name = /\.pdf$/i.test($('saveName').value.trim()) ? $('saveName').value.trim() : S.baseName + '-edited.pdf';
+    let handle = null;
+    if (!EXT.saveFile && window.showSaveFilePicker) {
+      try {
+        handle = await window.showSaveFilePicker({
+          suggestedName: name,
+          types: [{ description: 'PDF document', accept: { 'application/pdf': ['.pdf'] } }]
+        });
+      } catch (e) {
+        if (e && e.name === 'AbortError') return;      /* the dialog was cancelled */
+        handle = null;                                  /* not allowed here: a download instead */
+      }
+    }
+    saving = true;
+    const was = $('btnSave').textContent;
+    $('btnSave').disabled = true; $('btnSave').textContent = 'Saving…';
+    try {
+      const photos = livePins().length > 0;
+      const blob = await buildPdf(S.items, null, { photos: photos, append: true, annots: true }, 'blob');
+      let saved = name;
+      if (handle) {
+        const w = await handle.createWritable();
+        await w.write(blob);
+        await w.close();
+        saved = handle.name;
+      } else {
+        const done = await download(blob, name);
+        if (done === false) return;                     /* the app's dialog, cancelled */
+        if (typeof done === 'string') saved = done;
+      }
+      toast('Saved <b>' + esc(saved) + '</b>');
+      S.baseCount = S.items.length;
+      clearRecovery();
+    } catch (e) {
+      toast(esc(saveError(e)));
+    } finally {
+      saving = false;
+      $('btnSave').disabled = false; $('btnSave').textContent = was;
+    }
+  }
+
+  /* Print the document as it stands, marks and all, with the browser's own
+     print dialog: the PDF is built with the marks painted in, loaded into
+     a hidden frame, and printed from there. */
+  async function printDoc() {
+    if (!S.items.length) return;
+    toast('Preparing to print…');
+    let url = null;
+    try {
+      const blob = await buildPdf(S.items, null, { photos: false, annots: false }, 'blob');
+      url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+      const old = document.getElementById('printFrame');
+      if (old) old.remove();
+      const f = document.createElement('iframe');
+      f.id = 'printFrame'; f.title = 'Print';
+      f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+      f.src = url;
+      f.onload = function () {
+        setTimeout(function () {
+          try { f.contentWindow.focus(); f.contentWindow.print(); }
+          catch (e) { window.open(url, '_blank'); }   /* no printing from a frame here: a tab of its own */
+        }, 300);
+      };
+      document.body.appendChild(f);
+      setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
+    } catch (e) {
+      toast(esc(saveError(e, 'The document could not be prepared for printing')));
+    }
+  }
+
   /* Resolves false only when the reader turned the save down (the desktop
      app's Save dialog, cancelled); a browser download cannot say. */
   async function download(bytes, name, type) {
@@ -7417,7 +7497,7 @@
       closeEditor(true);
     }
     if (e.target.closest('.pop') || e.target.closest('#btnAdd') ||
-        e.target.closest('#btnSave') || e.target.closest('#btnTr') ||
+        e.target.closest('#btnSave') || e.target.closest('#btnSaveAs') || e.target.closest('#btnTr') ||
         e.target.closest('#btnExtract') || e.target.closest('#btnJpg') ||
         e.target.closest('#pinExpGo')) return;
     if (e.target.closest('[data-a="add"]')) return;
@@ -7507,10 +7587,18 @@
     jpgUpdate();
   });
 
-  $('btnSave').addEventListener('click', function () {
+  /* Save, as in any PDF editor: straight to the system's own Save dialog —
+     pick the folder and the name there — with nothing of ours in between.
+     The choices that used to come first (file name, flatten, the site-photo
+     report) are under Save as… (the arrow beside Undo). */
+  $('btnSave').addEventListener('click', quickSave);
+  $('btnQSave').addEventListener('click', quickSave);
+  $('btnSaveAs').addEventListener('click', function () {
     if (!S.items.length) return;
-    $('savePop').hidden ? openPop('savePop', $('btnSave')) : closePops();
+    $('savePop').hidden ? openPop('savePop', $('btnSaveAs')) : closePops();
   });
+  $('btnQOpen').addEventListener('click', function () { pickNew(); });
+  $('btnQPrint').addEventListener('click', printDoc);
   $('saveCancel').addEventListener('click', closePops);
   $('saveGo').addEventListener('click', function () {
     let n = $('saveName').value.trim() || (S.baseName + '-edited.pdf');
@@ -7932,7 +8020,8 @@
     if (mod && e.key.toLowerCase() === 'f') {
       e.preventDefault(); setRail(true); switchTab('find'); return;
     }
-    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); $('btnSave').click(); return; }
+    if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); quickSave(); return; }
+    if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); printDoc(); return; }
     if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
     if (e.key === 'Escape') {
       closePops();
