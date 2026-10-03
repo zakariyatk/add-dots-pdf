@@ -440,12 +440,8 @@
       Array.prototype.forEach.call($('orgGrid').children, function (c, i) {
         c.classList.toggle('picked', !!S.items[i].pick);
       });
-      /* keep the sidebar ticks and the Extract counter in step */
+      /* keep the sidebar selection and the Extract counter in step */
       S.items.forEach(function (it) {
-        if (it.tickbox) {
-          it.tickbox.classList.toggle('on', !!it.pick);
-          it.tickbox.setAttribute('aria-pressed', it.pick ? 'true' : 'false');
-        }
         if (it.thumb) it.thumb.classList.toggle('picked', !!it.pick);
       });
       document.body.classList.toggle('picking', n > 0);
@@ -561,7 +557,7 @@
 
     X.organize = {
       open: openOrganize, close: closeOrganize, moveTo: moveTo, moveMany: moveMany, parseRanges: parseRanges,
-      /* the ticked pages (it.pick), from the sidebar's selection bar too */
+      /* the selected pages (it.pick), from the sidebar's selection bar too */
       rotateSelected: rotateSelected, removeSelected: removeSelected,
       duplicateSelected: duplicateSelected, extractSelected: extractSelected
     };

@@ -560,7 +560,7 @@
 
   }
 
-  /* move and remove, and the tick for extracting, over the thumbnail */
+  /* move and remove, over the thumbnail; a picked page shows by its border */
   function ensureThumbTools(it) {
     if (it.thumbTools || !it.thumb) return;
     const th = it.thumbContent;
@@ -578,22 +578,6 @@
     });
     th.appendChild(tt);
     it.thumbTools = tt;
-
-    const tick2 = document.createElement('button');
-    tick2.className = 'tickbox'; tick2.type = 'button';
-    tick2.title = 'Tick this page for extracting';
-    tick2.setAttribute('aria-pressed', 'false');
-    tick2.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="5 13 10 18 19 6"/></svg>';
-    tick2.addEventListener('click', function (e) {
-      e.stopPropagation();
-      it.pick = !it.pick;
-      pickAnchor = S.items.indexOf(it);
-      syncPicks();
-    });
-    th.appendChild(tick2);
-    it.tickbox = tick2;
-    tick2.classList.toggle('on', !!it.pick);
-    tick2.setAttribute('aria-pressed', it.pick ? 'true' : 'false');
   }
 
   async function ensurePage(it) {
@@ -4573,18 +4557,14 @@
       }
     }, 30);
   });
-  $('pinLoad').addEventListener('click', function () {
-    if (!S.items.length) return;
-    $('pinProjIn').click();
-  });
 
-  /* ---- exports from the Properties tab ---- */
-  /* The single Export Report button opens a chooser; whichever format is picked
-     runs here and shows its progress on that same button. */
+  /* ---- exports, from the Save popover ---- */
+  /* The Export report button opens a chooser under Save; whichever format is
+     picked runs here and shows its progress on that same button. */
   $('pinExpGo').addEventListener('click', function () {
     if (!livePins().length) { toast('Add at least one pin first'); return; }
     if (viewerBusy) return;
-    $('expPop').hidden ? openPop('expPop', this) : closePops();
+    $('expPop').hidden ? openPop('expPop', $('btnSave')) : closePops();
   });
 
   $('expAsPdf').addEventListener('click', async function () {
@@ -4592,6 +4572,7 @@
     if (!livePins().length) { toast('Add at least one pin first'); return; }
     const btn = $('pinExpGo');
     btn.disabled = true; btn.textContent = 'Building…';
+    toast('Building the report…');
     try {
       const name = S.baseName + '-pins.pdf';
       download(await buildPdf(S.items, null, { photos: true }, 'blob'), name);
@@ -4599,7 +4580,7 @@
     } catch (err) {
       toast(esc(saveError(err, 'The report could not be built')));
     } finally {
-      btn.disabled = false; btn.textContent = 'Export Report';
+      btn.disabled = false; btn.textContent = 'Export report';
     }
   });
 
@@ -4637,6 +4618,7 @@
     btn.disabled = true;
     /* ask for the folder first, while the click still counts as a user gesture */
     const dir = await pickFolder();
+    toast('Building the web viewer…');
     const base = S.baseName.replace(/[^\w.-]+/g, '-') || 'document';
     const assetDir = base + '-assets';
     try {
@@ -4720,7 +4702,7 @@
       toast('The viewer could not be built — try again');
     } finally {
       viewerBusy = false;
-      btn.disabled = false; btn.textContent = 'Export Report';
+      btn.disabled = false; btn.textContent = 'Export report';
     }
   });
 
@@ -5679,9 +5661,6 @@
   /* Resolves false only when the reader turned the save down (the desktop
      app's Save dialog, cancelled); a browser download cannot say. */
   async function download(bytes, name, type) {
-    /* saving asks for a free account first (js/account.js, requireSignIn:
-       'save'); the popup closed, nothing is saved */
-    if (EXT.account && EXT.account.need && !(await EXT.account.need())) return false;
     /* the browser is copying the file out and writing it to disk: thumbnails,
        drawn in a worker alongside, wait until that is done rather than
        compete with it */
@@ -5728,7 +5707,7 @@
   /* Selecting pages in the sidebar, as in Acrobat and WPS: a click goes to
      the page, Ctrl/Cmd+click adds a page or takes it out, Shift+click takes
      the run from the last one clicked. The selection is the same set the
-     ticks, Extract and Organize use (it.pick). */
+     border marks, and Extract and Organize use (it.pick). */
   let pickAnchor = -1;
   function thumbClick(it, e) {
     const i = S.items.indexOf(it);
@@ -5810,15 +5789,11 @@
     }
   }, true);
 
-  /* pages ticked in the sidebar */
+  /* pages selected in the sidebar */
   function syncPicks() {
     let n = 0;
     S.items.forEach(function (it) {
       if (it.pick) n++;
-      if (it.tickbox) {
-        it.tickbox.classList.toggle('on', !!it.pick);
-        it.tickbox.setAttribute('aria-pressed', it.pick ? 'true' : 'false');
-      }
       if (it.thumb) it.thumb.classList.toggle('picked', !!it.pick);
     });
     document.body.classList.toggle('picking', n > 0);
@@ -5860,7 +5835,7 @@
     $('exNote').innerHTML = p.length
       ? '<b>' + p.length + '</b> of ' + n + ' pages \u00b7 ' + esc(formatRanges(p)) +
         '<br>Numbers follow the order shown in the sidebar.'
-      : 'Type page numbers \u2014 <b>1-3, 7, 12-15</b> \u2014 or tick pages in the sidebar.';
+      : 'Type page numbers \u2014 <b>1-3, 7, 12-15</b> \u2014 or Ctrl+click pages in the sidebar.';
   }
 
   function prepExtract() {
@@ -6030,7 +6005,7 @@
         esc(formatRanges(p)) +
         (p.length === 1 ? '<br>One .jpg, at the size you pick above.'
                         : '<br>One .jpg per page, delivered together in a .zip.')
-      : 'Type page numbers \u2014 <b>1-3, 7, 12-15</b> \u2014 or tick pages in the sidebar.';
+      : 'Type page numbers \u2014 <b>1-3, 7, 12-15</b> \u2014 or Ctrl+click pages in the sidebar.';
   }
 
   function prepJpg() {
@@ -6152,7 +6127,7 @@
   });
 
   /* ---------------- search ---------------- */
-  function invalidateSearch() { S.hits = []; S.hitIndex = -1; $('hitList').innerHTML = ''; hitsShown = 0; if (S.query) runSearch(); }
+  function invalidateSearch() { S.hits = []; S.hitIndex = -1; $('hitList').innerHTML = ''; hitsShown = 0; showFindNow(); if (S.query) runSearch(); }
 
   async function textOf(it) {
     const key = it.src.id + ':' + it.num;
@@ -6180,6 +6155,18 @@
   $('findIn').addEventListener('keydown', function (e) {
     if (e.key === 'Enter') { e.preventDefault(); if (S.hits.length) stepHit(e.shiftKey ? -1 : 1); }
   });
+  $('findPrev').addEventListener('click', function () { stepHit(-1); });
+  $('findNext').addEventListener('click', function () { stepHit(1); });
+  /* where you are in the matches, big enough to read at a glance, as in Foxit */
+  function showFindNow() {
+    const n = S.hits.length, h = S.hits[S.hitIndex];
+    $('findPrev').disabled = $('findNext').disabled = n < 2;
+    $('findNow').hidden = !h;
+    if (h) {
+      $('findNow').innerHTML = '<b>' + (S.hitIndex + 1).toLocaleString() + '</b> of ' + n.toLocaleString() +
+        (n >= MAX_HITS ? '+' : '') + '<span>Page ' + h.page + '</span>';
+    }
+  }
 
   async function runSearch() {
     thumbsPause();
@@ -6189,7 +6176,7 @@
   async function searchNow() {
     const q = $('findIn').value.trim();
     S.query = q; S.hits = []; S.hitIndex = -1;
-    $('hitList').innerHTML = ''; hitsShown = 0; revealFor = null; clearMarks();
+    $('hitList').innerHTML = ''; hitsShown = 0; revealFor = null; clearMarks(); showFindNow();
     if (q.length < 2) { $('hitCount').textContent = q ? 'Type at least two characters' : ''; return; }
     $('hitCount').textContent = 'Reading text…';
     const needle = q.toLowerCase();
@@ -6272,6 +6259,7 @@
     const was = $('hitList').children[S.hitIndex];
     if (was) was.classList.remove('active');
     S.hitIndex = i;
+    showFindNow();
     showHits(i + 1);                              /* a step past the rows written so far */
     const el = $('hitList').children[i];
     if (el) el.classList.add('active');
@@ -6508,7 +6496,7 @@
   /* Anything a module has put on top of the page and that owns Escape itself. */
   function overlayOpen() {
     const on = document.querySelector(
-      '.sigmodal:not([hidden]), .docmodal:not([hidden]), .sharemodal:not([hidden]), ' +
+      '.sigmodal:not([hidden]), .docmodal:not([hidden]), ' +
       '.orgview:not([hidden]), .cthread:not([hidden]), .sheet.show, .pop:not([hidden])'
     );
     return !!on;
@@ -7258,7 +7246,7 @@
     popFrom = anchor || null;
     if (id === 'extractPop') prepExtract();
     if (id === 'jpgPop') prepJpg();
-    if (id === 'savePop') $('savePhotosRow').hidden = !livePins().length;
+    if (id === 'savePop') $('savePhotosRow').hidden = $('savePinsRow').hidden = !livePins().length;
     if (id === 'trPop') {
       $('trGo').textContent = TR.on ? 'Update translation' : 'Show translation';
       $('trCancel').textContent = TR.on ? 'Turn off' : 'Cancel';

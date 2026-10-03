@@ -6,8 +6,9 @@
    can set window.ADDDOTS_CONFIG before this runs: what it sets wins, the
    rest comes from here. */
 window.ADDDOTS_CONFIG = Object.assign({
-  /* Accounts are off: no Sign in anywhere, and every tool and every save
-     works without one. To turn them back on, put back the Supabase project
+  /* Sign in and Share are not in the app for now (they come back as a
+     feature later, with js/account.js and js/share.js from git history), so
+     nothing reads these settings yet. For accounts, the Supabase project is
      "add-dots-pdf" (organisation adddots, Mumbai):
        supabaseUrl: 'https://jrdbuifhcxwyjxgyaowz.supabase.co',
        supabaseKey: 'sb_publishable_LD1GNGGp9Q9aHwcws71gRQ_C76ri7J9', */

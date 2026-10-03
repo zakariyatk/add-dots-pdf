@@ -23,7 +23,6 @@
 <link rel="stylesheet" href="css/app.css">
 <link rel="stylesheet" href="css/pro.css">
 <link rel="stylesheet" href="css/light.css">
-<link rel="stylesheet" href="css/account.css">
 <link rel="stylesheet" href="css/wps.css">
 
 <script src="js/health.js"></script>
@@ -77,9 +76,6 @@
     </div>
     <span class="grow"></span>
     <span class="meta" id="meta" title="SDS-JD-048 R0 - RESUBMIT - MV GF Doory Type D1 Main Entrance Door.pdf · 3.2 MB · 4p"></span>
-    <div class="grp" id="grpAccount" hidden="">
-      <button class="btn acct" id="btnAccount" aria-haspopup="dialog" aria-label="Sign in" title="Sign in to your ADD DOTS account"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span class="lbl" id="acctLbl">Sign in</span></button>
-    </div>
     <div class="grp" id="grpUi">
       <button class="btn uimode" id="btnUi" title="Switch to dark interface" aria-label="Switch to dark interface"><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg></button>
     </div>
@@ -228,7 +224,7 @@
     <button class="btn" id="cropAll" hidden="">Apply crop to all pages</button>
     <button class="btn" id="cropReset" hidden="">Reset crop</button>
     <span class="grow"></span>
-    <button class="btn" id="modeDone">Done</button>
+    <button class="btn primary" id="modeDone">Done</button>
   </div>
 
   <div class="main">
@@ -250,15 +246,7 @@
           </div>
           <div class="row">
             <button class="btn" id="pinRenum" title="Number pins 1…n in page order">Renumber</button>
-            <button class="btn" id="pinSave" title="Save your pins and photos so you can carry on later — the drawing stays separate">Save project</button>
           </div>
-          <div class="row">
-            <button class="btn" id="pinLoad" title="Open a saved project (.json) or an exported viewer report (.html) onto this drawing">Open project</button>
-          </div>
-        </div>
-        <div class="pinexp">
-          <span>Export</span>
-          <button class="btn primary" id="pinExpGo" title="Export the pins and photos as a PDF or a web viewer" disabled="">Export Report</button>
         </div>
         <div class="pincount" id="pinCount"></div>
         <div id="pinList"></div>
@@ -289,7 +277,10 @@
       <div class="rail-body" id="railFind" hidden="">
         <div class="search-wrap">
           <input class="search-in" id="findIn" placeholder="Search this document" aria-label="Search this document">
+          <button class="btn findstep" id="findPrev" type="button" title="Previous match (Shift+Enter)" aria-label="Previous match" disabled=""><svg viewBox="0 0 24 24"><polyline points="6 15 12 9 18 15"></polyline></svg></button>
+          <button class="btn findstep" id="findNext" type="button" title="Next match (Enter)" aria-label="Next match" disabled=""><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
         </div>
+        <div class="findnow" id="findNow" hidden=""></div>
         <div class="hitcount" id="hitCount"></div>
         <div id="hitList"></div>
       </div>
@@ -331,9 +322,6 @@
           <button data-go="hRecent"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>Recent files</button>
         </nav>
         <span class="grow"></span>
-        <div class="hacct" id="hAccount" hidden="">
-          <button class="hacct-btn" id="hAcctBtn" aria-haspopup="dialog"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span><b id="hAcctName">Sign in</b><small id="hAcctSub">One account on every device</small></span></button>
-        </div>
         <div class="safe">
           <svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path><polyline points="8.5 12 11 14.5 15.5 9.5"></polyline></svg>
           <span>Private by design. Your files are opened and edited on this device — nothing is uploaded.</span>
@@ -348,7 +336,6 @@
               <p>Read, edit, mark up, pin site photos, organize and convert your PDFs.</p>
             </div>
             <button class="resume uimode" id="hUi" title="Switch to dark interface"><svg class="sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg><svg class="moon" viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"></path></svg><span id="hUiLbl">Dark mode</span></button>
-            <button class="resume hacct-top" id="hAcctTop" aria-haspopup="dialog" hidden=""><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"></circle><path d="M4 21a8 8 0 0 1 16 0"></path></svg><span id="hAcctTopLbl">Sign in</span></button>
             <button class="resume" id="hResume" hidden="">Back to <b id="hResumeName"></b> →</button>
           </div>
 
@@ -431,114 +418,6 @@
 </div>
 
 <div class="scrim" id="scrim"></div>
-
-<!-- Sign in / create account (js/account.js). One form per step; the code
-     steps take the 6-digit code Supabase emails. -->
-<div class="authdlg" id="authDlg" role="dialog" aria-modal="true" aria-labelledby="authTitle" aria-describedby="authSub" hidden="">
-  <div class="authcard">
-    <button class="authx" id="authClose" type="button" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"></path></svg></button>
-    <!-- beside the forms when a save asks for an account (js/account.js) -->
-    <aside class="authpromo" aria-label="What a free account gives you">
-      <span class="authfree">100% FREE</span>
-      <h3>Your PDF is ready to save</h3>
-      <p>One free account, and every tool is yours. No payment, no card, no trial.</p>
-      <ul>
-        <li>Edit text, images and pages</li>
-        <li>Annotate, highlight, sign and fill forms</li>
-        <li>Merge, split, compress and convert</li>
-        <li>Share for review and comments</li>
-        <li>The web, Windows, Android and iOS</li>
-      </ul>
-      <p class="authsafe">Your documents stay on your device.</p>
-    </aside>
-    <div class="authbrand">ADD DOTS <em>PDF</em></div>
-    <h2 id="authTitle">Sign in</h2>
-    <p class="authsub" id="authSub"></p>
-    <div class="authmsg" id="authMsg" role="alert" hidden=""></div>
-
-    <form data-view="signin" novalidate>
-      <div class="authsso" data-sso="" hidden="">
-        <button class="authprov" type="button" data-provider="google"><svg class="g" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"></path><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z"></path><path fill="#FBBC05" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14z"></path><path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10c.8-2.4 3-4.1 5.6-4.1z"></path></svg>Continue with Google</button>
-        <button class="authprov" type="button" data-provider="apple"><svg class="a" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9a4.8 4.8 0 0 0-3.8-2c-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9a5 5 0 0 0-4.2 2.6c-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.8 2.6 3.1 2.5 1.3-.1 1.7-.8 3.3-.8 1.5 0 1.9.8 3.3.8 1.4 0 2.2-1.2 3-2.5.9-1.4 1.3-2.8 1.4-2.9-.1 0-2.7-1-2.7-4zM13.9 5.1c.7-.8 1.2-2 1-3.1-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.4z"></path></svg>Continue with Apple</button>
-        <p class="author"><span>or with email</span></p>
-      </div>
-      <label for="aSiEmail">Email</label>
-      <input id="aSiEmail" name="email" type="email" autocomplete="username" required>
-      <label for="aSiPw">Password</label>
-      <input id="aSiPw" name="password" type="password" autocomplete="current-password" required>
-      <button class="authgo" type="submit">Sign in</button>
-      <div class="authlinks"><a href="#" data-go="forgot">Forgot password?</a><a href="#" data-go="signup">Create an account</a></div>
-    </form>
-
-    <form data-view="signup" novalidate hidden="">
-      <div class="authsso" data-sso="" hidden="">
-        <button class="authprov" type="button" data-provider="google"><svg class="g" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"></path><path fill="#34A853" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z"></path><path fill="#FBBC05" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14z"></path><path fill="#EA4335" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10c.8-2.4 3-4.1 5.6-4.1z"></path></svg>Continue with Google</button>
-        <button class="authprov" type="button" data-provider="apple"><svg class="a" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M16.4 12.6c0-2.6 2.1-3.8 2.2-3.9a4.8 4.8 0 0 0-3.8-2c-1.6-.2-3.1.9-3.9.9-.8 0-2-.9-3.4-.9a5 5 0 0 0-4.2 2.6c-1.8 3.1-.5 7.7 1.3 10.2.8 1.2 1.8 2.6 3.1 2.5 1.3-.1 1.7-.8 3.3-.8 1.5 0 1.9.8 3.3.8 1.4 0 2.2-1.2 3-2.5.9-1.4 1.3-2.8 1.4-2.9-.1 0-2.7-1-2.7-4zM13.9 5.1c.7-.8 1.2-2 1-3.1-1 0-2.2.7-2.9 1.5-.6.7-1.2 1.9-1 3 1.1.1 2.2-.6 2.9-1.4z"></path></svg>Continue with Apple</button>
-        <p class="author"><span>or with email</span></p>
-      </div>
-      <label for="aSuEmail">Email</label>
-      <input id="aSuEmail" name="email" type="email" autocomplete="username" required>
-      <label for="aSuPw">Password</label>
-      <input id="aSuPw" name="password" type="password" autocomplete="new-password" minlength="8" required aria-describedby="aSuHint">
-      <p class="authhint" id="aSuHint">At least 8 characters.</p>
-      <button class="authgo" type="submit">Create account</button>
-      <p class="authhint">By creating an account you agree to the <a href="privacy.html" data-go="privacy">privacy policy</a>.</p>
-      <div class="authlinks"><span>Have an account?</span><a href="#" data-go="signin">Sign in</a></div>
-    </form>
-
-    <form data-view="verify" novalidate hidden="">
-      <label for="aVeCode">6-digit code</label>
-      <input id="aVeCode" name="code" class="authcode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required>
-      <button class="authgo" type="submit">Confirm email</button>
-      <p class="authhint">The email has a link instead of a code? Click the link, then come back and <a href="#" data-go="signin">sign in</a>.</p>
-      <div class="authlinks"><a href="#" data-resend="">Send a new code</a><a href="#" data-go="signup">Use a different email</a></div>
-    </form>
-
-    <form data-view="forgot" novalidate hidden="">
-      <label for="aFoEmail">Email</label>
-      <input id="aFoEmail" name="email" type="email" autocomplete="username" required>
-      <button class="authgo" type="submit">Send code</button>
-      <div class="authlinks"><a href="#" data-go="signin">Back to sign in</a></div>
-    </form>
-
-    <form data-view="reset" novalidate hidden="">
-      <label for="aReCode">6-digit code</label>
-      <input id="aReCode" name="code" class="authcode" inputmode="numeric" autocomplete="one-time-code" maxlength="10" required>
-      <label for="aRePw">New password</label>
-      <input id="aRePw" name="password" type="password" autocomplete="new-password" minlength="8" required>
-      <p class="authhint">At least 8 characters.</p>
-      <button class="authgo" type="submit">Set new password</button>
-      <p class="authhint">The email has a link instead of a code? Click it: you set the new password on the page it opens, then sign in here with it.</p>
-      <div class="authlinks"><a href="#" data-resend="">Send a new code</a><a href="#" data-go="signin">Back to sign in</a></div>
-    </form>
-
-    <form data-view="newpw" novalidate hidden="">
-      <label for="aNpPw">New password</label>
-      <input id="aNpPw" name="password" type="password" autocomplete="new-password" minlength="8" required>
-      <p class="authhint">At least 8 characters.</p>
-      <button class="authgo" type="submit">Set new password</button>
-    </form>
-
-    <form data-view="account" novalidate hidden="">
-      <p class="authnote">Your documents stay on this device. Your account is the same on the web, Windows, Android and iOS.</p>
-      <button class="authgo" type="submit">Sign out</button>
-      <div class="authlinks"><a href="privacy.html" data-go="privacy">Privacy policy</a><a href="#" data-go="delete">Delete account…</a></div>
-    </form>
-
-    <form data-view="delete" novalidate hidden="">
-      <p class="authnote">This deletes your ADD DOTS account and your sign-in on every device, at once. It cannot be undone. Documents on your devices are not touched.</p>
-      <label for="aDePw">Password</label>
-      <input id="aDePw" name="password" type="password" autocomplete="current-password" required>
-      <button class="authgo authdanger" type="submit">Delete my account</button>
-      <div class="authlinks"><a href="#" data-go="account">Keep my account</a></div>
-    </form>
-
-    <div data-view="privacy" hidden="">
-      <div class="authpolicy" id="authPolicy" tabindex="0" role="region" aria-label="Privacy policy"></div>
-      <div class="authlinks"><a href="#" data-back="">Back</a></div>
-    </div>
-  </div>
-</div>
 
 <div class="sheet" id="moreSheet" role="dialog" aria-label="More options" aria-modal="true" hidden="">
   <div class="grab"></div>
@@ -724,6 +603,15 @@
     Add linked photo pages for the pins</label>
   <label class="chk" id="saveFlatRow" title="Off: highlights, notes, ink, boxes, lines, text boxes and stamps are saved as PDF comments, which Acrobat and other readers can edit. On: they are painted into the page for good."><input type="checkbox" id="saveFlat">
     Flatten markups into the page</label>
+  <!-- the site-photo extras, once the drawing has pins; a saved project opens
+       again with Open, like any file -->
+  <div class="savepins" id="savePinsRow" hidden="">
+    <label>Site photos</label>
+    <div class="row">
+      <button class="btn" id="pinSave" style="flex:1" title="Save your pins and photos so you can carry on later — the drawing stays separate">Save project</button>
+      <button class="btn" id="pinExpGo" style="flex:1" title="Export the pins and photos as a PDF or a web viewer" disabled="">Export report</button>
+    </div>
+  </div>
   <div class="note" id="saveNote"></div>
   <div class="row" style="margin-top:10px">
     <button class="btn primary" id="saveGo" style="flex:1">Save PDF</button>
@@ -1212,13 +1100,11 @@
 <script src="js/skin.js"></script>
 <script src="js/books.js"></script>
 <script src="js/toolprops.js"></script>
-<script src="js/share.js"></script>
 <script src="js/toolbar.js"></script>
 <script src="js/site-nav.js"></script>
 <script src="js/pwa.js"></script>
 <script src="js/desktop.js"></script>
 <script src="js/mobile.js"></script>
 <script src="js/config.js"></script>
-<script src="js/account.js"></script>
 </body>
 </html>

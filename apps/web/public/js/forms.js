@@ -494,25 +494,70 @@
       X.toast('Signature changed');
     }
 
+    /* Nothing goes on the page until you say where, as in Acrobat and WPS:
+       after Place the signature is in hand, and a click puts it there at its
+       usual size (centred on the click), or a drag draws the box it fills. */
+    let sigHand = null;          /* { img, kind } while the tool is in hand */
+    let sigPress = null;         /* { it, from } between press and release */
+    function sigBox(it, from, to, img) {
+      if (!to) {
+        const v = it.page.view, pw = v[2] - v[0];
+        const w = Math.min(pw * 0.34, 210), h = w * img.h / img.w;
+        return [[from[0] - w / 2, from[1] - h / 2], [from[0] + w / 2, from[1] + h / 2]];
+      }
+      /* the dragged box, with the signature's own proportions: its width
+         decides, the height follows, growing the way the drag went */
+      const w = Math.abs(to[0] - from[0]), h = w * img.h / img.w;
+      const x = Math.min(from[0], to[0]);
+      const y = to[1] >= from[1] ? from[1] : from[1] - h;
+      return [[x, y], [x + w, y + h]];
+    }
+    function sigShape(box) {
+      return {
+        t: 'sig', id: 'sig' + Date.now().toString(36), kind: sigHand.kind,
+        url: sigHand.img.url, iw: sigHand.img.w, ih: sigHand.img.h, a: box[0], b: box[1]
+      };
+    }
+    X.hints.sigplace = 'Click on the page where the signature goes, or drag to draw its size.';
+    X.toolBtn.sigplace = 'btnSign';
+    X.tools.sigplace = {
+      down: function (it, at, e) {
+        if (!sigHand || !it.page) return;
+        try { it.capture.setPointerCapture(e.pointerId); } catch (err) { /* a mouse works without it */ }
+        sigPress = { it: it, from: it.vp.convertToPdfPoint(at[0], at[1]), x: e.clientX, y: e.clientY, drag: false };
+      },
+      move: function (it, at, e) {
+        if (!sigPress || sigPress.it !== it) return;
+        if (!sigPress.drag && Math.hypot(e.clientX - sigPress.x, e.clientY - sigPress.y) < 6) return;
+        sigPress.drag = true;
+        const to = it.vp.convertToPdfPoint(at[0], at[1]);
+        X.drawShapes(it, sigShape(sigBox(it, sigPress.from, to, sigHand.img)));
+      },
+      up: function (it, at) {
+        const p = sigPress; sigPress = null;
+        if (!p || p.it !== it || !sigHand) return;
+        const to = p.drag ? it.vp.convertToPdfPoint(at[0], at[1]) : null;
+        let box = sigBox(it, p.from, to, sigHand.img);
+        /* a drag too small to see is taken as a click */
+        if (to && Math.abs(box[1][0] - box[0][0]) < 12) box = sigBox(it, p.from, null, sigHand.img);
+        X.snapshot();
+        it.shapes.push(sigShape(box));
+        sigHand = null;
+        X.setTool('select');
+        S.sel = { it: it, i: it.shapes.length - 1 };
+        X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+        X.toast('Signature placed');
+      },
+      cancel: function (it) { sigPress = null; if (it) X.drawShapes(it); }
+    };
+    X.on('tool', function (t) { if (t !== 'sigplace') { sigHand = null; sigPress = null; } });
+
     function placeOnPage(img) {
       const it = S.items[S.current - 1];
       if (!it || !it.page) { X.toast('Open a page first'); return; }
-      X.snapshot();
-      const v = it.page.view;
-      const pw = v[2] - v[0], ph = v[3] - v[1];
-      const targetW = Math.min(pw * 0.34, 210);
-      const k = targetW / img.w;
-      const dw = img.w * k, dh = img.h * k;
-      /* park it low and right, where a signature usually goes */
-      const x = v[0] + pw * 0.58, y = v[1] + ph * 0.12;
-      it.shapes.push({
-        t: 'sig', id: 'sig' + Date.now().toString(36), kind: sigKind,
-        url: img.url, iw: img.w, ih: img.h,
-        a: [x, y], b: [x + dw, y + dh]
-      });
-      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
-      X.setTool('select');
-      X.toast('Signature placed — drag it where you want it');
+      sigHand = { img: img, kind: sigKind };
+      X.setTool('sigplace');
+      X.toast('Click where the signature goes, or drag to size it');
     }
 
     $('btnSign').addEventListener('click', function () {
