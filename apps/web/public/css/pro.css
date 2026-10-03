@@ -1327,3 +1327,4 @@ body .rail-tabs .btn.on:not(#railClose) {
   background: var(--marker); border-color: var(--marker); color: var(--accent-ink, #050505);
   font-weight: 650; box-shadow: 0 1px 3px color-mix(in srgb, var(--marker) 40%, transparent);
 }
+.markpop .mfield[hidden] { display: none }

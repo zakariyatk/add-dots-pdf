@@ -2120,6 +2120,88 @@ try {
     await tctx.close();
   }
 
+  /* ---- every mark stays editable once placed: select, move, scale ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, MIXED);
+    const drag = async (x1, y1, x2, y2) => {
+      await page.mouse.move(x1, y1);
+      await page.mouse.down();
+      await page.mouse.move(x2, y2, { steps: 8 });
+      await page.mouse.up();
+      await page.waitForTimeout(250);
+    };
+    const r = await page.evaluate(() => {
+      const it = window.ADDPDF.S.items[0];
+      it.box.scrollIntoView({ block: 'start' });
+      const b = it.anno.getBoundingClientRect();
+      return { x: b.left, y: Math.max(b.top, 160) };
+    });
+    await page.waitForTimeout(300);
+    const results = {};
+    for (const [t, place] of [
+      ['hlarea', () => drag(r.x + 80, r.y + 60, r.x + 220, r.y + 110)],
+      ['ink', () => drag(r.x + 260, r.y + 60, r.x + 360, r.y + 130)],
+      ['stamp', () => page.mouse.click(r.x + 150, r.y + 220)],
+    ]) {
+      await page.evaluate((t) => window.ADDPDF.setTool(t), t);
+      await place();
+      await page.waitForTimeout(250);
+      const i = await page.evaluate(() => window.ADDPDF.S.items[0].shapes.length - 1);
+      await page.evaluate(() => window.ADDPDF.setTool('select'));
+      /* pick it up where it is drawn, and drag it */
+      const box = () =>
+        page.evaluate((i) => {
+          const s = window.ADDPDF.S.items[0].shapes[i];
+          let P = [];
+          if (s.quads) s.quads.forEach((q) => P.push([q[0], q[1]], [q[2], q[3]]));
+          else if (s.pts) P = s.pts;
+          else P = [s.a, s.b];
+          const xs = P.map((q) => q[0]),
+            ys = P.map((q) => q[1]);
+          return [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
+        }, i);
+      const at = await page.evaluate((i) => {
+        const X = window.ADDPDF,
+          it = X.S.items[0],
+          s = it.shapes[i];
+        const p = s.pts
+          ? s.pts[Math.floor(s.pts.length / 2)]
+          : s.quads
+            ? [s.quads[0][0] + 4, s.quads[0][1] + 4]
+            : [(s.a[0] + s.b[0]) / 2, s.a[1] + 2];
+        const v = it.vp.convertToViewportPoint(p[0], p[1]);
+        const b = it.anno.getBoundingClientRect();
+        return [b.left + v[0] - it.off.left, b.top + v[1] - it.off.top];
+      }, i);
+      const b0 = await box();
+      await drag(at[0], at[1], at[0] + 30, at[1] + 20);
+      const b1 = await box();
+      const selected = await page.evaluate((i) => !!window.ADDPDF.S.sel && window.ADDPDF.S.sel.i === i, i);
+      /* the corner furthest down and right scales it */
+      const k = await page.evaluate(() => {
+        const ks = [...document.querySelectorAll('.anno .hnd .kn')].map((e) => e.getBoundingClientRect());
+        const r = ks.sort((a, b) => b.x + b.y - (a.x + a.y))[0];
+        return r ? [r.x + r.width / 2, r.y + r.height / 2] : null;
+      });
+      if (k) await drag(k[0], k[1], k[0] + 40, k[1] + 30);
+      const b2 = await box();
+      results[t] = {
+        selected,
+        moved: b1[0] !== b0[0],
+        scaled: b2[2] - b2[0] > b1[2] - b1[0] + 1,
+      };
+      await page.keyboard.press('Escape');
+    }
+    check(
+      'area highlight, pen and stamp: selected, moved and scaled after placing',
+      Object.values(results).every((x) => x.selected && x.moved && x.scaled),
+      results,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- Merge PDFs joins every file picked into one document, never a tab each ---- */
   {
     const mctx = await browser.newContext({

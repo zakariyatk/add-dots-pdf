@@ -341,10 +341,16 @@
           el.style.stroke = s.c;
           el.style.strokeWidth = Math.max(1, (y2 - y1) * 0.07 * S.scale * 1.6);
         }
-        el.style.pointerEvents = 'all';
-        el.style.cursor = 'pointer';
-        el.addEventListener('click', function (e) { e.stopPropagation(); openThread(it, idx); });
         g.appendChild(el);
+        /* underline and strike-out are thin: grab them by the words they mark */
+        const hit = document.createElementNS(SVGNS, 'rect');
+        hit.setAttribute('x', x1); hit.setAttribute('y', y1);
+        hit.setAttribute('width', x2 - x1); hit.setAttribute('height', y2 - y1);
+        hit.style.fill = 'transparent';
+        hit.style.pointerEvents = 'all';
+        hit.style.cursor = S.tool === 'select' ? 'move' : 'pointer';
+        grab(hit, it, idx);
+        g.appendChild(hit);
       });
       if (s.note && s.note.text) g.appendChild(noteFlag(it, s, vp, idx));
       return g;
@@ -377,9 +383,7 @@
       pl.style.fill = 'none';
       pl.style.strokeLinecap = 'round';
       pl.style.strokeLinejoin = 'round';
-      if (idx >= 0) pl.addEventListener('pointerdown', function (e) {
-        if (S.tool === 'select') { e.stopPropagation(); selectShape(it, idx); }
-      });
+      if (idx >= 0) pl.addEventListener('pointerdown', function (e) { X.beginDrag(it, idx, e, 'move'); });
       g.appendChild(pl);
       return g;
     }
@@ -405,7 +409,7 @@
         ln.style.stroke = 'rgba(0,0,0,.5)'; ln.style.strokeWidth = 1.4;
         g.appendChild(ln);
       }
-      g.addEventListener('click', function (e) { e.stopPropagation(); openThread(it, idx); });
+      grab(g, it, idx);
       return g;
     }
 
@@ -437,16 +441,65 @@
       t.style.letterSpacing = (h * 0.03) + 'px';
       g.appendChild(t);
       g.style.pointerEvents = 'all';
-      if (idx >= 0) g.addEventListener('pointerdown', function (e) {
-        if (S.tool === 'select') { e.stopPropagation(); selectShape(it, idx); }
-      });
+      g.style.cursor = 'move';
+      if (idx >= 0) g.addEventListener('pointerdown', function (e) { X.beginDrag(it, idx, e, 'move'); });
       return g;
     }
 
-    function selectShape(it, idx) {
-      S.sel = { it: it, i: idx };
-      S.items.forEach(function (x) { X.drawShapes(x); });
+    /* A highlight, an underline or a note, once placed, is a mark like any
+       other: with Select, pressing it picks it up (drag to move, corners to
+       scale) and a double-click opens its comment. With its own tool in hand
+       a click still opens the comment straight away. */
+    /* The double-click is counted by hand: the first press selects the mark,
+       which draws it again, so the browser's own dblclick never reaches it. */
+    let lastPress = null;
+    function grab(el, it, idx) {
+      if (idx < 0) return;
+      el.addEventListener('pointerdown', function (e) {
+        const now = Date.now(), lp = lastPress;
+        if (S.tool === 'select' && e.button === 0 && lp && lp.it === it && lp.idx === idx &&
+            now - lp.t < 450 && (S.draggedAt || 0) < lp.t) {
+          lastPress = null;
+          e.preventDefault(); e.stopPropagation();
+          openThread(it, idx);
+          return;
+        }
+        lastPress = { it: it, idx: idx, t: now };
+        X.beginDrag(it, idx, e, 'move');
+      });
+      el.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (S.tool === 'select') return;
+        openThread(it, idx);
+      });
     }
+
+    /* a placed stamp can become another stamp, from its properties panel */
+    (function () {
+      const el = document.createElement('div');
+      el.className = 'row';
+      el.innerHTML = '<span class="anno-lbl">Stamp</span><select id="mpStampK" aria-label="Stamp">' +
+        STAMPS.map(function (d) { return '<option value="' + d.k + '">' + d.text + '</option>'; }).join('') +
+        '</select>';
+      el.addEventListener('click', function (e) { e.stopPropagation(); });
+      el.querySelector('select').addEventListener('change', function () {
+        const sel = S.sel, sh = sel && sel.it && sel.it.shapes[sel.i];
+        if (!sh || sh.t !== 'stamp') return;
+        X.snapshot();
+        sh.k = this.value;
+        X.drawShapes(sel.it); X.drawThumb(sel.it); X.updateMeta();
+      });
+      X.markPop.stamp = {
+        el: el,
+        sync: function (sh) { el.querySelector('select').value = sh.k; }
+      };
+    })();
+
+    /* how each one is gripped once selected (core draws the handles) */
+    X.handleKind.markup = 'bbox';
+    X.handleKind.ink = 'bbox';
+    X.handleKind.stamp = 'box';
+    X.handleKind.note = 'point';
 
     X.shapeRenderers.markup = markupEl;
     X.shapeRenderers.ink = inkEl;

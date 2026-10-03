@@ -1824,10 +1824,37 @@
   function rotPt(p, c, deg) { return E.rotPt(p, c, deg); }
   function boxOf(s) { return E.boxOf(s); }
   function shapeMid(s) { return E.shapeMid(s); }
+  /* Marks that are not two points — a highlight's quads, a pen stroke's
+     points, a sticky note's one corner — still have a box around them, which
+     is what moving and scaling them works from. */
+  function markPts(s) {
+    if (s.quads) {
+      const out = [];
+      s.quads.forEach(function (q) { out.push([q[0], q[1]], [q[2], q[3]]); });
+      return out;
+    }
+    if (s.pts && !s.a) return s.pts;
+    if (s.a && s.b) return [s.a, s.b];
+    return s.a ? [s.a] : [];
+  }
+  function markBox(s) {
+    const P = markPts(s);
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    P.forEach(function (p) {
+      x1 = Math.min(x1, p[0]); y1 = Math.min(y1, p[1]);
+      x2 = Math.max(x2, p[0]); y2 = Math.max(y2, p[1]);
+    });
+    return P.length ? { x1: x1, y1: y1, x2: x2, y2: y2 } : { x1: 0, y1: 0, x2: 0, y2: 0 };
+  }
+  function twoPoint(s) { return !!(s.a && s.b && !s.quads && !(s.pts && !s.a)); }
   /* the four corners of a box, turned by its own rotation */
   function rectCorners(s) { return E.rectCorners(s); }
   /* text turns about its own anchor, which is also where pdf-lib turns it */
-  function rotCenter(s) { return E.rotCenter(s); }
+  function rotCenter(s) {
+    if (s.t === 'text' || twoPoint(s)) return E.rotCenter(s);
+    const b = markBox(s);
+    return [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
+  }
   /* the un-turned footprint of a text mark, in PDF points */
   function textRect(s) { return E.textRect(s, textWidth); }
   /* that footprint as four viewport points, turned */
@@ -1968,6 +1995,28 @@
     if (o.m) s.m = [o.m[0] + mx, o.m[1] + my];    /* a third point, e.g. a Leader's elbow */
     if (o.patch) s.patch = Object.assign({}, o.patch, { x: o.patch.x + mx, y: o.patch.y + my });
     if (o.pts && !o.a) s.pts = o.pts.map(function (q) { return [q[0] + mx, q[1] + my]; });
+    if (o.quads) s.quads = o.quads.map(function (q) { return [q[0] + mx, q[1] + my, q[2] + mx, q[3] + my]; });
+  }
+  /* scale a mark's points from the corner opposite the one pulled (ci: 0 top-
+     left … 3 bottom-left of its box, in PDF space); Shift keeps the shape */
+  function scaleMark(s, o, ci, p, uniform) {
+    const b = markBox(o);
+    const C = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
+    const pull = C[ci], fix = C[(ci + 2) % 4];
+    const w = pull[0] - fix[0], h = pull[1] - fix[1];
+    let sx = w ? (p[0] - fix[0]) / w : 1, sy = h ? (p[1] - fix[1]) / h : 1;
+    sx = Math.max(0.05, sx); sy = Math.max(0.05, sy);
+    if (uniform) sx = sy = Math.max(sx, sy);
+    function f(q) { return [fix[0] + (q[0] - fix[0]) * sx, fix[1] + (q[1] - fix[1]) * sy]; }
+    if (o.quads) {
+      s.quads = o.quads.map(function (q) {
+        const a = f([q[0], q[1]]), c = f([q[2], q[3]]);
+        return [Math.min(a[0], c[0]), Math.min(a[1], c[1]), Math.max(a[0], c[0]), Math.max(a[1], c[1])];
+      });
+    }
+    if (o.pts && !o.a) s.pts = o.pts.map(f);
+    if (o.a) s.a = f(o.a);
+    if (o.b) s.b = f(o.b);
   }
 
   function copyShape(s) {
@@ -2111,6 +2160,8 @@
       const kr = EXT.keepRatio[o.t] ? !!EXT.keepRatio[o.t](o) : false;
       if (EXT.keepRatio[o.t]) resizeBox(s, o, d.extra, p, false, kr !== e.shiftKey);
       else resizeBox(s, o, d.extra, p, e.shiftKey);
+    } else if (d.mode === 'bscale') {
+      scaleMark(s, o, d.extra, p, e.shiftKey);
     } else if (d.mode === 'turn') {
       turnShape(s, o, d, p, e.shiftKey);
     } else if (d.mode === 'size') {
@@ -2124,6 +2175,7 @@
   function dragEnd() {
     const d = dragOn; if (!d) return;
     dragOn = null;
+    if (d.moved) S.draggedAt = Date.now();
     if (EXT.snapHide) EXT.snapHide();
     if (d.moved) { drawShapes(d.it); updateMeta(); }
     syncMarkPop();
@@ -2370,10 +2422,15 @@
     $('mpStrokeChip').style.background = s.c;
     $('mpStrokeLbl').textContent = isText ? 'Text' : isBox ? 'Border' : 'Colour';
 
-    $('mpStrokeBtn').hidden = isPic;
-    $('mpStyleWrap').hidden = isText || isPic;
-    $('mpWidthWrap').hidden = isText || isPic;
-    $('mpCapWrap').hidden = isText || isPic;
+    /* marks with no line of their own to style (a highlight, a note, a
+       stamp) and marks that do not turn (those, and a pen stroke) */
+    const noLine = isPic || s.t === 'markup' || s.t === 'note' || s.t === 'stamp';
+    const noTurn = s.t === 'markup' || s.t === 'note' || s.t === 'stamp' || s.t === 'ink';
+    $('mpStrokeBtn').hidden = isPic || s.t === 'stamp';
+    $('mpStyleWrap').hidden = isText || noLine;
+    $('mpWidthWrap').hidden = isText || noLine;
+    $('mpCapWrap').hidden = isText || noLine;
+    $('mpAngle').closest('.mfield').hidden = noTurn;
     $('mpJoinWrap').hidden = !isBox;
     $('mpText').hidden = !isText;
 
@@ -2417,7 +2474,11 @@
     if (!vp || !it.anno) { pop.hidden = true; return; }
     const q = s.t === 'text' ? textQuad(s, vp)
             : s.t === 'rect' ? rectCorners(s).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); })
-            : [vp.convertToViewportPoint(s.a[0], s.a[1]), vp.convertToViewportPoint(s.b[0], s.b[1])];
+            : twoPoint(s) ? [vp.convertToViewportPoint(s.a[0], s.a[1]), vp.convertToViewportPoint(s.b[0], s.b[1])]
+            : (function () {
+                const b = markBox(s);
+                return [vp.convertToViewportPoint(b.x1, b.y1), vp.convertToViewportPoint(b.x2, b.y2)];
+              })();
     const r = it.anno.getBoundingClientRect();
     let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
     q.forEach(function (p) {
@@ -2471,7 +2532,31 @@
        mark here is two points either way, so the drag maths is already right. */
     const kind = EXT.handleKind[s.t] || s.t;
 
-    if (kind === 'rect') {
+    if (kind === 'bbox' || kind === 'point') {
+      /* a box round it; 'bbox' corners scale it, a 'point' mark only moves */
+      const b = markBox(s);
+      const q = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]]
+        .map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+      let qx1 = Infinity, qy1 = Infinity, qx2 = -Infinity, qy2 = -Infinity;
+      q.forEach(function (v) {
+        qx1 = Math.min(qx1, v[0]); qy1 = Math.min(qy1, v[1]);
+        qx2 = Math.max(qx2, v[0]); qy2 = Math.max(qy2, v[1]);
+      });
+      const pad = kind === 'point' ? 4 : 2;
+      const out = document.createElementNS(SVGNS, 'rect');
+      out.setAttribute('class', 'halo');
+      out.setAttribute('x', qx1 - pad); out.setAttribute('y', qy1 - pad);
+      out.setAttribute('width', Math.max(4, qx2 - qx1 + pad * 2));
+      out.setAttribute('height', Math.max(4, qy2 - qy1 + pad * 2));
+      g.appendChild(out);
+      if (kind === 'bbox') {
+        q.forEach(function (v, i) {
+          knob(v, 'bscale', i).dataset.cur = (v[0] - (qx1 + qx2) / 2) * (v[1] - (qy1 + qy2) / 2) > 0 ? 'nwse' : 'nesw';
+        });
+      }
+      return g;
+    }
+    if (kind === 'rect' || kind === 'box') {
       const q = rectCorners(s).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
       const out = document.createElementNS(SVGNS, 'polygon');
       out.setAttribute('class', 'halo'); out.setAttribute('points', vpts(q));
@@ -2481,7 +2566,7 @@
       q.forEach(function (v, i) {
         knob(v, 'corner', i).dataset.cur = (v[0] - cx) * (v[1] - cy) > 0 ? 'nwse' : 'nesw';
       });
-      turnGrip(q[0], q[1]);
+      if (kind === 'rect') turnGrip(q[0], q[1]);      /* a 'box' (a stamp) does not turn */
     } else if (kind === 'line' || kind === 'arrow' || kind === 'ends') {
       const a = vp.convertToViewportPoint(s.a[0], s.a[1]);
       const b = vp.convertToViewportPoint(s.b[0], s.b[1]);
