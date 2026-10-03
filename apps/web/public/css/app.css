@@ -1026,8 +1026,7 @@
           padding-top:env(safe-area-inset-top);box-shadow:12px 0 34px rgba(0,0,0,.45)}
     .rail-tabs .btn{height:38px;font-size:13px}
     #railClose{display:inline-flex;flex:0 0 40px;border-color:var(--line)}
-    .modebar #modeDone{position:sticky;right:0;background:var(--chrome-2);
-                       border-color:var(--line);box-shadow:-14px 0 14px var(--chrome-2)}
+    .modebar #modeDone{position:sticky;right:0;box-shadow:-14px 0 14px var(--chrome-2)}
     .search-in{height:40px;font-size:16px}
     .thumb .tools{opacity:1}
     .thumb .tools button{width:28px;height:28px}

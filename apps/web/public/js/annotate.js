@@ -41,16 +41,16 @@
     /* ---------------- toolbar ---------------- */
 
     const TOOLS = [
-      { t: 'highlight', id: 'tHighlight', label: 'Highlight', key: 'H', shift: true,
+      { t: 'highlight', id: 'tHighlight', label: 'Highlight text', key: 'H', shift: true,
         path: '<path d="M4 20h5l10-10-5-5L4 15z"/><line x1="14" y1="6" x2="18" y2="10"/><line x1="3" y1="21" x2="11" y2="21"/>' },
       /* a box dragged anywhere, text or not (a drawing, a scan) */
-      { t: 'hlarea', id: 'tHlArea', label: 'Area highlight', key: 'G', shift: true,
+      { t: 'hlarea', id: 'tHlArea', label: 'Highlight area', key: 'G', shift: true,
         path: '<rect x="3" y="6" width="18" height="12" rx="1.5" stroke-dasharray="3 2"/><rect x="6" y="9" width="12" height="6" fill="currentColor" stroke="none" opacity=".45"/>' },
       { t: 'underline', id: 'tUnderline', label: 'Underline', key: 'U',
         path: '<path d="M7 4v7a5 5 0 0 0 10 0V4"/><line x1="5" y1="20" x2="19" y2="20"/>' },
       { t: 'strike', id: 'tStrike', label: 'Strike out', key: 'D',
         path: '<path d="M7 7a4 3 0 0 1 8 0"/><path d="M16 15a4 3 0 0 1-8.5 0"/><line x1="3" y1="12" x2="21" y2="12"/>' },
-      { t: 'ink', id: 'tInk', label: 'Pen', key: 'P', shift: true,
+      { t: 'ink', id: 'tInk', label: 'Draw', key: 'P', shift: true,
         path: '<path d="M3 20l3.5-1 11-11a2.1 2.1 0 0 0-3-3l-11 11z"/><line x1="14" y1="6" x2="17" y2="9"/>' },
       { t: 'note', id: 'tNote', label: 'Sticky note', key: 'N',
         path: '<path d="M4 4h16v10l-5 6H4z"/><path d="M20 14h-6v6"/>' },

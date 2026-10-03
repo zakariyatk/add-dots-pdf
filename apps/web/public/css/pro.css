@@ -921,6 +921,13 @@ body.props-in-ribbon #modeBar > * { flex: none }
 }
 #panTool #modeBar .grow { order: 91; flex: 1 }
 #panTool #modeBar #modeDone { order: 92 }
+/* Done finishes the tool the way Save finishes the file: the same blue button */
+#modeDone.primary, #panTool #modeBar #modeDone.primary {
+  background: var(--marker); border-color: transparent; color: var(--accent-ink, #050505); font-weight: 650;
+}
+#modeDone.primary:hover:not(:disabled), #panTool #modeBar #modeDone.primary:hover:not(:disabled) {
+  background: var(--marker); border-color: transparent; filter: brightness(.92);
+}
 #btnToolNow { cursor: pointer }
 
 /* the selected mark's panel, laid into the Drawing Tool tab instead of floating */

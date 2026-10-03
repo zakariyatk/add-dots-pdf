@@ -1718,6 +1718,23 @@ try {
     await page.click('#sigModal [data-m="type"]');
     await page.fill('#sigName', 'Smoke Signer');
     await page.click('#sigApply');
+    await page.waitForTimeout(200);
+    check(
+      'Place puts nothing on the page until you click where it goes',
+      await page.evaluate(
+        () =>
+          window.ADDPDF.S.tool === 'sigplace' && !window.ADDPDF.S.items[0].shapes.some((s) => s.t === 'sig'),
+      ),
+    );
+    {
+      const r = await page.evaluate(() => {
+        const c = window.ADDPDF.S.items[0].capture;
+        c.scrollIntoView({ block: 'start' });
+        const b = c.getBoundingClientRect();
+        return { x: b.left + b.width * 0.6, y: Math.max(b.top, 0) + 200 };
+      });
+      await page.mouse.click(r.x, r.y);
+    }
     await page.waitForFunction(() => window.ADDPDF.S.items[0].shapes.some((s) => s.t === 'sig'));
     const sig = () =>
       page.evaluate(() => {

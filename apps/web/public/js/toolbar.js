@@ -37,8 +37,10 @@
        Draw — it puts a shape on the page like everything else there. */
     const EDIT_GROUPS = [
       { ids: ['tEditPan', 'tSelect'] },
-      { ids: ['tHighlight', 'tHlArea', 'tUnderline', 'tStrike'] },
-      { ids: ['tInk', 'tNote', 'tStamp'] },
+      /* the three you mark a page up with most, side by side */
+      { ids: ['tHighlight', 'tHlArea', 'tInk'] },
+      { ids: ['tUnderline', 'tStrike'] },
+      { ids: ['tNote', 'tStamp'] },
       { ids: ['tCrop', 'tPin'] }
     ];
 
