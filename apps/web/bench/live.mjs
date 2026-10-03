@@ -207,8 +207,8 @@ try {
   const rot = await page.evaluate(() => window.ADDPDF.S.items[window.ADDPDF.S.current - 1].rot);
   check('Page > Rotate turns the page', rot === 90, rot);
 
-  /* Save opens its popover, and Save there downloads the file: no account */
-  await page.click('#btnSave');
+  /* Save as… opens its popover, and Save there downloads the file: no account */
+  await page.click('#btnSaveAs');
   await page.waitForTimeout(300);
   const savePop = await page.evaluate(() => !document.getElementById('savePop').hidden);
   const dl = await Promise.all([page.waitForEvent('download', { timeout: 30000 }), page.click('#saveGo')])

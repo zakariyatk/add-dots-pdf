@@ -140,7 +140,7 @@ for (const f of files) {
         id: 'lim',
       }),
     );
-    await page.click('#btnSave');
+    await page.click('#btnSaveAs');
     const [dl] = await Promise.all([
       page.waitForEvent('download', { timeout: 600000 }),
       page.click('#saveGo'),
