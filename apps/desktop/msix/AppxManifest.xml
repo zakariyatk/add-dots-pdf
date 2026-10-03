@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Microsoft Store package (MSIX) for ADD DOTS PDF. msix/pack.ps1 fills
+     in the version and packs it around the app built by `tauri build`.
+     Identity, Publisher and PublisherDisplayName are the ones Partner Center
+     gave the product (Product management > Product identity); the Store
+     signs the package itself, so they must match exactly. -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap rescap">
+
+  <Identity
+    Name="ADDDOTS.ADDDOTSPDF"
+    Publisher="CN=B4571263-B820-4F66-B107-5B0CC5616541"
+    Version="{VERSION}"
+    ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>ADD DOTS PDF</DisplayName>
+    <PublisherDisplayName>ADD DOTS</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="App" Executable="{EXE}" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements
+        DisplayName="ADD DOTS PDF"
+        Description="Read, edit and mark up PDFs"
+        BackgroundColor="transparent"
+        Square150x150Logo="Assets\Square150x150Logo.png"
+        Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <!-- opens PDFs from Explorer, as the setup .exe's install does -->
+        <uap:Extension Category="windows.fileTypeAssociation">
+          <uap:FileTypeAssociation Name="pdf">
+            <uap:DisplayName>PDF document</uap:DisplayName>
+            <uap:SupportedFileTypes>
+              <uap:FileType ContentType="application/pdf">.pdf</uap:FileType>
+            </uap:SupportedFileTypes>
+          </uap:FileTypeAssociation>
+        </uap:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <!-- a desktop (Win32) app: the Tauri window runs as a normal program -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

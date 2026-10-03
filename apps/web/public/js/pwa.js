@@ -41,7 +41,11 @@
 
   function applyUpdate() {
     if (reloading) return;
-    if (busy()) { toast('An update is ready · reload when you have saved'); return; }
+    /* a document open: a bar that stays until it is answered (js/update.js) */
+    if (busy()) {
+      if (api && api.updateReady) api.updateReady(); else toast('An update is ready · reload when you have saved');
+      return;
+    }
     /* A belt-and-braces stop on reload loops: if anything ever reports an
        update on every load, this turns the second one into a message. */
     var last = 0;

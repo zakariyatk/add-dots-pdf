@@ -1,0 +1,9 @@
+{
+  "_": "The notes 'What's new' shows after an update, and the update bar in the Windows and phone apps. Newest first; edit when releasing. Build time comes from the commit.",
+  "notes": [
+    "Every mark can be selected, moved and resized after placing: highlights, underlines, pen, stamps and notes",
+    "Open, Save and Print buttons next to Home; Save goes straight to the folder you pick",
+    "Merge PDFs joins the files you pick into one document",
+    "Find shows the match you are on clearly, with next and previous buttons"
+  ]
+}

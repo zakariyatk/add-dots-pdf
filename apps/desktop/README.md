@@ -74,3 +74,22 @@ with "Windows cannot access the specified device, path, or file". Signing
 needs a code-signing certificate; with one, Tauri signs during `tauri build`
 (`bundle.windows.certificateThumbprint`, or a signing command for a cloud
 certificate), from secrets added to GitHub.
+
+## Microsoft Store (MSIX)
+
+`msix/` packs the same app as an MSIX for the Microsoft Store, with the
+identity Partner Center gave the product "ADD DOTS PDF" (Store ID
+9PGHPBRMLQMS): `Name ADDDOTS.ADDDOTSPDF`, publisher `ADD DOTS`.
+
+- `msix/AppxManifest.xml`: the package manifest (identity, Start menu
+  logos, opening PDFs from Explorer, `runFullTrust` as a desktop app).
+- `msix/Assets/`: the logos, made from the web app's icon.
+- `msix/pack.ps1 -Version 1.0.N.0`: packs `src-tauri/target/release/adddots-pdf.exe`
+  after `npx tauri build`, with the Windows SDK's `makepri` and `makeappx`.
+
+CI packs it on every run as version `1.0.<run number>.0` (each Store
+submission needs a higher version), installs it signed with a throwaway
+certificate, starts it from its Start menu entry and removes it, then uploads
+the unsigned `.msix` as the `windows-store-msix` artifact. That file is what
+goes to Partner Center: the Store signs it, so no code-signing certificate is
+needed, and Store installs update themselves.

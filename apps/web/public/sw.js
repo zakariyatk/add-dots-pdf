@@ -25,7 +25,7 @@
    Paths are relative so the app works from a subfolder (adddots.com/pdfreader/)
    exactly as it does from a domain root. */
 
-const VERSION = 'v41';
+const VERSION = 'v42';
 const CACHE = 'adpdf-' + VERSION;
 
 /* Everything the app is made of. The pdf.js worker is in here too — without it
@@ -56,6 +56,8 @@ const SHELL = [
   'js/toolbar.js',
   'js/site-nav.js',
   'js/pwa.js',
+  'js/build.js',
+  'js/update.js',
   'js/desktop.js',
   'js/mobile.js',
   'js/config.js',
@@ -190,6 +192,7 @@ self.addEventListener('fetch', function (e) {
 
   const path = url.pathname.slice(scope.length);
   if (path.indexOf('api/') === 0) return;                   /* shares and comments: live only */
+  if (path === 'latest.js') return;                         /* which build the site has: always asked */
 
   /* A review link carries ?t=… — the same document with a different query, so
      every navigation is answered with the home document. */
