@@ -2,46 +2,19 @@
    -------------------
    The WPS look (css/wps.css) over the light interface, with the status bar
    it brings: the sidebar, the page and the zoom along the bottom, as WPS
-   has them. View > Look switches to the plain light interface and back;
-   the choice is remembered on this device. */
+   has them. It is the only look: there is no plain look to switch to. */
 (function () {
   'use strict';
 
   const X = window.ADDPDF;
   if (!X) { console.error('[skin] core bridge missing'); return; }
 
-  const KEY = 'adddots.skin';
-  function stored() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
-  function keep(v) { try { localStorage.setItem(KEY, v); } catch (e) {} }
-  function apply(v) { document.body.dataset.skin = v === 'plain' ? 'plain' : 'wps'; }
-  apply(stored() || 'wps');
+  document.body.dataset.skin = 'wps';
+  /* a device that once chose the plain look forgets it */
+  try { localStorage.removeItem('adddots.skin'); } catch (e) { /* nothing kept */ }
 
   X.on('ready', function () {
     const S = X.S, $ = X.$;
-
-    /* ---------------- View > Look ---------------- */
-    const pan = $('panView');
-    if (pan) {
-      const sep = document.createElement('span'); sep.className = 'sep';
-      const grp = document.createElement('div'); grp.className = 'grp'; grp.id = 'grpLook';
-      const b = document.createElement('button');
-      b.className = 'btn'; b.id = 'btnLook'; b.type = 'button';
-      b.innerHTML = '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/>' +
-        '<line x1="9" y1="9" x2="9" y2="20"/></svg>';
-      const sync = function () {
-        const wps = document.body.dataset.skin === 'wps';
-        b.dataset.label = wps ? 'WPS look' : 'Plain look';
-        b.title = wps ? 'Look: WPS — switch to the plain look' : 'Look: plain — switch to the WPS look';
-        b.setAttribute('aria-label', b.title);
-      };
-      b.addEventListener('click', function () {
-        const next = document.body.dataset.skin === 'wps' ? 'plain' : 'wps';
-        apply(next); keep(next); sync(); paint();
-      });
-      sync();
-      grp.appendChild(b);
-      pan.appendChild(sep); pan.appendChild(grp);
-    }
 
     /* ---------------- the status bar ---------------- */
     const ic = function (p) { return '<svg viewBox="0 0 24 24">' + p + '</svg>'; };

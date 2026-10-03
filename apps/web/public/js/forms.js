@@ -488,7 +488,7 @@
       const y1 = Math.min(s.a[1], s.b[1]), y2 = Math.max(s.a[1], s.b[1]);
       const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2, h = y2 - y1, w = h * img.w / img.h;
       s.url = img.url; s.iw = img.w; s.ih = img.h;
-      delete s.ink; delete s.free;
+      delete s.ink; delete s.lock;
       s.a = [cx - w / 2, cy - h / 2]; s.b = [cx + w / 2, cy + h / 2];
       X.drawShapes(it); X.drawThumb(it); X.updateMeta();
       X.toast('Signature changed');
@@ -505,12 +505,9 @@
         const w = Math.min(pw * 0.34, 210), h = w * img.h / img.w;
         return [[from[0] - w / 2, from[1] - h / 2], [from[0] + w / 2, from[1] + h / 2]];
       }
-      /* the dragged box, with the signature's own proportions: its width
-         decides, the height follows, growing the way the drag went */
-      const w = Math.abs(to[0] - from[0]), h = w * img.h / img.w;
-      const x = Math.min(from[0], to[0]);
-      const y = to[1] >= from[1] ? from[1] : from[1] - h;
-      return [[x, y], [x + w, y + h]];
+      /* the dragged box, as dragged: the signature fills it */
+      return [[Math.min(from[0], to[0]), Math.min(from[1], to[1])],
+              [Math.max(from[0], to[0]), Math.max(from[1], to[1])]];
     }
     function sigShape(box) {
       return {
@@ -539,7 +536,7 @@
         const to = p.drag ? it.vp.convertToPdfPoint(at[0], at[1]) : null;
         let box = sigBox(it, p.from, to, sigHand.img);
         /* a drag too small to see is taken as a click */
-        if (to && Math.abs(box[1][0] - box[0][0]) < 12) box = sigBox(it, p.from, null, sigHand.img);
+        if (to && (Math.abs(box[1][0] - box[0][0]) < 12 || Math.abs(box[1][1] - box[0][1]) < 6)) box = sigBox(it, p.from, null, sigHand.img);
         X.snapshot();
         it.shapes.push(sigShape(box));
         sigHand = null;
@@ -572,10 +569,11 @@
     /* ---------------- the signature as a mark ---------------- */
 
     /* Placed, it is a mark like a picture, as in Acrobat and WPS: drag it,
-       pull a corner to scale it (its proportions held; Shift frees them),
+       pull a corner to scale it (freely; Shift or Keep proportions holds them),
        turn it by the round grip, and the properties panel changes the rest. */
     X.handleKind.sig = 'rect';
-    X.keepRatio.sig = function (s) { return !s.free; };
+    /* corners scale it freely; Keep proportions (or Shift) holds its shape */
+    X.keepRatio.sig = function (s) { return !!s.lock; };
 
     X.shapeRenderers.sig = function (it, s, vp, idx) {
       const a = vp.convertToViewportPoint(s.a[0], s.a[1]);
@@ -653,12 +651,12 @@
           return '<button class="sw" data-ink="' + c + '" style="background:' + c + '" title="Ink ' + c + '"></button>';
         }).join('') + '</div>' +
         '<div class="row" style="gap:6px">' +
-        '<button class="btn" id="mpSigLock" style="flex:1" title="Corners keep the proportions (Shift does the opposite)">Keep proportions</button>' +
+        '<button class="btn" id="mpSigLock" style="flex:1" title="On: corners keep the proportions. Off: they scale freely (Shift does the opposite)">Keep proportions</button>' +
         '<button class="btn" id="mpSigReset" style="flex:1" title="Back to the signature\'s own proportions">Original shape</button></div>';
       X.markPop.sig = {
         el: el,
         sync: function (s) {
-          el.querySelector('#mpSigLock').classList.toggle('on', !s.free);
+          el.querySelector('#mpSigLock').classList.toggle('on', !!s.lock);
           Array.prototype.forEach.call(el.querySelectorAll('[data-ink]'), function (b) {
             b.classList.toggle('on', (s.ink || '') === b.dataset.ink);
           });
@@ -666,7 +664,7 @@
       };
       el.addEventListener('click', function (e) { e.stopPropagation(); });
       el.querySelector('#mpSigLock').addEventListener('click', function () {
-        sigEdit(function (s) { if (s.free) delete s.free; else s.free = true; });
+        sigEdit(function (s) { if (s.lock) delete s.lock; else s.lock = true; });
         X.markPop.sig.sync(selSig());
       });
       el.querySelector('#mpSigReset').addEventListener('click', function () {

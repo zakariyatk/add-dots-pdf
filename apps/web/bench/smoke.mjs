@@ -1770,8 +1770,8 @@ try {
     }
     const s2 = await sig();
     check(
-      'a corner scales it and keeps its proportions',
-      s2.w > s1.w * 1.2 && Math.abs(s2.w / s2.h - s1.w / s1.h) < 0.05,
+      'a corner scales it freely, without holding its proportions',
+      s2.w > s1.w * 1.2 && Math.abs(s2.w / s2.h - s1.w / s1.h) > 0.05,
       { before: [s1.w, s1.h], after: [s2.w, s2.h] },
     );
     await page.fill('#mpAngle', '20');
@@ -2118,6 +2118,67 @@ try {
     );
     check('no errors on the page', errors.length === 0, errors);
     await tctx.close();
+  }
+
+  /* ---- Merge PDFs joins every file picked into one document, never a tab each ---- */
+  {
+    const mctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: 'block',
+    });
+    await mctx.addInitScript(() => {
+      window.ADDDOTS_NO_TABS = false;
+    });
+    const page = await mctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    let [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.click('.tcard[data-tool="merge"]'),
+    ]);
+    await chooser.setFiles([MIXED, COLUMNS]);
+    await page
+      .waitForFunction(() => window.ADDPDF.S.items.length > 60, null, { timeout: 30000 })
+      .catch(() => {});
+    await page.waitForTimeout(500);
+    const one = await page.evaluate(() => ({
+      pages: window.ADDPDF.S.items.length,
+      tabs: window.ADDPDF.tabs.list().length,
+      current: window.ADDPDF.S.current,
+      fresh: window.ADDPDF.S.items.filter((it) => it.added).length,
+    }));
+    check(
+      'Merge PDFs, nothing open: the files picked become one document, opened at page 1',
+      one.pages > 60 && one.tabs === 1 && one.current === 1 && one.fresh === 0,
+      one,
+    );
+    /* with a document open, the merged files open together in one new tab */
+    await page.click('#btnHome');
+    [chooser] = await Promise.all([
+      page.waitForEvent('filechooser'),
+      page.click('.tcard[data-tool="merge"]'),
+    ]);
+    await chooser.setFiles([MIXED, COLUMNS]);
+    await page
+      .waitForFunction(() => window.ADDPDF.tabs.list().length === 2, null, { timeout: 20000 })
+      .catch(() => {});
+    const frame = page.frames().filter((f) => /[?&]tab=/.test(f.url()))[0];
+    let inTab = 0;
+    if (frame) {
+      await frame
+        .waitForFunction(() => window.ADDPDF && window.ADDPDF.S.items.length > 60, null, { timeout: 30000 })
+        .catch(() => {});
+      inTab = await frame.evaluate(() => window.ADDPDF.S.items.length);
+    }
+    const tabs = await page.evaluate(() => window.ADDPDF.tabs.list().length);
+    check('Merge PDFs, a document open: one new tab holds them all', tabs === 2 && inTab === one.pages, {
+      tabs,
+      inTab,
+    });
+    check('no errors on the page', errors.length === 0, errors);
+    await mctx.close();
   }
 } finally {
   await browser.close();

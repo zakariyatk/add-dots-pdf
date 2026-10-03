@@ -5,7 +5,8 @@
    in use in WPS red, actions in WPS blue, and a status bar along the
    bottom with the page and the zoom (js/skin.js). The layout and every
    button stay where they are: this is colour, shape and spacing only.
-   View > Look switches back to the plain light interface.
+   Active tools and main buttons are in Acrobat blue: a solid tile with a
+   white icon for the tool in hand, a blue pill for the main action.
    --------------------------------------------------------------- */
 
 body[data-ui="light"][data-skin="wps"] {
@@ -15,8 +16,8 @@ body[data-ui="light"][data-skin="wps"] {
   --line: #E1E4EA;
   --text: #1F2329;
   --text-dim: #575E6A;
-  --marker: #2563EB;          /* WPS blue, deep enough for white text (5.2:1) */
-  --marker-ink: #1D4ED8;
+  --marker: #1473E6;          /* Acrobat blue, white text on it 4.6:1 */
+  --marker-ink: #0D66D0;
   --wps-red: #C8262C;         /* WPS red, 5:1 on the desk */
   --wps-desk: #F2F4F8;
   --hover: rgba(47, 107, 255, .07);
@@ -88,3 +89,28 @@ body[data-ui="light"][data-skin="wps"] .statusbar[hidden] { display: none }
 .statusbar .sbzoom { width: 120px; accent-color: var(--marker); margin: 0 4px }
 .statusbar .sbpct { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums }
 @media (max-width: 900px) { body[data-ui="light"][data-skin="wps"] .statusbar { display: none } }
+
+/* ---- Acrobat blue: the tool in hand is a solid blue tile, white icon ---- */
+body[data-ui="light"][data-skin="wps"] .ribbon .btn.on,
+body[data-ui="light"][data-skin="wps"] .ribbon .btn.on:hover:not(:disabled) {
+  background: #1473E6; border-color: #1473E6; box-shadow: 0 1px 3px rgba(20, 115, 230, .35);
+}
+body[data-ui="light"][data-skin="wps"] .ribbon .btn.on svg,
+body[data-ui="light"][data-skin="wps"] .ribbon .btn.on::after { color: #FFFFFF; font-weight: 600 }
+/* the small controls in the Drawing Tool tab and the dropdown arrows stay light when on */
+body[data-ui="light"][data-skin="wps"] #panTool #modeBar .btn.on,
+body[data-ui="light"][data-skin="wps"] #panTool .markpop .btn.on {
+  background: #1473E6; border-color: #1473E6; color: #FFFFFF;
+}
+
+/* ---- main actions: a blue pill with white, bold text (Save, Done, Save PDF…) ---- */
+body[data-ui="light"][data-skin="wps"] .btn.primary,
+body[data-ui="light"][data-skin="wps"] .toolchip .btn.primary {
+  background: #1473E6; border-color: transparent; color: #FFFFFF; font-weight: 700;
+  border-radius: 999px; padding-left: 16px; padding-right: 16px;
+}
+body[data-ui="light"][data-skin="wps"] .btn.primary:hover:not(:disabled),
+body[data-ui="light"][data-skin="wps"] .toolchip .btn.primary:hover:not(:disabled) {
+  background: #0D66D0; filter: none;
+}
+body[data-ui="light"][data-skin="wps"] .toolchip .btn:not(.primary) { border-radius: 999px }

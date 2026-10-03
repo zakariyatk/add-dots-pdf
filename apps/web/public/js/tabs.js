@@ -37,13 +37,14 @@
     /* another file, from in here: a tab of its own, made by the bar */
     X.tabs = {
       available: function () { return true; },
-      openFiles: function (files) { up({ t: 'adpdf-tab-open', files: files }); }
+      openFiles: function (files) { up({ t: 'adpdf-tab-open', files: files }); },
+      openMerged: function (files) { up({ t: 'adpdf-tab-open', files: files, merge: true }); }
     };
 
     window.addEventListener('message', function (e) {
       if (e.origin !== location.origin || !e.data || e.data.t !== 'adpdf-tab-files') return;
       const files = e.data.files || [];
-      if (files.length && X.openFiles) X.openFiles(files);
+      if (files.length && X.openFiles) X.openFiles(files, { merge: !!e.data.merge });
     });
 
     X.on('ready', function () {
@@ -128,8 +129,8 @@
       if (t.frame) { try { t.frame.focus(); } catch (e) {} }
     }
 
-    function newTab(files) {
-      const t = { id: ++seq, frame: null, name: '', dirty: false, el: null, files: files, ready: false };
+    function newTab(files, merge) {
+      const t = { id: ++seq, frame: null, name: '', dirty: false, el: null, files: files, ready: false, merge: !!merge };
       const f = document.createElement('iframe');
       f.className = 'dtframe';
       f.title = 'Document';
@@ -190,14 +191,15 @@
       if (e.origin !== location.origin || !e.data || !e.data.t) return;
       const t = byId(e.data.tabId);
       if (e.data.t === 'adpdf-tab-open') {
-        (e.data.files || []).forEach(function (f) { newTab([f]); });
+        if (e.data.merge) newTab(e.data.files || [], true);
+        else (e.data.files || []).forEach(function (f) { newTab([f]); });
         return;
       }
       if (!t) return;
       if (e.data.t === 'adpdf-tab-ready') {
         t.ready = true;
         if (t.files && t.files.length) {
-          t.frame.contentWindow.postMessage({ t: 'adpdf-tab-files', files: t.files }, location.origin);
+          t.frame.contentWindow.postMessage({ t: 'adpdf-tab-files', files: t.files, merge: t.merge }, location.origin);
           t.files = null;
         }
       } else if (e.data.t === 'adpdf-tab-state') {
@@ -224,6 +226,11 @@
       openFiles: function (files) {
         (files || []).filter(function (f) { return /\.pdf$/i.test(f.name || '') || f.type === 'application/pdf'; })
           .forEach(function (f) { newTab([f]); });
+      },
+      /* several PDFs joined into one document, in a tab of its own */
+      openMerged: function (files) {
+        const pdfs = (files || []).filter(function (f) { return /\.pdf$/i.test(f.name || '') || f.type === 'application/pdf'; });
+        if (pdfs.length) newTab(pdfs, true);
       },
       list: function () { return tabs.map(function (t) { return { id: t.id, name: label(t), dirty: dirtyOf(t), active: t.id === active }; }); },
       select: select,
