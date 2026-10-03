@@ -116,6 +116,53 @@ jobs:
           for ($i = 0; $i -lt 30 -and (Test-Path $env:INSTALLED_APP); $i++) { Start-Sleep 1 }
           if (Test-Path $env:INSTALLED_APP) { throw 'the app is still there after uninstalling' }
           'ok  uninstalled'
+      # the Microsoft Store package (apps/desktop/msix): the same app, as an
+      # MSIX with the identity Partner Center gave it. Its version climbs
+      # with every run, as each Store submission needs a higher one.
+      - name: Pack the Store package (MSIX)
+        shell: pwsh
+        run: |
+          $v = "1.0.${{ github.run_number }}.0"
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/msix" | Out-Null
+          pwsh apps/desktop/msix/pack.ps1 -Version $v -Out "$env:RUNNER_TEMP/msix/ADD-DOTS-PDF-$v.msix"
+      # installed as the Store would (signed here with a throwaway certificate
+      # for the Publisher name, which the Store replaces with its own), started
+      # from the Start menu entry, then removed
+      - name: Install and start the MSIX
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msix = Get-ChildItem "$env:RUNNER_TEMP/msix/*.msix" | Select-Object -First 1
+          $test = Join-Path $env:RUNNER_TEMP 'test-signed.msix'
+          Copy-Item $msix.FullName $test
+          $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=B4571263-B820-4F66-B107-5B0CC5616541' `
+            -KeyUsage DigitalSignature -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+          $pw = ConvertTo-SecureString -String 'test' -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath "$env:RUNNER_TEMP/test.pfx" -Password $pw | Out-Null
+          Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP/test.cer" | Out-Null
+          Import-Certificate -FilePath "$env:RUNNER_TEMP/test.cer" -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          & $signtool.FullName sign /fd SHA256 /f "$env:RUNNER_TEMP/test.pfx" /p test $test
+          if ($LASTEXITCODE) { throw "signtool failed ($LASTEXITCODE)" }
+          Add-AppxPackage -Path $test
+          $pkg = Get-AppxPackage -Name 'ADDDOTS.ADDDOTSPDF'
+          if (-not $pkg) { throw 'the MSIX did not install' }
+          "ok  installed $($pkg.PackageFullName)"
+          if (-not (Test-Path (Join-Path $pkg.InstallLocation 'adddots-pdf.exe'))) { throw 'the app is not in the package' }
+          Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!App"
+          $p = $null
+          for ($i = 0; $i -lt 30 -and -not $p; $i++) { Start-Sleep 1; $p = Get-Process adddots-pdf -ErrorAction SilentlyContinue }
+          if (-not $p) { throw 'the packaged app did not start' }
+          'ok  the packaged app starts'
+          $p | Stop-Process -Force
+          Remove-AppxPackage -Package $pkg.PackageFullName
+          'ok  removed'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-store-msix
+          path: ${{ runner.temp }}/msix/*.msix
+          retention-days: 30
       # the unsigned test installer: Windows SmartScreen warns before running
       # it. One setup .exe for this user, no administrator (no .msi: an MSI
       # installs for the whole computer and asks for one)
