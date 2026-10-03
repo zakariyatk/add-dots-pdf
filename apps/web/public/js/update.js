@@ -104,6 +104,7 @@
       const s = document.createElement('script');
       s.src = site() + 'latest.js?t=' + Date.now();
       s.async = true;
+      s.dataset.quiet = '';                /* offline, or not on the site yet: not an error (js/health.js) */
       const done = function () {
         s.remove();
         const v = window.ADDDOTS_LATEST || null;

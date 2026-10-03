@@ -53,6 +53,8 @@
   window.addEventListener('error', function (e) {
     const t = e.target;
     if (t && t !== window && t.tagName) {
+      /* a load that may fail and says so itself (the update check, offline) */
+      if (t.dataset && t.dataset.quiet !== undefined) return;
       /* a script, stylesheet or picture that did not load */
       const src = t.src || t.href || '';
       log('load', t.tagName.toLowerCase() + ' did not load: ' + src.replace(/^.*\//, ''));
