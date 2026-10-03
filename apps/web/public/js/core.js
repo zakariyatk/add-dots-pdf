@@ -6504,14 +6504,37 @@
     const m = it.tl && it.tl.querySelector('mark.hitw.now');
     if (!m) return;
     revealFor = null;
-    const r = m.getBoundingClientRect(), sr = stage.getBoundingClientRect();
-    const dy = r.top < sr.top + 40 || r.bottom > sr.bottom - 40 ? r.top - (sr.top + sr.height / 2) : 0;
-    const dx = r.left < sr.left || r.right > sr.right ? r.left - (sr.left + sr.width / 2) : 0;
     /* the reader's place is the match now: a jump's hold on the top of its
        page (flushResizes) must not pull the view back there */
     jumpHold = null;
+    bringIntoView(m);
+    keepShown(it, 4);
+  }
+  function bringIntoView(m) {
+    const r = m.getBoundingClientRect(), sr = stage.getBoundingClientRect();
+    const dy = r.top < sr.top + 40 || r.bottom > sr.bottom - 40 ? r.top - (sr.top + sr.height / 2) : 0;
+    const dx = r.left < sr.left || r.right > sr.right ? r.left - (sr.left + sr.width / 2) : 0;
     if (dx || dy) stage.scrollBy({ top: dy, left: dx, behavior: 'instant' });
   }
+  /* For a moment after a step, the match is kept in view: pages above it can
+     still take their real size, or its page redraw its words, just after the
+     scroll — which moved the match off screen, or took its mark, with nothing
+     to put it back. The reader scrolling or clicking ends this at once. */
+  let shownCheck = 0;
+  function keepShown(it, n) {
+    clearTimeout(shownCheck);
+    shownCheck = setTimeout(function () {
+      const h = S.hits[S.hitIndex];
+      if (!S.query || !h || S.items[h.page - 1] !== it || !it.tl) return;
+      let m = it.tl.querySelector('mark.hitw.now');
+      if (!m && it.tl.firstChild) { markItem(it); m = it.tl.querySelector('mark.hitw.now'); }
+      if (m) bringIntoView(m);
+      if (n > 1) keepShown(it, n - 1);
+    }, 250);
+  }
+  ['wheel', 'pointerdown', 'touchstart', 'keydown'].forEach(function (ev) {
+    stage.addEventListener(ev, function () { clearTimeout(shownCheck); }, { passive: true });
+  });
 
   /* ---------------- tools & mode bar ---------------- */
   const TOOL_BTN = { select: 'tSelect', rect: 'tRect', line: 'tLine', arrow: 'tArrow', text: 'tText', crop: 'tCrop', pin: 'tPin' };
