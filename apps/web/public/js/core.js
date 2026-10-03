@@ -7592,11 +7592,17 @@
     if (S.items.length) {
       /* a document is open: the tool works on it */
       hideHome();
-      if (t === 'merge') { addMode = 'end'; $('fileAdd').click(); return; }
+      /* with tabs, the files picked become a new merged document of their
+         own; without (the Windows and phone apps), they join this one */
+      if (t === 'merge') {
+        if (inNewTab()) { pendingTool = 'merge'; $('fileIn').click(); }
+        else { addMode = 'end'; $('fileAdd').click(); }
+        return;
+      }
       setTimeout(function () { runTool(t); }, 0);   /* after this click finishes bubbling */
       return;
     }
-    if (t === 'merge') toast('Select two or more PDFs — they are joined in the order you pick them');
+    if (t === 'merge') toast('Select two or more PDFs — they are joined into one, in order');
     pickNew(t);
   });
 
@@ -7729,9 +7735,16 @@
   $('pickBtn').addEventListener('click', function () { pickNew(); });
   /* The picker, and anything else that arrives holding File objects — the
      desktop app hands PDFs here when the operating system opens one with it. */
-  async function takeFiles(files) {
+  async function takeFiles(files, opts) {
     if (!files.length) return;
-    if (inNewTab() && files.some(isPdf)) { EXT.tabs.openFiles(files); return; }
+    /* Merge PDFs: every file picked is joined into one document, in order,
+       like a binder — never a tab each */
+    const merge = !!(opts && opts.merge) || pendingTool === 'merge';
+    if (inNewTab() && files.some(isPdf)) {
+      if (merge && EXT.tabs.openMerged) { pendingTool = null; EXT.tabs.openMerged(files.filter(isPdf)); }
+      else EXT.tabs.openFiles(files);
+      return;
+    }
     const pdfs = files.filter(isPdf);
     const tool = pendingTool; pendingTool = null;
     const proj = await takeProjectFiles(files);
@@ -7753,12 +7766,23 @@
     const rest = files.filter(function (f) {
       return f !== pdfs[0] && !isProjectFile(f) && !isImageFile(f);
     });
-    if (rest.length && S.items.length && EXT.tabs && EXT.tabs.available() && rest.some(isPdf)) {
+    if (rest.length && S.items.length && !merge && EXT.tabs && EXT.tabs.available() && rest.some(isPdf)) {
       EXT.tabs.openFiles(rest.filter(isPdf));
     } else if (rest.length && S.items.length) await insertPdfs(rest, S.items.length);
     if (proj && S.items.length) await applyProject(proj.d, proj.pool, proj.name);
     else flushProject();
-    if (tool) setTimeout(function () { runTool(tool); }, 60);
+    if (merge && pdfs.length > 1) {
+      /* one binder made from scratch: no page in it is "new", and it opens at its start */
+      S.items.forEach(function (it) {
+        it.added = false;
+        if (it.box) it.box.classList.remove('added');
+        const nb = it.thumbContent && it.thumbContent.querySelector('.badge');
+        if (nb) nb.remove();
+      });
+      goTo(1);
+      toast('Merged <b>' + pdfs.length + ' PDFs</b> into one · ' + S.items.length + ' pages');
+    }
+    else if (tool) setTimeout(function () { runTool(tool); }, 60);
   }
 
   $('fileIn').addEventListener('change', function (e) {
