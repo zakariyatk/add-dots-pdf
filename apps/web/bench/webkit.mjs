@@ -101,7 +101,7 @@ try {
       id: 'wk',
     }),
   );
-  await page.click('#btnSave');
+  await page.click('#btnSaveAs');
   const dl = await Promise.all([page.waitForEvent('download', { timeout: 60000 }), page.click('#saveGo')])
     .then((r) => r[0])
     .catch(() => null);

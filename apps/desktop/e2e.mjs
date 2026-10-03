@@ -242,7 +242,7 @@ try {
       w: 2,
       id: 'e2e',
     });
-    document.getElementById('btnSave').click();
+    document.getElementById('btnSaveAs').click();
   });
   await sleep(400);
   await run(() => document.getElementById('saveGo').click());

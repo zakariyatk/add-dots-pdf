@@ -156,7 +156,7 @@ try {
       w: 2,
       id: 'e2e',
     });
-    document.getElementById('btnSave').click();
+    document.getElementById('btnSaveAs').click();
   });
   await sleep(500);
   await page.evaluate(() => document.getElementById('saveGo').click());
