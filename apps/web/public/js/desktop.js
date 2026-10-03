@@ -52,6 +52,9 @@
     if (ArrayBuffer.isView(b)) return Promise.resolve(new Uint8Array(b.buffer, b.byteOffset, b.byteLength));
     return Promise.resolve(new Uint8Array(b));
   }
+  /* an update: this app's page in the Microsoft Store (js/update.js) */
+  api.openStore = function () { return T.core.invoke('open_store'); };
+
   api.saveFile = function (data, name, type) {
     return toBytes(data).then(function (body) {
       return T.core.invoke('save_file', body, {

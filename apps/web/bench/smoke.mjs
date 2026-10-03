@@ -2236,6 +2236,68 @@ try {
     await ctx.close();
   }
 
+  /* ---- updates: what is new after one, and the apps hear of a newer build ---- */
+  {
+    const uctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      serviceWorkers: 'block',
+    });
+    await uctx.addInitScript(() => {
+      /* the Windows app, its desktop side answered here */
+      window.__TAURI__ = {
+        core: {
+          invoke: async (cmd) => {
+            if (cmd === 'open_store') window.__store = true;
+            return cmd === 'launch_files' ? [] : null;
+          },
+        },
+        event: { listen: async () => () => {} },
+      };
+      /* a build seen before this one: this start follows an update */
+      localStorage.setItem('adddots.build.seen', 'an-older-build');
+    });
+    await uctx.route('https://pdf.adddots.com/latest.js*', (r) =>
+      r.fulfill({
+        contentType: 'text/javascript',
+        body:
+          'window.ADDDOTS_LATEST = ' +
+          JSON.stringify({ id: 'newer', time: Date.now() + 86400000, notes: ['A new tool'] }) +
+          ';',
+      }),
+    );
+    const page = await uctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    const bars = [];
+    await page
+      .waitForFunction(
+        () => /updated/.test((document.querySelector('#updBar b') || {}).textContent || ''),
+        null,
+        { timeout: 10000 },
+      )
+      .catch(() => {});
+    bars.push(await page.evaluate(() => (document.querySelector('#updBar b') || {}).textContent || ''));
+    await page.click('#updBar .btn.primary').catch(() => {});
+    await page
+      .waitForFunction(
+        () => /available/.test((document.querySelector('#updBar b') || {}).textContent || ''),
+        null,
+        { timeout: 15000 },
+      )
+      .catch(() => {});
+    bars.push(await page.evaluate(() => (document.querySelector('#updBar b') || {}).textContent || ''));
+    await page.click('#updBar .btn.primary').catch(() => {});
+    const store = await page.evaluate(() => window.__store === true);
+    check(
+      'after an update the app says what is new; the Windows app hears of a newer build and opens the Store',
+      /updated/.test(bars[0]) && /available/.test(bars[1]) && store,
+      { bars, store },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await uctx.close();
+  }
+
   /* ---- Merge PDFs joins every file picked into one document, never a tab each ---- */
   {
     const mctx = await browser.newContext({

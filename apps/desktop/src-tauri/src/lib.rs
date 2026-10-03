@@ -173,6 +173,27 @@ fn main_window(app: &tauri::App) -> tauri::Result<()> {
     Ok(())
 }
 
+/// This app's page in the Microsoft Store, where an update is installed
+/// (the update notice in js/update.js). One fixed address: the page cannot
+/// hand it any other to open.
+const STORE_PAGE: &str = "ms-windows-store://pdp/?productid=9PGHPBRMLQMS";
+
+#[tauri::command]
+fn open_store() -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer")
+            .arg(STORE_PAGE)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        Err(format!("the Microsoft Store ({STORE_PAGE}) is on Windows only"))
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -202,7 +223,7 @@ pub fn run() {
             main_window(app)?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![launch_files, read_file, save_file])
+        .invoke_handler(tauri::generate_handler![launch_files, read_file, save_file, open_store])
         .run(tauri::generate_context!())
         .expect("error while running ADD DOTS PDF");
 }
