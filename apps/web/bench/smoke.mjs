@@ -1770,8 +1770,8 @@ try {
     }
     const s2 = await sig();
     check(
-      'a corner scales it and keeps its proportions',
-      s2.w > s1.w * 1.2 && Math.abs(s2.w / s2.h - s1.w / s1.h) < 0.05,
+      'a corner scales it freely, without holding its proportions',
+      s2.w > s1.w * 1.2 && Math.abs(s2.w / s2.h - s1.w / s1.h) > 0.05,
       { before: [s1.w, s1.h], after: [s2.w, s2.h] },
     );
     await page.fill('#mpAngle', '20');

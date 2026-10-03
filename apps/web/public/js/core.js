@@ -2058,7 +2058,7 @@
   function turnShape(s, o, d, p, snap) {
     const c = rotCenter(o);
     let delta = Math.atan2(p[1] - c[1], p[0] - c[0]) * 180 / Math.PI - d.a0;
-    if (o.t === 'line' || o.t === 'arrow') {
+    if (turnsByEnds(o.t)) {
       if (snap) delta = Math.round(delta / 15) * 15;
       s.a = rotPt(o.a, c, delta);
       s.b = rotPt(o.b, c, delta);
@@ -2333,15 +2333,18 @@
     if (!e.target.closest('#mpSwatches') && !e.target.closest('.cbtn')) closeSwatches();
   });
 
+  /* A mark drawn between two points — a line, an arrow, a dimension, an arc —
+     turns by turning those points: it has no rotation of its own to set. */
+  function turnsByEnds(t) { return t === 'line' || t === 'arrow' || EXT.handleKind[t] === 'line'; }
   /* the angle a mark reads as, and how to set it */
   function markAngle(s) {
-    if (s.t === 'line' || s.t === 'arrow') {
+    if (turnsByEnds(s.t)) {
       return Math.atan2(s.b[1] - s.a[1], s.b[0] - s.a[0]) * 180 / Math.PI;
     }
     return s.r || 0;
   }
   function setMarkAngle(s, deg) {
-    if (s.t === 'line' || s.t === 'arrow') {
+    if (turnsByEnds(s.t)) {
       const c = shapeMid(s), turn = deg - markAngle(s);
       s.a = rotPt(s.a, c, turn);
       s.b = rotPt(s.b, c, turn);
@@ -8214,7 +8217,7 @@
     shCap: shCap, shJoin: shJoin,
     vpts: vpts, textWidth: textWidth, fontIdx: fontIdx,
     dirAngle: dirAngle, shOp: shOp,
-    openPop: openPop, closePops: closePops,
+    openPop: openPop, closePops: closePops, undo: undo,
     invalidateSearch: invalidateSearch,
     isMobile: isMobile,
     openFiles: takeFiles,

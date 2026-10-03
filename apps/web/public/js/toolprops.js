@@ -150,7 +150,69 @@
       if (cur !== 'ribTool') X.setRibbon('ribTool');
     }
 
-    X.on('tool', function () { sync(); });
+    /* ---------------- Done / Cancel beside the work ----------------
+       The Done at the end of the ribbon was easy to miss, and so was the fact
+       that a tool was in hand at all. A small bar comes up instead: first
+       under the tool's name in the ribbon, then beside whatever you draw.
+       Done keeps it all; Cancel takes back everything drawn since the tool
+       was picked up and puts the tool down. */
+    const chip = document.createElement('div');
+    chip.className = 'toolchip'; chip.id = 'toolChip'; chip.hidden = true;
+    chip.setAttribute('role', 'toolbar'); chip.setAttribute('aria-label', 'Tool in hand');
+    chip.innerHTML = '<span class="tc-ico" aria-hidden="true"></span><b class="tc-name"></b>' +
+      '<button type="button" class="btn tc-cancel" id="toolCancel" title="Take back what this tool drew, and put it down (Esc)">Cancel</button>' +
+      '<button type="button" class="btn primary tc-done" id="toolDone" title="Keep it and put the tool down">Done</button>';
+    document.body.appendChild(chip);
+    let chipTool = null, undoMark = null;     /* the last undo step before the tool */
+
+    function chipLive() {
+      return !X.isMobile() && bar.classList.contains('show') && S.tool !== 'select' &&
+        !(X.tools[S.tool] && X.tools[S.tool].bare);
+    }
+    function placeChip(x, y) {
+      chip.hidden = false;
+      const w = chip.offsetWidth, h = chip.offsetHeight;
+      const sr = $('stage').getBoundingClientRect();
+      chip.style.left = Math.max(sr.left + 8, Math.min(sr.right - w - 8, x)) + 'px';
+      chip.style.top = Math.max(sr.top + 8, Math.min(sr.bottom - h - 8, y)) + 'px';
+    }
+    function chipUnderTool() {
+      const r = badge.getBoundingClientRect();
+      placeChip(r.left, Math.max(r.bottom, $('stage').getBoundingClientRect().top) + 10);
+    }
+    function syncChip() {
+      if (!chipLive()) { chip.hidden = true; chipTool = null; return; }
+      if (chipTool === S.tool) return;
+      chipTool = S.tool;
+      undoMark = S.undo[S.undo.length - 1] || null;
+      const b = toolButton(S.tool), svg = b && b.querySelector('svg');
+      chip.querySelector('.tc-ico').innerHTML = svg ? svg.outerHTML : '';
+      chip.querySelector('.tc-name').textContent =
+        (b && (b.dataset.label || b.getAttribute('aria-label'))) || 'Tool';
+      chip.classList.remove('pop'); void chip.offsetWidth; chip.classList.add('pop');
+      requestAnimationFrame(chipUnderTool);
+    }
+    /* after each stroke, click or box on a page, the bar comes to sit beside it */
+    $('stage').addEventListener('pointerup', function (e) {
+      if (chip.hidden || e.target.closest('.toolchip')) return;
+      setTimeout(function () {
+        if (!chip.hidden) placeChip(e.clientX + 18, e.clientY + 18);
+      }, 0);
+    });
+    $('toolDone').addEventListener('click', function () { X.setTool('select'); });
+    $('toolCancel').addEventListener('click', async function () {
+      /* text being typed: Esc throws it away, as it always has */
+      const ta = document.querySelector('.texted textarea');
+      if (S.editing && ta) ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      /* back to the step before the tool; if that has dropped off the end of
+         the undo list, every step left there is this tool's */
+      let n = 0;
+      while (S.undo.length && S.undo[S.undo.length - 1] !== undoMark && n++ < 100) await X.undo();
+      X.setTool('select');
+    });
+    window.addEventListener('resize', function () { if (!chip.hidden) chipUnderTool(); });
+
+    X.on('tool', function () { sync(); syncChip(); });
     /* core shows and hides the mark panel as marks are selected; follow it */
     if (pop && window.MutationObserver) {
       new MutationObserver(function () { sync(); })

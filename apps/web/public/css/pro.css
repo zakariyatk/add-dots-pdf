@@ -1278,3 +1278,52 @@ body:not([data-ui="light"]) .pgrid .psq { border-color: rgba(255,255,255,.25) }
   width: 16px; height: 16px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7;
   stroke-linecap: round; stroke-linejoin: round;
 }
+
+/* ---------- the Drawing Tool tab is as tall as every other tab ---------- */
+body.props-in-ribbon #modeBar, body.props-in-ribbon #panTool .markpop { min-height: 0 }
+/* Done lives in the bar beside the work now (js/toolprops.js), not in the ribbon */
+body.props-in-ribbon #panTool #modeDone { display: none }
+
+/* ---------- Done / Cancel beside the tool in hand ---------- */
+.toolchip {
+  position: fixed; z-index: 40; display: flex; align-items: center; gap: 8px;
+  padding: 6px 6px 6px 10px; border-radius: 10px; background: var(--chrome);
+  border: 1px solid var(--line); box-shadow: 0 6px 22px rgba(0, 0, 0, .22);
+  color: var(--text); font-size: 13px; transition: left .18s ease, top .18s ease;
+}
+.toolchip[hidden] { display: none }
+.toolchip.pop { animation: chipin .35s ease-out }
+@keyframes chipin { 0% { transform: scale(.85); opacity: 0 } 60% { transform: scale(1.05); opacity: 1 } 100% { transform: none } }
+.toolchip .tc-ico { display: flex; color: var(--marker-ink) }
+.toolchip .tc-ico svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
+.toolchip .tc-name { font-weight: 650; margin-right: 4px; white-space: nowrap }
+.toolchip .btn { height: 30px; padding: 0 14px; border-radius: 7px }
+.toolchip .tc-cancel { border-color: var(--line) }
+.toolchip .btn.primary {
+  background: var(--marker); border-color: transparent; color: var(--accent-ink, #050505); font-weight: 650;
+}
+.toolchip .btn.primary:hover:not(:disabled) { background: var(--marker); filter: brightness(.92) }
+@media (prefers-reduced-motion: reduce) { .toolchip { transition: none } .toolchip.pop { animation: none } }
+/* a tool with many controls (Dimension) keeps the row inside the ribbon:
+   the hint gives way first, and is cut to two lines rather than off the edge */
+#panTool { min-width: 0; overflow: hidden }
+body.props-in-ribbon #panTool #modeBar { min-width: 0; flex: 0 1 auto }
+#panTool #modeBar .hint { flex: 0 1 340px; min-width: 120px; -webkit-line-clamp: 3 }
+
+/* ---------- side panel tabs: Pages / Find / Properties / Notes ----------
+   Real buttons in a tidy two-by-two grid: the same size, the names centred,
+   and the open one plainly different — filled blue, the rest outlined. */
+body .rail-tabs { gap: 6px; padding: 10px 10px 4px }
+body .rail-tabs .btn:not(#railClose) {
+  height: 32px; justify-content: center; text-align: center; padding: 0 8px;
+  border: 1px solid var(--line); border-radius: 7px; background: var(--chrome);
+  color: var(--text); font-size: 12.5px; font-weight: 500;
+  box-shadow: 0 1px 1px rgba(0, 0, 0, .04);
+}
+body .rail-tabs .btn:not(#railClose):hover:not(.on) {
+  background: var(--chrome-2); border-color: color-mix(in srgb, var(--marker) 45%, var(--line));
+}
+body .rail-tabs .btn.on:not(#railClose) {
+  background: var(--marker); border-color: var(--marker); color: var(--accent-ink, #050505);
+  font-weight: 650; box-shadow: 0 1px 3px color-mix(in srgb, var(--marker) 40%, transparent);
+}
