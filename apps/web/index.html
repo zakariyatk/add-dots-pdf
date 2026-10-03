@@ -246,15 +246,7 @@
           </div>
           <div class="row">
             <button class="btn" id="pinRenum" title="Number pins 1…n in page order">Renumber</button>
-            <button class="btn" id="pinSave" title="Save your pins and photos so you can carry on later — the drawing stays separate">Save project</button>
           </div>
-          <div class="row">
-            <button class="btn" id="pinLoad" title="Open a saved project (.json) or an exported viewer report (.html) onto this drawing">Open project</button>
-          </div>
-        </div>
-        <div class="pinexp">
-          <span>Export</span>
-          <button class="btn primary" id="pinExpGo" title="Export the pins and photos as a PDF or a web viewer" disabled="">Export Report</button>
         </div>
         <div class="pincount" id="pinCount"></div>
         <div id="pinList"></div>
@@ -608,6 +600,15 @@
     Add linked photo pages for the pins</label>
   <label class="chk" id="saveFlatRow" title="Off: highlights, notes, ink, boxes, lines, text boxes and stamps are saved as PDF comments, which Acrobat and other readers can edit. On: they are painted into the page for good."><input type="checkbox" id="saveFlat">
     Flatten markups into the page</label>
+  <!-- the site-photo extras, once the drawing has pins; a saved project opens
+       again with Open, like any file -->
+  <div class="savepins" id="savePinsRow" hidden="">
+    <label>Site photos</label>
+    <div class="row">
+      <button class="btn" id="pinSave" style="flex:1" title="Save your pins and photos so you can carry on later — the drawing stays separate">Save project</button>
+      <button class="btn" id="pinExpGo" style="flex:1" title="Export the pins and photos as a PDF or a web viewer" disabled="">Export report</button>
+    </div>
+  </div>
   <div class="note" id="saveNote"></div>
   <div class="row" style="margin-top:10px">
     <button class="btn primary" id="saveGo" style="flex:1">Save PDF</button>

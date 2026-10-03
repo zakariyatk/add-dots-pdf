@@ -4557,18 +4557,14 @@
       }
     }, 30);
   });
-  $('pinLoad').addEventListener('click', function () {
-    if (!S.items.length) return;
-    $('pinProjIn').click();
-  });
 
-  /* ---- exports from the Properties tab ---- */
-  /* The single Export Report button opens a chooser; whichever format is picked
-     runs here and shows its progress on that same button. */
+  /* ---- exports, from the Save popover ---- */
+  /* The Export report button opens a chooser under Save; whichever format is
+     picked runs here and shows its progress on that same button. */
   $('pinExpGo').addEventListener('click', function () {
     if (!livePins().length) { toast('Add at least one pin first'); return; }
     if (viewerBusy) return;
-    $('expPop').hidden ? openPop('expPop', this) : closePops();
+    $('expPop').hidden ? openPop('expPop', $('btnSave')) : closePops();
   });
 
   $('expAsPdf').addEventListener('click', async function () {
@@ -4576,6 +4572,7 @@
     if (!livePins().length) { toast('Add at least one pin first'); return; }
     const btn = $('pinExpGo');
     btn.disabled = true; btn.textContent = 'Building…';
+    toast('Building the report…');
     try {
       const name = S.baseName + '-pins.pdf';
       download(await buildPdf(S.items, null, { photos: true }, 'blob'), name);
@@ -4583,7 +4580,7 @@
     } catch (err) {
       toast(esc(saveError(err, 'The report could not be built')));
     } finally {
-      btn.disabled = false; btn.textContent = 'Export Report';
+      btn.disabled = false; btn.textContent = 'Export report';
     }
   });
 
@@ -4621,6 +4618,7 @@
     btn.disabled = true;
     /* ask for the folder first, while the click still counts as a user gesture */
     const dir = await pickFolder();
+    toast('Building the web viewer…');
     const base = S.baseName.replace(/[^\w.-]+/g, '-') || 'document';
     const assetDir = base + '-assets';
     try {
@@ -4704,7 +4702,7 @@
       toast('The viewer could not be built — try again');
     } finally {
       viewerBusy = false;
-      btn.disabled = false; btn.textContent = 'Export Report';
+      btn.disabled = false; btn.textContent = 'Export report';
     }
   });
 
@@ -7235,7 +7233,7 @@
     popFrom = anchor || null;
     if (id === 'extractPop') prepExtract();
     if (id === 'jpgPop') prepJpg();
-    if (id === 'savePop') $('savePhotosRow').hidden = !livePins().length;
+    if (id === 'savePop') $('savePhotosRow').hidden = $('savePinsRow').hidden = !livePins().length;
     if (id === 'trPop') {
       $('trGo').textContent = TR.on ? 'Update translation' : 'Show translation';
       $('trCancel').textContent = TR.on ? 'Turn off' : 'Cancel';

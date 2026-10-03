@@ -38,7 +38,7 @@
     const EDIT_GROUPS = [
       { ids: ['tEditPan', 'tSelect'] },
       /* the three you mark a page up with most, side by side */
-      { ids: ['tHighlight', 'tHlArea', 'tInk'] },
+      { ids: ['tHighlight', 'tHighlightDd', 'tHlArea', 'tHlAreaDd', 'tInk'] },
       { ids: ['tUnderline', 'tStrike'] },
       { ids: ['tNote', 'tStamp'] },
       { ids: ['tCrop', 'tPin'] }

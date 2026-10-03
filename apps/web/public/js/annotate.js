@@ -32,7 +32,7 @@
     const STAMP_BY_K = {};
     STAMPS.forEach(function (s) { STAMP_BY_K[s.k] = s; });
 
-    let markupColor = { highlight: '#F2C14E', underline: '#E2483D', strike: '#E2483D' };
+    let markupColor = { highlight: '#F2C14E', hlarea: '#F2C14E', underline: '#E2483D', strike: '#E2483D' };
     let stampKind = 'approved';
     let inkWidth = 2.5;
     let uid = 0;
@@ -105,14 +105,17 @@
     modeBar.insertBefore(mkCtl, $('pinShowList'));
 
     function paintMarkupSwatches(kind) {
-      const cfg = MARKUP[kind]; if (!cfg) return;
+      const cfg = MARKUP[kind === 'hlarea' ? 'highlight' : kind]; if (!cfg) return;
       mkCtl.innerHTML = '';
-      cfg.colors.forEach(function (c) {
+      /* a colour picked from the dropdown that is not one of the five */
+      const list = cfg.colors.indexOf(markupColor[kind]) < 0 ? cfg.colors.concat([markupColor[kind]]) : cfg.colors;
+      list.forEach(function (c) {
         const b = document.createElement('button');
         b.className = 'sw' + (c === markupColor[kind] ? ' on' : '');
         b.style.background = c; b.title = c;
         b.addEventListener('click', function () {
           markupColor[kind] = c;
+          showDdColour(kind);
           Array.prototype.forEach.call(mkCtl.children, function (x) { x.classList.remove('on'); });
           b.classList.add('on');
           document.documentElement.style.setProperty('--mk-sel', c);
@@ -122,12 +125,112 @@
       document.documentElement.style.setProperty('--mk-sel', markupColor[kind]);
     }
 
+    /* ---------------- the highlight colour dropdowns ----------------
+       As in WPS: a small arrow beside Highlight text and Highlight area opens
+       a palette (automatic, theme colours with their tints and shades,
+       standard colours, the ones used lately, any colour, and an eyedropper
+       where the browser has one). Picking a colour picks up the tool too. */
+    const THEME = ['#FFFFFF', '#000000', '#E7E6E6', '#44546A', '#4472C4',
+                   '#ED7D31', '#A5A5A5', '#FFC000', '#5B9BD5', '#70AD47'];
+    const STANDARD = ['#C00000', '#FF0000', '#FFC000', '#FFFF00', '#92D050',
+                      '#00B050', '#00B0F0', '#0070C0', '#002060', '#7030A0'];
+    const AUTO = '#F2C14E';
+    function mix(hex, to, k) {
+      const n = parseInt(hex.slice(1), 16);
+      const ch = [n >> 16 & 255, n >> 8 & 255, n & 255].map(function (v) { return Math.round(v + (to - v) * k); });
+      return '#' + ch.map(function (v) { return v.toString(16).padStart(2, '0'); }).join('').toUpperCase();
+    }
+    /* each theme colour's column: lighter 80/60/40 %, darker 25/50 % */
+    function shades(c) {
+      if (c === '#FFFFFF') return [mix(c, 0, 0.05), mix(c, 0, 0.15), mix(c, 0, 0.25), mix(c, 0, 0.35), mix(c, 0, 0.5)];
+      if (c === '#000000') return [mix(c, 255, 0.5), mix(c, 255, 0.35), mix(c, 255, 0.25), mix(c, 255, 0.15), mix(c, 255, 0.05)];
+      return [mix(c, 255, 0.8), mix(c, 255, 0.6), mix(c, 255, 0.4), mix(c, 0, 0.25), mix(c, 0, 0.5)];
+    }
+    function recent() {
+      try { return JSON.parse(localStorage.getItem('adddots.hl.recent') || '[]').slice(0, 10); }
+      catch (e) { return []; }
+    }
+    function addRecent(c) {
+      const list = [c].concat(recent().filter(function (x) { return x !== c; })).slice(0, 10);
+      try { localStorage.setItem('adddots.hl.recent', JSON.stringify(list)); } catch (e) { /* not kept */ }
+    }
+    const DD = {};          /* kind -> { btn, pop } */
+    function showDdColour(kind) {
+      const d = DD[kind];
+      if (d) d.btn.style.setProperty('--dd-c', markupColor[kind]);
+    }
+    function pickColour(kind, c) {
+      c = String(c).toUpperCase();
+      markupColor[kind] = c;
+      addRecent(c);
+      showDdColour(kind);
+      X.closePops();
+      if (X.S.tool === kind) paintMarkupSwatches(kind);
+      else X.setTool(kind);
+    }
+    function swatch(kind, c) {
+      const on = c === String(markupColor[kind]).toUpperCase() ? ' on' : '';
+      return '<button type="button" class="sw' + on + '" data-c="' + c + '" style="background:' + c +
+        '" title="' + c + '" aria-label="Colour ' + c + '"></button>';
+    }
+    function fillPop(kind) {
+      const pop = DD[kind].pop, rec = recent();
+      pop.innerHTML =
+        '<button type="button" class="hlauto" data-c="' + AUTO + '"><i style="background:' + AUTO + '"></i>Automatic</button>' +
+        '<div class="hlhd">Theme colours</div>' +
+        '<div class="hlgrid">' + THEME.map(function (c) { return swatch(kind, c); }).join('') + '</div>' +
+        '<div class="hlgrid hlshades">' + [0, 1, 2, 3, 4].map(function (r) {
+          return THEME.map(function (c) { return swatch(kind, shades(c)[r]); }).join('');
+        }).join('') + '</div>' +
+        '<div class="hlhd">Standard colours</div>' +
+        '<div class="hlgrid">' + STANDARD.map(function (c) { return swatch(kind, c); }).join('') + '</div>' +
+        (rec.length ? '<div class="hlhd">Recent colours</div><div class="hlgrid">' +
+          rec.map(function (c) { return swatch(kind, c); }).join('') + '</div>' : '') +
+        '<div class="pdiv"></div>' +
+        '<label class="item hlmore"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.3"/><circle cx="12" cy="7.5" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/><path d="M12 21a2.5 2.5 0 0 1 0-5h1.5a2.5 2.5 0 0 0 2.5-2.5"/></svg>' +
+        '<span>More colours…</span><input type="color" value="' + String(markupColor[kind]).toLowerCase() + '"></label>' +
+        (window.EyeDropper ? '<button type="button" class="item hleye"><svg viewBox="0 0 24 24"><path d="M14.5 4.5l5 5M4 20l1.5-4.5 9-9 3 3-9 9z"/></svg><span>Eyedropper</span></button>' : '');
+    }
+    function buildDropdown(kind, toolId, label) {
+      const tool = $(toolId); if (!tool) return;
+      const btn = document.createElement('button');
+      btn.type = 'button'; btn.className = 'btn ddbtn'; btn.id = toolId + 'Dd';
+      btn.title = label + ' colour'; btn.setAttribute('aria-label', label + ' colour');
+      btn.setAttribute('aria-haspopup', 'dialog');
+      btn.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="7 10 12 15 17 10"/></svg>';
+      tool.insertAdjacentElement('afterend', btn);
+      const pop = document.createElement('div');
+      pop.className = 'pop hlpop'; pop.id = toolId + 'Pop'; pop.hidden = true;
+      pop.setAttribute('role', 'dialog'); pop.setAttribute('aria-label', label + ' colour');
+      document.body.appendChild(pop);
+      DD[kind] = { btn: btn, pop: pop };
+      X.registerPop(pop.id, btn.id);
+      btn.addEventListener('click', function () {
+        if (pop.hidden) fillPop(kind);
+        X.togglePop(pop.id, btn);
+      });
+      pop.addEventListener('click', function (e) {
+        const sw = e.target.closest('[data-c]');
+        if (sw) { pickColour(kind, sw.dataset.c); return; }
+        if (e.target.closest('.hleye')) {
+          X.closePops();
+          new window.EyeDropper().open().then(function (r) { pickColour(kind, r.sRGBHex); }, function () { /* cancelled */ });
+        }
+      });
+      pop.addEventListener('change', function (e) {
+        if (e.target.type === 'color') pickColour(kind, e.target.value);
+      });
+      showDdColour(kind);
+    }
+    buildDropdown('highlight', 'tHighlight', 'Highlight text');
+    buildDropdown('hlarea', 'tHlArea', 'Highlight area');
+
     X.on('tool', function (t) {
       const isMarkup = !!MARKUP[t] || t === 'hlarea';
       mkCtl.hidden = !isMarkup;
       inkCtl.hidden = t !== 'ink';
       stampCtl.hidden = t !== 'stamp';
-      if (isMarkup) paintMarkupSwatches(t === 'hlarea' ? 'highlight' : t);
+      if (isMarkup) paintMarkupSwatches(t);
       /* our tools bring their own colour row, so hide the core one */
       if (isMarkup || t === 'ink' || t === 'stamp' || t === 'note') {
         $('swatches').style.display = (t === 'ink') ? 'flex' : 'none';
@@ -430,7 +533,7 @@
         if (!areaDrag || areaDrag.it !== it) return;
         const b = it.vp.convertToPdfPoint(at[0], at[1]);
         X.drawShapes(it, { t: 'markup', k: 'highlight', quads: [areaQuad(areaDrag.a, b)],
-                           c: markupColor.highlight, o: MARKUP.highlight.op });
+                           c: markupColor.hlarea, o: MARKUP.highlight.op });
       },
       cancel: function (it) {
         if (!areaDrag) return;
@@ -445,7 +548,7 @@
         X.snapshot();
         it.shapes.push({
           t: 'markup', k: 'highlight', id: nextId(), area: true,
-          quads: [q], c: markupColor.highlight, o: MARKUP.highlight.op,
+          quads: [q], c: markupColor.hlarea, o: MARKUP.highlight.op,
           quote: '', note: null, created: Date.now()
         });
         X.drawShapes(it); X.drawThumb(it); X.updateMeta();
