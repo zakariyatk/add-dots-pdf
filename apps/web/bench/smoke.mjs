@@ -2142,6 +2142,60 @@ try {
     await ctx.close();
   }
 
+  /* ---- High-DPI: a screen at 300% gets pages drawn at 3x, and a move to a
+     screen of another density draws them again at its own ---- */
+  {
+    const dctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      deviceScaleFactor: 3,
+      serviceWorkers: 'block',
+    });
+    const page = await dctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await open(page, MIXED);
+    /* how many bitmap pixels page 1 has for each pixel of its box */
+    const ratio = () =>
+      page.evaluate(() => {
+        const X = window.ADDPDF,
+          it = X.S.items[0];
+        return {
+          dpr: X.drawDpr(),
+          ratio: +(it.canvas.width / it.box.offsetWidth).toFixed(2),
+        };
+      });
+    const at3 = await ratio();
+    /* Windows' scaling changed (or the window moved to another screen) */
+    const cdp = await dctx.newCDPSession(page);
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 1440,
+      height: 900,
+      deviceScaleFactor: 1.5,
+      mobile: false,
+    });
+    await page
+      .waitForFunction(
+        () => {
+          const X = window.ADDPDF,
+            it = X.S.items[0];
+          return X.drawDpr() === 1.5 && it.rendered && it.canvas.width / it.box.offsetWidth < 1.6;
+        },
+        null,
+        { timeout: 20000 },
+      )
+      .catch(() => {});
+    const at15 = await ratio();
+    check(
+      'a screen at 300% gets pages sharper than 2x, and a change of density draws them again at it',
+      at3.dpr === 3 && at3.ratio > 2.05 && at15.dpr === 1.5 && Math.abs(at15.ratio - 1.5) < 0.1,
+      { at3, at15 },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await dctx.close();
+  }
+
   /* ---- tabs: a second PDF opens in a tab of its own ---- */
   {
     const tctx = await browser.newContext({

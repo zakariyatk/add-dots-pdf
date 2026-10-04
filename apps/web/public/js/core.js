@@ -474,7 +474,6 @@
   })();
 
   const stage = $('stage'), rail = $('rail');
-  const DPR = Math.min(window.devicePixelRatio || 1, 2);
   /* what one page canvas is allowed to cost: a side a mobile GPU will still
      take, and an area that stays cheap to paint every frame */
   /* Phone GPUs commonly refuse a canvas past 4096 on a side, and a big one costs
@@ -496,6 +495,14 @@
     relieved: 0,
     tight: function () { return MEM.low || MEM.pressed; }
   };
+  /* Screen pixels per CSS pixel the pages are drawn at. Up to 3 on a
+     desktop, so a Windows screen at 250% or 300% shows the words as sharp
+     as the screen can (the caps above still bound each bitmap); 2 on a
+     phone or a low-memory device. A window moved to a screen of another
+     density, or a change of Windows' scaling, draws the pages again at the
+     new one (watchDpr). */
+  function dprNow() { return Math.min(window.devicePixelRatio || 1, COARSE || MEM.low ? 2 : 3); }
+  let DPR = dprNow();
   function capSide() { return MEM.tight() ? Math.min(MAX_CANVAS_SIDE, 4096) : MAX_CANVAS_SIDE; }
   function capPx() { return MEM.tight() ? Math.min(MAX_CANVAS_PX, 4e6) : MAX_CANVAS_PX; }
   const THEMES = ['paper', 'sepia', 'dark'];
@@ -1238,6 +1245,17 @@
     renderVisible(); drawVisibleThumbs();
     detailSoon(0);
   }
+
+  (function watchDpr() {
+    if (!window.matchMedia) return;
+    const mq = window.matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)');
+    if (!mq.addEventListener) return;
+    mq.addEventListener('change', function () {
+      const next = dprNow();
+      if (next !== DPR) { DPR = next; relayout(); }
+      watchDpr();                       /* the query names the old density: a new one for the next change */
+    }, { once: true });
+  })();
 
   /* ---------------- smooth zooming ----------------
      The live part only resizes and keeps the scroll anchored on whatever the
@@ -8902,6 +8920,8 @@
     drawPageInto: drawPageInto,
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */
     renderWorker: function () { return RW.lazy && RW.state === 'off' && NR.state !== 'off' ? 'idle' : RW.state; },
+    /* the screen density pages are drawn at (dprNow): for the tests */
+    drawDpr: function () { return DPR; },
     /* in the Windows app: whether PDFium draws the pages, and how many it has */
     /* for the performance panel */
     perf: function () {
