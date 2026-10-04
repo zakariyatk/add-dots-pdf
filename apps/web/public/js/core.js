@@ -527,6 +527,8 @@
   const S = {
     sources: [], items: [],
     scale: 1, fit: 'width', theme: 'paper', current: 1,
+    /* two pages side by side (View → Two pages), kept for next time */
+    spread: (function () { try { return localStorage.getItem('adpdf.spread') === '1'; } catch (e) { return false; } })(),
     baseName: 'document', metaBase: '', baseCount: 0,
     undo: [], hits: [], hitIndex: -1, query: '',
     textCache: new Map(), jumping: false,
@@ -1106,13 +1108,38 @@
     return { left: l, top: t, width: Math.max.apply(null, xs) - l, height: Math.max.apply(null, ys) - t };
   }
 
+  /* Two pages side by side, as a book or a set of drawings reads: 1 and 2,
+     3 and 4… (a grid of two columns, app.css body.spread). Not on a phone,
+     nor while the translation stands beside each page. The boxes keep their
+     reading order, so everything that finds a page by its offsetTop still
+     does: the two of a pair share a row. */
+  const SPREAD_GAP = 18;
+  function spreadOn() { return !!S.spread && !trSideBySide() && !isMobile(); }
+  /* how far Next and Previous go: a pair at a time in two-page view */
+  function pageStep() { return spreadOn() ? 2 : 1; }
+  function paintSpread() {
+    document.body.classList.toggle('spread', spreadOn());
+    const b = $('btnSpread');
+    if (b) { b.classList.toggle('on', !!S.spread); b.setAttribute('aria-pressed', S.spread ? 'true' : 'false'); }
+  }
+  function setSpread(on) {
+    S.spread = !!on;
+    try { localStorage.setItem('adpdf.spread', S.spread ? '1' : '0'); } catch (e) { /* this time only */ }
+    paintSpread();
+    if (!S.items.length) return Promise.resolve();
+    const at = S.current;
+    return relayout().then(function () { goTo(at); });
+  }
+
   function computeFit() {
     const it = S.items[0];
+    paintSpread();
     if (!it || !it.page) return;
     let avail = stage.clientWidth - 34;
     const availH = stage.clientHeight - 46;
     /* side by side, the page gets half of the stage less the gutter */
     if (trSideBySide()) avail = Math.max(120, (avail - TR.gap) / 2);
+    else if (spreadOn()) avail = Math.max(120, (avail - SPREAD_GAP) / 2);
     const v = it.page.getViewport({ scale: 1, rotation: it.page.rotate + it.rot });
     const c = cropRectIn(v, it.crop);
     const w = c ? c.width : v.width, h = c ? c.height : v.height;
@@ -6734,6 +6761,8 @@
 
   function goTo(n) {
     n = Math.max(1, Math.min(S.items.length, n));
+    /* two to a row: the pair's left page, on the same row */
+    if (spreadOn() && n % 2 === 0) n--;
     const it = S.items[n - 1]; if (!it) return;
     S.jumping = true;
     stage.scrollTop = it.box.offsetTop - 14;
@@ -6780,6 +6809,8 @@
           const m = (lo + hi) >> 1;
           if (S.items[m].box.offsetTop <= mid) { best = m + 1; lo = m + 1; } else hi = m - 1;
         }
+        /* two to a row: the pair is known by its first, left-hand page */
+        if (spreadOn() && best % 2 === 0) best--;
         if (best !== S.current) setCurrent(best);
       }
       renderVisible();
@@ -8029,6 +8060,8 @@
   $('btnIn').addEventListener('click', function () { setZoom(1.2); });
   $('btnOut').addEventListener('click', function () { setZoom(1 / 1.2); });
   $('btnFitW').addEventListener('click', function () { S.fit = 'width'; relayout(); });
+  $('btnSpread').addEventListener('click', function () { setSpread(!S.spread); });
+  paintSpread();
   $('btnRotL').addEventListener('click', function (e) { e.shiftKey ? rotateAll(-90) : rotateItem(S.current - 1, -90); });
   $('btnRotR').addEventListener('click', function (e) { e.shiftKey ? rotateAll(90) : rotateItem(S.current - 1, 90); });
   $('btnDel').addEventListener('click', function () { if (S.items.length) removeItem(S.current - 1); });
@@ -8153,8 +8186,8 @@
     $('themeLbl').textContent = THEME_LABEL[S.theme];
     $('btnTheme').dataset.label = 'Reading theme · ' + THEME_LABEL[S.theme];
   });
-  $('btnPrev').addEventListener('click', function () { goTo(S.current - 1); });
-  $('btnNext').addEventListener('click', function () { goTo(S.current + 1); });
+  $('btnPrev').addEventListener('click', function () { goTo(S.current - pageStep()); });
+  $('btnNext').addEventListener('click', function () { goTo(S.current + pageStep()); });
   $('pageIn').addEventListener('change', function () {
     const v = parseInt($('pageIn').value, 10);
     if (!isNaN(v)) goTo(v); else $('pageIn').value = String(S.current);
@@ -8559,8 +8592,8 @@
     if (mod) return;
 
     switch (e.key) {
-      case 'ArrowRight': case 'PageDown': case 'j': e.preventDefault(); goTo(S.current + 1); break;
-      case 'ArrowLeft': case 'PageUp': case 'k': e.preventDefault(); goTo(S.current - 1); break;
+      case 'ArrowRight': case 'PageDown': case 'j': e.preventDefault(); goTo(S.current + pageStep()); break;
+      case 'ArrowLeft': case 'PageUp': case 'k': e.preventDefault(); goTo(S.current - pageStep()); break;
       case 'Home': e.preventDefault(); goTo(1); break;
       case 'End': e.preventDefault(); goTo(S.items.length); break;
       case '+': case '=': e.preventDefault(); setZoom(1.2); break;
@@ -8969,6 +9002,8 @@
     isDirty: isDirty, docName: docName, homeShown: homeShown, showHome: showHome,
     /* the zoom, for the status bar (js/skin.js): read it, or glide to one */
     zoom: function () { return glideTarget(); }, zoomTo: function (v) { zoomGlide(v); },
+    /* two pages side by side: on now, set it, how far Next goes */
+    spread: function () { return spreadOn(); }, setSpread: setSpread, pageStep: pageStep,
     ZOOM_MIN: ZOOM_MIN, ZOOM_MAX: ZOOM_MAX,
     /* the document put away (its tab closed): back to the home screen */
     closeDocument: function () { hardReset(); updateMeta(); showHome(); },

@@ -2142,6 +2142,119 @@ try {
     await ctx.close();
   }
 
+  /* ---- two pages side by side ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+    await allLoaded(page);
+    const layout = () =>
+      page.evaluate(() => {
+        const X = window.ADDPDF,
+          S = X.S,
+          st = document.getElementById('stage').getBoundingClientRect();
+        const r = (i) => S.items[i].box.getBoundingClientRect();
+        const [a, b, c] = [r(0), r(1), r(2)];
+        return {
+          on: document.body.classList.contains('spread'),
+          pairRow: Math.abs(a.top - b.top) < 1,
+          leftRight: a.right <= b.left,
+          nextBelow: c.top >= Math.max(a.bottom, b.bottom) - 1 && Math.abs(c.left - a.left) < 2,
+          fits: a.left >= st.left - 1 && b.right <= st.right + 1,
+          drawn: S.items[1].rendered,
+          bar: document.querySelector('#statusBar [data-a="two"]').classList.contains('on'),
+          pressed: document.getElementById('btnSpread').getAttribute('aria-pressed'),
+        };
+      });
+    await page.click('#btnSpread');
+    await page
+      .waitForFunction(() => window.ADDPDF.S.items[1].rendered, null, { timeout: 20000 })
+      .catch(() => {});
+    await page.waitForTimeout(400);
+    const on = await layout();
+    check(
+      'Two pages: 1 and 2 side by side, 3 below, the pair fitting the width, the buttons lit',
+      on.on &&
+        on.pairRow &&
+        on.leftRight &&
+        on.nextBelow &&
+        on.fits &&
+        on.drawn &&
+        on.bar &&
+        on.pressed === 'true',
+      on,
+    );
+    await page.focus('#stage');
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(600);
+    const next = await page.evaluate(() => window.ADDPDF.S.current);
+    await page.evaluate(() => window.ADDPDF.goTo(10));
+    await page.waitForTimeout(600);
+    const even = await page.evaluate(() => window.ADDPDF.S.current);
+    await page.click('#statusBar [data-a="prev"]');
+    await page.waitForTimeout(600);
+    const back = await page.evaluate(() => window.ADDPDF.S.current);
+    check(
+      'Next goes a pair at a time, a page jumped to is shown with its pair',
+      next === 3 && even === 9 && back === 7,
+      {
+        next,
+        even,
+        back,
+      },
+    );
+    await page.keyboard.press('p');
+    await page.waitForTimeout(900);
+    const fitPage = await page.evaluate(() => {
+      const S = window.ADDPDF.S,
+        st = document.getElementById('stage'),
+        sr = st.getBoundingClientRect();
+      const a = S.items[S.current - 1].box.getBoundingClientRect(),
+        b = S.items[S.current].box.getBoundingClientRect();
+      return {
+        h: Math.round(a.height),
+        avail: st.clientHeight,
+        inside: a.left >= sr.left - 1 && b.right <= sr.right + 1,
+      };
+    });
+    check('Fit page shows the whole pair', fitPage.h <= fitPage.avail && fitPage.inside, fitPage);
+
+    /* pages of every size (A4 beside A1 sheets): still in pairs, and every
+       one reachable, none pushed past the left edge */
+    await open(page, MIXED);
+    await allLoaded(page);
+    await page.waitForTimeout(400);
+    const mixed = await page.evaluate(() => {
+      const S = window.ADDPDF.S;
+      const bad = [];
+      for (let i = 0; i + 1 < S.items.length; i += 2) {
+        if (S.items[i].box.offsetTop !== S.items[i + 1].box.offsetTop) bad.push('row ' + (i + 1));
+      }
+      const left = S.items.map((it, i) => (it.box.offsetLeft < 0 ? i + 1 : 0)).filter(Boolean);
+      return { bad, left };
+    });
+    check(
+      'with pages of every size, still in pairs and none past the left edge',
+      !mixed.bad.length && !mixed.left.length,
+      mixed,
+    );
+
+    /* kept for next time */
+    await page.reload();
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await open(page, MIXED);
+    const kept = await layout();
+    await page.click('#btnSpread');
+    await page.waitForTimeout(500);
+    const off = await layout();
+    check(
+      'it is kept for the next start, and off again one page under the other',
+      kept.on && kept.pairRow && !off.on && !off.pairRow && off.pressed === 'false',
+      { kept: kept.on, off: { on: off.on, pairRow: off.pairRow } },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- High-DPI: a screen at 300% gets pages drawn at 3x, and a move to a
      screen of another density draws them again at its own ---- */
   {

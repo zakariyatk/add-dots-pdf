@@ -34,6 +34,7 @@
       '<span class="sbgrow"></span>' +
       '<button type="button" data-a="fitw" title="Fit width (W)" aria-label="Fit width">' + ic('<rect x="6" y="4" width="12" height="16" rx="1.5"/><polyline points="4 9 1.5 12 4 15"/><polyline points="20 9 22.5 12 20 15"/>') + '</button>' +
       '<button type="button" data-a="fitp" title="Fit page (P)" aria-label="Fit page">' + ic('<rect x="6" y="3" width="12" height="18" rx="1.5"/><line x1="9" y1="8" x2="15" y2="8"/>') + '</button>' +
+      '<button type="button" data-a="two" title="Two pages side by side" aria-label="Two pages">' + ic('<rect x="2.5" y="5" width="8.5" height="14" rx="1.2"/><rect x="13" y="5" width="8.5" height="14" rx="1.2"/>') + '</button>' +
       '<span class="sbsep"></span>' +
       '<button type="button" data-a="out" title="Zoom out (−)" aria-label="Zoom out">' + ic('<line x1="5" y1="12" x2="19" y2="12"/>') + '</button>' +
       '<input type="range" class="sbzoom" id="sbZoom" min="0" max="1000" step="1" aria-label="Zoom">' +
@@ -54,11 +55,13 @@
       const a = b.dataset.a, n = S.items.length;
       if (a === 'rail') click('btnRail');
       if (a === 'first') X.goTo(1);
-      if (a === 'prev') X.goTo(Math.max(1, S.current - 1));
-      if (a === 'next') X.goTo(Math.min(n, S.current + 1));
+      const step = X.pageStep ? X.pageStep() : 1;
+      if (a === 'prev') X.goTo(Math.max(1, S.current - step));
+      if (a === 'next') X.goTo(Math.min(n, S.current + step));
       if (a === 'last') X.goTo(n);
       if (a === 'fitw') click('btnFitW');
       if (a === 'fitp') { S.fit = 'page'; X.relayout(); }
+      if (a === 'two' && X.setSpread) X.setSpread(!S.spread);
       if (a === 'out') click('btnOut');
       if (a === 'in') click('btnIn');
       setTimeout(paint, 60);
@@ -81,7 +84,7 @@
       bar.hidden = !S.items.length;
       if (!S.items.length) return;
       const z = X.zoom ? X.zoom() : S.scale;
-      const k = S.current + '|' + S.items.length + '|' + z.toFixed(3) + '|' + S.fit + '|' + !$('rail').hidden;
+      const k = S.current + '|' + S.items.length + '|' + z.toFixed(3) + '|' + S.fit + '|' + !$('rail').hidden + '|' + S.spread;
       if (k === last) return;
       last = k;
       if (document.activeElement !== page) page.value = S.current;
@@ -89,7 +92,9 @@
       if (document.activeElement !== zoom) zoom.value = toSlider(z);
       $('sbPct').textContent = Math.round(z * 100) + '%';
       bar.querySelector('[data-a="first"]').disabled = bar.querySelector('[data-a="prev"]').disabled = S.current <= 1;
-      bar.querySelector('[data-a="last"]').disabled = bar.querySelector('[data-a="next"]').disabled = S.current >= S.items.length;
+      const step = X.pageStep ? X.pageStep() : 1;
+      bar.querySelector('[data-a="last"]').disabled = bar.querySelector('[data-a="next"]').disabled = S.current + step > S.items.length;
+      bar.querySelector('[data-a="two"]').classList.toggle('on', !!S.spread);
       bar.querySelector('[data-a="fitw"]').classList.toggle('on', S.fit === 'width');
       bar.querySelector('[data-a="fitp"]').classList.toggle('on', S.fit === 'page');
       bar.querySelector('[data-a="rail"]').classList.toggle('on', !$('rail').hidden);
