@@ -26,6 +26,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 
 use tauri::{Emitter, Manager};
+
+mod pdfium;
 use tauri_plugin_dialog::DialogExt;
 
 #[derive(Default)]
@@ -204,6 +206,97 @@ fn new_window(app: tauri::AppHandle, handoff: String, state: tauri::State<'_, Op
     build_window(&app, &config).map_err(|e| e.to_string())
 }
 
+/* ---------------- pages drawn natively (pdfium.rs) ---------------- */
+
+/// Where PDFium is: bundled beside the app (its resources), else beside the
+/// .exe (the Store package), else where scripts/get-pdfium.mjs put it (a
+/// development build). ADDDOTS_NATIVE=off leaves it unloaded.
+fn pdfium_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let name = pdfium::lib_name();
+    let mut places = vec![];
+    if let Ok(d) = app.path().resource_dir() {
+        places.push(d.join(name));
+    }
+    if let Some(d) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
+        places.push(d.join(name));
+    }
+    if cfg!(debug_assertions) {
+        places.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("pdfium").join(name));
+    }
+    places.into_iter().find(|p| p.exists())
+}
+
+/// Ok(where PDFium was loaded from), or Err(why pages are drawn as before).
+#[tauri::command]
+fn pdf_native_status(app: tauri::AppHandle) -> Result<String, String> {
+    if std::env::var("ADDDOTS_NATIVE").map(|v| v == "off").unwrap_or(false) {
+        return Err("turned off (ADDDOTS_NATIVE=off)".into());
+    }
+    let path = pdfium_path(&app).ok_or_else(|| format!("no {} beside the app", pdfium::lib_name()))?;
+    pdfium::native().start(path)
+}
+
+/// Waits off the command thread for what the PDFium thread answers.
+async fn answer<T: Send + 'static>(rx: std::sync::mpsc::Receiver<Result<T, String>>) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or_else(|_| Err("the PDFium thread stopped".into())))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// A document's bytes (the request's body) opened as `x-key`, with the
+/// password in `x-password` if it has one. Ok(its page count).
+#[tauri::command]
+async fn pdf_open(request: tauri::ipc::Request<'_>) -> Result<u32, String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected the document's bytes".into());
+    };
+    let h = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(percent_decode);
+    let key: u32 = h("x-key").and_then(|k| k.parse().ok()).ok_or("no x-key")?;
+    let rx = pdfium::native().open(key, bytes.clone(), h("x-password"))?;
+    answer(rx).await
+}
+
+#[tauri::command]
+fn pdf_close(key: u32) {
+    pdfium::native().close(key);
+}
+
+/// Page `page` (from 0) of document `key` into a w x h bitmap at matrix m:
+/// its pixels, RGBA, as raw bytes; with z, zlib-compressed (fast). Handing
+/// the page 32 MB of pixels took longer than PDFium took to draw them, and a
+/// page is mostly white: compressed, it is a tenth or less to hand over, and
+/// the page unpacks it natively (DecompressionStream). Compressed here, off
+/// PDFium's thread, so the next page is being drawn meanwhile.
+#[tauri::command]
+async fn pdf_render(
+    rid: u32,
+    key: u32,
+    page: u32,
+    m: [f32; 6],
+    w: u32,
+    h: u32,
+    z: Option<bool>,
+) -> Result<tauri::ipc::Response, String> {
+    let rx = pdfium::native().render(rid, pdfium::Ask { key, page, m, w, h })?;
+    let px = answer(rx).await?;
+    if !z.unwrap_or(false) {
+        return Ok(tauri::ipc::Response::new(px));
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::Write;
+        let mut e = flate2::write::ZlibEncoder::new(Vec::with_capacity(px.len() / 8), flate2::Compression::fast());
+        e.write_all(&px).and_then(|_| e.finish()).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+fn pdf_cancel(rid: u32) {
+    pdfium::native().cancel(rid);
+}
+
 /// Where a PDF handed over later goes: the window used last, if it is
 /// still open, else any window of the app.
 fn target_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
@@ -268,7 +361,18 @@ pub fn run() {
             build_window(app.handle(), &main_config(app.handle()))?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![launch_files, read_file, save_file, open_store, new_window])
+        .invoke_handler(tauri::generate_handler![
+            launch_files,
+            read_file,
+            save_file,
+            open_store,
+            new_window,
+            pdf_native_status,
+            pdf_open,
+            pdf_close,
+            pdf_render,
+            pdf_cancel
+        ])
         .run(tauri::generate_context!())
         .expect("error while running ADD DOTS PDF");
 }

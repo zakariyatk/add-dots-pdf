@@ -32,3 +32,6 @@ apps/web/bench/.corpus/
 # the desktop app's Rust build, and schemas Tauri writes on each build
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
+
+# PDFium for the Windows app, fetched by apps/desktop/scripts/get-pdfium.mjs
+apps/desktop/src-tauri/pdfium/

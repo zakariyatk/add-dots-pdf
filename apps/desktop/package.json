@@ -6,7 +6,8 @@
     "tauri": "tauri",
     "desktop:build": "tauri build",
     "desktop:dev": "tauri dev",
-    "e2e": "node e2e.mjs"
+    "e2e": "node e2e.mjs",
+    "pdfium": "node scripts/get-pdfium.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.12.0",

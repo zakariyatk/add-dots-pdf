@@ -29,6 +29,16 @@ nothing outside the app.
   in the browser storage the windows share and asks `new_window` for a
   window that opens with its name; that window takes it from there. A PDF
   double-clicked later opens in the window used last.
+- **Pages drawn natively.** `src-tauri/src/pdfium.rs` draws pages with
+  PDFium (`pdfium.dll`, bundled beside the app) on a thread of its own, and
+  hands the page the pixels, compressed on the way. PDFium draws a CAD sheet
+  or a text page in about half pdf.js's time per megapixel; scans, whose
+  pictures pdf.js keeps decoded, are faster in pdf.js. So each document times
+  both and the faster draws it (core.js, `RW` and `NR`); a page with form
+  fields, or anything PDFium cannot open, goes to pdf.js as before.
+  `ADDDOTS_NATIVE=off` (or localStorage `adpdf.native` = `off`) turns it off.
+  `node scripts/get-pdfium.mjs` fetches the pinned build (CI does), checked by
+  sha256; `cargo test` draws a page with it when it is there.
 - **Saving.** Save sends the file's bytes to `save_file`, which asks where with
   the Windows Save dialog and writes the file there. Cancelling it leaves the
   document unsaved: the Save popover stays open and crash recovery keeps the
