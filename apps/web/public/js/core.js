@@ -5450,6 +5450,9 @@
     S.editing = null;
     document.body.classList.remove('editing');
     ed.box.remove();
+    /* for Edit Object: Esc on a line just lifted off the page puts it back */
+    EXT.emit('textEditClosed', { it: ed.it, idx: ed.idx, commit: !!commit,
+      changed: ed.idx < 0 || !ed.it.shapes[ed.idx] || ed.it.shapes[ed.idx].text !== val });
 
     if (!commit) { drawShapes(ed.it); return; }
     if (!(GF && GF.is(ed.item.f)) && !WINANSI_OK.test(val)) {
@@ -5527,7 +5530,8 @@
     wrapEl.className = 'texted';
     wrapEl.style.left = box.left + 'px';
     wrapEl.style.top = box.top + 'px';
-    wrapEl.style.width = Math.max(isMobile() ? 150 : 90, box.width) + 'px';
+    /* room past the text's own width, or the box wraps it (padding, the caret) */
+    wrapEl.style.width = Math.max(isMobile() ? 150 : 90, box.width + (idx >= 0 ? editPx(item) * 1.5 + 16 : 0)) + 'px';
 
     const ta = document.createElement('textarea');
     ta.value = item.text;
@@ -8655,7 +8659,9 @@
     syncPicks: syncPicks, setPicks: setPicks,
     newItem: newItem, ensureEls: ensureEls,
     buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource, swapSource: swapSource,
-    syncMarkPop: syncMarkPop, redrawAll: redrawAll, saveError: saveError, selectedText: selectedText,
+    syncMarkPop: syncMarkPop, redrawAll: redrawAll,
+    /* type in text mark idx of page it, the caret at its end */
+    editText: function (it, idx) { openEditor(it, null, idx, true); }, saveError: saveError, selectedText: selectedText,
     insertBlank: insertBlank, ensurePage: ensurePage, ensureAllPages: ensureAllPages, renderIdle: renderIdle,
     drawPageInto: drawPageInto,
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */

@@ -25,7 +25,8 @@ import type { Pt } from './model';
 
 /* ---------------- reading the operators ---------------- */
 
-export type Operand = number | boolean | null | { name: string } | { str: true } | Operand[] | { dict: true };
+export type Operand =
+  number | boolean | null | { name: string } | { str: Uint8Array } | Operand[] | { dict: true };
 
 export interface ContentOp {
   op: string;
@@ -71,16 +72,30 @@ export function parseContent(b: Uint8Array): ContentOp[] {
     const at = i;
     const c = b[i]!;
     if (c === 40) {
-      /* (a literal string), with nesting and escapes */
+      /* (a literal string), with nesting and escapes: its bytes */
+      const out: number[] = [];
       let depth = 0;
       for (; i < n; i++) {
         const d = b[i]!;
-        if (d === 92) i++;
-        else if (d === 40) depth++;
-        else if (d === 41 && --depth === 0) break;
+        if (d === 92) {
+          const e = b[++i]!;
+          const esc: Record<number, number> = { 110: 10, 114: 13, 116: 9, 98: 8, 102: 12 };
+          if (e in esc) out.push(esc[e]!);
+          else if (e >= 48 && e <= 55) {
+            let v = e - 48;
+            for (let k = 0; k < 2 && b[i + 1]! >= 48 && b[i + 1]! <= 55; k++) v = v * 8 + (b[++i]! - 48);
+            out.push(v & 255);
+          } else if (e === 13) {
+            if (b[i + 1] === 10) i++; /* a line continued */
+          } else if (e !== 10) out.push(e);
+          continue;
+        }
+        if (d === 40 && depth++ === 0) continue;
+        if (d === 41 && --depth === 0) break;
+        out.push(d);
       }
       i++;
-      push({ str: true }, at);
+      push({ str: Uint8Array.from(out) }, at);
     } else if (c === 60 && b[i + 1] === 60) {
       /* << a dictionary >>: skipped whole, nested ones too */
       let depth = 0;
@@ -103,9 +118,14 @@ export function parseContent(b: Uint8Array): ContentOp[] {
       i++;
       push({ dict: true }, at);
     } else if (c === 60) {
-      while (i < n && b[i] !== 62) i++;
+      /* <hex string> */
+      let hex = '';
+      for (i++; i < n && b[i] !== 62; i++) if (!WS.has(b[i]!)) hex += String.fromCharCode(b[i]!);
       i++;
-      push({ str: true }, at);
+      if (hex.length % 2) hex += '0';
+      const out = new Uint8Array(hex.length / 2);
+      for (let k = 0; k < out.length; k++) out[k] = parseInt(hex.substr(k * 2, 2), 16) || 0;
+      push({ str: out }, at);
     } else if (c === 91) {
       i++;
       if (!arrays.length && argStart < 0) argStart = at;
