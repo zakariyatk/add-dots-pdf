@@ -229,6 +229,12 @@
     toast('Installed · open it from your desktop or home screen');
   });
 
+  /* ---------- the Windows app ----------
+     On Windows, outside the apps, the home panel links to the Store page:
+     the Store app opens PDFs from Explorer and updates itself. */
+  var getWin = $('hGetWin');
+  if (getWin && !IN_APP && /Windows/.test(navigator.userAgent)) getWin.hidden = false;
+
   /* ---------- PDFs opened from the desktop ---------- */
   if ('launchQueue' in window && window.LaunchParams && 'files' in window.LaunchParams.prototype) {
     window.launchQueue.setConsumer(function (params) {

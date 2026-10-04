@@ -1,5 +1,10 @@
 # ADD DOTS PDF for Windows
 
+**In the Microsoft Store:** https://apps.microsoft.com/detail/9PGHPBRMLQMS.
+That is the way to install it: the Store signs the app, so there is no
+SmartScreen warning, and it updates itself. The setup `.exe` below is for
+testing.
+
 The web app (`apps/web/dist`) in a Tauri 2 window. On Windows the window is
 Edge WebView2, which is Chromium, the engine the web app's smoke test runs in.
 The installer is about 10 MB and puts the app in the Start menu, opening PDFs
@@ -67,7 +72,8 @@ installs for the whole computer and asks for an administrator.
 
 ## Signing
 
-The installer is not signed yet: Windows SmartScreen warns before running
+The Store version needs no certificate (the Store signs it). The setup `.exe`
+is not signed: Windows SmartScreen warns before running
 it ("Windows protected your PC", then "More info" and "Run anyway"), and a computer whose
 IT only lets signed programs run (AppLocker, Smart App Control) refuses it
 with "Windows cannot access the specified device, path, or file". Signing
