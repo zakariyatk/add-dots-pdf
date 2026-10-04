@@ -313,6 +313,18 @@
          display:flex;flex-direction:column;align-items:center;gap:18px;scroll-behavior:smooth;
          overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
   .pagebox{position:relative;flex:none}
+  /* two pages side by side (core spreadOn): a grid of two columns keeps the
+     pairs 1-2, 3-4… whatever their sizes; each page sits at the top of its
+     cell, the left one against the gutter */
+  /* safe: a pair wider than the window (an A1 sheet beside an A4) starts at
+     the left edge, where it can be scrolled to, rather than past it */
+  body.spread .stage{display:grid;grid-template-columns:repeat(2,max-content);justify-content:safe center;
+                     align-items:start;align-content:start;column-gap:18px;row-gap:18px}
+  body.spread .stage > .pagebox:nth-child(odd){justify-self:end}
+  /* the number above each page's corner: beside it, the right page's would
+     stand in the gutter next to the left page */
+  body.spread .tick{left:0;top:-14px}
+  body.spread .cropflag{left:28px;top:-13px}
   /* a page's content, taken out of the document while the page is far off
      screen (core.js mountPage); lays out as if it were the box itself */
   .pagebody{display:contents}
