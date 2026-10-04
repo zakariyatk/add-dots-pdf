@@ -54,8 +54,12 @@ swangle_indirect`. The failing runs used emulator 37.2.12 and WebView
 5. ~~Windows OCR~~: done, see `docs/windows-performance.md`. Not yet: both
    languages at once by Windows (today "English and Arabic" goes to
    Tesseract), and a timing against Tesseract on a real Windows machine.
-6. **Professional UI.** Dark theme pass, icon audit, toolbar groups,
-   two-page view, High-DPI audit, Windows print, context menus.
+6. **Professional UI.** Done: High-DPI (pages drawn up to 3x, again when
+   the density changes), the right-click page menu (`js/pagemenu.js`), two
+   pages side by side (View → Two pages), and a dark-interface pass (the
+   status bar in dark too; page numbers above each page in two-page view).
+   Left: an icon audit, toolbar groups, a cover-page option for two-page
+   view, and Windows print (check it on Windows in CI).
 7. ~~Security~~: done, see `docs/windows-performance.md`.
 
 Smaller items noted along the way:

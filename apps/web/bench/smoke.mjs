@@ -2217,6 +2217,38 @@ try {
       };
     });
     check('Fit page shows the whole pair', fitPage.h <= fitPage.avail && fitPage.inside, fitPage);
+    const labels = await page.evaluate(() => {
+      const S = window.ADDPDF.S;
+      return [S.current - 1, S.current].map((i) => {
+        const t = S.items[i].tick.getBoundingClientRect(),
+          b = S.items[i].box.getBoundingClientRect();
+        return {
+          over: t.left >= b.left - 1 && t.right <= b.right + 1 && t.bottom <= b.top + 1,
+          n: S.items[i].tick.textContent,
+        };
+      });
+    });
+    check(
+      'each page number stands above its own page, not in the gutter',
+      labels.every((l) => l.over),
+      labels,
+    );
+
+    /* the dark interface has the status bar too, in its own colours */
+    await page.evaluate(() => {
+      if (document.body.dataset.ui !== 'dark') document.getElementById('btnUi').click();
+    });
+    const darkBar = await page.evaluate(() => {
+      const b = document.getElementById('statusBar'),
+        cs = getComputedStyle(b);
+      return { shown: cs.display !== 'none' && b.offsetHeight > 0, bg: cs.backgroundColor, color: cs.color };
+    });
+    await page.evaluate(() => document.getElementById('btnUi').click());
+    check(
+      'the dark interface has the status bar, in dark colours',
+      darkBar.shown && darkBar.bg !== 'rgb(255, 255, 255)',
+      darkBar,
+    );
 
     /* pages of every size (A4 beside A1 sheets): still in pairs, and every
        one reachable, none pushed past the left edge */

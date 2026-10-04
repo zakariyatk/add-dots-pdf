@@ -321,6 +321,10 @@
   body.spread .stage{display:grid;grid-template-columns:repeat(2,max-content);justify-content:safe center;
                      align-items:start;align-content:start;column-gap:18px;row-gap:18px}
   body.spread .stage > .pagebox:nth-child(odd){justify-self:end}
+  /* the number above each page's corner: beside it, the right page's would
+     stand in the gutter next to the left page */
+  body.spread .tick{left:0;top:-14px}
+  body.spread .cropflag{left:28px;top:-13px}
   /* a page's content, taken out of the document while the page is far off
      screen (core.js mountPage); lays out as if it were the box itself */
   .pagebody{display:contents}
