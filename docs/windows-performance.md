@@ -162,3 +162,36 @@ Each phase: measure, change, test every existing feature, measure again.
 7. **Security.** A CSP for the window; validation of every path and
    file the Rust side accepts (already: read only handed-over files,
    write only where the Save dialog said).
+
+## Phase 1: done
+
+Atomic saves (`write_atomic` in `lib.rs`) and the performance panel
+(Ctrl+Shift+P, `js/perf.js`, `perf_native`).
+
+## Phase 2: memory — done
+
+- PDFium reads a file opened from Explorer **from disk**, a block at a
+  time (`FPDF_LoadCustomDocument`), instead of a copy of all of it; only
+  files the system handed over can be opened this way (`pdf_open_path`).
+  Saving over the open file still works (tested on Windows in CI).
+- The render worker (pdf.js twice over and a copy of each file) is **not
+  started** in the Windows app until a page needs it: one PDFium leaves to
+  pdf.js (form fields), no PDFium at all, or PDFium measuring slow for the
+  file (over 250 ms per megapixel; thumbnails do not count). Drawings
+  asked for while PDFium starts wait for it.
+- The save worker lets go of a big file's copy (over 32 MB) after saving.
+- Memory running short: PDFium drops the pages it keeps loaded
+  (`pdf_trim`).
+
+Release build, Linux, 8 s after the first page:
+
+| File                 | Web view before → after   | App before → after | First page before → after |
+| -------------------- | ------------------------- | ------------------ | ------------------------- |
+| 40-page scans, 85 MB | 1,273 → **778 MB** (−39%) | 312 → **221 MB**   | 6.5 → **3.8 s**           |
+| 2,000-page text      | 1,065 → 1,038 MB          | 212 → 195 MB       | 3.1 → 2.7 s               |
+| 300-page report      | 755 → 705 MB              | 199 → 198 MB       | 2.5 → 2.2 s               |
+| CAD, 8 sheets        | 885 → 876 MB              | 249 → 234 MB       | 2.3 → 2.1 s               |
+
+What remains of the floor (~700 MB with a small file here) is the web view
+itself, the page and pdf.js's worker; and on the page the file is still held
+by `src.bytes` and pdf.js. Phase 3 (opening by byte ranges) is the next cut.
