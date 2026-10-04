@@ -131,7 +131,7 @@
     /* can the worker draw this page? Not while it is still starting: a file
        opened the moment the app loads is drawn here rather than kept waiting */
     api.usable = function (it) {
-      if (api.state !== 'on' || !it.src.bytes || !it.src.doc) return false;
+      if (api.state !== 'on' || !it.src.bytes || it.src.lazy || !it.src.doc) return false;
       const key = keys.get(it.src.bytes);
       return key == null || !failed.has(key);
     };
@@ -206,17 +206,20 @@
         if (RW.lazy) RW.start();
         return false;
       });
-    const keys = new WeakMap();                  /* a source's bytes -> {key, opened} */
+    const keys = new WeakMap();                  /* a source (srcKey) -> {key, opened} */
     const no = new Set();                        /* 'key:num' it would not draw */
     let nextKey = 0, rid = 0;
     const Z = typeof DecompressionStream === 'function';
     function docOf(src) {
-      let d = keys.get(src.bytes);
+      let d = keys.get(srcKey(src));
       if (!d) {
         d = { key: ++nextKey };
         const headers = { 'x-key': String(d.key) };
         if (src.password) headers['x-password'] = encodeURIComponent(src.password);
-        const fromBytes = function () { return T.core.invoke('pdf_open', new U8(src.bytes), { headers: headers }); };
+        const fromBytes = function () {
+          if (!src.bytes) return Promise.reject(new Error('read as needed: no bytes here'));
+          return T.core.invoke('pdf_open', new U8(src.bytes), { headers: headers });
+        };
         /* from its file on disk when it has one: read as needed, no copy of
            it in the app; from its bytes if that fails (moved, changed) */
         d.opened = src.path
@@ -224,7 +227,7 @@
             .catch(fromBytes)
           : fromBytes();
         d.opened.catch(function () { d.failed = true; });
-        keys.set(src.bytes, d);
+        keys.set(srcKey(src), d);
       }
       return d;
     }
@@ -238,8 +241,8 @@
     }
     /* can it draw this page? (it says so only once it has loaded) */
     api.usable = function (it) {
-      if (api.state !== 'on' || api.paused || !it.src || !it.src.bytes || !it.page) return false;
-      const d = keys.get(it.src.bytes);
+      if (api.state !== 'on' || api.paused || !it.src || !srcKey(it.src) || !it.page) return false;
+      const d = keys.get(srcKey(it.src));
       return !(d && d.failed) && !no.has((d ? d.key : 0) + ':' + it.num);
     };
     api.render = function (it, v, w, h, transform) {
@@ -285,6 +288,84 @@
     };
     return api;
   })();
+  /* ---- in the Windows app: a big file read from disk as it is needed ----
+     A file over 150 MB handed over by Explorer is not read whole (js/desktop.js
+     sends what stands in for it, adddotsRange): the desktop side keeps it open
+     and pdf.js asks for the parts it needs (read_range), so page 1 shows
+     without the file being read, and the page holds no copy of it (src.lazy,
+     src.bytes null). Its whole bytes are read only for what needs them
+     (saving, a project, Edit Object: withBytes) and let go of after. The file
+     as opened is what is read, so saving over it changes nothing here. */
+  const RANGED = (function () {
+    let T = null;
+    try { T = window.__TAURI__ || (window.parent !== window ? window.parent.__TAURI__ : null); } catch (e) { T = null; }
+    const mine = new Set(), CHUNK = 32 * 1048576;
+    function read(id, offset, len) {
+      /* in a tab the answer is its window's ArrayBuffer, which pdf.js does
+         not take for one (instanceof): copied into this page's then */
+      return T.core.invoke('read_range', { id: id, offset: offset, len: len })
+        .then(function (b) { return b instanceof ArrayBuffer ? new Uint8Array(b) : new Uint8Array(b).slice(); });
+    }
+    const api = {
+      is: function (f) { return !!f && f.adddotsRange != null && !!T; },
+      /* the same file again, for a tab moved to a window of its own */
+      reopen: function (path, name) {
+        return T.core.invoke('open_plan', { path: path, keep: true }).then(function (p) {
+          return { name: name, size: p.size, type: 'application/pdf', adddotsPath: path, adddotsRange: p.id };
+        });
+      },
+      /* what pdf.js opens it with */
+      params: function (f) {
+        const id = f.adddotsRange;
+        mine.add(id);
+        const tr = new pdfjsLib.PDFDataRangeTransport(f.size, null);
+        tr.requestDataRange = function (begin, end) {
+          read(id, begin, end - begin).then(function (b) { tr.onDataRange(begin, b); },
+            function (e) { console.error('[ranged] could not read', e); });
+        };
+        return { range: tr, disableAutoFetch: true, disableStream: true };
+      },
+      /* all of it, a part at a time (one message of 500 MB is a copy too many) */
+      all: async function (id, size) {
+        const out = new Uint8Array(size);
+        for (let o = 0; o < size; o += CHUNK) out.set(await read(id, o, Math.min(CHUNK, size - o)), o);
+        return out;
+      },
+      close: function (id) {
+        mine.delete(id);
+        if (T) T.core.invoke('range_close', { id: id }).catch(function () {});
+      }
+    };
+    /* the page going away (a tab closed or moved): the files it kept open */
+    window.addEventListener('pagehide', function () { mine.forEach(api.close); });
+    return api;
+  })();
+  /* what a source's drawings are known by (its native document, its
+     timings): its bytes, or for a file read as needed what stands for it */
+  function srcKey(src) { return src.lazy || src.bytes; }
+  /* fn run with the whole bytes of these sources at hand: read for a file
+     read as needed, and let go of after (unless still in use) */
+  async function withBytes(srcs, fn) {
+    const lazy = [];
+    (srcs || []).forEach(function (s) { if (s && s.lazy && lazy.indexOf(s) < 0) lazy.push(s); });
+    lazy.forEach(function (s) { s.lazy.users = (s.lazy.users || 0) + 1; });
+    try {
+      for (const s of lazy) {
+        if (s.bytes) continue;
+        if (!s.lazy.reading) {
+          s.lazy.reading = RANGED.all(s.lazy.id, s.lazy.size)
+            .then(function (b) { if (s.lazy.users) s.bytes = b; return b; })
+            .finally(function () { s.lazy.reading = null; });
+        }
+        const b = await s.lazy.reading;
+        if (!s.bytes) s.bytes = b;
+      }
+      return await fn();
+    } finally {
+      lazy.forEach(function (s) { if (--s.lazy.users === 0) s.bytes = null; });
+    }
+  }
+
   /* What the performance panel reads (js/perf.js): the last file opened
      (read, parsed, first page drawn, ms from the start), and drawings by
      engine: [count, ms, megapixels]. */
@@ -300,10 +381,10 @@
      of a page for the next drawing. So each document times both, as time per
      megapixel: the first drawings alternate, then the faster one draws,
      and every twentieth goes to the other to see whether that has changed. */
-  const PICK = new WeakMap();                    /* a source's bytes -> timings */
+  const PICK = new WeakMap();                    /* a source (srcKey) -> timings */
   function pickFor(it) {
-    let p = PICK.get(it.src.bytes);
-    if (!p) PICK.set(it.src.bytes, (p = { native: [0, 0], worker: [0, 0], n: 0 }));
+    let p = PICK.get(srcKey(it.src));
+    if (!p) PICK.set(srcKey(it.src), (p = { native: [0, 0], worker: [0, 0], n: 0 }));
     return p;
   }
   /* PDFium draws a document until it proves slow for it: only then is the
@@ -583,12 +664,19 @@
     $('errMsg').hidden = false; $('errMsg').textContent = m;
   }
   function isPdf(f) { return f && (f.type === 'application/pdf' || /\.pdf$/i.test(f.name || '')); }
-  async function readBytes(f) { return new Uint8Array(await f.arrayBuffer()); }
+  async function readBytes(f) {
+    /* a big file handed over by Explorer, wanted whole here (added to a document) */
+    if (RANGED.is(f)) {
+      try { return await RANGED.all(f.adddotsRange, f.size); } finally { RANGED.close(f.adddotsRange); }
+    }
+    return new Uint8Array(await f.arrayBuffer());
+  }
 
   let lastPassword = null;
+  /* bytes, or for a file read as needed what pdf.js opens it with (RANGED) */
   async function loadWithPassword(bytes) {
     lastPassword = null;
-    const task = pdfjsLib.getDocument({ data: bytes.slice(0) });
+    const task = pdfjsLib.getDocument(bytes instanceof Uint8Array ? { data: bytes.slice(0) } : bytes);
     task.onPassword = function (cb, reason) {
       $('pwRow').classList.add('show');
       if (reason === pdfjsLib.PasswordResponses.INCORRECT_PASSWORD) showError('That password did not work. Try again.');
@@ -607,19 +695,23 @@
     /* timed for the performance panel (js/perf.js) */
     const t0 = performance.now();
     PERF.open = { name: file.name, size: file.size, read: null, parsed: null, first: null, t0: t0 };
-    let bytes, doc;
-    try { bytes = await readBytes(file); }
-    catch (e) { showError('The file could not be read from disk. Try again.'); return false; }
+    let bytes = null, doc;
+    /* a big file from Explorer: read as needed, not whole (RANGED) */
+    const ranged = RANGED.is(file);
+    if (!ranged) {
+      try { bytes = await readBytes(file); }
+      catch (e) { showError('The file could not be read from disk. Try again.'); return false; }
+    }
     PERF.open.read = performance.now() - t0;
     /* in the Windows app PDFium draws the pages: the render worker opens the
        file only when a page needs it (RW.render), not two more copies now */
-    if (NR.state === 'off') RW.open(bytes, null, file);
-    try { doc = await loadWithPassword(bytes); }
+    if (NR.state === 'off' && !ranged) RW.open(bytes, null, file);
+    try { doc = await loadWithPassword(ranged ? RANGED.params(file) : bytes); }
     catch (e) {
-      RW.close(bytes);
+      if (ranged) RANGED.close(file.adddotsRange); else RW.close(bytes);
       showError('This file could not be opened. It may be damaged or not a real PDF.'); return false;
     }
-    if (lastPassword && NR.state === 'off') RW.open(bytes, lastPassword, file);
+    if (lastPassword && NR.state === 'off' && !ranged) RW.open(bytes, lastPassword, file);
     if (PERF.open && PERF.open.t0 === t0) PERF.open.parsed = performance.now() - t0;
 
     hardReset();
@@ -627,9 +719,10 @@
     const src = { id: ++srcId, name: file.name, bytes: bytes, doc: doc };
     /* opened from Explorer: its place on disk (js/desktop.js) */
     if (file.adddotsPath) src.path = file.adddotsPath;
+    if (ranged) src.lazy = { id: file.adddotsRange, size: file.size };
     /* the file itself, while these are its bytes: a worker can read it
        rather than be sent a copy (see SW) */
-    src.file = file; src.fileOf = bytes;
+    else { src.file = file; src.fileOf = bytes; }
     if (lastPassword) src.password = lastPassword;
     S.sources.push(src);
     for (let i = 1; i <= doc.numPages; i++) S.items.push(newItem(src, i, 0, false));
@@ -687,7 +780,8 @@
          loading its pages can reject it ("Transport destroyed"): a try alone
          would leave that rejection unhandled */
       if (src.doc && src.doc !== keepDoc) {
-        RW.close(src.bytes); SW.forget(src.id);
+        RW.close(srcKey(src)); SW.forget(src.id);
+        if (src.lazy) RANGED.close(src.lazy.id);
         try { Promise.resolve(src.doc.destroy()).catch(function () {}); } catch (e) {}
       }
     });
@@ -4934,9 +5028,9 @@
     const btn = this;
     btn.disabled = true; btn.textContent = 'Saving…';
     /* let the button repaint before the base64 pass locks the thread */
-    setTimeout(function () {
+    setTimeout(async function () {
       try {
-        const data = buildProject();
+        const data = await withBytes(S.sources, function () { return buildProject(); });
         const text = JSON.stringify(data);
         const name = S.baseName + '-project.json';
         download(text, name, 'application/json');
@@ -5236,6 +5330,16 @@
     try {
       srcs = [];
       for (const s of (d.sources || [])) {
+        if (s.range) {
+          /* a big file read as needed, moved here from another window */
+          const f = await RANGED.reopen(s.range.path, s.name || 'document.pdf');
+          let doc;
+          try { doc = await pdfjsLib.getDocument(RANGED.params(f)).promise; }
+          catch (e) { RANGED.close(f.adddotsRange); throw e; }
+          srcs.push({ old: s.id, name: f.name, synthetic: false, bytes: null, doc: doc,
+                      lazy: { id: f.adddotsRange, size: f.size }, path: s.range.path });
+          continue;
+        }
         const bytes = s.bytes || b64ToBytes(s.b64);
         const doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
         srcs.push({ old: s.id, name: s.name || 'document.pdf', synthetic: !!s.synthetic,
@@ -5253,6 +5357,7 @@
     srcs.forEach(function (s) {
       const src = { id: ++srcId, name: s.name, bytes: s.bytes, doc: s.doc };
       if (s.synthetic) src.synthetic = true;
+      if (s.lazy) { src.lazy = s.lazy; src.path = s.path; }
       S.sources.push(src);
       byOld[s.old] = src;
     });
@@ -5907,6 +6012,12 @@
      (for a download: the worker's comes back without another copy), else
      the bytes. */
   async function buildPdf(items, cache, opts, want) {
+    /* a file read as needed (RANGED) is read whole for this, and let go after */
+    return withBytes(items.map(function (it) { return it.src; }), function () {
+      return buildPdfNow(items, cache, opts, want);
+    });
+  }
+  async function buildPdfNow(items, cache, opts, want) {
     thumbsPause();
     try {
       await Promise.all(EXT.beforeSave.map(function (fn) { return fn(); }));
@@ -5969,6 +6080,15 @@
       waiting.forEach(function (w) { w.rej(unavailable(why)); });
       waiting.clear();
     }
+    /* a source, sent to the worker once (again if its bytes changed) */
+    function send(src) {
+      if (sent.get(src.id) === srcKey(src)) return;
+      /* the file as opened is read by the worker itself: posting the
+         bytes copies them here first, a quarter-second for 84 MB */
+      const file = src.file && src.fileOf === src.bytes ? src.file : null;
+      worker.postMessage({ op: 'source', id: src.id, file: file, bytes: file ? null : src.bytes, name: src.name || '' });
+      sent.set(src.id, srcKey(src));
+    }
     function start() {
       if (starting) return starting;
       starting = new Promise(function (res) {
@@ -6016,15 +6136,7 @@
         return new Promise(function (res, rej) {
           const id = ++rid;
           try {
-            items.forEach(function (it) {
-              const src = it.src;
-              if (sent.get(src.id) === src.bytes) return;
-              /* the file as opened is read by the worker itself: posting the
-                 bytes copies them here first, a quarter-second for 84 MB */
-              const file = src.file && src.fileOf === src.bytes ? src.file : null;
-              worker.postMessage({ op: 'source', id: src.id, file: file, bytes: file ? null : src.bytes, name: src.name || '' });
-              sent.set(src.id, src.bytes);
-            });
+            items.forEach(function (it) { send(it.src); });
             worker.postMessage({ op: 'build', rid: id, items: plain, state: state, opts: opts, cacheId: cacheId, blob: !!blob });
           } catch (e) {
             /* something in the marks cannot be posted: the page builds it */
@@ -6032,6 +6144,25 @@
             return;
           }
           waiting.set(id, { res: res, rej: rej });
+        });
+      },
+      /* Edit Object's work on a page (save-worker.js 'eo'): fn 'shapes' or
+         'lines' read it, 'cutShapes' or 'cutText' cut from it */
+      edit: function (src, fn, index, extra) {
+        return start().then(function (ok) {
+          if (!ok || !worker) throw unavailable();
+          const go = function () {
+            return new Promise(function (res, rej) {
+              const id = ++rid;
+              try {
+                send(src);
+                worker.postMessage(Object.assign({ op: 'eo', rid: id, src: src.id, fn: fn, index: index }, extra || {}));
+              } catch (e) { rej(unavailable(e && e.message)); return; }
+              waiting.set(id, { res: res, rej: rej });
+            });
+          };
+          /* a file read as needed is read whole only to be sent */
+          return (sent.get(src.id) === srcKey(src) ? go() : withBytes([src], go)).then(function (m) { return m.out; });
         });
       },
       forget: function (id) {
@@ -8555,7 +8686,9 @@
     const used = {};
     S.items.forEach(function (it) { if (it.src) used[it.src.id] = it.src; });
     const srcs = Object.keys(used).map(function (k) { return used[k]; });
-    if (srcs.reduce(function (n, s) { return n + s.bytes.length; }, 0) > REC_MAX_BYTES) { rec.tooBig = true; return; }
+    /* a file read as needed is over the limit anyway (see open_plan) */
+    if (srcs.some(function (s) { return s.lazy; }) ||
+        srcs.reduce(function (n, s) { return n + s.bytes.length; }, 0) > REC_MAX_BYTES) { rec.tooBig = true; return; }
     if (sig !== rec.sig) rec.changedAt = now;
     const fresh = srcs.filter(function (s) { return !rec.srcs.has(s.id); });
     const project = sig === rec.sig ? null : buildProject(false);
@@ -8759,7 +8892,9 @@
     removeItem: removeItem, moveItem: moveItem, rotateItem: rotateItem,
     syncPicks: syncPicks, setPicks: setPicks,
     newItem: newItem, ensureEls: ensureEls,
-    buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource, swapSource: swapSource,
+    buildPdf: buildPdf, withBytes: withBytes,
+    /* Edit Object's page work in the save worker; rejects SaveWorkerUnavailable */
+    editWork: function (src, fn, index, extra) { return SW.edit(src, fn, index, extra); }, loadSrc: loadSrc, addSource: addSource, swapSource: swapSource,
     syncMarkPop: syncMarkPop, redrawAll: redrawAll,
     /* type in text mark idx of page it, the caret at its end */
     editText: function (it, idx) { openEditor(it, null, idx, true); }, saveError: saveError, selectedText: selectedText,
@@ -8779,7 +8914,7 @@
     },
     nativeRender: function (pause) {
       if (pause !== undefined) NR.paused = !!pause;      /* to compare it with the worker */
-      const it = S.items[S.current - 1], t = it && it.src && NR.timings(it.src.bytes);
+      const it = S.items[S.current - 1], t = it && it.src && NR.timings(srcKey(it.src));
       const per = function (x) { return x && x[1] ? Math.round(x[0] / x[1]) : null; };
       return {
         state: NR.state, why: NR.why, drawn: NR.drawn, ms: Math.round(NR.ms), paused: !!NR.paused,
@@ -8818,7 +8953,12 @@
     exportSession: function () {
       const d = buildProject(false), byId = {};
       S.sources.forEach(function (src) { byId[src.id] = src; });
-      d.sources.forEach(function (src) { src.bytes = byId[src.id].bytes; });
+      d.sources.forEach(function (src) {
+        const s = byId[src.id];
+        /* a file read as needed goes as where it is: the new window opens it again */
+        if (s.lazy && s.path) src.range = { path: s.path, size: s.lazy.size };
+        else src.bytes = s.bytes;
+      });
       return d;
     },
     importSession: function (d) { return openProject(d, true); },

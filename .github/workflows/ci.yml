@@ -108,6 +108,13 @@ jobs:
         working-directory: apps/desktop
         env:
           APP: ${{ env.INSTALLED_APP }}
+      # again with every file treated as big (over 150 MB): opened, drawn
+      # and saved while read a part at a time from disk
+      - run: node e2e.mjs
+        working-directory: apps/desktop
+        env:
+          APP: ${{ env.INSTALLED_APP }}
+          ADDDOTS_RANGE_MB: '0'
       - name: Uninstall
         shell: pwsh
         run: |

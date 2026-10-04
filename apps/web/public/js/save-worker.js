@@ -17,7 +17,15 @@
    incremental update, E.appendPdf) when the pages allow it; appended says
    whether they were, else the file was rebuilt.
    items are { src: id, num, rot, crop, shapes, fields }. Builds that share a
-   cacheId (the pages of one file split up) parse each source once. */
+   cacheId (the pages of one file split up) parse each source once.
+
+     { op: 'eo', rid, src, fn, index, ids | id }    Edit Object's work on a page
+                                                    -> { rid, out } | { rid, error }
+   fn 'shapes' and 'lines' read page index's shapes or lines of text (plain
+   data); 'cutShapes' (ids) and 'cutText' (id) give the page on its own
+   with those cut out, as PDF bytes. Each source's pdf-lib document is kept
+   for the next ask until the source is forgotten: a CAD sheet's content
+   froze the page for a second when read there. */
 'use strict';
 
 let ready = false, whyNot = '';
@@ -121,15 +129,44 @@ async function build(m) {
   return { parts: [await E.buildPdf(items, cache.map, opts, hooks())], appended: false };
 }
 
+const eoDocs = new Map();
+function eoDoc(id) {
+  if (!eoDocs.has(id)) {
+    const s = sources.get(id);
+    if (!s) return Promise.reject(new Error('save worker: source ' + id + ' was not sent'));
+    const p = Promise.resolve(s.bytes).then(function (b) { return PDFLib.PDFDocument.load(b, { updateMetadata: false }); });
+    p.catch(function () { eoDocs.delete(id); });
+    eoDocs.set(id, p);
+  }
+  return eoDocs.get(id);
+}
+async function eo(m) {
+  const d = await eoDoc(m.src);
+  if (m.fn === 'shapes') return E.pageShapes(d, m.index);
+  if (m.fn === 'lines') return E.pageTextLines(d, m.index);
+  if (m.fn === 'cutShapes') return E.cutShapes(d, m.index, m.ids);
+  if (m.fn === 'cutText') return E.cutText(d, m.index, m.id);
+  throw new Error('save worker: no such work: ' + m.fn);
+}
+
 self.onmessage = function (e) {
   const m = e.data;
   if (m.op === 'hello') { self.postMessage({ op: 'hello', ok: ready, why: whyNot }); return; }
   if (m.op === 'source') {
     const bytes = m.file ? m.file.arrayBuffer().then(function (b) { return new Uint8Array(b); }) : m.bytes;
     sources.set(m.id, { bytes: bytes, name: m.name });
+    eoDocs.delete(m.id);
     return;
   }
-  if (m.op === 'forget') { sources.delete(m.id); if (cache.map) cache.map.delete(m.id); return; }
+  if (m.op === 'forget') { sources.delete(m.id); eoDocs.delete(m.id); if (cache.map) cache.map.delete(m.id); return; }
+  if (m.op === 'eo') {
+    eo(m).then(function (out) {
+      self.postMessage({ rid: m.rid, out: out }, out instanceof Uint8Array ? [out.buffer] : []);
+    }, function (err) {
+      self.postMessage({ rid: m.rid, error: { name: err && err.name || 'Error', message: String(err && err.message || err) } });
+    });
+    return;
+  }
   if (m.op !== 'build') return;
   build(m).then(function (r) {
     if (m.blob) {

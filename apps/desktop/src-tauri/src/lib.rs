@@ -20,10 +20,10 @@
 //! window opens with that name and takes it from there. A PDF handed over
 //! later goes to the window used last.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 
 use tauri::{Emitter, Manager};
 
@@ -40,6 +40,9 @@ struct Opened {
     last: Mutex<String>,
     /// numbers the windows a tab is moved to
     windows: AtomicU32,
+    /// big files kept open to be read a part at a time (`open_plan`), by id
+    ranged: Mutex<HashMap<u32, Arc<Mutex<std::fs::File>>>>,
+    next_range: AtomicU32,
 }
 
 /// PDFs among a start's arguments (the first argument is the program itself),
@@ -91,6 +94,91 @@ fn read_file(path: String, state: tauri::State<'_, Opened>) -> Result<tauri::ipc
     std::fs::read(&p)
         .map(tauri::ipc::Response::new)
         .map_err(|e| e.to_string())
+}
+
+/// How to open a handed-over file: its size, and whether it is big enough to
+/// be read a part at a time (`read_range`) rather than whole. Over 150 MB,
+/// where crash recovery does not keep a copy of a file anyway, so nothing is
+/// lost by not holding one; ADDDOTS_RANGE_MB sets another size (the tests).
+/// `keep` asks for that whatever its size (a tab moved to a new window).
+/// When it is, the file is kept open and `id` names it: the parts are read
+/// from the file as it was opened, so saving over it (a new file renamed
+/// into its place) does not change what the open document reads, as with
+/// PDFium (pdf_open_path). `range_close` lets it go.
+#[derive(serde::Serialize)]
+struct OpenPlan {
+    size: u64,
+    ranges: bool,
+    id: Option<u32>,
+}
+
+#[tauri::command]
+fn open_plan(
+    path: String,
+    keep: Option<bool>,
+    state: tauri::State<'_, Opened>,
+) -> Result<OpenPlan, String> {
+    let p = PathBuf::from(&path);
+    if !state.allowed.lock().unwrap().contains(&p) {
+        return Err("not a file this app was asked to open".into());
+    }
+    let size = std::fs::metadata(&p)
+        .map(|m| m.len())
+        .map_err(|e| e.to_string())?;
+    let mb: u64 = std::env::var("ADDDOTS_RANGE_MB")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(150);
+    let ranges = keep.unwrap_or(false) || size > mb * 1024 * 1024;
+    let mut id = None;
+    if ranges {
+        let f = std::fs::File::open(&p).map_err(|e| e.to_string())?;
+        let n = state.next_range.fetch_add(1, Ordering::SeqCst) + 1;
+        state
+            .ranged
+            .lock()
+            .unwrap()
+            .insert(n, Arc::new(Mutex::new(f)));
+        id = Some(n);
+    }
+    Ok(OpenPlan { size, ranges, id })
+}
+
+/// `len` bytes of a file kept open by `open_plan`, from `offset` (fewer at
+/// its end), as raw binary: what pdf.js asks for as it reads a big file.
+#[tauri::command]
+async fn read_range(
+    id: u32,
+    offset: u64,
+    len: u32,
+    state: tauri::State<'_, Opened>,
+) -> Result<tauri::ipc::Response, String> {
+    let f = state
+        .ranged
+        .lock()
+        .unwrap()
+        .get(&id)
+        .cloned()
+        .ok_or("that file is not open")?;
+    tauri::async_runtime::spawn_blocking(move || range_of(&mut f.lock().unwrap(), offset, len))
+        .await
+        .map_err(|e| e.to_string())?
+        .map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+fn range_close(id: u32, state: tauri::State<'_, Opened>) {
+    state.ranged.lock().unwrap().remove(&id);
+}
+
+fn range_of(f: &mut std::fs::File, offset: u64, len: u32) -> Result<Vec<u8>, String> {
+    use std::io::{Read, Seek, SeekFrom};
+    f.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
+    let mut out = Vec::with_capacity(len as usize);
+    f.take(len as u64)
+        .read_to_end(&mut out)
+        .map_err(|e| e.to_string())?;
+    Ok(out)
 }
 
 /// `%XX` escapes undone (the page sends the name through encodeURIComponent,
@@ -464,6 +552,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             launch_files,
             read_file,
+            open_plan,
+            read_range,
+            range_close,
             save_file,
             open_store,
             new_window,
@@ -486,6 +577,23 @@ mod tests {
 
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn a_range_of_a_file_and_its_end_even_once_saved_over() {
+        let dir = std::env::temp_dir().join(format!("adddots-range-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let p = dir.join("r.pdf");
+        std::fs::write(&p, b"0123456789").unwrap();
+        let mut f = std::fs::File::open(&p).unwrap();
+        assert_eq!(range_of(&mut f, 2, 3).unwrap(), b"234");
+        assert_eq!(range_of(&mut f, 8, 100).unwrap(), b"89");
+        assert_eq!(range_of(&mut f, 20, 5).unwrap(), b"");
+        /* saved over (as Save does it) while open: still the file as opened */
+        write_atomic(&p, b"abcdefghij").unwrap();
+        assert_eq!(range_of(&mut f, 0, 4).unwrap(), b"0123");
+        drop(f);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

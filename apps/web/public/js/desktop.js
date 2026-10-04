@@ -36,11 +36,19 @@
     if (!paths || !paths.length || !api) return;
     trace.received = trace.received.concat(paths);
     Promise.all(paths.map(function (p) {
-      return T.core.invoke('read_file', { path: p }).then(function (buf) {
-        const f = new File([buf], base(p), { type: 'application/pdf' });
-        /* where it is on disk: PDFium reads it from there, not from a copy (core.js NR) */
-        f.adddotsPath = p;
-        return f;
+      return T.core.invoke('open_plan', { path: p }).then(function (plan) {
+        /* a big file is not read whole: the desktop side keeps it open and
+           pdf.js reads the parts it needs (core.js RANGED). What stands in
+           for it is plain data, so it reaches a tab as it is. */
+        if (plan && plan.id != null) {
+          return { name: base(p), size: plan.size, type: 'application/pdf', adddotsPath: p, adddotsRange: plan.id };
+        }
+        return T.core.invoke('read_file', { path: p }).then(function (buf) {
+          const f = new File([buf], base(p), { type: 'application/pdf' });
+          /* where it is on disk: PDFium reads it from there, not from a copy (core.js NR) */
+          f.adddotsPath = p;
+          return f;
+        });
       });
     })).then(function (files) {
       /* ready is sticky: this runs at once if core has already booted */
@@ -49,7 +57,10 @@
         /* a document open: each in a tab of its own */
         if (api.hasDoc() && api.tabs && api.tabs.available()) { api.tabs.openFiles(files); return; }
         /* the picker asks before it replaces unsaved work; so does this */
-        if (api.hasDoc() && !api.okToReplace()) return;
+        if (api.hasDoc() && !api.okToReplace()) {
+          files.forEach(function (f) { if (f.adddotsRange != null) T.core.invoke('range_close', { id: f.adddotsRange }).catch(function () {}); });
+          return;
+        }
         api.openFiles(files);
       });
     }).catch(function (e) {
