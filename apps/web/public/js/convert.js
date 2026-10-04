@@ -1000,7 +1000,27 @@
           if (Math.abs(rot) > 0.01) pair(50, n(rot));
           grow(p[0], p[1]); this.count++;
         },
-        file: function (layers) {
+        /* the file as bytes, written a part at a time with a pause whenever
+           a part has taken 30 ms, so the page answers while it is: a CAD
+           set's, joined and encoded in one piece, held it up for 1.2 s.
+           The text is ASCII (dxfText), so the parts can be cut anywhere. */
+        bytes: async function (layers) {
+          const all = this.lines(layers), enc = new TextEncoder(), parts = [];
+          let size = 0, t = performance.now();
+          for (let i = 0; i < all.length; i += 4000) {
+            const b = enc.encode(all.slice(i, i + 4000).join('\r\n') + '\r\n');
+            parts.push(b); size += b.length;
+            if (performance.now() - t > 30) {
+              await new Promise(function (r) { setTimeout(r, 0); });
+              t = performance.now();
+            }
+          }
+          const out = new Uint8Array(size);
+          let at = 0;
+          parts.forEach(function (b) { out.set(b, at); at += b.length; });
+          return out;
+        },
+        lines: function (layers) {
           const H = [];
           function hp(code, v) { H.push(String(code), String(v)); }
           const b = isFinite(box.x1) ? box : { x1: 0, y1: 0, x2: 100, y2: 100 };
@@ -1027,7 +1047,7 @@
           hp(0, 'SECTION'); hp(2, 'BLOCKS'); hp(0, 'ENDSEC');
           hp(0, 'SECTION'); hp(2, 'ENTITIES');
           const tail = ['0', 'ENDSEC', '0', 'EOF'];
-          return H.concat(L, tail).join('\r\n') + '\r\n';
+          return H.concat(L, tail);
         }
       };
     }
@@ -1074,7 +1094,14 @@
           if (pts.length >= 2) out.poly(layer, col, pts, s.closed);
         });
       }
+      /* a pause whenever 30 ms of it has run: a CAD sheet's thousands of
+         paths otherwise held the page up a quarter-second at a time */
+      let slice = performance.now();
       for (let i = 0; i < ol.fnArray.length; i++) {
+        if ((i & 63) === 0 && performance.now() - slice > 30) {
+          await new Promise(function (r) { setTimeout(r, 0); });
+          slice = performance.now();
+        }
         const fn = ol.fnArray[i], args = ol.argsArray[i];
         if (fn === OPS.save) stack.push({ ctm: ctm, stroke: stroke, fill: fill });
         else if (fn === OPS.restore) { const s = stack.pop(); if (s) { ctm = s.ctm; stroke = s.stroke; fill = s.fill; } }
@@ -1150,7 +1177,7 @@
         ox += size.w + size.w * 0.1;                 /* the next sheet sits alongside */
         if (o.lay === 'zip') {
           files.push({ name: S.baseName + ' - page ' + doc.label(i) + '.dxf',
-                       data: new TextEncoder().encode(out.file(CAD_LAYERS)) });
+                       data: await out.bytes(CAD_LAYERS) });
           n += out.count;
         }
       }
@@ -1164,7 +1191,7 @@
       if (o.lay === 'zip') return { data: files[0].data, name: files[0].name, type: 'application/dxf', note: note };
       n = out.count;
       if (!n) throw new Error('no drawing found — the pages look scanned');
-      return { data: new TextEncoder().encode(out.file(CAD_LAYERS)), name: S.baseName + '.dxf',
+      return { data: await out.bytes(CAD_LAYERS), name: S.baseName + '.dxf',
                type: 'application/dxf', note: note };
     };
 

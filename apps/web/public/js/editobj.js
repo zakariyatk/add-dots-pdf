@@ -111,13 +111,33 @@
       }
       return docs.get(src);
     }
+    /* the page's content read or cut in the save worker, off this thread (a
+       CAD sheet's took a second here); here, as before, when it cannot */
+    function work(src, fn, index, extra) {
+      if (src.password) return Promise.reject(new Error('protected'));
+      const here = function () {
+        return docOf(src).then(function (d) {
+          if (fn === 'shapes') return E.pageShapes(d, index);
+          if (fn === 'lines') return E.pageTextLines(d, index);
+          if (fn === 'cutShapes') return E.cutShapes(d, index, extra.ids);
+          return E.cutText(d, index, extra.id);
+        });
+      };
+      /* X.editedBy says where the last of it was done (for the tests) */
+      const local = function () { X.editedBy = 'page'; return here(); };
+      if (!X.editWork) return local();
+      return X.editWork(src, fn, index, extra).then(function (out) { X.editedBy = 'worker'; return out; }, function (e) {
+        if (e && e.name === 'SaveWorkerUnavailable') return local();
+        throw e;
+      });
+    }
     function shapesOf(it) {
       let m = lists.get(it.src);
       if (!m) lists.set(it.src, (m = new Map()));
       if (!m.has(it.num)) {
         const num = it.num, src = it.src;
-        m.set(num, docOf(src).then(function (d) {
-          return E.pageShapes(d, num - 1).map(function (s) { s.segs = null; return s; });
+        m.set(num, work(src, 'shapes', num - 1).then(function (list) {
+          return list.map(function (s) { s.segs = null; return s; });
         }).catch(function (err) {
           console.warn('[editobj] page content', err);
           return null;
@@ -132,7 +152,7 @@
       if (!m) texts.set(it.src, (m = new Map()));
       if (!m.has(it.num)) {
         const num = it.num, src = it.src;
-        m.set(num, docOf(src).then(function (d) { return E.pageTextLines(d, num - 1); }).catch(function (err) {
+        m.set(num, work(src, 'lines', num - 1).catch(function (err) {
           console.warn('[editobj] page text', err);
           return null;
         }));
@@ -304,8 +324,7 @@
       if (busy) return;
       busy = true;
       try {
-        const d = await docOf(it.src);
-        const bytes = await E.cutText(d, it.num - 1, l.id);
+        const bytes = await work(it.src, 'cutText', it.num - 1, { id: l.id });
         X.snapshot();
         const src = await X.addSource(it.src.name, bytes, true);
         const mark = {
@@ -346,8 +365,7 @@
       if (busy) return;
       busy = true;
       try {
-        const d = await docOf(it.src);
-        const bytes = await E.cutShapes(d, it.num - 1, [s.id]);
+        const bytes = await work(it.src, 'cutShapes', it.num - 1, { ids: [s.id] });
         X.snapshot();
         const src = await X.addSource(it.src.name, bytes, true);
         const mark = E.vpathFromShape(s);

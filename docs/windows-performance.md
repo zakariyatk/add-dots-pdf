@@ -153,8 +153,8 @@ Each phase: measure, change, test every existing feature, measure again.
    under memory pressure; measure RAM with the 85 MB and 2,000-page files.
 3. **Big files.** ✅ Open from disk by byte ranges (pdf.js range transport,
    native `read_range`), so a 500 MB file is not read whole before page 1.
-4. **Off the page thread.** Search matching and Edit Object parsing in a
-   worker; Convert in a worker or native.
+4. **Off the page thread.** ✅ Measured first: search was already off it;
+   Edit Object's work moved to the save worker; DXF conversion yields.
 5. **Windows OCR.** Windows.Media.Ocr through the Rust side, Tesseract
    kept for the web.
 6. **Professional UI.** Dark theme pass, icon audit, toolbar groups,
@@ -232,3 +232,35 @@ pdf.js sets aside room for the whole file in its worker, and it fills that
 room as the background text indexing reads every page. Not indexing big
 files in the background would be the next cut, at the price of search
 starting later.
+
+## Phase 4: off the page thread — done
+
+Measured first (`apps/web/bench/longtasks.mjs`). It counts the page
+thread's long tasks (over 50 ms, when the page cannot answer input) during
+each job, in Chrome, after the file has settled:
+
+| Job                                 | Long tasks before        | After                |
+| ----------------------------------- | ------------------------ | -------------------- |
+| Search 2,000 pages (and again)      | none                     | none                 |
+| Edit Object, first point, CAD sheet | 1,198 ms (one of 882 ms) | **93 ms**            |
+| Edit Object, lift a shape, CAD      | 605 ms (max 419)         | **205 ms** (max 125) |
+| Edit Object, 300-page report        | none                     | none                 |
+| Convert to Word / Excel, 300 pages  | none                     | none                 |
+| Convert to DXF, CAD 8 sheets        | 2,683 ms (one of 1,989)  | **759 ms** (max 261) |
+
+DXF conversion also got faster (5.5 → 3.0 s), and its output is
+byte-identical.
+
+- **Search needed nothing.** pdf.js's worker already extracts the text,
+  and matching cached text across 2,000 pages takes 35 ms in all.
+- **Edit Object** reads a page's shapes and lines of text, and cuts them
+  out, in the **save worker** (`op: 'eo'`). That worker already has
+  pdf-lib, the engine and each file. It keeps the parsed document per file
+  until the file is let go of. The page thread still does the same work
+  when the worker cannot (`X.editedBy` says which did it; the smoke test
+  checks it was the worker).
+- **DXF**: the time went to joining and encoding the finished file in one
+  piece (46 MB of text). It is now written 4,000 lines at a time, with a
+  pause whenever 30 ms have run, and so is the walk through each sheet's
+  drawing. What is left is about 60–80 ms per sheet while pdf.js hands
+  over the sheet's drawing operations.

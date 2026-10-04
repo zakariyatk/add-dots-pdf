@@ -2555,11 +2555,16 @@ try {
     const lifted = await page.evaluate(() => {
       const A = window.ADDPDF,
         it = A.S.items[0];
-      return { marks: it.shapes.map((s) => s.t + ' ' + s.c), selected: !!A.S.sel, num: it.num };
+      return {
+        marks: it.shapes.map((s) => s.t + ' ' + s.c),
+        selected: !!A.S.sel,
+        num: it.num,
+        by: A.editedBy,
+      };
     });
     check(
-      'Edit Object: a line the PDF draws lights up and lifts off as an editable shape',
-      lit && lifted.marks.join() === 'vpath #008000' && lifted.selected,
+      'Edit Object: a line the PDF draws lights up and lifts off as an editable shape, read and cut in the save worker',
+      lit && lifted.marks.join() === 'vpath #008000' && lifted.selected && lifted.by === 'worker',
       { lit, lifted },
     );
     await page.mouse.move(lx, ly);

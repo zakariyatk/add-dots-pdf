@@ -6080,6 +6080,15 @@
       waiting.forEach(function (w) { w.rej(unavailable(why)); });
       waiting.clear();
     }
+    /* a source, sent to the worker once (again if its bytes changed) */
+    function send(src) {
+      if (sent.get(src.id) === srcKey(src)) return;
+      /* the file as opened is read by the worker itself: posting the
+         bytes copies them here first, a quarter-second for 84 MB */
+      const file = src.file && src.fileOf === src.bytes ? src.file : null;
+      worker.postMessage({ op: 'source', id: src.id, file: file, bytes: file ? null : src.bytes, name: src.name || '' });
+      sent.set(src.id, srcKey(src));
+    }
     function start() {
       if (starting) return starting;
       starting = new Promise(function (res) {
@@ -6127,15 +6136,7 @@
         return new Promise(function (res, rej) {
           const id = ++rid;
           try {
-            items.forEach(function (it) {
-              const src = it.src;
-              if (sent.get(src.id) === src.bytes) return;
-              /* the file as opened is read by the worker itself: posting the
-                 bytes copies them here first, a quarter-second for 84 MB */
-              const file = src.file && src.fileOf === src.bytes ? src.file : null;
-              worker.postMessage({ op: 'source', id: src.id, file: file, bytes: file ? null : src.bytes, name: src.name || '' });
-              sent.set(src.id, src.bytes);
-            });
+            items.forEach(function (it) { send(it.src); });
             worker.postMessage({ op: 'build', rid: id, items: plain, state: state, opts: opts, cacheId: cacheId, blob: !!blob });
           } catch (e) {
             /* something in the marks cannot be posted: the page builds it */
@@ -6143,6 +6144,25 @@
             return;
           }
           waiting.set(id, { res: res, rej: rej });
+        });
+      },
+      /* Edit Object's work on a page (save-worker.js 'eo'): fn 'shapes' or
+         'lines' read it, 'cutShapes' or 'cutText' cut from it */
+      edit: function (src, fn, index, extra) {
+        return start().then(function (ok) {
+          if (!ok || !worker) throw unavailable();
+          const go = function () {
+            return new Promise(function (res, rej) {
+              const id = ++rid;
+              try {
+                send(src);
+                worker.postMessage(Object.assign({ op: 'eo', rid: id, src: src.id, fn: fn, index: index }, extra || {}));
+              } catch (e) { rej(unavailable(e && e.message)); return; }
+              waiting.set(id, { res: res, rej: rej });
+            });
+          };
+          /* a file read as needed is read whole only to be sent */
+          return (sent.get(src.id) === srcKey(src) ? go() : withBytes([src], go)).then(function (m) { return m.out; });
         });
       },
       forget: function (id) {
@@ -8872,7 +8892,9 @@
     removeItem: removeItem, moveItem: moveItem, rotateItem: rotateItem,
     syncPicks: syncPicks, setPicks: setPicks,
     newItem: newItem, ensureEls: ensureEls,
-    buildPdf: buildPdf, withBytes: withBytes, loadSrc: loadSrc, addSource: addSource, swapSource: swapSource,
+    buildPdf: buildPdf, withBytes: withBytes,
+    /* Edit Object's page work in the save worker; rejects SaveWorkerUnavailable */
+    editWork: function (src, fn, index, extra) { return SW.edit(src, fn, index, extra); }, loadSrc: loadSrc, addSource: addSource, swapSource: swapSource,
     syncMarkPop: syncMarkPop, redrawAll: redrawAll,
     /* type in text mark idx of page it, the caret at its end */
     editText: function (it, idx) { openEditor(it, null, idx, true); }, saveError: saveError, selectedText: selectedText,
