@@ -286,6 +286,8 @@
       return { it: it, quads: quads, text: text.replace(/\s+/g, ' ').trim() };
     }
 
+    /* the page menu's Highlight (js/pagemenu.js) */
+    X.applyMarkup = function (kind) { applyMarkup(kind); };
     function applyMarkup(kind) {
       const got = quadsFromSelection();
       if (!got) { X.toast('Select some text on the page first'); return; }
