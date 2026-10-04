@@ -44,6 +44,17 @@ if (!device) {
 const sh = async (cmd) => (await device.shell(cmd)).toString().trim();
 
 let page = null;
+let reconnects = 0;
+
+/* the app's WebView, and a page to drive in it. Connecting can hang on a
+   WebView that is still starting: once more, then fail */
+async function connect() {
+  const open = async (ms) => within((await device.webView({ pkg: PKG }, { timeout: ms })).page(), 30000);
+  return open(60000).catch(async () => {
+    await sleep(2000);
+    return open(30000);
+  });
+}
 
 /* a promise that gives up after ms */
 const within = (p, ms) =>
@@ -83,18 +94,23 @@ async function report() {
   /* the crash buffer holds the whole report of any crash, Java or native */
   const crashes = await sh('logcat -d -b crash -v time').catch(() => '');
   console.log('\ncrash log:\n' + (crashes.split('\n').slice(-150).join('\n') || '(empty)'));
-  const log = await sh('logcat -d -v time').catch(() => '');
-  const lines = log
-    .split('\n')
-    .filter((l) =>
-      /fatal|crash|chromium|cr_|webview|renderer|sandboxed|gpu|lowmemory|lmkd|kill|anr|adddots|console|capacitor/i.test(
-        l,
-      ),
-    )
-    /* system chatter that matches the words above and says nothing about the app
-       (crashrecovery: thousands of lines from NamespaceManager) */
-    .filter((l) => !/AiAiEcho|DynamiteModule|NamespaceManager|crashrecovery|AppsFilter|OomAdjuster/.test(l));
-  console.log('\nlogcat (' + lines.length + ' lines):\n' + lines.slice(-200).join('\n'));
+  const log = (await sh('logcat -d -v time').catch(() => '')).split('\n');
+  /* system chatter that says nothing about the app: Google's apps settling
+     after boot (crashrecovery alone is thousands of lines) */
+  const noise =
+    /AiAiEcho|DynamiteModule|NamespaceManager|crashrecovery|AppsFilter|OomAdjuster|TimedProcessReaper|Can't format flag|cr_CronetUrlRequestContext/;
+  /* the app: its process, its activity coming and going, its WebView's console */
+  const app = log.filter(
+    (l) =>
+      !noise.test(l) &&
+      (/com\.adddots\.pdf|Capacitor|chromium|console/i.test(l) ||
+        /ActivityTaskManager|wm_on_|wm_destroy|Config changes|configuration changed|Displayed/i.test(l)),
+  );
+  console.log('\nlogcat, the app (' + app.length + ' lines):\n' + app.slice(-150).join('\n'));
+  const sys = log.filter(
+    (l) => !noise.test(l) && /fatal|crash|webview|renderer|sandboxed|gpu|lowmemory|lmkd|kill|anr/i.test(l),
+  );
+  console.log('\nlogcat, the system (' + sys.length + ' lines):\n' + sys.slice(-80).join('\n'));
 }
 /* A step the emulator never answers (an adb shell, an install) would wait for
    ever: after ten minutes, say where it stopped and fail. */
@@ -135,18 +151,24 @@ try {
       '/.MainActivity',
   );
   step = 'open the first PDF and find the WebView';
-  const webview = await device.webView({ pkg: PKG }, { timeout: 60000 });
-  step = 'connect to the WebView';
-  /* connecting can hang on a WebView that is still starting: once more, then fail */
-  page = await within(webview.page(), 30000).catch(async () => {
-    await sleep(2000);
-    return within((await device.webView({ pkg: PKG }, { timeout: 30000 })).page(), 30000);
-  });
+  page = await connect();
   step = 'wait for page 1';
   const until = async (fn, ms = 60000) => {
     const t = Date.now();
     while (Date.now() - t < ms) {
-      const v = await page.evaluate(fn).catch(() => null);
+      const v = await page.evaluate(fn).catch(async (e) => {
+        /* the WebView went away: on a freshly booted emulator the system
+           can recreate the activity (Google's apps change the configuration
+           as they settle). The app takes the intent it was started with
+           again and reopens the file, so the run carries on with the new
+           WebView; it says so, and three times is a failure */
+        if (/closed/.test(String(e && e.message)) && reconnects < 3) {
+          reconnects++;
+          console.log('  the WebView went away while waiting (' + step + '): connecting again');
+          page = await connect().catch(() => page);
+        }
+        return null;
+      });
       if (v) return v;
       await sleep(250);
     }
@@ -248,5 +270,6 @@ try {
   clearTimeout(watchdog);
 }
 
+if (reconnects) console.log('\nthe WebView went away ' + reconnects + ' time(s) and was connected again');
 console.log(failed ? '\n' + failed + ' check(s) failed' : '\nall checks passed');
 process.exit(failed ? 1 : 0);
