@@ -22,6 +22,8 @@
 
   const BUILD = window.ADDDOTS_BUILD || null;
   const IN_DESKTOP = !!window.__TAURI__;
+  /* a document tab is a frame of the window, which tells of updates itself */
+  const IN_FRAME = window.parent !== window;
   const IN_PHONE = !!(window.Capacitor && window.Capacitor.isNativePlatform &&
     window.Capacitor.isNativePlatform());
   const SEEN = 'adddots.build.seen';
@@ -141,7 +143,7 @@
   }
 
   function checkApp() {
-    if (!(IN_DESKTOP || IN_PHONE) || !BUILD) return;
+    if (!(IN_DESKTOP || IN_PHONE) || !BUILD || IN_FRAME) return;
     fetchLatest().then(offerAppUpdate);
   }
 

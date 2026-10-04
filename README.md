@@ -2,6 +2,9 @@
 
 PDF reader and editor for web, Windows, iOS and Android.
 
+- Web: https://pdf.adddots.com/
+- Windows: [Microsoft Store](https://apps.microsoft.com/detail/9PGHPBRMLQMS)
+
 This repo is being rebuilt in phases. The plan is in `C:\Users\zak\.claude\plans\linear-wibbling-babbage.md`, and the v1 app is tagged `v1-legacy` as the reference for how things should behave.
 
 ## Layout

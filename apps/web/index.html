@@ -327,6 +327,11 @@
           <button data-go="hRecent"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>Recent files</button>
         </nav>
         <span class="grow"></span>
+        <!-- Windows browsers only, outside the apps: js/pwa.js shows it -->
+        <a class="getwin" id="hGetWin" href="https://apps.microsoft.com/detail/9PGHPBRMLQMS" target="_blank" rel="noopener" hidden="">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8"></rect><rect x="13" y="3" width="8" height="8"></rect><rect x="3" y="13" width="8" height="8"></rect><rect x="13" y="13" width="8" height="8"></rect></svg>
+          <span><b>Get the Windows app</b>From the Microsoft Store</span>
+        </a>
         <div class="safe">
           <svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"></path><polyline points="8.5 12 11 14.5 15.5 9.5"></polyline></svg>
           <span>Private by design. Your files are opened and edited on this device — nothing is uploaded.</span>
@@ -1090,6 +1095,8 @@
 })();
 </script>
 </template>
+<script src="js/fonts-list.js"></script>
+<script src="js/fonts.js"></script>
 <script src="js/core.js"></script>
 <script src="js/navigate.js"></script>
 <script src="js/annotate.js"></script>

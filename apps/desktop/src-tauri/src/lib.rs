@@ -13,9 +13,16 @@
 //! Saving: the page sends the file's bytes (`save_file`) and the desktop side
 //! asks where with the system's Save dialog, then writes it there. The page
 //! never names a path to write to.
+//!
+//! Windows: each PDF opens in a tab of the window (js/tabs.js), and a tab can
+//! be moved to a window of its own (`new_window`). The page puts the tab's
+//! document in the browser storage the windows share and names it; the new
+//! window opens with that name and takes it from there. A PDF handed over
+//! later goes to the window used last.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 
 use tauri::{Emitter, Manager};
@@ -27,6 +34,10 @@ struct Opened {
     pending: Mutex<Vec<String>>,
     /// every path the system handed over: the only ones read_file serves
     allowed: Mutex<HashSet<PathBuf>>,
+    /// the window used last: where a PDF handed over later opens
+    last: Mutex<String>,
+    /// numbers the windows a tab is moved to
+    windows: AtomicU32,
 }
 
 /// PDFs among a start's arguments (the first argument is the program itself),
@@ -140,23 +151,28 @@ async fn save_file(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> R
     Ok(Some(path.to_string_lossy().into_owned()))
 }
 
-/// The window, from tauri.conf.json (which leaves creating it to this).
-///
-/// For the end-to-end test on Windows only: with ADDDOTS_DEVTOOLS_PORT set,
-/// WebView2 also listens for DevTools on that local port, which is how
-/// Playwright drives a WebView2 app. Edge's WebDriver cannot attach to this
-/// app, as it looks for WebView2 in a data folder of its own choosing.
-fn main_window(app: &tauri::App) -> tauri::Result<()> {
-    let config = app
-        .config()
+/// The main window's settings in tauri.conf.json (which leaves creating it to this).
+fn main_config(app: &tauri::AppHandle) -> tauri::utils::config::WindowConfig {
+    app.config()
         .app
         .windows
         .iter()
         .find(|w| w.label == "main")
         .cloned()
-        .expect("a main window in tauri.conf.json");
+        .expect("a main window in tauri.conf.json")
+}
+
+/// A window made from those settings.
+///
+/// For the end-to-end test on Windows only: with ADDDOTS_DEVTOOLS_PORT set,
+/// WebView2 also listens for DevTools on that local port, which is how
+/// Playwright drives a WebView2 app. Edge's WebDriver cannot attach to this
+/// app, as it looks for WebView2 in a data folder of its own choosing. Every
+/// window gets the same arguments: WebView2 refuses a second window whose
+/// arguments differ from the first's.
+fn build_window(app: &tauri::AppHandle, config: &tauri::utils::config::WindowConfig) -> tauri::Result<()> {
     #[allow(unused_mut)]
-    let mut builder = tauri::WebviewWindowBuilder::from_config(app.handle(), &config)?;
+    let mut builder = tauri::WebviewWindowBuilder::from_config(app, config)?;
     #[cfg(windows)]
     if let Some(port) = std::env::var("ADDDOTS_DEVTOOLS_PORT").ok().and_then(|p| p.parse::<u16>().ok()) {
         // wry's own defaults, which setting any arguments replaces; and, as
@@ -171,6 +187,30 @@ fn main_window(app: &tauri::App) -> tauri::Result<()> {
     }
     builder.build()?;
     Ok(())
+}
+
+/// A tab moved to a window of its own: the window opens the document the
+/// page put away under `handoff` (js/tabs.js). The name is all it is given,
+/// and only a short one of letters and digits is taken.
+#[tauri::command]
+fn new_window(app: tauri::AppHandle, handoff: String, state: tauri::State<'_, Opened>) -> Result<(), String> {
+    if handoff.is_empty() || handoff.len() > 40 || !handoff.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err("not a document to move".into());
+    }
+    let n = state.windows.fetch_add(1, Ordering::Relaxed) + 1;
+    let mut config = main_config(&app);
+    config.label = format!("doc-{n}");
+    config.url = tauri::WebviewUrl::App(format!("index.html?handoff={handoff}").into());
+    build_window(&app, &config).map_err(|e| e.to_string())
+}
+
+/// Where a PDF handed over later goes: the window used last, if it is
+/// still open, else any window of the app.
+fn target_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
+    let last = app.state::<Opened>().last.lock().unwrap().clone();
+    app.get_webview_window(&last)
+        .or_else(|| app.get_webview_window("main"))
+        .or_else(|| app.webview_windows().into_values().next())
 }
 
 /// This app's page in the Microsoft Store, where an update is installed
@@ -202,16 +242,21 @@ pub fn run() {
             let paths = pdf_args(&args, Path::new(&cwd));
             let state = app.state::<Opened>();
             let files = remember(&state, &paths);
-            if let Some(w) = app.get_webview_window("main") {
+            if let Some(w) = target_window(app) {
                 let _ = w.unminimize();
                 let _ = w.set_focus();
-            }
-            if !files.is_empty() {
-                let _ = app.emit("open-files", files);
+                if !files.is_empty() {
+                    let _ = app.emit_to(w.label(), "open-files", files);
+                }
             }
         }))
         .plugin(tauri_plugin_dialog::init())
-        .manage(Opened::default())
+        .manage(Opened { last: Mutex::new("main".into()), ..Default::default() })
+        .on_window_event(|w, e| {
+            if let tauri::WindowEvent::Focused(true) = e {
+                *w.state::<Opened>().last.lock().unwrap() = w.label().to_string();
+            }
+        })
         .setup(|app| {
             // the files first: the page asks for them as soon as it loads
             let args: Vec<String> = std::env::args().collect();
@@ -220,10 +265,10 @@ pub fn run() {
             let state = app.state::<Opened>();
             let files = remember(&state, &paths);
             *state.pending.lock().unwrap() = files;
-            main_window(app)?;
+            build_window(app.handle(), &main_config(app.handle()))?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![launch_files, read_file, save_file, open_store])
+        .invoke_handler(tauri::generate_handler![launch_files, read_file, save_file, open_store, new_window])
         .run(tauri::generate_context!())
         .expect("error while running ADD DOTS PDF");
 }

@@ -1,0 +1,35 @@
+/* The Google Fonts the Text tool offers: written by
+   scripts/fonts/fetch-google-fonts.py, with their files in
+   assets/fonts/google/. styles: has regular, bold, italic, bold italic. */
+self.ADDDOTS_FONT_LIST = [
+  {"id": "roboto", "name": "Roboto", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "open-sans", "name": "Open Sans", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "lato", "name": "Lato", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "montserrat", "name": "Montserrat", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "poppins", "name": "Poppins", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "inter", "name": "Inter", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "noto-sans", "name": "Noto Sans", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "source-sans-3", "name": "Source Sans 3", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "raleway", "name": "Raleway", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "nunito", "name": "Nunito", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "ubuntu", "name": "Ubuntu", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "pt-sans", "name": "PT Sans", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "fira-sans", "name": "Fira Sans", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "work-sans", "name": "Work Sans", "fallback": "sans-serif", "styles": [1, 1, 1, 1]},
+  {"id": "oswald", "name": "Oswald", "fallback": "sans-serif", "styles": [1, 1, 0, 0]},
+  {"id": "merriweather", "name": "Merriweather", "fallback": "serif", "styles": [1, 1, 1, 1]},
+  {"id": "playfair-display", "name": "Playfair Display", "fallback": "serif", "styles": [1, 1, 1, 1]},
+  {"id": "lora", "name": "Lora", "fallback": "serif", "styles": [1, 1, 1, 1]},
+  {"id": "pt-serif", "name": "PT Serif", "fallback": "serif", "styles": [1, 1, 1, 1]},
+  {"id": "noto-serif", "name": "Noto Serif", "fallback": "serif", "styles": [1, 1, 1, 1]},
+  {"id": "roboto-slab", "name": "Roboto Slab", "fallback": "serif", "styles": [1, 1, 0, 0]},
+  {"id": "libre-baskerville", "name": "Libre Baskerville", "fallback": "serif", "styles": [1, 1, 1, 1]},
+  {"id": "eb-garamond", "name": "EB Garamond", "fallback": "serif", "styles": [1, 1, 1, 1]},
+  {"id": "crimson-text", "name": "Crimson Text", "fallback": "serif", "styles": [1, 1, 1, 1]},
+  {"id": "roboto-mono", "name": "Roboto Mono", "fallback": "monospace", "styles": [1, 1, 1, 1]},
+  {"id": "dancing-script", "name": "Dancing Script", "fallback": "cursive", "styles": [1, 1, 0, 0]},
+  {"id": "caveat", "name": "Caveat", "fallback": "cursive", "styles": [1, 1, 0, 0]},
+  {"id": "pacifico", "name": "Pacifico", "fallback": "cursive", "styles": [1, 0, 0, 0]},
+  {"id": "great-vibes", "name": "Great Vibes", "fallback": "cursive", "styles": [1, 0, 0, 0]},
+  {"id": "bebas-neue", "name": "Bebas Neue", "fallback": "sans-serif", "styles": [1, 0, 0, 0]}
+];

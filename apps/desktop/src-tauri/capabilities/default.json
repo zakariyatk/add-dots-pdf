@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the app's window may ask of the desktop side: the files it was opened with, and events",
-  "windows": ["main"],
+  "description": "What the app's window may ask of the desktop side: the files it was opened with, and events; a tab moved to a window of its own (doc-N) asks the same",
+  "windows": ["main", "doc-*"],
   "permissions": ["core:default"]
 }

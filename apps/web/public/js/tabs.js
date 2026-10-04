@@ -11,8 +11,13 @@
    are two tabs. A tab says what it holds (name, unsaved changes) to the bar;
    closing one with unsaved changes asks first.
 
+   In the Windows app a PDF opened from Explorer gets a tab too, and a tab
+   can be moved to a window of its own, as in Acrobat: drag it down out of
+   the bar, or right-click it, "Move to new window". It goes with its
+   unsaved work, still editable (js/desktop.js carries it over).
+
    Tests that open file after file in one page set window.ADDDOTS_NO_TABS.
-   The Windows and phone apps have none: one document to a window there. */
+   The phone app has none: one document at a time on a phone. */
 (function () {
   'use strict';
 
@@ -21,11 +26,9 @@
 
   const tabParam = /[?&]tab=(\d+)/.exec(location.search);
   const inTab = !!tabParam && window.parent !== window;
-  /* The Windows and phone apps keep one document to a window: a PDF the
-     system hands them replaces the one open, as their own tests expect. */
-  const IN_APP = !!window.__TAURI__ ||
-    !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  const off = function () { return !!window.ADDDOTS_NO_TABS || IN_APP; };
+  /* the phone app keeps one document at a time */
+  const IN_PHONE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+  const off = function () { return !!window.ADDDOTS_NO_TABS || IN_PHONE; };
 
   /* ================= inside a tab ================= */
 
@@ -108,7 +111,8 @@
         b.tabIndex = 0;
         b.dataset.id = t.id;
         const name = label(t);
-        b.title = name + (dirtyOf(t) ? ' — unsaved changes' : '');
+        b.title = name + (dirtyOf(t) ? ' — unsaved changes' : '') +
+          (X.newWindow ? '\nDrag it down out of the bar, or right-click it, to move it to a window of its own' : '');
         b.innerHTML = '<svg viewBox="0 0 24 24" class="dtico"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>' +
           '<span class="dtname"></span><i class="dtdot" aria-hidden="true"></i>' +
           (t.id === 0 && !X.hasDoc() ? '' :
@@ -144,9 +148,10 @@
       return t;
     }
 
-    function close(id) {
+    /* force: no question about unsaved work (it has gone to another window) */
+    function close(id, force) {
       const t = byId(id); if (!t) return;
-      if (dirtyOf(t) && !confirm('Close "' + label(t) + '"? Its unsaved changes will be lost.')) return;
+      if (!force && dirtyOf(t) && !confirm('Close "' + label(t) + '"? Its unsaved changes will be lost.')) return;
       const at = tabs.indexOf(t);
       if (id === 0) {
         /* the app itself stays, as the Home tab: its document is put away */
@@ -162,7 +167,82 @@
       } else paint();
     }
 
+    /* ---- a tab to a window of its own (the Windows app) ---- */
+    function canDetach(id) {
+      const t = byId(id);
+      return !!(X.newWindow && t && tabs.length > 1 && (id !== 0 || X.hasDoc()) && (id === 0 || t.ready));
+    }
+    function detach(id) {
+      if (!canDetach(id)) return;
+      const t = byId(id);
+      const W = id === 0 ? X : t.frame.contentWindow && t.frame.contentWindow.ADDPDF;
+      if (!W || !W.hasDoc() || !W.exportSession) return;
+      let d;
+      try { d = W.exportSession(); } catch (e) { X.toast('That document could not be moved'); return; }
+      d.name = label(t);
+      X.newWindow(d).then(function () {
+        try { W.forgetSession(); } catch (e) { /* its record goes stale and is dropped */ }
+        close(id, true);
+      }, function (e) {
+        console.error('[tabs] new window', e);
+        X.toast('Could not open a new window');
+      });
+    }
+
+    const menu = document.createElement('div');
+    menu.className = 'dtmenu'; menu.hidden = true; menu.setAttribute('role', 'menu');
+    menu.innerHTML = '<button type="button" role="menuitem" data-a="win">Move to new window</button>' +
+      '<button type="button" role="menuitem" data-a="close">Close</button>';
+    document.body.appendChild(menu);
+    let menuFor = null;
+    function hideMenu() { menu.hidden = true; menuFor = null; }
+    list.addEventListener('contextmenu', function (e) {
+      const tab = e.target.closest('.dtab'); if (!tab) return;
+      e.preventDefault();
+      menuFor = +tab.dataset.id;
+      menu.querySelector('[data-a="win"]').hidden = !canDetach(menuFor);
+      menu.hidden = false;
+      menu.style.left = Math.min(window.innerWidth - menu.offsetWidth - 6, e.clientX) + 'px';
+      menu.style.top = Math.min(window.innerHeight - menu.offsetHeight - 6, e.clientY) + 'px';
+    });
+    menu.addEventListener('click', function (e) {
+      const b = e.target.closest('button'); if (!b || menuFor == null) return;
+      const id = menuFor;
+      hideMenu();
+      if (b.dataset.a === 'win') detach(id); else close(id);
+    });
+    document.addEventListener('pointerdown', function (e) { if (!menu.hidden && !menu.contains(e.target)) hideMenu(); }, true);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !menu.hidden) hideMenu(); });
+
+    /* dragged well clear of the bar, a tab tears off into a window */
+    let tear = null;
+    list.addEventListener('pointerdown', function (e) {
+      const tab = e.target.closest('.dtab');
+      if (!tab || e.button !== 0 || e.target.closest('.dtx') || !canDetach(+tab.dataset.id)) return;
+      tear = { id: +tab.dataset.id, x: e.clientX, y: e.clientY, el: tab, on: false, pid: e.pointerId };
+    });
+    function away(e) {
+      const r = bar.getBoundingClientRect();
+      return e.clientY > r.bottom + 50 || e.clientY < 0 || e.clientX < 0 || e.clientX > window.innerWidth;
+    }
+    document.addEventListener('pointermove', function (e) {
+      if (!tear || e.pointerId !== tear.pid) return;
+      if (!tear.on && Math.hypot(e.clientX - tear.x, e.clientY - tear.y) > 8) {
+        tear.on = true;
+        try { tear.el.setPointerCapture(e.pointerId); } catch (err) { /* the drag still works inside the window */ }
+      }
+      if (tear.on) tear.el.classList.toggle('tearing', away(e));
+    });
+    document.addEventListener('pointerup', function (e) {
+      if (!tear || e.pointerId !== tear.pid) return;
+      const t = tear; tear = null;
+      t.el.classList.remove('tearing');
+      if (t.on && away(e)) { suppressClick = true; detach(t.id); }
+    });
+    let suppressClick = false;
+
     list.addEventListener('click', function (e) {
+      if (suppressClick) { suppressClick = false; return; }
       const tab = e.target.closest('.dtab'); if (!tab) return;
       const id = +tab.dataset.id;
       if (e.target.closest('.dtx')) { e.stopPropagation(); close(id); return; }

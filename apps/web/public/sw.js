@@ -38,6 +38,8 @@ const SHELL = [
   'css/light.css',
   'css/wps.css',
   'js/engine.js',
+  'js/fonts-list.js',
+  'js/fonts.js',
   'js/core.js',
   'js/navigate.js',
   'js/annotate.js',

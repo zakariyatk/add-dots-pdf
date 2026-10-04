@@ -289,14 +289,54 @@
     times: '"Times New Roman", Times, serif',
     cour: '"Courier New", Courier, monospace'
   };
+  /* and the Google Fonts (js/fonts.js), as 'g:<id>' */
+  const GF = window.ADDDOTS_FONTS || null;
+  if (GF) GF.list.forEach(function (f) { CSS_FONT['g:' + f.id] = GF.css('g:' + f.id); });
+  ['txFont', 'mpFont'].forEach(function (id) { if (GF && $(id)) $(id).innerHTML = GF.options(); });
   function fontIdx(b, i) { return E.fontIdx(b, i); }
 
   /* standard-font text widths; null for the moment it takes to embed the fonts */
   let measure = null;
   E.createTextMeasurer().then(function (m) { measure = m; }, function () { measure = null; });
 
+  /* A Google Font is measured as the page draws it, once its file is in;
+     until then by count (null), and every page is redrawn when it arrives */
+  const fontCtx = document.createElement('canvas').getContext('2d');
+  const fontWait = {};
+  function fileFontSpec(item) {
+    return (item.i ? 'italic ' : '') + (item.b ? 'bold ' : '') + '100px ' + CSS_FONT[item.f];
+  }
+  function fileFontWidth(item, line) {
+    const spec = fileFontSpec(item);
+    if (!document.fonts || !document.fonts.check(spec, line)) {
+      if (document.fonts && !fontWait[spec]) {
+        fontWait[spec] = document.fonts.load(spec, line).then(function () {
+          S.items.forEach(function (x) { if (x.anno) drawShapes(x); });
+        }, function () {});
+      }
+      return null;
+    }
+    fontCtx.font = spec;
+    return fontCtx.measureText(line).width * item.size / 100;
+  }
   function textWidth(item, line) {
+    if (GF && GF.is(item.f)) return fileFontWidth(item, line);
     return measure ? measure(item, line) : null;
+  }
+  /* a Google Font's file for a save, with fontkit to embed it (see loadUnicodeFont) */
+  const fileFonts = {};
+  function loadFileFont(f, style) {
+    const path = GF && GF.file(f, style);
+    if (!path) return Promise.resolve(null);
+    if (!fileFonts[path]) {
+      fileFonts[path] = Promise.all([loadUnicodeFont().then(function (u) { return u.fontkit; }),
+        fetch(path).then(function (r) {
+          if (!r.ok) throw new Error('font: HTTP ' + r.status);
+          return r.arrayBuffer();
+        })]).then(function (got) { return { fontkit: got[0], bytes: new Uint8Array(got[1]) }; });
+      fileFonts[path].catch(function () { delete fileFonts[path]; });
+    }
+    return fileFonts[path];
   }
   const WINANSI_OK = /^[\u0000-\u00FF\u20AC\u201A\u0192\u201E\u2026\u2020\u2021\u02C6\u2030\u0160\u2039\u0152\u017D\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u02DC\u2122\u0161\u203A\u0153\u017E\u0178\n]*$/;
 
@@ -1652,7 +1692,7 @@
     if (TQ.busy || !TQ.want.size || rail.hidden) return;
     if (RQ.busy || RQ.want.size || TQ.hold) return;  /* pages first: pumpRender calls back when idle */
     /* a document whose thumbnails are slow to draw waits for a longer pause */
-    const quiet = TQ.slow ? 1500 : 400;
+    const quiet = TQ.slow ? 500 : 120;
     const still = performance.now() - TQ.lastScroll;
     if (still < quiet) {
       clearTimeout(TQ.timer);
@@ -1678,6 +1718,7 @@
     });
   }
 
+  const THUMB_RES = 0.6;
   async function paintThumb(it) {
     if (it.thumbDone) return;
     it.thumbDone = true;
@@ -1689,8 +1730,12 @@
     const sc = 176 / shown;
     const v = it.page.getViewport({ scale: sc, rotation: rot });
     const c = cropRectIn(v, it.crop);
-    it.thumbCanvas.width = Math.floor(v.width);
-    it.thumbCanvas.height = Math.floor(v.height);
+    /* drawn at a fraction of its size and stretched to fit: a thumbnail
+       only has to say which page it is, and a smaller bitmap draws in a
+       fraction of the time */
+    const vr = it.page.getViewport({ scale: sc * THUMB_RES, rotation: rot });
+    it.thumbCanvas.width = Math.max(1, Math.floor(vr.width));
+    it.thumbCanvas.height = Math.max(1, Math.floor(vr.height));
     it.thumbCanvas.style.width = Math.floor(v.width) + 'px';
     it.thumbCanvas.style.height = Math.floor(v.height) + 'px';
     it.thumbCanvas.style.left = (c ? -c.left : 0) + 'px';
@@ -1710,8 +1755,8 @@
     for (;;) {
       const task = inWorker
         /* a page not on screen will not be drawn again soon: free it after */
-        ? RW.render(it, v, it.thumbCanvas.width, it.thumbCanvas.height, null, !it.rendered)
-        : it.page.render({ canvasContext: ctx, viewport: v });
+        ? RW.render(it, vr, it.thumbCanvas.width, it.thumbCanvas.height, null, !it.rendered)
+        : it.page.render({ canvasContext: ctx, viewport: vr });
       TQ.task = task; TQ.it = it;
       try {
         const bitmap = await task.promise;
@@ -4923,9 +4968,11 @@
     };
   }
 
-  async function openProject(d) {
+  /* moved: a tab brought over from another window, which is no project to
+     the reader — it keeps its own name and says nothing */
+  async function openProject(d, moved) {
     if (S.items.length && !okToReplace()) return false;
-    toast('Opening the project…');
+    if (!moved) toast('Opening the project…');
     let srcs;
     try {
       srcs = [];
@@ -4990,6 +5037,11 @@
     const nPhotos = Object.keys(S.locs).reduce(function (a, k) {
       return a + ((S.locs[k].photos || []).length);
     }, 0);
+    if (moved) {
+      S.metaBase = '<b>' + esc(d.name || docName()) + '</b>';
+      $('meta').innerHTML = S.metaBase;
+      return true;
+    }
     toast('Project open · <b>' + S.items.length + '</b> pages · <b>' + nPins + '</b> pins · ' +
           '<b>' + nPhotos + '</b> photos');
     return true;
@@ -5231,7 +5283,7 @@
     ed.box.remove();
 
     if (!commit) { drawShapes(ed.it); return; }
-    if (!WINANSI_OK.test(val)) {
+    if (!(GF && GF.is(ed.item.f)) && !WINANSI_OK.test(val)) {
       toast('Built-in fonts cover Latin text only');
       drawShapes(ed.it);
       return;
@@ -5596,6 +5648,7 @@
         return E.saveHooks(state, {
           measure: textWidth,
           unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont },
+          fonts: { load: loadFileFont },
           breathe: breathe
         });
       };
@@ -8449,7 +8502,19 @@
     ZOOM_MIN: ZOOM_MIN, ZOOM_MAX: ZOOM_MAX,
     /* the document put away (its tab closed): back to the home screen */
     closeDocument: function () { hardReset(); updateMeta(); showHome(); },
-    hasDoc: function () { return !!S.items.length; }
+    hasDoc: function () { return !!S.items.length; },
+    /* the whole document as it stands — pages, turns, crops, marks, pins —
+       with its files' bytes, for a tab moved to a window of its own
+       (js/tabs.js); importSession opens it there, editable as it was */
+    exportSession: function () {
+      const d = buildProject(false), byId = {};
+      S.sources.forEach(function (src) { byId[src.id] = src; });
+      d.sources.forEach(function (src) { src.bytes = byId[src.id].bytes; });
+      return d;
+    },
+    importSession: function (d) { return openProject(d, true); },
+    /* its work lives elsewhere now: nothing here to offer back after a crash */
+    forgetSession: function () { return clearRecovery(); }
   });
   EXT.emit('ready');
 })();
