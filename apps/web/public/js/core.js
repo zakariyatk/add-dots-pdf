@@ -1246,16 +1246,22 @@
     detailSoon(0);
   }
 
+  function densityChanged() {
+    const next = dprNow();
+    if (next !== DPR) { DPR = next; relayout(); }
+  }
   (function watchDpr() {
     if (!window.matchMedia) return;
     const mq = window.matchMedia('(resolution: ' + (window.devicePixelRatio || 1) + 'dppx)');
     if (!mq.addEventListener) return;
     mq.addEventListener('change', function () {
-      const next = dprNow();
-      if (next !== DPR) { DPR = next; relayout(); }
+      densityChanged();
       watchDpr();                       /* the query names the old density: a new one for the next change */
     }, { once: true });
   })();
+  /* not every browser tells the query of a change; a window moved to a
+     screen of another density changes its size in CSS pixels, though */
+  window.addEventListener('resize', densityChanged);
 
   /* ---------------- smooth zooming ----------------
      The live part only resizes and keeps the scroll anchored on whatever the

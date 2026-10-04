@@ -2163,14 +2163,16 @@ try {
           it = X.S.items[0];
         return {
           dpr: X.drawDpr(),
+          screen: window.devicePixelRatio,
           ratio: +(it.canvas.width / it.box.offsetWidth).toFixed(2),
         };
       });
     const at3 = await ratio();
-    /* Windows' scaling changed (or the window moved to another screen) */
+    /* the window moved to a screen at 150%: its density changes, and its
+       size in CSS pixels with it */
     const cdp = await dctx.newCDPSession(page);
     await cdp.send('Emulation.setDeviceMetricsOverride', {
-      width: 1440,
+      width: 1439,
       height: 900,
       deviceScaleFactor: 1.5,
       mobile: false,
