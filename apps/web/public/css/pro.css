@@ -1394,3 +1394,23 @@ body .rail-tabs .btn.on:not(#railClose) {
 /* the shape under the pointer, about to be picked */
 .anno .eohl { fill: rgba(47, 134, 240, .12); stroke: #2F86F0; stroke-width: 2; stroke-dasharray: 5 3; pointer-events: none }
 body[data-tool="editobj"] .capture { cursor: pointer }
+
+/* ---- tools that are in the Windows app (js/winonly.js) ---- */
+.btn.winonly { position: relative }
+.btn.winonly::before {
+  content: ''; position: absolute; top: 3px; right: 3px; width: 9px; height: 9px; opacity: .85;
+  background:
+    linear-gradient(#2F86F0, #2F86F0) 0 0 / 4px 4px no-repeat, linear-gradient(#2F86F0, #2F86F0) 5px 0 / 4px 4px no-repeat,
+    linear-gradient(#2F86F0, #2F86F0) 0 5px / 4px 4px no-repeat, linear-gradient(#2F86F0, #2F86F0) 5px 5px / 4px 4px no-repeat
+}
+.wocard { position: fixed; inset: 0; z-index: 300; display: flex; align-items: center; justify-content: center;
+  background: rgba(0, 0, 0, .45); padding: 16px }
+.wocard[hidden] { display: none }
+.wobox { width: min(420px, 100%); background: var(--chrome); color: var(--text); border: 1px solid var(--line);
+  border-radius: 12px; padding: 22px; box-shadow: 0 16px 48px rgba(0, 0, 0, .35); display: flex; flex-direction: column; gap: 8px }
+.wobox .wologo { width: 30px; height: 30px; fill: #2F86F0; stroke: none }
+.wobox b { font-size: 17px }
+.wobox p { margin: 0; font-size: 13.5px; line-height: 1.5 }
+.wobox .wonote { color: var(--text-dim); font-size: 12.5px }
+.woacts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; flex-wrap: wrap }
+.woacts a.btn { text-decoration: none; display: inline-flex; align-items: center }

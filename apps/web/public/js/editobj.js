@@ -71,6 +71,7 @@
     }
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
+      if (X.winOnly && X.winOnly('editobj')) return;
       if (!S.items.length) { X.toast('Open a PDF first'); return; }
       if (!menu.hidden) { menu.hidden = true; return; }
       openMenu();
