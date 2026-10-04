@@ -2464,6 +2464,11 @@
   }
 
   function beginDrag(it, idx, e, mode, extra) {
+    /* a right-click on a mark selects it, for the menu (js/pagemenu.js) */
+    if (e.button === 2 && S.tool === 'select' && it.vp && it.shapes[idx] && it.shapes[idx].t !== 'pin') {
+      if (!S.sel || S.sel.it !== it || selList().indexOf(idx) < 0) { S.sel = { it: it, i: idx }; S.multi = null; redrawAll(); }
+      return;
+    }
     if (S.tool !== 'select' || !it.vp || e.button > 0) return;
     const s = it.shapes[idx];
     if (!s || s.t === 'pin') return;             /* pins have their own tool */
@@ -3316,6 +3321,41 @@
     hideMarkPop();
     drawShapes(it); updateMeta(); renderPins();
     toast(list.length > 1 ? list.length + ' marks removed' : 'Mark removed');
+    return true;
+  }
+
+  /* A copy of each selected mark, a little down and to the right, selected
+     in their place (the page menu's Duplicate). */
+  function duplicateSelected() {
+    if (!S.sel) return false;
+    snapshot();
+    const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
+    const off = 12 / Math.max(0.2, S.scale);                          /* 12 screen pixels, in points */
+    const made = list.map(function (i) {
+      const o = JSON.parse(JSON.stringify(it.shapes[i]));
+      const c = JSON.parse(JSON.stringify(o));
+      moveShape(c, o, off, -off);
+      if (c.id != null) c.id = String(c.id) + '-' + Date.now().toString(36) + i;
+      it.shapes.push(c);
+      return it.shapes.length - 1;
+    });
+    setGroup(it, made);
+    drawShapes(it); updateMeta();
+    toast(made.length > 1 ? made.length + ' marks duplicated' : 'Mark duplicated');
+    return true;
+  }
+  /* The selected marks drawn over every other mark on their page: the
+     last drawn is the one on top. */
+  function frontSelected() {
+    if (!S.sel) return false;
+    snapshot();
+    const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
+    const moved = list.map(function (i) { return it.shapes[i]; });
+    for (let k = list.length - 1; k >= 0; k--) it.shapes.splice(list[k], 1);
+    moved.forEach(function (m) { it.shapes.push(m); });
+    const n = it.shapes.length;
+    setGroup(it, moved.map(function (_, k) { return n - moved.length + k; }));
+    drawShapes(it);
     return true;
   }
 
@@ -8968,7 +9008,10 @@
     okToReplace: okToReplace,
     isDirty: isDirty, docName: docName, homeShown: homeShown, showHome: showHome,
     /* the zoom, for the status bar (js/skin.js): read it, or glide to one */
-    zoom: function () { return glideTarget(); }, zoomTo: function (v) { zoomGlide(v); },
+    zoom: function () { return glideTarget(); }, zoomTo: function (v, x, y) { zoomGlide(v, x, y); },
+    /* for the page menu (js/pagemenu.js) */
+    fitPage: function () { S.fit = 'page'; relayout(); }, print: function () { return printDoc(); },
+    deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
     ZOOM_MIN: ZOOM_MIN, ZOOM_MAX: ZOOM_MAX,
     /* the document put away (its tab closed): back to the home screen */
     closeDocument: function () { hardReset(); updateMeta(); showHome(); },
