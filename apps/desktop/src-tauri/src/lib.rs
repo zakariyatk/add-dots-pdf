@@ -174,7 +174,10 @@ fn range_close(id: u32, state: tauri::State<'_, Opened>) {
 fn range_of(f: &mut std::fs::File, offset: u64, len: u32) -> Result<Vec<u8>, String> {
     use std::io::{Read, Seek, SeekFrom};
     f.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
-    let mut out = Vec::with_capacity(len as usize);
+    // room for what the file has left, not for whatever was asked: a len
+    // of 4 GB would otherwise be set aside before a byte is read
+    let left = f.metadata().map_err(|e| e.to_string())?.len().saturating_sub(offset);
+    let mut out = Vec::with_capacity(left.min(len as u64) as usize);
     f.take(len as u64)
         .read_to_end(&mut out)
         .map_err(|e| e.to_string())?;
@@ -589,6 +592,7 @@ mod tests {
         assert_eq!(range_of(&mut f, 2, 3).unwrap(), b"234");
         assert_eq!(range_of(&mut f, 8, 100).unwrap(), b"89");
         assert_eq!(range_of(&mut f, 20, 5).unwrap(), b"");
+        assert_eq!(range_of(&mut f, 4, u32::MAX).unwrap(), b"456789", "a huge ask is the file's end");
         /* saved over (as Save does it) while open: still the file as opened */
         write_atomic(&p, b"abcdefghij").unwrap();
         assert_eq!(range_of(&mut f, 0, 4).unwrap(), b"0123");

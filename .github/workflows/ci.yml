@@ -52,6 +52,13 @@ jobs:
       - run: npm run smoke -w @adddots/web
         env:
           BENCH_CHANNEL: chrome
+      # again, every page under the Windows app's content security policy
+      # (tauri.conf.json), so a tool it would block fails here first
+      - name: Smoke test under the Windows app's content security policy
+        run: npm run smoke -w @adddots/web
+        env:
+          BENCH_CHANNEL: chrome
+          ADDDOTS_CSP: '1'
 
   desktop:
     name: Windows app (Tauri)

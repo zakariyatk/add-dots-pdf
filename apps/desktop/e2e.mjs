@@ -235,6 +235,32 @@ try {
   );
   check('the page cannot read a file it was not handed', /^refused/.test(refused), refused);
 
+  /* the window's content security policy (tauri.conf.json) is in force: no
+     eval; and the update check's sandboxed frame still runs and answers
+     (with what the website says, or nothing when offline) */
+  const policy = await runAsync(async () => {
+    let evals = true;
+    try {
+      new Function('return 1')();
+    } catch (e) {
+      evals = false;
+    }
+    /* a site that refuses at once (a closed port here), so the frame's answer
+       does not wait on the network: nothing, quickly */
+    const cfg = window.ADDDOTS_CONFIG;
+    const site = cfg.shareServer;
+    cfg.shareServer = 'http://127.0.0.1:9/';
+    const t = Date.now();
+    const latest = window.ADDPDF.latestBuild ? await window.ADDPDF.latestBuild() : 'missing';
+    cfg.shareServer = site;
+    return { evals, answered: latest === null && Date.now() - t < 20000, ms: Date.now() - t };
+  });
+  check(
+    'the window has a content security policy, and the update check still answers',
+    policy.evals === false && policy.answered,
+    policy,
+  );
+
   /* ---- a second double-click, with the app open ---- */
   const second = spawn(APP, [B], { env, stdio: 'ignore' });
   const quit = await new Promise((res) => {

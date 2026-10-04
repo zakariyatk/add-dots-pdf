@@ -1,19 +1,21 @@
 # Handover: where the Windows app work stands
 
-Last updated 2026-10-04. Read with `docs/windows-performance.md`, which has
+Last updated 2026-10-04 (second session). Read with `docs/windows-performance.md`, which has
 the analysis, the plan and the measured results of each phase.
 
 ## Done
 
-| Phase | What                                                                    | Where                  |
-| ----- | ----------------------------------------------------------------------- | ---------------------- |
-| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                          | PR #45 (merged)        |
-| 2     | Memory: PDFium reads from disk, render worker started only when needed  | PR #46 (merged)        |
-| 3     | Big files (over 150 MB) read from disk by byte ranges                   | PR #47                 |
-| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes | PR #47 (second commit) |
+| Phase | What                                                                    | Where                                   |
+| ----- | ----------------------------------------------------------------------- | --------------------------------------- |
+| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                          | PR #45 (merged)                         |
+| 2     | Memory: PDFium reads from disk, render worker started only when needed  | PR #46 (merged)                         |
+| 3     | Big files (over 150 MB) read from disk by byte ranges                   | PR #47                                  |
+| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes | PR #47 (second commit)                  |
+| 7     | Window CSP; update check sandboxed; `read_range` bounded                | `claude/affectionate-archimedes-ymfdlu` |
 
-Branch: `claude/festive-hypatia-aw32lc`. Once PR #47 is merged, start the
-next phase from `main`.
+PR #47 is merged. This session's work (the Android CI changes and phase 7)
+is on `claude/affectionate-archimedes-ymfdlu`, not yet in a pull request; CI
+runs only on pull requests, so it has not run there yet.
 
 ## Open problem: the Android CI job fails most of the time
 
@@ -30,7 +32,13 @@ next phase from `main`.
   software GPU (`-gpu swiftshader_indirect`), logs
   `Failed to find ColorBuffer` / `Failed to bind to texture`, and isn't
   pinned (`channel: stable` takes the newest emulator).
-- **Next steps to try,** in `.github/workflows/ci.yml` (`android` job) and
+- **Tried (this session, waiting on CI):** 4 cores, 4 GB, `-gpu
+swangle_indirect`. The failing runs used emulator 37.2.12 and WebView
+  Chrome 113; the app booted (render worker on) but page 1 was not drawn.
+  `e2e-android.mjs` now prints the app's state when a check times out
+  (files, pages, which are drawn, errors), and its logcat filter no longer
+  matches "crashrecovery", whose thousands of lines had hidden the rest.
+- **If it still fails, next,** in `.github/workflows/ci.yml` (`android` job) and
   `apps/mobile/e2e-android.mjs`:
   1. Compare the emulator version (the "Emulator 37.x" line) in a passing
      run (#126, #127, #129) with a failing one (#130, #132, #133). If it
@@ -49,9 +57,7 @@ next phase from `main`.
    Tesseract (`js/ocr.js`) for the website and as the fallback.
 6. **Professional UI.** Dark theme pass, icon audit, toolbar groups,
    two-page view, High-DPI audit, Windows print, context menus.
-7. **Security.** A CSP for the Tauri window (it has `csp: null` today in
-   `apps/desktop/src-tauri/tauri.conf.json`), and a review of every path
-   and file the Rust side accepts (`lib.rs`).
+7. ~~Security~~: done, see `docs/windows-performance.md`.
 
 Smaller items noted along the way:
 

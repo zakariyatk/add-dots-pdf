@@ -728,7 +728,9 @@ try {
     /* WCAG 2.1 A and AA, and axe's best practices. The words of the PDF
        itself (the text layer) are the document's, not the app's. */
     const audit = async () => {
-      if (!(await page.evaluate(() => !!window.axe))) await page.addScriptTag({ content: AXE });
+      /* run, not added as a script tag: the page's content security policy
+         (ADDDOTS_CSP=1) rightly refuses an inline script */
+      if (!(await page.evaluate(() => !!window.axe))) await page.evaluate(AXE + '\n;0');
       return page.evaluate(async () => {
         const r = await window.axe.run(
           { exclude: [['#stage .textLayer']] },
@@ -2269,7 +2271,12 @@ try {
     );
     const page = await uctx.newPage();
     const errors = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    /* the update check's sandboxed frame (latest-frame.html) runs none of the
+       app's scripts, but this test's start-up script and Playwright's
+       service-worker block are put into it too, and fail there */
+    page.on('pageerror', (e) => {
+      if (!/sandboxed and lacks the 'allow-same-origin' flag/.test(e.message)) errors.push(e.message);
+    });
     await page.goto(URL);
     const bars = [];
     await page
