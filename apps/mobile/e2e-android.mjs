@@ -44,12 +44,66 @@ if (!device) {
 const sh = async (cmd) => (await device.shell(cmd)).toString().trim();
 
 let page = null;
+
+/* a promise that gives up after ms */
+const within = (p, ms) =>
+  Promise.race([p, sleep(ms).then(() => Promise.reject(new Error('no answer in ' + ms / 1000 + ' s')))]);
+
+/* where the app is, when a check times out: was the file handed over, did it
+   open, how far did drawing get */
+async function appState() {
+  if (!page) return { page: 'not connected' };
+  return within(
+    page.evaluate(() => {
+      const a = window.ADDPDF;
+      if (!a || !a.S) return { core: 'not booted' };
+      return {
+        sources: a.S.sources.map((s) => s && s.name),
+        pages: a.S.items.length,
+        rendered: a.S.items.slice(0, 3).map((it) => !!it.rendered),
+        worker: a.renderWorker(),
+        errors: window.ADDPDF_HEALTH ? window.ADDPDF_HEALTH.session().slice(0, 5) : null,
+      };
+    }),
+    10000,
+  ).catch((e) => ({ page: String((e && e.message) || e).split('\n')[0] }));
+}
+
+/* on a failure, what the device saw: the app's own errors, and the system
+   log's crashes and WebView messages (a WebView that goes away leaves its
+   reason here) */
+async function report() {
+  const health = page
+    ? await within(
+        page.evaluate(() => (window.ADDPDF_HEALTH ? window.ADDPDF_HEALTH.session() : null)),
+        10000,
+      ).catch(() => null)
+    : null;
+  if (health) console.log('\napp errors: ' + JSON.stringify(health.slice(0, 10)));
+  /* the crash buffer holds the whole report of any crash, Java or native */
+  const crashes = await sh('logcat -d -b crash -v time').catch(() => '');
+  console.log('\ncrash log:\n' + (crashes.split('\n').slice(-150).join('\n') || '(empty)'));
+  const log = await sh('logcat -d -v time').catch(() => '');
+  const lines = log
+    .split('\n')
+    .filter((l) =>
+      /fatal|crash|chromium|cr_|webview|renderer|sandboxed|gpu|lowmemory|lmkd|kill|anr|adddots|console|capacitor/i.test(
+        l,
+      ),
+    )
+    /* system chatter that matches the words above and says nothing about the app
+       (crashrecovery: thousands of lines from NamespaceManager) */
+    .filter((l) => !/AiAiEcho|DynamiteModule|NamespaceManager|crashrecovery|AppsFilter|OomAdjuster/.test(l));
+  console.log('\nlogcat (' + lines.length + ' lines):\n' + lines.slice(-200).join('\n'));
+}
 /* A step the emulator never answers (an adb shell, an install) would wait for
    ever: after ten minutes, say where it stopped and fail. */
 let step = 'start';
 const watchdog = setTimeout(
-  () => {
+  async () => {
     console.log('FAIL the Android run finished in time  ' + JSON.stringify({ stuckAt: step }));
+    /* what the device saw, as on any other failure, but no longer than a minute */
+    await Promise.race([report(), sleep(60000)]);
     process.exit(1);
   },
   10 * 60 * 1000,
@@ -82,7 +136,13 @@ try {
   );
   step = 'open the first PDF and find the WebView';
   const webview = await device.webView({ pkg: PKG }, { timeout: 60000 });
-  page = await webview.page();
+  step = 'connect to the WebView';
+  /* connecting can hang on a WebView that is still starting: once more, then fail */
+  page = await within(webview.page(), 30000).catch(async () => {
+    await sleep(2000);
+    return within((await device.webView({ pkg: PKG }, { timeout: 30000 })).page(), 30000);
+  });
+  step = 'wait for page 1';
   const until = async (fn, ms = 60000) => {
     const t = Date.now();
     while (Date.now() - t < ms) {
@@ -103,7 +163,7 @@ try {
   check(
     'opened from another app (content://), the PDF opens and page 1 is drawn',
     !!first && first.pages === 3 && first.name === 'first.pdf',
-    first,
+    first || (await appState()),
   );
   /* the render worker may still be starting on a slow phone: pages are drawn
      on the page meanwhile; once it has started, it draws */
@@ -140,7 +200,11 @@ try {
       ? { pages: a.S.items.length, name: a.S.sources[0].name }
       : null;
   });
-  check('a second PDF opened while the app is open replaces the first', !!got && got.pages === 5, got);
+  check(
+    'a second PDF opened while the app is open replaces the first',
+    !!got && got.pages === 5,
+    got || (await appState()),
+  );
 
   step = 'save';
   /* Save */
@@ -179,28 +243,7 @@ try {
 } catch (e) {
   check('the Android app could be driven', false, String((e && e.message) || e).split('\n')[0]);
 } finally {
-  /* on a failure, what the device saw: the app's own errors, and the system
-     log's crashes and WebView messages (a WebView that goes away leaves its
-     reason here) */
-  if (failed) {
-    const health = page
-      ? await page
-          .evaluate(() => (window.ADDPDF_HEALTH ? window.ADDPDF_HEALTH.session() : null))
-          .catch(() => null)
-      : null;
-    if (health) console.log('\napp errors: ' + JSON.stringify(health.slice(0, 10)));
-    /* the crash buffer holds the whole report of any crash, Java or native */
-    const crashes = await sh('logcat -d -b crash -v time').catch(() => '');
-    console.log('\ncrash log:\n' + (crashes.split('\n').slice(-150).join('\n') || '(empty)'));
-    const log = await sh('logcat -d -v time').catch(() => '');
-    const lines = log
-      .split('\n')
-      .filter((l) =>
-        /fatal|crash|chromium|cr_|webview|renderer|sandboxed|lowmemory|lmkd|killing|adddots|console/i.test(l),
-      )
-      .filter((l) => !/AiAiEcho|DynamiteModule/.test(l));
-    console.log('\nlogcat (' + lines.length + ' lines):\n' + lines.slice(-150).join('\n'));
-  }
+  if (failed) await report();
   await device.close().catch(() => {});
   clearTimeout(watchdog);
 }
