@@ -62,8 +62,12 @@ swangle_indirect`. The failing runs used emulator 37.2.12 and WebView
    joins, outline style (the 12 filled ones are on purpose: file-type
    badges, Redact, the reading theme); the light ribbon drew them at 22px,
    which broke toolbar.js's pixel snapping, and now draws them at 24px.
-   Left: toolbar groups, a cover-page option for two-page view, and
-   Windows print (check it on Windows in CI).
+   Toolbar groups done: Page reads turn and add or remove | Organize |
+   Merge, Insert | Split, Extract | Pages to JPG (Duplicate and Split now
+   reach the phone's more-sheet); Document pairs Print with Text and
+   Compress with Properties; View's Open stands apart from the theme.
+   Left: a cover-page option for two-page view, and Windows print (check
+   it on Windows in CI).
 7. ~~Security~~: done, see `docs/windows-performance.md`.
 
 Smaller items noted along the way:

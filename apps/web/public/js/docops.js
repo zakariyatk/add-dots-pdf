@@ -71,11 +71,11 @@
     btn(g3, 'btnExportText', 'Text', 'Save every page of text as a .txt file',
       '<path d="M14 3v5h5"/><path d="M19 8v11a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7z"/>' +
       '<line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/>', exportText);
-    btn(g3, 'btnCompress', 'Compress', 'Make the file smaller by re-encoding the pages',
+    /* the file itself: how big, and what it says about itself */
+    const g4 = grp();
+    btn(g4, 'btnCompress', 'Compress', 'Make the file smaller by re-encoding the pages',
       '<path d="M4 9l8-6 8 6"/><path d="M4 15l8 6 8-6"/><line x1="4" y1="12" x2="20" y2="12"/>',
       function () { openPanel('zip'); });
-
-    const g4 = grp();
     btn(g4, 'btnProps', 'Properties', 'Title, author and the rest of the document details',
       '<circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><circle cx="12" cy="8" r="1"/>',
       function () { openPanel('props'); });
