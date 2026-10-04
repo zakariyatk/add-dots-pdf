@@ -275,8 +275,32 @@ async fn pdf_open(request: tauri::ipc::Request<'_>) -> Result<u32, String> {
     };
     let h = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(percent_decode);
     let key: u32 = h("x-key").and_then(|k| k.parse().ok()).ok_or("no x-key")?;
-    let rx = pdfium::native().open(key, bytes.clone(), h("x-password"))?;
+    let rx = pdfium::native().open(key, pdfium::From::Bytes(bytes.clone()), h("x-password"))?;
     answer(rx).await
+}
+
+/// A document opened from its file on disk, read a block at a time as
+/// PDFium needs it, so the app holds no copy of it. Only a file the system
+/// handed over (opened from Explorer) can be read this way.
+#[tauri::command]
+async fn pdf_open_path(
+    key: u32,
+    path: String,
+    password: Option<String>,
+    state: tauri::State<'_, Opened>,
+) -> Result<u32, String> {
+    let p = PathBuf::from(&path);
+    if !state.allowed.lock().unwrap().contains(&p) {
+        return Err("not a file this app was asked to open".into());
+    }
+    let rx = pdfium::native().open(key, pdfium::From::Path(p), password)?;
+    answer(rx).await
+}
+
+/// Memory running short: PDFium lets go of the pages it keeps loaded.
+#[tauri::command]
+fn pdf_trim() {
+    pdfium::native().trim();
 }
 
 #[tauri::command]
@@ -445,6 +469,8 @@ pub fn run() {
             new_window,
             pdf_native_status,
             pdf_open,
+            pdf_open_path,
+            pdf_trim,
             pdf_close,
             pdf_render,
             pdf_cancel,

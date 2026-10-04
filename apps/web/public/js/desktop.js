@@ -37,7 +37,10 @@
     trace.received = trace.received.concat(paths);
     Promise.all(paths.map(function (p) {
       return T.core.invoke('read_file', { path: p }).then(function (buf) {
-        return new File([buf], base(p), { type: 'application/pdf' });
+        const f = new File([buf], base(p), { type: 'application/pdf' });
+        /* where it is on disk: PDFium reads it from there, not from a copy (core.js NR) */
+        f.adddotsPath = p;
+        return f;
       });
     })).then(function (files) {
       /* ready is sticky: this runs at once if core has already booted */

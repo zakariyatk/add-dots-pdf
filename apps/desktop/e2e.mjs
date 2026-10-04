@@ -173,7 +173,12 @@ try {
     const a = window.ADDPDF;
     return a.renderWorker() !== 'wait' && { state: a.renderWorker(), mode: a.renderWorkerMode() };
   }, 40000);
-  check('pages are drawn in the render worker', !!rw && rw.state === 'on', rw);
+  /* the render worker starts only when a page needs it: PDFium draws them all here */
+  check(
+    'the render worker is ready, or idle while PDFium draws',
+    !!rw && (rw.state === 'on' || rw.state === 'idle'),
+    rw,
+  );
   /* and by PDFium, natively, once it has loaded (src-tauri/src/pdfium.rs) */
   const native = await until(() => {
     const n = window.ADDPDF.nativeRender();

@@ -44,6 +44,7 @@ struct FsRectF {
 struct Lib {
     _lib: libloading::Library,
     load_mem: unsafe extern "system" fn(*const c_void, usize, *const i8) -> Doc,
+    load_custom: unsafe extern "system" fn(*mut FileAccess, *const i8) -> Doc,
     last_error: unsafe extern "system" fn() -> std::ffi::c_ulong,
     close_doc: unsafe extern "system" fn(Doc),
     page_count: unsafe extern "system" fn(Doc) -> c_int,
@@ -81,6 +82,7 @@ impl Lib {
             init();
             Ok(Lib {
                 load_mem: sym!("FPDF_LoadMemDocument64"),
+                load_custom: sym!("FPDF_LoadCustomDocument"),
                 last_error: sym!("FPDF_GetLastError"),
                 close_doc: sym!("FPDF_CloseDocument"),
                 page_count: sym!("FPDF_GetPageCount"),
@@ -102,10 +104,51 @@ impl Lib {
     }
 }
 
-/// An open document: PDFium reads from these bytes for as long as it is open.
+/// PDFium's FPDF_FILEACCESS: it asks for blocks of the file as it needs them.
+#[repr(C)]
+struct FileAccess {
+    len: std::ffi::c_ulong,
+    get_block: extern "C" fn(*mut c_void, std::ffi::c_ulong, *mut u8, std::ffi::c_ulong) -> c_int,
+    param: *mut c_void,
+}
+
+/// A file PDFium reads from disk, a block at a time, rather than from a
+/// copy of all of it in memory.
+struct Reader {
+    access: FileAccess,
+    file: std::fs::File,
+}
+
+// c_ulong is 32 bits on Windows and 64 elsewhere: the conversion is real there
+#[allow(clippy::useless_conversion)]
+extern "C" fn get_block(param: *mut c_void, pos: std::ffi::c_ulong, buf: *mut u8, size: std::ffi::c_ulong) -> c_int {
+    use std::io::{Read, Seek, SeekFrom};
+    let file = unsafe { &mut *(param as *mut std::fs::File) };
+    let out = unsafe { std::slice::from_raw_parts_mut(buf, size as usize) };
+    match file.seek(SeekFrom::Start(u64::from(pos))).and_then(|_| file.read_exact(out)) {
+        Ok(()) => 1,
+        Err(_) => 0,
+    }
+}
+
+/// Where a document's bytes are while it is open: PDFium reads from them.
+enum Keep {
+    Bytes(#[allow(dead_code)] Vec<u8>),
+    File(#[allow(dead_code)] Box<Reader>),
+}
+
+/// What a document is opened from.
+pub enum From {
+    /// its bytes, sent by the page
+    Bytes(Vec<u8>),
+    /// the file on disk, read as needed: no copy of it in memory
+    Path(PathBuf),
+}
+
+/// An open document.
 struct Open {
     doc: Doc,
-    _bytes: Vec<u8>,
+    _keep: Keep,
     pages: c_int,
 }
 
@@ -133,13 +176,15 @@ pub struct Ask {
 enum Job {
     Open {
         key: u32,
-        bytes: Vec<u8>,
+        from: From,
         password: Option<String>,
         reply: Sender<Result<u32, String>>,
     },
     Close {
         key: u32,
     },
+    /// memory running short: let go of every page kept loaded
+    Trim,
     Render {
         rid: u32,
         ask: Ask,
@@ -213,11 +258,16 @@ impl Native {
             .map_err(|_| "the PDFium thread stopped".into())
     }
 
-    /// Opens `bytes` as document `key`: Ok(its page count).
-    pub fn open(&self, key: u32, bytes: Vec<u8>, password: Option<String>) -> Result<Receiver<Result<u32, String>>, String> {
+    /// Opens a document as `key`: Ok(its page count).
+    pub fn open(&self, key: u32, from: From, password: Option<String>) -> Result<Receiver<Result<u32, String>>, String> {
         let (reply, rx) = channel();
-        self.send(Job::Open { key, bytes, password, reply })?;
+        self.send(Job::Open { key, from, password, reply })?;
         Ok(rx)
+    }
+
+    /// Lets go of every page kept loaded (their decoded pictures with them).
+    pub fn trim(&self) {
+        let _ = self.send(Job::Trim);
     }
 
     pub fn close(&self, key: u32) {
@@ -252,12 +302,17 @@ fn serve(lib: Lib, jobs: Receiver<Job>, cancelled: Arc<Mutex<HashSet<u32>>>) {
     };
     while let Ok(job) = jobs.recv() {
         match job {
-            Job::Open { key, bytes, password, reply } => {
+            Job::Trim => {
+                for l in pages.drain(..) {
+                    unsafe { (lib.close_page)(l.page) };
+                }
+            }
+            Job::Open { key, from, password, reply } => {
                 drop_doc(&mut pages, key);
                 if let Some(old) = docs.remove(&key) {
                     unsafe { (lib.close_doc)(old.doc) };
                 }
-                let _ = reply.send(open_doc(&lib, bytes, password).map(|o| {
+                let _ = reply.send(open_doc(&lib, from, password).map(|o| {
                     let n = o.pages as u32;
                     docs.insert(key, o);
                     n
@@ -290,23 +345,35 @@ fn serve(lib: Lib, jobs: Receiver<Job>, cancelled: Arc<Mutex<HashSet<u32>>>) {
     }
 }
 
-fn open_doc(lib: &Lib, bytes: Vec<u8>, password: Option<String>) -> Result<Open, String> {
+fn open_doc(lib: &Lib, from: From, password: Option<String>) -> Result<Open, String> {
     let pw = password
         .map(|p| CString::new(p).map_err(|_| "a password with a zero byte".to_string()))
         .transpose()?;
-    let doc = unsafe {
-        (lib.load_mem)(
-            bytes.as_ptr() as *const c_void,
-            bytes.len(),
-            pw.as_ref().map_or(std::ptr::null(), |p| p.as_ptr()),
-        )
+    let pw_ptr = pw.as_ref().map_or(std::ptr::null(), |p| p.as_ptr());
+    let (doc, keep) = match from {
+        From::Bytes(bytes) => {
+            let doc = unsafe { (lib.load_mem)(bytes.as_ptr() as *const c_void, bytes.len(), pw_ptr) };
+            (doc, Keep::Bytes(bytes))
+        }
+        From::Path(path) => {
+            let file = std::fs::File::open(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+            let len = file.metadata().map_err(|e| e.to_string())?.len();
+            let len = std::ffi::c_ulong::try_from(len).map_err(|_| "too big to read in blocks".to_string())?;
+            let mut r = Box::new(Reader {
+                access: FileAccess { len, get_block, param: std::ptr::null_mut() },
+                file,
+            });
+            r.access.param = &mut r.file as *mut std::fs::File as *mut c_void;
+            let doc = unsafe { (lib.load_custom)(&mut r.access, pw_ptr) };
+            (doc, Keep::File(r))
+        }
     };
     if doc.is_null() {
         let code = unsafe { (lib.last_error)() };
         return Err(format!("PDFium could not open it (error {code})"));
     }
     let pages = unsafe { (lib.page_count)(doc) };
-    Ok(Open { doc, _bytes: bytes, pages })
+    Ok(Open { doc, _keep: keep, pages })
 }
 
 /// Page `ask.page` (from 0), loaded or kept from before.
@@ -442,7 +509,7 @@ mod tests {
         let Some(path) = lib_path() else { return };
         let n = native();
         n.start(path).expect("PDFium loads");
-        let pages = n.open(1, pdf(), None).unwrap().recv().unwrap().expect("opens");
+        let pages = n.open(1, From::Bytes(pdf()), None).unwrap().recv().unwrap().expect("opens");
         assert_eq!(pages, 1);
         // the page at 100%, the right way up: PDF y runs up, the bitmap's down
         let m = [1.0, 0.0, 0.0, -1.0, 0.0, 100.0];
@@ -460,16 +527,40 @@ mod tests {
     }
 
     #[test]
+    fn reads_a_file_from_disk_and_lets_it_be_saved_over() {
+        let Some(path) = lib_path() else { return };
+        let n = native();
+        n.start(path).unwrap();
+        let dir = std::env::temp_dir().join(format!("adddots-pdfium-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("on disk.pdf");
+        std::fs::write(&file, pdf()).unwrap();
+        assert_eq!(n.open(21, From::Path(file.clone()), None).unwrap().recv().unwrap(), Ok(1));
+        let m = [1.0, 0.0, 0.0, -1.0, 0.0, 100.0];
+        let px = n.render(21, Ask { key: 21, page: 0, m, w: 200, h: 100 }).unwrap().recv().unwrap().unwrap();
+        assert_eq!(&px[(50 * 200 + 50) * 4..(50 * 200 + 50) * 4 + 4], &[0, 0, 0, 255]);
+        // saving over the open file, as Save does: a new file renamed into its
+        // place while PDFium still holds the old one open (Windows included)
+        let tmp = dir.join("on disk.pdf.saving");
+        std::fs::write(&tmp, b"%PDF-1.4 new").unwrap();
+        std::fs::rename(&tmp, &file).expect("the open file can be replaced");
+        assert_eq!(std::fs::read(&file).unwrap(), b"%PDF-1.4 new");
+        n.trim();
+        n.close(21);
+        std::fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
     fn refuses_what_it_cannot_do() {
         let Some(path) = lib_path() else { return };
         let n = native();
         n.start(path).unwrap();
-        assert!(n.open(7, b"not a pdf".to_vec(), None).unwrap().recv().unwrap().is_err());
+        assert!(n.open(7, From::Bytes(b"not a pdf".to_vec()), None).unwrap().recv().unwrap().is_err());
         let m = [1.0, 0.0, 0.0, -1.0, 0.0, 100.0];
         assert!(n.render(1, Ask { key: 99, page: 0, m, w: 10, h: 10 }).unwrap().recv().unwrap().is_err());
         assert!(n.render(2, Ask { key: 99, page: 0, m, w: 20000, h: 20000 }).is_err());
         n.cancel(3);
-        n.open(8, pdf(), None).unwrap().recv().unwrap().unwrap();
+        n.open(8, From::Bytes(pdf()), None).unwrap().recv().unwrap().unwrap();
         let r = n.render(3, Ask { key: 8, page: 0, m, w: 10, h: 10 }).unwrap().recv().unwrap();
         assert_eq!(r.unwrap_err(), "cancelled");
     }
