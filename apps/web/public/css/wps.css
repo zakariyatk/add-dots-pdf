@@ -40,7 +40,10 @@ body[data-ui="light"][data-skin="wps"] .ribbon {
 }
 body[data-ui="light"][data-skin="wps"] .app { background: var(--wps-desk) }
 body[data-ui="light"][data-skin="wps"] .ribbon .btn { height: 56px; border-radius: 7px; gap: 5px }
-body[data-ui="light"][data-skin="wps"] .ribbon .btn svg { width: 22px; height: 22px; color: #3A404A }
+/* 24px, as everywhere: the icons are drawn on a 24-unit grid and snapped to
+   whole pixels (toolbar.js snapIcons), which holds only when one unit is one
+   pixel; at 22px their one-pixel lines fell between two and came out grey */
+body[data-ui="light"][data-skin="wps"] .ribbon .btn svg { width: 24px; height: 24px; color: #3A404A }
 body[data-ui="light"][data-skin="wps"] .ribbon .btn::after { font-size: 12px; color: #3A404A }
 body[data-ui="light"][data-skin="wps"] .ribbon .btn:hover:not(:disabled) { background: #F1F4FA; border-color: transparent }
 body[data-ui="light"][data-skin="wps"] .ribbon .btn.on { background: #EAF0FF; border-color: #CFDCFF }

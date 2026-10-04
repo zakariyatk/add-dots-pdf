@@ -2234,6 +2234,27 @@ try {
       labels,
     );
 
+    /* the ribbon's icons are 24px in both interfaces: drawn on a 24-unit grid
+       and snapped to whole pixels (toolbar.js), crisp only at one unit a pixel */
+    const iconSizes = async () =>
+      page.evaluate(() => {
+        const sizes = {};
+        document.querySelectorAll('#ribbon .rpan:not([hidden]) .btn > svg').forEach((s) => {
+          const r = s.getBoundingClientRect();
+          if (r.width) sizes[Math.round(r.width) + 'x' + Math.round(r.height)] = 1;
+        });
+        return Object.keys(sizes);
+      });
+    const lightIcons = await iconSizes();
+    await page.evaluate(() => document.getElementById('btnUi').click());
+    const darkIcons = await iconSizes();
+    await page.evaluate(() => document.getElementById('btnUi').click());
+    check(
+      "the ribbon's icons are 24px in the light and the dark interface, one grid unit to a pixel",
+      lightIcons.join() === '24x24' && darkIcons.join() === '24x24',
+      { light: lightIcons, dark: darkIcons },
+    );
+
     /* the dark interface has the status bar too, in its own colours */
     await page.evaluate(() => {
       if (document.body.dataset.ui !== 'dark') document.getElementById('btnUi').click();
