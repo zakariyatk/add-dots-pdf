@@ -2491,6 +2491,64 @@ try {
     await ctx.close();
   }
 
+  /* ---- the ribbon's groups read by job ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, MIXED);
+    const row = (tab) =>
+      page.click('#' + tab).then(() =>
+        page.evaluate(() => {
+          const pan = document.querySelector('#ribbon .rpan:not([hidden])');
+          return [...pan.querySelectorAll(':scope > .grp')]
+            .filter((g) => g.offsetParent)
+            .map((g) =>
+              [...g.children]
+                .filter((x) => x.offsetParent)
+                .map((x) => (x.classList.contains('tsep') ? '|' : x.dataset.label))
+                .join(','),
+            );
+        }),
+      );
+    const pageTab = await row('ribPage');
+    const docTab = await row('ribDoc');
+    check(
+      'Page: turn and add or remove | Organize | other PDFs in | this one in parts | to JPG; Document: Print and Text, Compress and Properties',
+      JSON.stringify(pageTab.slice(1)) ===
+        JSON.stringify([
+          'Rotate left,Rotate right,|,Add pages,Duplicate,Remove page',
+          'Organize',
+          'Merge,Insert',
+          'Split,Extract pages',
+          'Pages to JPG',
+        ]) &&
+        docTab.includes('Print,Text') &&
+        docTab.includes('Compress,Properties'),
+      { pageTab, docTab },
+    );
+    /* on a phone the Page tab's groups ride in the more-sheet: Duplicate and
+       Split too now, and back in their order on the desktop */
+    await page.setViewportSize({ width: 700, height: 900 });
+    await page.waitForTimeout(400);
+    const sheet = await page.evaluate(() =>
+      [...document.querySelectorAll('#moreBody .btn')].map((x) => x.dataset.label),
+    );
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForTimeout(400);
+    const back = await row('ribPage');
+    check(
+      'on a phone Duplicate and Split are in the more-sheet; back on the desktop the groups are in their order',
+      sheet.includes('Duplicate') &&
+        sheet.includes('Split') &&
+        JSON.stringify(back) === JSON.stringify(pageTab),
+      {
+        sheet: sheet.filter((l) => /Duplicate|Split/.test(l)),
+        same: JSON.stringify(back) === JSON.stringify(pageTab),
+      },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- High-DPI: a screen at 300% gets pages drawn at 3x, and a move to a
      screen of another density draws them again at its own ---- */
   {

@@ -19,10 +19,15 @@
 
     const panPage = $('panPage');
 
+    /* The Page tab reads by job: turn and add or remove pages | Organize |
+       other PDFs in (Insert, Merge) | this one out in parts (Split, Extract) |
+       Pages to JPG. These groups go in before Extract, the static groups
+       keeping the places core recorded for the phone layout. */
     function group(id) {
       const sep = document.createElement('span'); sep.className = 'sep';
       const g = document.createElement('div'); g.className = 'grp'; g.id = id;
-      panPage.appendChild(sep); panPage.appendChild(g);
+      const at = $('grpExtract');
+      panPage.insertBefore(g, at); panPage.insertBefore(sep, at);
       return g;
     }
     function button(host, id, label, title, path, fn, primary) {
@@ -56,6 +61,12 @@
       '<line x1="12" y1="3" x2="12" y2="21" stroke-dasharray="3 3"/><path d="M8 7H5a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h3"/>' +
       '<path d="M16 7h3a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2h-3"/>',
       openSplit);
+    /* Duplicate beside Add pages and Remove page, after a light divider from
+       Rotate; Split beside Extract, both taking this document apart */
+    const tsep = document.createElement('span'); tsep.className = 'tsep'; tsep.setAttribute('aria-hidden', 'true');
+    $('grpPage').insertBefore(tsep, $('btnAdd'));
+    $('grpPage').insertBefore($('btnDuplicate'), $('btnDel'));
+    $('grpExtract').insertBefore($('btnSplit'), $('btnExtract'));
 
     /* a hidden picker of our own so we never fight core over its file inputs */
     const pdfIn = document.createElement('input');

@@ -1,70 +1,59 @@
 # Handover: where the Windows app work stands
 
-Last updated 2026-10-04 (second session). Read with `docs/windows-performance.md`, which has
-the analysis, the plan and the measured results of each phase.
+Last updated 2026-10-04, end of the second session. Read with
+`docs/windows-performance.md`, which has the analysis, the plan and the
+measured results of each phase.
+
+## Start here tomorrow
+
+1. Merge PR #51 (toolbar groups, branch `claude/toolbar-groups`) once its
+   CI is green. Everything else from these sessions is already in `main`.
+2. Pull `main` on the new computer and set it up (below).
+3. Pick the next item from "What is left".
 
 ## Done
 
-| Phase | What                                                                    | Where                  |
-| ----- | ----------------------------------------------------------------------- | ---------------------- |
-| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                          | PR #45 (merged)        |
-| 2     | Memory: PDFium reads from disk, render worker started only when needed  | PR #46 (merged)        |
-| 3     | Big files (over 150 MB) read from disk by byte ranges                   | PR #47                 |
-| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes | PR #47 (second commit) |
-| 5     | OCR by Windows' own reader, Tesseract as the fallback                   | PR #48                 |
-| 7     | Window CSP; update check sandboxed; `read_range` bounded                | PR #48                 |
+| Phase | What                                                                     | Where  |
+| ----- | ------------------------------------------------------------------------ | ------ |
+| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                           | PR #45 |
+| 2     | Memory: PDFium reads from disk, render worker started only when needed   | PR #46 |
+| 3     | Big files (over 150 MB) read from disk by byte ranges                    | PR #47 |
+| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes  | PR #47 |
+| 5     | OCR by Windows' own reader (`src-tauri/src/ocr.rs`), Tesseract fallback  | PR #48 |
+| 6     | High-DPI (pages up to 3x, redrawn when the density changes)              | PR #48 |
+| 6     | Right-click page menu (`js/pagemenu.js`)                                 | PR #49 |
+| 6     | Two pages side by side; dark-interface pass; icon audit (ribbon at 24px) | PR #50 |
+| 6     | Toolbar groups: Page and Document tabs read by job                       | PR #51 |
+| 7     | Window CSP; update check sandboxed; `read_range` bounded                 | PR #48 |
 
-PR #47 is merged. This session's work (the Android CI changes, phases 5 and 7) is PR #48, branch `claude/affectionate-archimedes-ymfdlu`.
+PRs #45-#50 are merged. All work is in `main` except #51.
 
-## Open problem: the Android CI job fails most of the time
+## The Android CI job
 
-- **Symptom.** "Android app (Capacitor)" fails at the emulator step. Either
-  page 1 is not drawn within 60 s and the WebView connection closes, or the
-  run hangs at "open the first PDF and find the WebView" until the 10-minute
-  watchdog fires.
-- **History.** Over the last 40 CI runs it failed 17% of the time up to Oct 4,
-  11:25 UTC, then 5 of 7 runs, including pushes to `main`.
-- **Not caused by the app getting heavier.** On a 6×-throttled phone in
-  Chrome, start-up is the same at the last always-green commit (`6fb543b`)
-  and now: boot ~1.5 s, first page ~2 s, the same workers and memory.
-- **Likely cause.** The emulator itself. It runs with 2 cores and the
-  software GPU (`-gpu swiftshader_indirect`), logs
-  `Failed to find ColorBuffer` / `Failed to bind to texture`, and isn't
-  pinned (`channel: stable` takes the newest emulator).
-- **Tried (this session; its first run on PR #48 passed):** 4 cores, 4 GB, `-gpu
-swangle_indirect`. The failing runs used emulator 37.2.12 and WebView
-  Chrome 113; the app booted (render worker on) but page 1 was not drawn.
-  `e2e-android.mjs` now prints the app's state when a check times out
-  (files, pages, which are drawn, errors), and its logcat filter no longer
-  matches "crashrecovery", whose thousands of lines had hidden the rest.
-- **If it still fails, next,** in `.github/workflows/ci.yml` (`android` job) and
-  `apps/mobile/e2e-android.mjs`:
-  1. Compare the emulator version (the "Emulator 37.x" line) in a passing
-     run (#126, #127, #129) with a failing one (#130, #132, #133). If it
-     changed, pin the last good one (`emulator-build:` in
-     reactivecircus/android-emulator-runner).
-  2. Try `-gpu guest` or `-gpu swangle_indirect` instead of
-     `swiftshader_indirect`, and `cores: 4` (the emulator itself suggests 4).
-  3. In `e2e-android.mjs`, give `webview.page()` its own timeout and retry
-     finding the WebView once. A hang currently uses up the whole
-     10-minute watchdog and prints no logcat.
+It failed most runs (the WebView went away before page 1 was checked).
+Fixed in PR #48: 4 cores, 4 GB, `-gpu swangle_indirect`, and
+`apps/mobile/e2e-android.mjs` reconnects when the system recreates the
+WebView on a freshly booted emulator (it prints each time it does), reports
+the app's state when a check times out, and keeps Google's log noise out of
+the report. If it fails again, the report now says why; next ideas: pin the
+emulator version (`emulator-build:` in reactivecircus/android-emulator-runner)
+or wait for the emulator to settle after boot before starting the app.
 
-## Remaining phases
+## What is left
 
-5. ~~Windows OCR~~: done, see `docs/windows-performance.md`. Not yet: both
-   languages at once by Windows (today "English and Arabic" goes to
-   Tesseract), and a timing against Tesseract on a real Windows machine.
-6. **Professional UI.** Done: High-DPI (pages drawn up to 3x, again when
-   the density changes), the right-click page menu (`js/pagemenu.js`), two
-   pages side by side (View → Two pages), and a dark-interface pass (the
-   status bar in dark too; page numbers above each page in two-page view).
-   Icon audit done: all 94 icons share one 24-unit grid, round caps and
-   joins, outline style (the 12 filled ones are on purpose: file-type
-   badges, Redact, the reading theme); the light ribbon drew them at 22px,
-   which broke toolbar.js's pixel snapping, and now draws them at 24px.
-   Left: toolbar groups, a cover-page option for two-page view, and
-   Windows print (check it on Windows in CI).
-7. ~~Security~~: done, see `docs/windows-performance.md`.
+Phase 6 (professional UI):
+
+- A cover-page option for two-page view (page 1 alone, as a book's cover).
+- Windows print: check printing in the Windows app, with a CI check on the
+  Windows runner.
+
+Phase 5 follow-ups:
+
+- Windows reading both languages at once (today "English and Arabic" goes
+  to Tesseract).
+- Timing Windows OCR against Tesseract on a real Windows machine. CI checks
+  that Windows' reader reads a picture of words (it installs the English
+  OCR component on the runner if missing).
 
 Smaller items noted along the way:
 
@@ -84,7 +73,7 @@ Smaller items noted along the way:
 ```sh
 git clone https://github.com/zakariyatk/add-dots-pdf
 cd add-dots-pdf
-git checkout claude/festive-hypatia-aw32lc   # or main once PR #47 is merged
+git checkout main                            # after PR #51 is merged
 npm ci
 npm run build                                # engine + web app into apps/web/dist
 ```
@@ -93,7 +82,8 @@ Checks, as CI runs them:
 
 ```sh
 npm run lint && npm run format:check && npm run typecheck && npm test
-npm run smoke -w @adddots/web                # Chrome smoke test, 155 checks
+npm run smoke -w @adddots/web                # Chrome smoke test, 179 checks
+ADDDOTS_CSP=1 npm run smoke -w @adddots/web  # again, under the Windows app's CSP
 cd apps/desktop/src-tauri && cargo test      # Rust side
 ```
 
