@@ -51,6 +51,7 @@ const SHELL = [
   'js/docops.js',
   'js/convert.js',
   'js/ocr.js',
+  'js/editobj.js',
   'js/tabs.js',
   'js/skin.js',
   'js/books.js',

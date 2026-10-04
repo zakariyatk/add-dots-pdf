@@ -464,7 +464,7 @@
   function snapshot() {
     S.undo.push(S.items.map(function (it) {
       return {
-        ref: it, num: it.num, rot: it.rot, added: it.added,
+        ref: it, src: it.src, num: it.num, rot: it.rot, added: it.added,
         crop: it.crop ? { x: it.crop.x, y: it.crop.y, w: it.crop.w, h: it.crop.h } : null,
         shapes: it.shapes.map(function (s) { return Object.assign({}, s); })
       };
@@ -482,7 +482,10 @@
     hideMarkPop();
     S.items = snap.map(function (s) {
       const it = s.ref;
-      const heavy = it.rot !== s.rot;
+      /* a page whose own content was edited (Edit Object) goes back to the copy it was */
+      const content = !!s.src && it.src !== s.src;
+      const heavy = it.rot !== s.rot || content;
+      if (content) { it.src = s.src; it.page = null; }
       it.num = s.num; it.rot = s.rot; it.added = s.added;
       it.crop = s.crop; it.shapes = s.shapes;
       if (heavy) { it.rendered = false; it.thumbDone = false; if (it.tl) it.tl.innerHTML = ''; }
@@ -2245,7 +2248,8 @@
     dimr: 'Radius', dimd: 'Diameter', dima: 'Angle',
     markup: 'Markup', ink: 'Ink', note: 'Note', stamp: 'Stamp', sig: 'Signature',
     redact: 'Redaction', wm: 'Watermark', hf: 'Header / footer', bates: 'Bates',
-    image: 'Image', video: 'Video', link: 'Link', table: 'Table', leader: 'Leader'
+    image: 'Image', video: 'Video', link: 'Link', table: 'Table', leader: 'Leader',
+    vpath: 'Shape'
   };
   let mpBuilt = false;
 
@@ -2414,8 +2418,19 @@
       });
       pop.appendChild(n);
     }
+    /* a shape off the page may have been only filled: its outline can go, or come */
+    if (key === 'c' && s.t === 'vpath') {
+      const n = document.createElement('button');
+      n.type = 'button';
+      n.className = 'pnofill' + (s.nos ? ' on' : '');
+      n.innerHTML = '<i></i>No outline';
+      n.addEventListener('click', function (e) {
+        e.stopPropagation(); markEdit(function (x) { x.nos = true; }); closeSwatches();
+      });
+      pop.appendChild(n);
+    }
     buildPalette(pop, s[key], function (c) {
-      markEdit(function (x) { x[key] = c; });
+      markEdit(function (x) { x[key] = c; if (key === 'c') delete x.nos; });
       closeSwatches();
     });
     pop.hidden = false;
@@ -2456,7 +2471,7 @@
     if (!s || dragOn) { pop.hidden = true; closeSwatches(); return; }
     buildMarkPop();
     const isText = s.t === 'text';
-    const isBox = s.t === 'rect';
+    const isBox = s.t === 'rect' || s.t === 'vpath';     /* a shape off the page fills too */
     const isPic = s.t === 'sig';              /* a picture: no line to style */
     const count = selList().length;
     $('mpTitle').textContent = count > 1 ? count + ' marks' : (MARK_NAME[s.t] || 'Mark');
@@ -2464,13 +2479,14 @@
     $('mpFillBtn').hidden = !isBox;
     $('mpFillChip').className = s.fill ? '' : 'none';
     $('mpFillChip').style.background = s.fill || '';
-    $('mpStrokeChip').style.background = s.c;
+    $('mpStrokeChip').style.background = s.nos ? '' : s.c;
+    $('mpStrokeChip').className = s.nos ? 'none' : '';
     $('mpStrokeLbl').textContent = isText ? 'Text' : isBox ? 'Border' : 'Colour';
 
     /* marks with no line of their own to style (a highlight, a note, a
        stamp) and marks that do not turn (those, and a pen stroke) */
     const noLine = isPic || s.t === 'markup' || s.t === 'note' || s.t === 'stamp';
-    const noTurn = s.t === 'markup' || s.t === 'note' || s.t === 'stamp' || s.t === 'ink';
+    const noTurn = s.t === 'markup' || s.t === 'note' || s.t === 'stamp' || s.t === 'ink' || s.t === 'vpath';
     $('mpStrokeBtn').hidden = isPic || s.t === 'stamp';
     $('mpStyleWrap').hidden = isText || noLine;
     $('mpWidthWrap').hidden = isText || noLine;
@@ -5540,6 +5556,18 @@
     toast(bits.join(' · '));
   }
 
+  /* A page drawn from a new copy of itself: page 1 of src, which Edit Object
+     made with a shape cut out of its content (js/editobj.js). Undo goes back
+     to the copy before (snapshot keeps it.src). */
+  function swapSource(it, src) {
+    if (it.task) { try { it.task.cancel(); } catch (e) {} }
+    it.src = src; it.num = 1; it.page = null;
+    it.rendered = false; it.thumbDone = false;
+    if (it.tl) it.tl.innerHTML = '';
+    if (S.query) invalidateSearch();
+    return relayout().then(function () { drawThumb(it); updateMeta(); });
+  }
+
   /* Register a PDF the modules produced (merge, insert, blank, stamp sheet)
      so its pages can join S.items like any opened file. */
   async function addSource(name, bytes, synthetic) {
@@ -8473,7 +8501,8 @@
     removeItem: removeItem, moveItem: moveItem, rotateItem: rotateItem,
     syncPicks: syncPicks, setPicks: setPicks,
     newItem: newItem, ensureEls: ensureEls,
-    buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource, saveError: saveError, selectedText: selectedText,
+    buildPdf: buildPdf, loadSrc: loadSrc, addSource: addSource, swapSource: swapSource,
+    syncMarkPop: syncMarkPop, redrawAll: redrawAll, saveError: saveError, selectedText: selectedText,
     insertBlank: insertBlank, ensurePage: ensurePage, ensureAllPages: ensureAllPages, renderIdle: renderIdle,
     drawPageInto: drawPageInto,
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */
