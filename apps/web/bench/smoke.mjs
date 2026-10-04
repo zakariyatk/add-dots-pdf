@@ -194,6 +194,8 @@ const browser = await chromium.launch({ channel: process.env.BENCH_CHANNEL || un
       window.ADDDOTS_CONFIG = Object.assign({ requireSignIn: false }, window.ADDDOTS_CONFIG || {});
       /* file after file in one page: each replaces the last, no tabs */
       window.ADDDOTS_NO_TABS = true;
+      /* the Windows app's tools too (js/winonly.js), to test them here */
+      window.ADDDOTS_ALL_TOOLS = true;
     });
     return c;
   };
@@ -2467,6 +2469,141 @@ try {
     );
     check('no errors on the page', errors.length === 0, errors);
     await dctx.close();
+  }
+
+  /* ---- Edit Object: a shape the PDF draws, lifted off the page, moved and saved ---- */
+  {
+    const d = await PDFDocument.create();
+    const pg = d.addPage([595, 842]);
+    pg.drawLine({
+      start: { x: 320, y: 520 },
+      end: { x: 520, y: 700 },
+      thickness: 3,
+      color: PDFLib.rgb(0, 0.5, 0),
+    });
+    pg.drawRectangle({ x: 60, y: 520, width: 200, height: 140, color: PDFLib.rgb(1, 0.85, 0.2) });
+    const ectx = await browser.newContext({ viewport: { width: 1300, height: 900 }, acceptDownloads: true });
+    const errors = [];
+    const page = await ectx.newPage();
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.setInputFiles('#fileIn', {
+      name: 'shapes.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from(await d.save()),
+    });
+    await page
+      .waitForFunction(() => window.ADDPDF.S.items[0] && window.ADDPDF.S.items[0].rendered, null, {
+        timeout: 20000,
+      })
+      .catch(() => {});
+    await page.evaluate(() => window.ADDPDF.setTool('editobj'));
+    const at = (x, y) =>
+      page.evaluate(
+        ([x, y]) => {
+          const it = window.ADDPDF.S.items[0];
+          const v = it.vp.convertToViewportPoint(x, y);
+          const r = it.anno.getBoundingClientRect();
+          return [r.left + v[0], r.top + v[1]];
+        },
+        [x, y],
+      );
+    const [lx, ly] = await at(420, 610);
+    await page.mouse.move(lx, ly);
+    await page.waitForSelector('.anno .eohl', { timeout: 5000 }).catch(() => {});
+    const lit = await page.evaluate(() => !!document.querySelector('.anno .eohl'));
+    await page.mouse.click(lx, ly);
+    await page
+      .waitForFunction(() => window.ADDPDF.S.items[0].shapes.length === 1 && window.ADDPDF.S.sel, null, {
+        timeout: 10000,
+      })
+      .catch(() => {});
+    const lifted = await page.evaluate(() => {
+      const A = window.ADDPDF,
+        it = A.S.items[0];
+      return { marks: it.shapes.map((s) => s.t + ' ' + s.c), selected: !!A.S.sel, num: it.num };
+    });
+    check(
+      'Edit Object: a line the PDF draws lights up and lifts off as an editable shape',
+      lit && lifted.marks.join() === 'vpath #008000' && lifted.selected,
+      { lit, lifted },
+    );
+    await page.mouse.move(lx, ly);
+    await page.mouse.down();
+    await page.mouse.move(lx - 200, ly, { steps: 6 });
+    await page.mouse.up();
+    await page.evaluate(() => document.getElementById('btnSaveAs').click());
+    await page.waitForTimeout(400);
+    const [dl] = await Promise.all([
+      page.waitForEvent('download', { timeout: 30000 }),
+      page.click('#saveGo'),
+    ]);
+    const saved = await PDFDocument.load(readFileSync(await dl.path()));
+    const E = await page.evaluate(() => !!window.ADDPDFEngine.pageShapes);
+    /* the saved page's own shapes: the box, and the line once only, moved left */
+    const shapes = await page.evaluate(
+      async (b) => {
+        const doc = await window.ADDPDF.PDFLib.PDFDocument.load(new Uint8Array(b));
+        return window.ADDPDFEngine.pageShapes(doc, 0).map((s) => [s.stroke, Math.round(s.box[0])]);
+      },
+      Array.from(await saved.save()),
+    );
+    const lines = shapes.filter((s) => s[0] === '#008000');
+    check(
+      'Edit Object: the shape saves once, where it was moved to',
+      E && lines.length === 1 && lines[0][1] < 300,
+      {
+        shapes,
+      },
+    );
+    await page.evaluate(() => window.ADDPDF.undo());
+    await page.evaluate(() => window.ADDPDF.undo());
+    const back = await page.evaluate(() => ({
+      marks: window.ADDPDF.S.items[0].shapes.length,
+      src: window.ADDPDF.S.items[0].src.id,
+    }));
+    check('Edit Object: undo puts the page back as it was', back.marks === 0 && back.src === 1, back);
+    check('no errors on the page', errors.length === 0, errors);
+    await ectx.close();
+  }
+
+  /* ---- on the website, the Windows app's tools say where they are ---- */
+  {
+    const wctx = await browser.newContext({ viewport: { width: 1300, height: 900 } });
+    await wctx.addInitScript(() => {
+      window.ADDDOTS_ALL_TOOLS = false;
+    });
+    const errors = [];
+    const page = await wctx.newPage();
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.setInputFiles('#fileIn', join(CORPUS_DIR, 'small-text-12p.pdf'));
+    await page
+      .waitForFunction(() => window.ADDPDF.S.items.length > 0, null, { timeout: 20000 })
+      .catch(() => {});
+    const seen = await page.evaluate(() => {
+      const out = {};
+      out.badges = ['tEditObj', 'btnToWord', 'btnOcr'].map((id) => {
+        const b = document.getElementById(id);
+        return !!b && b.classList.contains('winonly');
+      });
+      document.getElementById('btnToWord').click();
+      const card = document.getElementById('winOnly');
+      out.card = !!card && !card.hidden && /Convert/.test(card.textContent);
+      out.store = !!card && /apps\.microsoft\.com/.test(card.querySelector('#woGet').href);
+      card.querySelector('#woClose').click();
+      window.ADDPDF.setTool('editobj');
+      return out;
+    });
+    await page.waitForTimeout(100);
+    const tool = await page.evaluate(() => window.ADDPDF.S.tool);
+    check(
+      'website: Edit Object, Convert and OCR point to the Windows app',
+      seen.badges.every(Boolean) && seen.card && seen.store && tool === 'select',
+      { seen, tool },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await wctx.close();
   }
 } finally {
   await browser.close();
