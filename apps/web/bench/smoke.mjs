@@ -2388,6 +2388,20 @@ try {
             st.calls.push({ cmd, bytes: args instanceof Uint8Array, len: args && args.length });
             if (cmd === 'launch_files') return /handoff=/.test(location.search) ? [] : ['C:/docs/a.pdf'];
             if (cmd === 'read_file') return new Uint8Array(files[args.path]).buffer;
+            /* b.pdf stands for a big file: read a part at a time (core.js RANGED) */
+            if (cmd === 'open_plan') {
+              const big = /b\.pdf$/.test(args.path) || !!args.keep;
+              if (!big) return { size: files[args.path].length, ranges: false, id: null };
+              const id = (st.nextRange = (st.nextRange || 0) + 1);
+              (st.ranged = st.ranged || {})[id] = args.path;
+              return { size: files[args.path].length, ranges: true, id };
+            }
+            if (cmd === 'read_range') {
+              st.reads = (st.reads || 0) + 1;
+              const f = files[st.ranged[args.id]];
+              return new Uint8Array(f.slice(args.offset, args.offset + args.len)).buffer;
+            }
+            if (cmd === 'range_close') return void (st.closed = (st.closed || 0) + 1);
             if (cmd === 'new_window') return void window.open('/?handoff=' + args.handoff, '_blank');
             if (cmd === 'save_file') {
               if (!(args instanceof Uint8Array)) throw new Error("expected the file's bytes");
@@ -2420,6 +2434,17 @@ try {
         .catch(() => {});
       inTab = await frameOf().evaluate(() => window.ADDPDF.S.items.length);
     }
+    const lazy = frameOf()
+      ? await frameOf().evaluate(() => {
+          const s = window.ADDPDF.S.sources[0];
+          return { lazy: !!s.lazy, bytes: !!s.bytes, reads: window.parent.__STUB.reads || 0 };
+        })
+      : null;
+    check(
+      'Windows app: a big file handed over is read a part at a time, with no copy of it on the page',
+      !!lazy && lazy.lazy && !lazy.bytes && lazy.reads > 0,
+      lazy,
+    );
     const host = await page.evaluate(() => window.ADDPDF.S.items.length);
     check('Windows app: a PDF handed over with one open gets a tab of its own', inTab === 5 && host === 3, {
       inTab,
@@ -2437,10 +2462,11 @@ try {
       .waitForFunction(() => window.__STUB.calls.some((c) => c.cmd === 'save_file'), null, { timeout: 20000 })
       .catch(() => {});
     const saved = await page.evaluate(() => window.__STUB.calls.filter((c) => c.cmd === 'save_file'));
+    const after = await frameOf().evaluate(() => !!window.ADDPDF.S.sources[0].bytes);
     check(
-      'Windows app: Save in a tab hands the app the file as bytes',
-      saved.length === 1 && saved[0].bytes,
-      saved,
+      'Windows app: Save in a tab hands the app the file as bytes (a big one read whole, and let go of after)',
+      saved.length === 1 && saved[0].bytes && saved[0].len > 1000 && !after,
+      { saved, bytesKept: after },
     );
 
     const opened = dctx.waitForEvent('page', { timeout: 20000 });
@@ -2456,15 +2482,23 @@ try {
       moved = await win.evaluate(() => ({
         pages: window.ADDPDF.S.items.length,
         marks: window.ADDPDF.S.items[0] ? window.ADDPDF.S.items[0].shapes.length : 0,
+        lazy: !!(window.ADDPDF.S.sources[0] && window.ADDPDF.S.sources[0].lazy),
       }));
     }
     const left = await page.evaluate(() => ({
       tabs: window.ADDPDF.tabs.list().length,
       frames: document.querySelectorAll('.dtframe').length,
+      closed: window.__STUB.closed || 0,
     }));
     check(
       'Windows app: a tab moved to a new window takes its marks along, and leaves this one',
-      !!moved && moved.pages === 5 && moved.marks === 1 && left.tabs === 1 && left.frames === 0,
+      !!moved &&
+        moved.pages === 5 &&
+        moved.marks === 1 &&
+        moved.lazy &&
+        left.tabs === 1 &&
+        left.frames === 0 &&
+        left.closed >= 1,
       { moved, left },
     );
     check('no errors on the page', errors.length === 0, errors);

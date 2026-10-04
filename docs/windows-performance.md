@@ -151,7 +151,7 @@ Each phase: measure, change, test every existing feature, measure again.
 2. **Memory.** Windows: draw natively first and open the file in the
    render worker only when native cannot draw a page; free PDFium pages
    under memory pressure; measure RAM with the 85 MB and 2,000-page files.
-3. **Big files.** Open from disk by byte ranges (pdf.js range transport,
+3. **Big files.** ✅ Open from disk by byte ranges (pdf.js range transport,
    native `read_range`), so a 500 MB file is not read whole before page 1.
 4. **Off the page thread.** Search matching and Edit Object parsing in a
    worker; Convert in a worker or native.
@@ -195,3 +195,40 @@ Release build, Linux, 8 s after the first page:
 What remains of the floor (~700 MB with a small file here) is the web view
 itself, the page and pdf.js's worker; and on the page the file is still held
 by `src.bytes` and pdf.js. Phase 3 (opening by byte ranges) is the next cut.
+
+## Phase 3: big files — done
+
+- A file over 150 MB handed over by Explorer is **not read whole**. The
+  desktop side keeps it open (`open_plan`), and pdf.js asks for the parts
+  it needs (`read_range`, through `PDFDataRangeTransport`). The page holds
+  no copy of it (`src.lazy`; `src.bytes` stays empty).
+- The open file is what gets read, not the path. Saving over it (a new
+  file renamed into its place) leaves the open document reading what it
+  opened, as PDFium does since Phase 2.
+- The whole file is read only for a job that needs it: saving or
+  exporting (`buildPdf`), a project, or Edit Object (`withBytes`). It is
+  read 32 MB at a time and let go of afterwards.
+- A tab moved to a new window takes the file's place on disk, not its
+  bytes, and the new window opens it again the same way.
+- Crash recovery already skips files this big (`REC_MAX_BYTES`), so the
+  150 MB cut-off changes nothing there. `ADDDOTS_RANGE_MB` sets another
+  cut-off. CI runs the desktop end-to-end test a second time with it at
+  0, so every file goes through this path.
+
+Release build, Linux, a 257 MB file (120 scanned pages), 8 s after the
+first page:
+
+|                        | Before (Phase 2) | After          |
+| ---------------------- | ---------------- | -------------- |
+| First page             | 16–21 s          | **2.6 s**      |
+| Web view               | 1,127 MB         | 945–1,077 MB   |
+| WebKit network process | 303 MB           | **58 MB**      |
+| App (Rust, PDFium)     | 230 MB           | 261 MB         |
+| Total                  | 1,660 MB         | 1,264–1,396 MB |
+
+The big gain is the time to the first page: it no longer waits for the
+whole file to be read and copied. The web view stays high for two reasons:
+pdf.js sets aside room for the whole file in its worker, and it fills that
+room as the background text indexing reads every page. Not indexing big
+files in the background would be the next cut, at the price of search
+starting later.

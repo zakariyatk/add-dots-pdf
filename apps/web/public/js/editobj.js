@@ -104,7 +104,8 @@
     function docOf(src) {
       if (!docs.has(src)) {
         const p = src.password ? Promise.reject(new Error('protected'))
-          : X.PDFLib.PDFDocument.load(src.bytes, { updateMetadata: false });
+          /* a big file read as needed (core RANGED) is read whole for this */
+          : X.withBytes([src], function () { return X.PDFLib.PDFDocument.load(src.bytes, { updateMetadata: false }); });
         p.catch(function () {});
         docs.set(src, p);
       }

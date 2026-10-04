@@ -158,7 +158,12 @@ try {
     const a = window.ADDPDF;
     const it = a && a.S && a.S.items[0];
     return it && it.rendered && a.S.sources[0]
-      ? { pages: a.S.items.length, name: a.S.sources[0].name, worker: a.renderWorker() }
+      ? {
+          pages: a.S.items.length,
+          name: a.S.sources[0].name,
+          worker: a.renderWorker(),
+          ranged: !!a.S.sources[0].lazy,
+        }
       : null;
   }, 60000);
   check(
@@ -166,6 +171,11 @@ try {
     !!first && first.pages === 3 && first.name === 'first.pdf',
     first,
   );
+  /* ADDDOTS_RANGE_MB=0: every file is "big", read a part at a time from
+     the file kept open (core.js RANGED), as one over 150 MB is */
+  if (process.env.ADDDOTS_RANGE_MB === '0') {
+    check('a big file is read a part at a time, not whole', !!first && first.ranged, first);
+  }
   /* the render worker says ready only once pdf.js has opened and drawn a
      page in it (up to two tries of 8 s); pages are drawn on the page
      meanwhile */
