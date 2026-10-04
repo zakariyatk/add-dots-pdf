@@ -151,11 +151,14 @@
     }
 
     /* ---------------- Done / Cancel beside the work ----------------
-       The Done at the end of the ribbon was easy to miss, and so was the fact
-       that a tool was in hand at all. A small bar comes up instead: first
-       under the tool's name in the ribbon, then beside whatever you draw.
-       Done keeps it all; Cancel takes back everything drawn since the tool
-       was picked up and puts the tool down. */
+       The Done at the end of the ribbon was easy to miss. A small bar comes
+       up beside the work instead — not when a tool is picked up, only once
+       it has put something on the page, and then beside it. Done keeps it
+       all; Cancel takes back everything drawn since the tool was picked up
+       and puts the tool down.
+
+       A mark selected to edit gets the same bar beside it, with Delete in
+       place of Cancel; Done lets go of the mark. */
     const chip = document.createElement('div');
     chip.className = 'toolchip'; chip.id = 'toolChip'; chip.hidden = true;
     chip.setAttribute('role', 'toolbar'); chip.setAttribute('aria-label', 'Tool in hand');
@@ -164,6 +167,8 @@
       '<button type="button" class="btn primary tc-done" id="toolDone" title="Keep it and put the tool down">Done</button>';
     document.body.appendChild(chip);
     let chipTool = null, undoMark = null;     /* the last undo step before the tool */
+    let chipMark = null;                       /* the mark the bar sits beside, when editing one */
+    let dragging = false;                      /* a press on the page, in Select: the bar waits */
 
     function chipLive() {
       return !X.isMobile() && bar.classList.contains('show') && S.tool !== 'select' &&
@@ -176,31 +181,90 @@
       chip.style.left = Math.max(sr.left + 8, Math.min(sr.right - w - 8, x)) + 'px';
       chip.style.top = Math.max(sr.top + 8, Math.min(sr.bottom - h - 8, y)) + 'px';
     }
-    function chipUnderTool() {
-      const r = badge.getBoundingClientRect();
-      placeChip(r.left, Math.max(r.bottom, $('stage').getBoundingClientRect().top) + 10);
+    function fillChip(b, name, onMark) {
+      const no = $('toolCancel');
+      no.textContent = onMark ? 'Delete' : 'Cancel';
+      no.title = onMark ? 'Delete this mark (Delete)' : 'Take back what this tool drew, and put it down (Esc)';
+      $('toolDone').title = onMark ? 'Finish editing this mark' : 'Keep it and put the tool down';
+      const svg = b && b.querySelector('svg');
+      chip.querySelector('.tc-ico').innerHTML = svg ? svg.outerHTML : '';
+      chip.querySelector('.tc-name').textContent = name;
     }
     function syncChip() {
-      if (!chipLive()) { chip.hidden = true; chipTool = null; return; }
+      if (!chipLive()) {
+        chipTool = null;
+        syncMarkChip();
+        return;
+      }
+      chipMark = null;
+      chip.classList.remove('mark');
       if (chipTool === S.tool) return;
+      /* picked up: nothing shows until the tool has put something down */
       chipTool = S.tool;
       undoMark = S.undo[S.undo.length - 1] || null;
-      const b = toolButton(S.tool), svg = b && b.querySelector('svg');
-      chip.querySelector('.tc-ico').innerHTML = svg ? svg.outerHTML : '';
-      chip.querySelector('.tc-name').textContent =
-        (b && (b.dataset.label || b.getAttribute('aria-label'))) || 'Tool';
-      chip.classList.remove('pop'); void chip.offsetWidth; chip.classList.add('pop');
-      requestAnimationFrame(chipUnderTool);
+      chip.hidden = true;
+      const b = toolButton(S.tool);
+      fillChip(b, (b && (b.dataset.label || b.getAttribute('aria-label'))) || 'Tool');
     }
-    /* after each stroke, click or box on a page, the bar comes to sit beside it */
+    function drewSomething() { return (S.undo[S.undo.length - 1] || null) !== undoMark; }
+    function popIn() { chip.classList.remove('pop'); void chip.offsetWidth; chip.classList.add('pop'); }
+    /* after each stroke, click or box on a page that leaves something there,
+       the bar comes to sit beside it */
     $('stage').addEventListener('pointerup', function (e) {
-      if (chip.hidden || e.target.closest('.toolchip')) return;
+      if (!chipLive() || e.target.closest('.toolchip')) return;
+      const x = e.clientX, y = e.clientY;
       setTimeout(function () {
-        if (!chip.hidden) placeChip(e.clientX + 18, e.clientY + 18);
+        if (!chipLive() || !drewSomething()) return;
+        const first = chip.hidden;
+        placeChip(x + 18, y + 18);
+        if (first) popIn();
       }, 0);
     });
-    $('toolDone').addEventListener('click', function () { X.setTool('select'); });
+
+    /* ---- beside a selected mark ---- */
+    function markRect() {
+      const h = document.querySelector('.anno .hnd .halo, .anno .halo');
+      if (!h) return null;
+      const r = h.getBoundingClientRect();
+      return r.width || r.height ? r : null;
+    }
+    function syncMarkChip() {
+      const s = !X.isMobile() && !dragging && S.tool === 'select' ? selectedMark() : null;
+      const r = s && markRect();
+      if (!s || !r) { chip.hidden = true; chipMark = null; chip.classList.remove('mark'); return; }
+      const fresh = chipMark !== s;
+      chipMark = s;
+      chip.classList.add('mark');
+      const name = ($('mpTitle') && $('mpTitle').textContent) || 'Mark';
+      fillChip(toolButton(s.t), name, true);
+      const w = chip.offsetWidth || 220;
+      placeChip(r.left + r.width / 2 - w / 2, r.bottom + 14);
+      if (fresh) popIn();
+    }
+    $('stage').addEventListener('pointerdown', function (e) {
+      if (S.tool === 'select' && !e.target.closest('.toolchip')) { dragging = true; chip.hidden = true; }
+    }, true);                                  /* before a mark's own handler stops it */
+    document.addEventListener('pointerup', function () {
+      if (!dragging) return;
+      dragging = false;
+      setTimeout(syncMarkChip, 0);
+    });
+    $('stage').addEventListener('scroll', function () {
+      if (chipMark) syncMarkChip();
+    }, { passive: true });
+
+    $('toolDone').addEventListener('click', function () {
+      if (chipMark) {
+        S.sel = null; S.multi = null;
+        S.items.forEach(function (x) { X.drawShapes(x); });
+        if (pop) pop.hidden = true;
+        syncMarkChip();
+        return;
+      }
+      X.setTool('select');
+    });
     $('toolCancel').addEventListener('click', async function () {
+      if (chipMark) { $('mpDel').click(); setTimeout(syncMarkChip, 0); return; }
       /* text being typed: Esc throws it away, as it always has */
       const ta = document.querySelector('.texted textarea');
       if (S.editing && ta) ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -210,17 +274,17 @@
       while (S.undo.length && S.undo[S.undo.length - 1] !== undoMark && n++ < 100) await X.undo();
       X.setTool('select');
     });
-    window.addEventListener('resize', function () { if (!chip.hidden) chipUnderTool(); });
+    window.addEventListener('resize', function () { if (chipMark) syncMarkChip(); });
 
     X.on('tool', function () { sync(); syncChip(); });
     /* core shows and hides the mark panel as marks are selected; follow it */
     if (pop && window.MutationObserver) {
-      new MutationObserver(function () { sync(); })
+      new MutationObserver(function () { sync(); syncChip(); })
         .observe(pop, { attributes: true, attributeFilter: ['hidden'] });
     }
     /* and a click on empty page, or Delete, clears the selection */
     document.addEventListener('pointerup', function () {
-      if (mode === 'mark') setTimeout(sync, 0);
+      if (mode === 'mark') setTimeout(function () { sync(); syncChip(); }, 0);
     });
 
     let resizeTick = 0;

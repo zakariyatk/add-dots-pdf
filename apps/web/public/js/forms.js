@@ -249,7 +249,7 @@
       '</div>' +
       '<div class="sigpane" id="sigUpload" hidden>' +
       '<input type="file" id="sigFile" accept="image/*">' +
-      '<p class="sighint">A PNG with a transparent background looks best.</p>' +
+      '<p class="sighint">A photo or scan of a signature on paper works: its background is taken out.</p>' +
       '<div class="sigprev" id="sigPrev"></div>' +
       '</div>' +
       '<div class="sigcolors">' +
@@ -335,25 +335,78 @@
     $('sigName').addEventListener('input', syncApply);
     $('sigClear').addEventListener('click', function () {
       clearCanvas(); $('sigName').value = ''; $('sigPrev').innerHTML = '';
-      uploaded = null; syncApply();
+      uploaded = null; uploadedRaw = null; $('sigFile').value = ''; syncApply();
     });
     $('sigClose').addEventListener('click', closeSign);
     sigModal.addEventListener('mousedown', function (e) {
       if (e.target === sigModal) closeSign();
     });
 
-    let uploaded = null;
+    /* The picture as chosen, and as placed: with its background taken out */
+    let uploaded = null, uploadedRaw = null;
+    function showUploaded() {
+      $('sigPrev').innerHTML = uploaded ? '<img src="' + uploaded + '" alt="Signature preview">' : '';
+      syncApply();
+    }
+    function useUpload() {
+      if (!uploadedRaw) return;
+      const raw = uploadedRaw;
+      removeBackground(raw).then(function (url) {
+        if (raw !== uploadedRaw) return;          /* another picture since */
+        uploaded = url || raw;
+        showUploaded();
+      });
+    }
     $('sigFile').addEventListener('change', function (e) {
       const f = e.target.files && e.target.files[0];
       if (!f) return;
       const r = new FileReader();
-      r.onload = function () {
-        uploaded = r.result;
-        $('sigPrev').innerHTML = '<img src="' + uploaded + '" alt="Signature preview">';
-        syncApply();
-      };
+      r.onload = function () { uploadedRaw = r.result; useUpload(); };
       r.readAsDataURL(f);
     });
+
+    /* A signature on paper, made see-through: the paper's own shade is read
+       off the picture's border, and each pixel is kept as much as it is
+       darker than that, so the strokes keep their soft edges and a grey
+       photo of white paper clears as well as a clean scan. Large pictures
+       are scaled down first: a signature needs no more than 1600 pixels. */
+    function removeBackground(url) {
+      return new Promise(function (res) {
+        const img = new Image();
+        img.onload = function () {
+          const k = Math.min(1, 1600 / Math.max(img.width, img.height));
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.round(img.width * k));
+          c.height = Math.max(1, Math.round(img.height * k));
+          const g = c.getContext('2d');
+          g.drawImage(img, 0, 0, c.width, c.height);
+          let d;
+          try { d = g.getImageData(0, 0, c.width, c.height); } catch (e) { res(null); return; }
+          const px = d.data, W = c.width, H = c.height;
+          function lum(i) { return 0.299 * px[i] + 0.587 * px[i + 1] + 0.114 * px[i + 2]; }
+          /* the border's shade: the median, so strokes that run off the edge do not count */
+          const edge = [];
+          const step = Math.max(1, Math.floor((W + H) / 400));
+          for (let x = 0; x < W; x += step) { edge.push(lum(x * 4)); edge.push(lum(((H - 1) * W + x) * 4)); }
+          for (let y = 0; y < H; y += step) { edge.push(lum(y * W * 4)); edge.push(lum((y * W + W - 1) * 4)); }
+          edge.sort(function (a, b) { return a - b; });
+          const bg = edge[Math.floor(edge.length / 2)] || 255;
+          /* already see-through, or not on light paper: leave it as it is */
+          let clear = 0;
+          for (let i = 3; i < px.length; i += 400) if (px[i] < 250) clear++;
+          if (clear > px.length / 4000 || bg < 110) { res(null); return; }
+          const lo = Math.max(12, (255 - bg) * 0.2 + 18), hi = lo + Math.max(40, bg * 0.3);
+          for (let i = 0; i < px.length; i += 4) {
+            const dk = bg - lum(i);
+            px[i + 3] = dk <= lo ? 0 : dk >= hi ? 255 : Math.round((dk - lo) / (hi - lo) * 255);
+          }
+          g.putImageData(d, 0, 0);
+          res(c.toDataURL('image/png'));
+        };
+        img.onerror = function () { res(null); };
+        img.src = url;
+      });
+    }
 
     function syncApply() {
       let ok = false;

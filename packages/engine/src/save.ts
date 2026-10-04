@@ -24,7 +24,7 @@ import {
   type PDFFont,
   type PDFPage,
 } from 'pdf-lib';
-import { FONTS, fontIdx } from './fonts';
+import { embedTextFont, fontIdx, isFileFont, type FontFileSource } from './fonts';
 import { arrowHead, boxOf, lineOrigin, rotPt, textRect, type MeasureText } from './geometry';
 import { isText, type AnyMark, type Mark, type PageItem, type Source, type TextMark } from './model';
 import { dashOf, hexToRgb01, shCap, shJoin, shOp } from './style';
@@ -78,6 +78,8 @@ export interface SaveHooks {
   /** The fonts for characters the standard fonts cannot draw (see text.ts).
       Without them, such characters save as '?'. */
   unicode?: UnicodeFontSource | null;
+  /** The Google Fonts' files, for text in one of them (see fonts.ts). */
+  fonts?: FontFileSource | null;
   /** Module marks that need a standard font: type -> font name. */
   fontNeeds?: Record<string, (s: AnyMark) => string | null | undefined>;
   /** Module marks drawn into the PDF: type -> painter. */
@@ -262,7 +264,7 @@ async function compose(
         continue;
       }
       const key = s.f + fontIdx(s.b, s.i);
-      if (!embedded[key]) embedded[key] = await out.embedFont(FONTS[s.f][fontIdx(s.b, s.i)]!);
+      if (!embedded[key]) embedded[key] = await embedTextFont(out, s.f, fontIdx(s.b, s.i), hooks.fonts);
     }
   }
   const fontFor = (s: TextMark) => embedded[s.f + fontIdx(s.b, s.i)] || null;
@@ -276,9 +278,10 @@ async function compose(
     : [];
   const markText = textIn(items.map((it) => it.shapes)) + '\n' + textIn(pinLocs);
   if (needsUnicode(markText)) extra.fallback = await extra.unicode(markText);
-  /* a line with characters the standard font lacks is measured as drawn */
+  /* a line with characters the standard font lacks, or in a font from a
+     file, is measured as drawn */
   const measureT: MeasureText = (s, line) => {
-    const f = needsUnicode(line) ? fontFor(s) : null;
+    const f = needsUnicode(line) || isFileFont(s.f) ? fontFor(s) : null;
     return f ? textWidth(line, s.size, { font: f, fallback: extra.fallback }) : measure(s, line);
   };
 

@@ -49,7 +49,9 @@ export interface Mark extends MarkBase {
   fill?: string | null;
 }
 
-export type FontFamily = 'helv' | 'times' | 'cour';
+/** A standard PDF font, or 'g:<id>': a Google Font the page supplies (see SaveHooks.fonts). */
+export type StandardFamily = 'helv' | 'times' | 'cour';
+export type FontFamily = StandardFamily | `g:${string}`;
 export type Align = 'left' | 'center' | 'right';
 
 /** A text mark has one point, its baseline anchor `a`. Careful: here `b` means

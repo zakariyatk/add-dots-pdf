@@ -8,6 +8,7 @@
    uses the same builder, so the two cannot drift apart. */
 
 import type { PDFDocument } from 'pdf-lib';
+import type { FontFileSource } from './fonts';
 import type { MeasureText } from './geometry';
 import type { Scale } from './measure';
 import { DEFAULT_SCALE } from './measure';
@@ -50,6 +51,7 @@ export interface SaveState {
 export interface SaveEnv {
   measure: MeasureText;
   unicode?: UnicodeFontSource | null;
+  fonts?: FontFileSource | null;
   /** Let the thread breathe during a long save. */
   breathe?: () => Promise<void>;
 }
@@ -81,6 +83,7 @@ export function saveHooks(state: SaveState, env: SaveEnv): SaveHooks {
   return {
     measure: env.measure,
     unicode: env.unicode || null,
+    fonts: env.fonts || null,
     fontNeeds: { ...annotateFontNeeds, ...drawFontNeeds, ...docopsFontNeeds, ...ocrFontNeeds },
     shapePainters: {
       ...annotatePainters,

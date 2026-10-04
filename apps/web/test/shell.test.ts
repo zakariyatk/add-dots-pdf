@@ -19,6 +19,27 @@ const localRefs = [...html.matchAll(/<(?:script|link)\b[^>]*?\b(?:src|href)="([^
 const shellMatch = /const SHELL = \[([\s\S]*?)\];/.exec(sw);
 const shell = shellMatch ? [...shellMatch[1]!.matchAll(/'([^']+)'/g)].map((m) => m[1]!) : [];
 
+/* a TrueType font's tables, by tag: where each starts */
+function tables(b: Buffer): Record<string, number> {
+  const t: Record<string, number> = {};
+  for (let i = 0, n = b.readUInt16BE(4); i < n; i++) {
+    const at = 12 + i * 16;
+    t[b.toString('latin1', at, at + 4)] = b.readUInt32BE(at + 8);
+  }
+  return t;
+}
+/* how many of its glyphs have an odd length */
+function oddGlyphs(b: Buffer): number {
+  const t = tables(b);
+  const longLoca = b.readInt16BE(t['head']! + 50) === 1;
+  const numGlyphs = b.readUInt16BE(t['maxp']! + 4);
+  const at = (i: number) =>
+    longLoca ? b.readUInt32BE(t['loca']! + i * 4) : b.readUInt16BE(t['loca']! + i * 2) * 2;
+  let odd = 0;
+  for (let i = 0; i < numGlyphs; i++) odd += (at(i + 1) - at(i)) % 2;
+  return odd;
+}
+
 describe('web app shell', () => {
   it('finds the files index.html loads', () => {
     expect(localRefs).toContain('js/core.js');
@@ -99,19 +120,8 @@ describe('vendored Unicode font support', () => {
      glyph lengths. */
   it.each(['DejaVuSans.ttf', 'NotoEmoji.ttf'])('%s: every glyph has an even length', (name) => {
     const b = readFileSync(join(app, 'public/assets/fonts', name));
-    const tables: Record<string, number> = {};
-    for (let i = 0, n = b.readUInt16BE(4); i < n; i++) {
-      const at = 12 + i * 16;
-      tables[b.toString('latin1', at, at + 4)] = b.readUInt32BE(at + 8);
-    }
-    const longLoca = b.readInt16BE(tables['head']! + 50) === 1;
-    const numGlyphs = b.readUInt16BE(tables['maxp']! + 4);
-    const at = (i: number) =>
-      longLoca ? b.readUInt32BE(tables['loca']! + i * 4) : b.readUInt16BE(tables['loca']! + i * 2) * 2;
-    let odd = 0;
-    for (let i = 0; i < numGlyphs; i++) odd += (at(i + 1) - at(i)) % 2;
-    expect(numGlyphs).toBeGreaterThan(1000);
-    expect(odd).toBe(0);
+    expect(b.readUInt16BE(tables(b)['maxp']! + 4)).toBeGreaterThan(1000);
+    expect(oddGlyphs(b)).toBe(0);
   });
 
   it('ships the font licences', () => {
@@ -120,6 +130,30 @@ describe('vendored Unicode font support', () => {
     );
     expect(readFileSync(join(app, 'public/assets/fonts/NotoEmoji-LICENSE.txt'), 'utf8')).toMatch(
       /SIL Open Font License/,
+    );
+  });
+
+  /* The Google Fonts for text (js/fonts-list.js): each style the list says a
+     family has is there, padded like the fonts above, with its licence. */
+  const gdir = join(app, 'public/assets/fonts/google');
+  const listSrc = readFileSync(join(app, 'public/js/fonts-list.js'), 'utf8');
+  const gfonts = JSON.parse(listSrc.slice(listSrc.indexOf('['), listSrc.lastIndexOf(']') + 1)) as {
+    id: string;
+    styles: number[];
+  }[];
+  it('offers 25 to 30 Google Fonts', () => {
+    expect(gfonts.length).toBeGreaterThanOrEqual(25);
+    expect(gfonts.length).toBeLessThanOrEqual(30);
+  });
+  const gfiles = gfonts.flatMap((f) =>
+    ['r', 'b', 'i', 'bi'].filter((_, i) => f.styles[i]).map((k) => f.id + '-' + k + '.ttf'),
+  );
+  it.each(gfiles)('google/%s: every glyph has an even length', (name) => {
+    expect(oddGlyphs(readFileSync(join(gdir, name)))).toBe(0);
+  });
+  it.each(gfonts.map((f) => f.id))('google/%s ships its licence', (id) => {
+    expect(readFileSync(join(gdir, id + '-LICENSE.txt'), 'utf8')).toMatch(
+      /SIL Open Font License|Apache License|UBUNTU FONT LICENCE/,
     );
   });
 

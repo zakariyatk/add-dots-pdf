@@ -60,6 +60,25 @@ function loadEmojiFont() {
   return emojiFont;
 }
 
+/* A Google Font's file (js/fonts.js picks the same one: the nearest style
+   the family has), with fontkit to embed it */
+const fileFonts = {};
+function loadFileFont(f, style) {
+  if (!self.ADDDOTS_FONT_LIST) importScripts('fonts-list.js');
+  const fam = (self.ADDDOTS_FONT_LIST || []).filter(function (x) { return 'g:' + x.id === f; })[0];
+  if (!fam) return Promise.resolve(null);
+  const near = [[0], [1, 0], [2, 0], [3, 1, 2, 0]][style] || [0];
+  const k = near.filter(function (i) { return fam.styles[i]; })[0] || 0;
+  const path = '../assets/fonts/google/' + fam.id + '-' + ['r', 'b', 'i', 'bi'][k] + '.ttf';
+  if (!fileFonts[path]) {
+    fileFonts[path] = Promise.all([loadUnicodeFont(), fetchBytes(path)]).then(function (got) {
+      return { fontkit: got[0].fontkit, bytes: got[1] };
+    });
+    fileFonts[path].catch(function () { delete fileFonts[path]; });
+  }
+  return fileFonts[path];
+}
+
 function joined(parts) {
   const out = new Uint8Array(parts.reduce(function (n, p) { return n + p.length; }, 0));
   let at = 0;
@@ -90,7 +109,8 @@ async function build(m) {
   const hooks = function () {
     return E.saveHooks(m.state, {
       measure: function (item, line) { return measure ? measure(item, line) : null; },
-      unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont }
+      unicode: { load: loadUnicodeFont, loadEmoji: loadEmojiFont },
+      fonts: { load: loadFileFont }
     });
   };
   const opts = m.opts || {};

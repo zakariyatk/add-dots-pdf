@@ -6,10 +6,10 @@
    - started with a PDF as its argument (a double-click in Explorer), the
      PDF opens and page 1 is drawn, in the render worker
    - no service worker in the app; the page reads only files it was handed
-   - a second start with another PDF (a second double-click) opens it in the
-     window already open, and quits
-   - Save writes the file (ADDDOTS_SAVE_TO stands in for the Save dialog),
-     a PDF with every page
+   - a second start with another PDF (a second double-click) opens it in a
+     new tab of the window already open, and quits
+   - Save, from that tab, writes the file (ADDDOTS_SAVE_TO stands in for the
+     Save dialog), a PDF with every page
 
    Windows: Playwright over WebView2's DevTools port, which the app opens
    only when ADDDOTS_DEVTOOLS_PORT is set (Microsoft's way to test a WebView2
@@ -219,22 +219,37 @@ try {
     const t = setTimeout(() => res(null), 20000);
     second.on('exit', (code) => (clearTimeout(t), res(code)));
   });
+  /* in a tab of its own (a frame of the window), the first one kept */
   const got = await until(() => {
-    const a = window.ADDPDF;
-    return a.S.sources[0] && a.S.sources[0].name === 'second.pdf' && a.S.items[0].rendered
-      ? { pages: a.S.items.length, name: a.S.sources[0].name }
+    const f = document.querySelector('.dtframe');
+    const a = f && f.contentWindow && f.contentWindow.ADDPDF;
+    return a &&
+      a.S &&
+      a.S.sources[0] &&
+      a.S.sources[0].name === 'second.pdf' &&
+      a.S.items[0] &&
+      a.S.items[0].rendered
+      ? {
+          pages: a.S.items.length,
+          name: a.S.sources[0].name,
+          first: window.ADDPDF.S.items.length,
+          tabs: window.ADDPDF.tabs.list().length,
+        }
       : null;
   });
-  check('a second start hands its PDF to the open window and quits', quit === 0 && !!got && got.pages === 5, {
-    quit,
-    got,
-  });
+  check(
+    'a second start opens its PDF in a new tab of the open window, and quits',
+    quit === 0 && !!got && got.pages === 5 && got.first === 3 && got.tabs === 2,
+    { quit, got },
+  );
 
-  /* ---- Save ---- */
+  /* ---- Save, from the tab ---- */
   await run(() => {
+    const w = document.querySelector('.dtframe').contentWindow;
     /* the run has no account: saving without one (js/config.js requireSignIn) */
     window.ADDDOTS_CONFIG.requireSignIn = false;
-    window.ADDPDF.S.items[0].shapes.push({
+    w.ADDDOTS_CONFIG.requireSignIn = false;
+    w.ADDPDF.S.items[0].shapes.push({
       t: 'rect',
       a: [60, 60],
       b: [200, 140],
@@ -242,10 +257,10 @@ try {
       w: 2,
       id: 'e2e',
     });
-    document.getElementById('btnSaveAs').click();
+    w.document.getElementById('btnSaveAs').click();
   });
   await sleep(400);
-  await run(() => document.getElementById('saveGo').click());
+  await run(() => document.querySelector('.dtframe').contentWindow.document.getElementById('saveGo').click());
   let saved = null;
   for (let i = 0; i < 100 && !saved; i++) {
     const f = readdirSync(saveTo).filter((n) => n.endsWith('.pdf'));
@@ -257,8 +272,10 @@ try {
     await sleep(300);
     pages = (await PDFDocument.load(readFileSync(saved))).getPageCount();
   }
-  const toast = await run(() => document.getElementById('toast').textContent);
-  check('Save writes the file where it was asked, a PDF with every page', pages === 5, {
+  const toast = await run(
+    () => document.querySelector('.dtframe').contentWindow.document.getElementById('toast').textContent,
+  );
+  check('Save, from a tab, writes the file where it was asked, a PDF with every page', pages === 5, {
     saved,
     pages,
     toast,

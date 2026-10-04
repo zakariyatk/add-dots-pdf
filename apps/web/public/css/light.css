@@ -66,8 +66,8 @@ body[data-ui="light"] .sw.on { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18), 0
 /* ---- sidebar ---- */
 body[data-ui="light"] .rail { background: #FAFAFB }
 body[data-ui="light"] .thumb .shell { box-shadow: 0 1px 3px rgba(0, 0, 0, .12) }
-body[data-ui="light"] .thumb.active .shell,
 body[data-ui="light"] .thumb.picked .shell { box-shadow: 0 0 0 2px rgba(20, 115, 230, .28) }
+body[data-ui="light"] .thumb.active .no { color: #1473E6 }
 body[data-ui="light"] :is(.thumb .tools button, .ptools button) {
   background: rgba(255, 255, 255, .96); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
 }

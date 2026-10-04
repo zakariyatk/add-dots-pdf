@@ -2358,6 +2358,116 @@ try {
     check('no errors on the page', errors.length === 0, errors);
     await mctx.close();
   }
+
+  /* ---- the Windows app's tabs, with the desktop side stood in for ----
+     A PDF handed over with one open gets a tab; a tab moved to a window of
+     its own takes its marks along, still editable; a tab saves through the
+     window's connection, as bytes. (apps/desktop/e2e.mjs drives the real
+     app; this runs where it cannot.) */
+  {
+    const two = await (async () => {
+      const out = [];
+      for (const n of [3, 5]) {
+        const d = await PDFDocument.create();
+        for (let i = 0; i < n; i++) d.addPage([595, 842]);
+        out.push(Array.from(await d.save()));
+      }
+      return out;
+    })();
+    const dctx = await browser.newContext({ viewport: { width: 1300, height: 850 } });
+    await dctx.addInitScript(([A, B]) => {
+      window.ADDDOTS_NO_TABS = false;
+      if (window.top !== window) return;
+      const st = (window.__STUB = { calls: [], listeners: {} });
+      const files = { 'C:/docs/a.pdf': A, 'C:/docs/b.pdf': B };
+      window.__TAURI__ = {
+        core: {
+          invoke: async (cmd, args, opts) => {
+            st.calls.push({ cmd, bytes: args instanceof Uint8Array, len: args && args.length });
+            if (cmd === 'launch_files') return /handoff=/.test(location.search) ? [] : ['C:/docs/a.pdf'];
+            if (cmd === 'read_file') return new Uint8Array(files[args.path]).buffer;
+            if (cmd === 'new_window') return void window.open('/?handoff=' + args.handoff, '_blank');
+            if (cmd === 'save_file') {
+              if (!(args instanceof Uint8Array)) throw new Error("expected the file's bytes");
+              return 'C:/out/' + decodeURIComponent(opts.headers['x-name']);
+            }
+            return null;
+          },
+        },
+        webviewWindow: {
+          getCurrentWebviewWindow: () => ({ listen: (ev, fn) => void (st.listeners[ev] = fn) }),
+        },
+      };
+    }, two);
+    const errors = [];
+    const page = await dctx.newPage();
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page
+      .waitForFunction(() => window.ADDPDF && window.ADDPDF.S.items.length === 3, null, { timeout: 20000 })
+      .catch(() => {});
+    await page.evaluate(() => window.__STUB.listeners['open-files']({ payload: ['C:/docs/b.pdf'] }));
+    const frameOf = () => page.frames().filter((f) => /[?&]tab=/.test(f.url()))[0];
+    await page
+      .waitForFunction(() => document.querySelector('.dtframe'), null, { timeout: 10000 })
+      .catch(() => {});
+    let inTab = 0;
+    if (frameOf()) {
+      await frameOf()
+        .waitForFunction(() => window.ADDPDF && window.ADDPDF.S.items.length === 5, null, { timeout: 20000 })
+        .catch(() => {});
+      inTab = await frameOf().evaluate(() => window.ADDPDF.S.items.length);
+    }
+    const host = await page.evaluate(() => window.ADDPDF.S.items.length);
+    check('Windows app: a PDF handed over with one open gets a tab of its own', inTab === 5 && host === 3, {
+      inTab,
+      host,
+    });
+
+    await frameOf().evaluate(() => {
+      window.ADDDOTS_CONFIG.requireSignIn = false;
+      const A = window.ADDPDF;
+      A.S.items[0].shapes.push({ t: 'rect', a: [60, 60], b: [200, 140], c: '#E2483D', w: 2 });
+      A.drawShapes(A.S.items[0]);
+    });
+    await frameOf().click('#btnSave');
+    await page
+      .waitForFunction(() => window.__STUB.calls.some((c) => c.cmd === 'save_file'), null, { timeout: 20000 })
+      .catch(() => {});
+    const saved = await page.evaluate(() => window.__STUB.calls.filter((c) => c.cmd === 'save_file'));
+    check(
+      'Windows app: Save in a tab hands the app the file as bytes',
+      saved.length === 1 && saved[0].bytes,
+      saved,
+    );
+
+    const opened = dctx.waitForEvent('page', { timeout: 20000 });
+    await page.locator('.dtab').nth(1).click({ button: 'right' });
+    await page.locator('.dtmenu [data-a="win"]').click();
+    const win = await opened.catch(() => null);
+    let moved = null;
+    if (win) {
+      win.on('pageerror', (e) => errors.push(e.message));
+      await win
+        .waitForFunction(() => window.ADDPDF && window.ADDPDF.S.items.length === 5, null, { timeout: 20000 })
+        .catch(() => {});
+      moved = await win.evaluate(() => ({
+        pages: window.ADDPDF.S.items.length,
+        marks: window.ADDPDF.S.items[0] ? window.ADDPDF.S.items[0].shapes.length : 0,
+      }));
+    }
+    const left = await page.evaluate(() => ({
+      tabs: window.ADDPDF.tabs.list().length,
+      frames: document.querySelectorAll('.dtframe').length,
+    }));
+    check(
+      'Windows app: a tab moved to a new window takes its marks along, and leaves this one',
+      !!moved && moved.pages === 5 && moved.marks === 1 && left.tabs === 1 && left.frames === 0,
+      { moved, left },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await dctx.close();
+  }
 } finally {
   await browser.close();
   server.kill();

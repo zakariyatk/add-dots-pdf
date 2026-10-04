@@ -22,6 +22,13 @@ nothing outside the app.
   (`launch_files`) or is told of them (`open-files`), then reads each one
   (`read_file`). It can read only the files handed over this way, never any
   other path.
+- **Tabs and windows.** A PDF handed over with a document open gets a tab
+  of its own (`js/tabs.js`), as in Acrobat. A tab can be moved to a window
+  of its own: drag it down out of the tab bar, or right-click it and pick
+  "Move to new window". The page puts the document, unsaved marks and all,
+  in the browser storage the windows share and asks `new_window` for a
+  window that opens with its name; that window takes it from there. A PDF
+  double-clicked later opens in the window used last.
 - **Saving.** Save sends the file's bytes to `save_file`, which asks where with
   the Windows Save dialog and writes the file there. Cancelling it leaves the
   document unsaved: the Save popover stays open and crash recovery keeps the
