@@ -2255,6 +2255,189 @@ try {
     await ctx.close();
   }
 
+  /* ---- the page menu: a right-click on a page opens the app's own menu ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, MIXED);
+    const box = async (n) =>
+      page.evaluate((i) => {
+        const r = window.ADDPDF.S.items[i].box.getBoundingClientRect();
+        return { x: r.left, y: r.top, w: r.width, h: r.height };
+      }, n - 1);
+    const menuState = () =>
+      page.evaluate(() => {
+        const m = document.getElementById('pageMenu');
+        return {
+          open: !!m && !m.hidden,
+          head: m && m.querySelector('.hd') ? m.querySelector('.hd').textContent : null,
+          items: m ? [...m.querySelectorAll('button')].map((b) => (b.disabled ? '-' : '') + b.dataset.a) : [],
+          focus:
+            document.activeElement === m
+              ? 'menu'
+              : document.activeElement && document.activeElement.dataset
+                ? document.activeElement.dataset.a
+                : null,
+          bar: (() => {
+            return ['markPop', 'toolChip'].some((id) => {
+              const b = document.getElementById(id);
+              return !!b && !b.hidden && getComputedStyle(b).display !== 'none';
+            });
+          })(),
+        };
+      });
+    const pick = async (a) => {
+      await page.click('#pageMenu button[data-a="' + a + '"]');
+      await page.waitForTimeout(300);
+    };
+    let b1 = await box(1);
+    const spot = { x: b1.x + b1.w * 0.6, y: Math.min(b1.y + b1.h * 0.5, 600) };
+    await page.mouse.click(spot.x, spot.y, { button: 'right' });
+    const first = await menuState();
+    check(
+      "a right-click on a page opens the app's menu there, with the page's actions, keyboard ready",
+      first.open &&
+        first.head === 'Page 1' &&
+        first.items.includes('-copy') &&
+        ['rot', 'blank', 'extract', 'delpage', 'zin', 'fit', 'print', 'note', 'text'].every((a) =>
+          first.items.includes(a),
+        ) &&
+        first.focus === 'menu',
+      first,
+    );
+    await page.keyboard.press('ArrowDown');
+    const moved = await menuState();
+    await page.keyboard.press('Escape');
+    const closed = await menuState();
+    check('the arrows move through it, Escape closes it', moved.focus === 'selall' && !closed.open, {
+      moved: moved.focus,
+      closed: closed.open,
+    });
+
+    await page.mouse.click(spot.x, spot.y, { button: 'right' });
+    await pick('rot');
+    await page.mouse.click(spot.x, spot.y, { button: 'right' });
+    await pick('blank');
+    const pages = await page.evaluate(() => {
+      const S = window.ADDPDF.S;
+      return { rot: S.items[0].rot, n: S.items.length, blank: !!S.items[1].src.synthetic };
+    });
+    check(
+      'Rotate page turns that page; Insert blank page adds one after it',
+      pages.rot === 90 && pages.n === 61 && pages.blank,
+      pages,
+    );
+    await page.evaluate(() => window.ADDPDF.undo());
+    await page.evaluate(() => window.ADDPDF.undo());
+    /* Insert went on to the new page: back to page 1 */
+    await page.evaluate(() => window.ADDPDF.goTo(1));
+    await page.waitForTimeout(700);
+
+    /* Add text here: the text tool's click, where the menu was opened */
+    b1 = await box(1);
+    const tspot = { x: b1.x + b1.w * 0.3, y: b1.y + b1.h * 0.3 };
+    await page.mouse.click(tspot.x, tspot.y, { button: 'right' });
+    await pick('text');
+    await page.keyboard.type('From the menu');
+    await page.keyboard.press('Control+Enter');
+    await page.evaluate(() => window.ADDPDF.setTool('select'));
+    await page.waitForTimeout(300);
+    const placed = await page.evaluate(({ x, y }) => {
+      const X = window.ADDPDF,
+        it = X.S.items[0];
+      const s = it.shapes.find((m) => m.t === 'text');
+      if (!s) return null;
+      const r = it.box.getBoundingClientRect();
+      const v = it.vp.convertToViewportPoint(s.a[0], s.a[1]);
+      return {
+        text: s.txt || s.text || s.s,
+        dx: Math.round(r.left + v[0] - x),
+        dy: Math.round(r.top + v[1] - y),
+      };
+    }, tspot);
+    check(
+      'Add text here puts a text mark where the menu was opened',
+      !!placed &&
+        /From the menu/.test(JSON.stringify(placed)) &&
+        Math.abs(placed.dx) < 40 &&
+        Math.abs(placed.dy) < 40,
+      placed,
+    );
+
+    /* on a mark: the mark's menu */
+    const mk = await page.evaluate(() => {
+      const it = window.ADDPDF.S.items[0];
+      const el = [...it.anno.querySelectorAll('text, tspan, g, rect, path')].find((e) => {
+        const r = e.getBoundingClientRect();
+        return r.width > 4 && r.height > 4;
+      });
+      const r = el.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await page.mouse.click(mk.x, mk.y, { button: 'right' });
+    const onMark = await menuState();
+    await pick('mkdup');
+    const dup = await page.evaluate(
+      () => window.ADDPDF.S.items[0].shapes.filter((m) => m.t === 'text').length,
+    );
+    await page.mouse.click(mk.x, mk.y, { button: 'right' });
+    await pick('mkdel');
+    const left = await page.evaluate(
+      () => window.ADDPDF.S.items[0].shapes.filter((m) => m.t === 'text').length,
+    );
+    check(
+      "a right-click on a mark selects it and opens the mark's menu over its bar: Duplicate, Delete",
+      onMark.open &&
+        !onMark.bar &&
+        onMark.head === 'Mark' &&
+        onMark.items.includes('mkedit') &&
+        dup === 2 &&
+        left === 1,
+      { onMark, dup, left },
+    );
+
+    /* selected words: Copy text and Highlight */
+    await page.evaluate(() => window.ADDPDF.setTool('select'));
+    await page.mouse.click(5, 5);
+    await page.evaluate(() => {
+      const tl = window.ADDPDF.S.items[0].tl;
+      const span = tl.querySelector(':scope > span');
+      const r = document.createRange();
+      r.selectNodeContents(span);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(r);
+    });
+    const w = await page.evaluate(() => {
+      const r = window.getSelection().getRangeAt(0).getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    });
+    await page.mouse.click(w.x, w.y, { button: 'right' });
+    const withWords = await menuState();
+    await pick('hl');
+    const hl = await page.evaluate(
+      () => window.ADDPDF.S.items[0].shapes.filter((m) => m.t === 'markup' && m.k === 'highlight').length,
+    );
+    check(
+      'with words selected, Copy text is offered and Highlight marks them',
+      withWords.items.includes('copy') && withWords.items.includes('hl') && hl === 1,
+      { items: withWords.items, hl },
+    );
+
+    /* Shift+F10, as the menu key does: the menu at the page in view */
+    await page.mouse.click(5, 5);
+    await page.focus('#stage').catch(() => {});
+    await page.keyboard.press('Shift+F10');
+    const keyed = await menuState();
+    await page.keyboard.press('Escape');
+    check(
+      'Shift+F10 opens it at the page in view, on its first item',
+      keyed.open && /^Page /.test(keyed.head || '') && keyed.focus === 'selall',
+      keyed,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- High-DPI: a screen at 300% gets pages drawn at 3x, and a move to a
      screen of another density draws them again at its own ---- */
   {
