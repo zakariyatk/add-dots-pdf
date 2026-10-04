@@ -252,6 +252,14 @@
     };
     return api;
   })();
+  /* What the performance panel reads (js/perf.js): the last file opened
+     (read, parsed, first page drawn, ms from the start), and drawings by
+     engine: [count, ms, megapixels]. */
+  const PERF = { open: null, drawn: {} };
+  function perfDrawn(engine, w, h, t0) {
+    const d = PERF.drawn[engine] || (PERF.drawn[engine] = [0, 0, 0]);
+    d[0]++; d[1] += performance.now() - t0; d[2] += w * h / 1e6;
+  }
   /* RW, with the native one in front of the worker, where it is faster.
      Which is faster depends on the file and the computer: PDFium draws a
      CAD sheet in a fraction of pdf.js's time, but every picture it draws
@@ -289,11 +297,14 @@
       const t0 = performance.now();
       if (!native) {
         const t = render(it, v, w, h, transform, drop, intent, fast);
-        if (p) t.promise.then(function () { timed(p, 'worker', w, h, t0); }, function () {});
+        t.promise.then(function () {
+          if (p) timed(p, 'worker', w, h, t0);
+          perfDrawn(t.engine === 'pdfium' ? 'pdfium (wasm)' : 'pdf.js worker', w, h, t0);
+        }, function () {});
         return t;
       }
       const nt = NR.render(it, v, w, h, transform);
-      nt.promise.then(function () { timed(p, 'native', w, h, t0); }, function () {});
+      nt.promise.then(function () { timed(p, 'native', w, h, t0); perfDrawn('PDFium native', w, h, t0); }, function () {});
       let wt = null;
       const task = {
         engine: 'native',
@@ -524,9 +535,13 @@
   async function openFile(file) {
     if (!isPdf(file)) { showError('That is not a PDF. Choose a file ending in .pdf.'); return false; }
     $('errMsg').hidden = true;
+    /* timed for the performance panel (js/perf.js) */
+    const t0 = performance.now();
+    PERF.open = { name: file.name, size: file.size, read: null, parsed: null, first: null, t0: t0 };
     let bytes, doc;
     try { bytes = await readBytes(file); }
     catch (e) { showError('The file could not be read from disk. Try again.'); return false; }
+    PERF.open.read = performance.now() - t0;
     RW.open(bytes, null, file);
     try { doc = await loadWithPassword(bytes); }
     catch (e) {
@@ -534,6 +549,7 @@
       showError('This file could not be opened. It may be damaged or not a real PDF.'); return false;
     }
     if (lastPassword) RW.open(bytes, lastPassword, file);
+    if (PERF.open && PERF.open.t0 === t0) PERF.open.parsed = performance.now() - t0;
 
     hardReset();
     if (S.tool !== 'select') setTool('select');
@@ -1484,6 +1500,7 @@
     it.baseRot = v.rotation;
     it.rendered = true;
     LIVE.add(it);
+    if (PERF.open && PERF.open.first == null) PERF.open.first = performance.now() - PERF.open.t0;
     if (it.src.synthetic && !it.blankMark) {
       it.blankMark = document.createElement('div');
       it.blankMark.className = 'blankmark';
@@ -8667,6 +8684,15 @@
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */
     renderWorker: function () { return RW.state; },
     /* in the Windows app: whether PDFium draws the pages, and how many it has */
+    /* for the performance panel */
+    perf: function () {
+      return {
+        open: PERF.open, drawn: PERF.drawn, pages: S.items.length,
+        drawnNow: LIVE.size, thumbsNow: TLIVE.size, sources: S.sources.length,
+        bytes: S.sources.reduce(function (n, s) { return n + (s.bytes ? s.bytes.length : 0); }, 0),
+        lowMemory: MEM.tight(), native: NR.state
+      };
+    },
     nativeRender: function (pause) {
       if (pause !== undefined) NR.paused = !!pause;      /* to compare it with the worker */
       const it = S.items[S.current - 1], t = it && it.src && NR.timings(it.src.bytes);

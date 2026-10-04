@@ -149,8 +149,31 @@ async fn save_file(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> R
         d.blocking_save_file().and_then(|f| f.into_path().ok())
     };
     let Some(path) = path else { return Ok(None) };
-    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    write_atomic(&path, bytes)?;
     Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+/// Writes a file whole or not at all. The bytes go to a temporary file
+/// beside it, are flushed to the disk, and then take its place in one
+/// rename: a crash, a full disk or a power cut mid-save leaves the file as
+/// it was, never cut short. (A rename replaces the old file on Windows too.)
+fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let tmp = dir.join(format!(".{name}.{}.saving", std::process::id()));
+    let res = (|| {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        drop(f);
+        std::fs::rename(&tmp, path)
+    })();
+    if let Err(e) = res {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e.to_string());
+    }
+    Ok(())
 }
 
 /// The main window's settings in tauri.conf.json (which leaves creating it to this).
@@ -297,6 +320,59 @@ fn pdf_cancel(rid: u32) {
     pdfium::native().cancel(rid);
 }
 
+/* ---------------- the performance panel (js/perf.js) ---------------- */
+
+/// The app's own memory, in bytes: working set now and at its peak. (The
+/// web view's processes report theirs to the page: performance.memory.)
+#[derive(serde::Serialize)]
+struct NativeMemory {
+    now: u64,
+    peak: u64,
+}
+
+#[cfg(windows)]
+fn native_memory() -> Option<NativeMemory> {
+    #[repr(C)]
+    struct Counters {
+        cb: u32,
+        page_faults: u32,
+        peak_working_set: usize,
+        working_set: usize,
+        quota_peak_paged: usize,
+        quota_paged: usize,
+        quota_peak_nonpaged: usize,
+        quota_nonpaged: usize,
+        pagefile: usize,
+        peak_pagefile: usize,
+    }
+    extern "system" {
+        fn GetCurrentProcess() -> *mut std::ffi::c_void;
+        fn K32GetProcessMemoryInfo(p: *mut std::ffi::c_void, c: *mut Counters, cb: u32) -> i32;
+    }
+    let mut c: Counters = unsafe { std::mem::zeroed() };
+    c.cb = std::mem::size_of::<Counters>() as u32;
+    let ok = unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut c, c.cb) };
+    (ok != 0).then(|| NativeMemory { now: c.working_set as u64, peak: c.peak_working_set as u64 })
+}
+
+#[cfg(not(windows))]
+fn native_memory() -> Option<NativeMemory> {
+    let s = std::fs::read_to_string("/proc/self/status").ok()?;
+    let kb = |k: &str| {
+        s.lines()
+            .find(|l| l.starts_with(k))
+            .and_then(|l| l.split_whitespace().nth(1))
+            .and_then(|v| v.parse::<u64>().ok())
+            .map(|v| v * 1024)
+    };
+    Some(NativeMemory { now: kb("VmRSS:")?, peak: kb("VmHWM:")? })
+}
+
+#[tauri::command]
+fn perf_native() -> Option<NativeMemory> {
+    native_memory()
+}
+
 /// Where a PDF handed over later goes: the window used last, if it is
 /// still open, else any window of the app.
 fn target_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
@@ -371,7 +447,8 @@ pub fn run() {
             pdf_open,
             pdf_close,
             pdf_render,
-            pdf_cancel
+            pdf_cancel,
+            perf_native
         ])
         .run(tauri::generate_context!())
         .expect("error while running ADD DOTS PDF");
@@ -383,6 +460,27 @@ mod tests {
 
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn the_app_knows_its_own_memory() {
+        let m = native_memory().expect("memory readable");
+        assert!(m.now > 1_000_000 && m.peak >= m.now);
+    }
+
+    #[test]
+    fn saving_replaces_the_file_whole_and_leaves_nothing_behind() {
+        let dir = std::env::temp_dir().join(format!("adddots-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a.pdf");
+        std::fs::write(&path, b"old").unwrap();
+        write_atomic(&path, b"new contents").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new contents");
+        let left: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(left.len(), 1, "no temporary file left: {left:?}");
+        // a folder that cannot be written to: an error, and the old file untouched
+        assert!(write_atomic(&dir.join("missing").join("b.pdf"), b"x").is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
