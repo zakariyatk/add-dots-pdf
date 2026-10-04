@@ -1,6 +1,6 @@
 # Handover: where the Windows app work stands
 
-Last updated 2026-10-04. Read with `docs/windows-performance.md`, which has
+Last updated 2026-10-04 (second session). Read with `docs/windows-performance.md`, which has
 the analysis, the plan and the measured results of each phase.
 
 ## Done
@@ -11,9 +11,10 @@ the analysis, the plan and the measured results of each phase.
 | 2     | Memory: PDFium reads from disk, render worker started only when needed  | PR #46 (merged)        |
 | 3     | Big files (over 150 MB) read from disk by byte ranges                   | PR #47                 |
 | 4     | Edit Object's work in the save worker; DXF conversion no longer freezes | PR #47 (second commit) |
+| 5     | OCR by Windows' own reader, Tesseract as the fallback                   | PR #48                 |
+| 7     | Window CSP; update check sandboxed; `read_range` bounded                | PR #48                 |
 
-Branch: `claude/festive-hypatia-aw32lc`. Once PR #47 is merged, start the
-next phase from `main`.
+PR #47 is merged. This session's work (the Android CI changes, phases 5 and 7) is PR #48, branch `claude/affectionate-archimedes-ymfdlu`.
 
 ## Open problem: the Android CI job fails most of the time
 
@@ -30,7 +31,13 @@ next phase from `main`.
   software GPU (`-gpu swiftshader_indirect`), logs
   `Failed to find ColorBuffer` / `Failed to bind to texture`, and isn't
   pinned (`channel: stable` takes the newest emulator).
-- **Next steps to try,** in `.github/workflows/ci.yml` (`android` job) and
+- **Tried (this session; its first run on PR #48 passed):** 4 cores, 4 GB, `-gpu
+swangle_indirect`. The failing runs used emulator 37.2.12 and WebView
+  Chrome 113; the app booted (render worker on) but page 1 was not drawn.
+  `e2e-android.mjs` now prints the app's state when a check times out
+  (files, pages, which are drawn, errors), and its logcat filter no longer
+  matches "crashrecovery", whose thousands of lines had hidden the rest.
+- **If it still fails, next,** in `.github/workflows/ci.yml` (`android` job) and
   `apps/mobile/e2e-android.mjs`:
   1. Compare the emulator version (the "Emulator 37.x" line) in a passing
      run (#126, #127, #129) with a failing one (#130, #132, #133). If it
@@ -44,14 +51,12 @@ next phase from `main`.
 
 ## Remaining phases
 
-5. **Windows OCR.** Windows.Media.Ocr through the Rust side (a new Tauri
-   command that takes a page bitmap and returns words with boxes). Keep
-   Tesseract (`js/ocr.js`) for the website and as the fallback.
+5. ~~Windows OCR~~: done, see `docs/windows-performance.md`. Not yet: both
+   languages at once by Windows (today "English and Arabic" goes to
+   Tesseract), and a timing against Tesseract on a real Windows machine.
 6. **Professional UI.** Dark theme pass, icon audit, toolbar groups,
    two-page view, High-DPI audit, Windows print, context menus.
-7. **Security.** A CSP for the Tauri window (it has `csp: null` today in
-   `apps/desktop/src-tauri/tauri.conf.json`), and a review of every path
-   and file the Rust side accepts (`lib.rs`).
+7. ~~Security~~: done, see `docs/windows-performance.md`.
 
 Smaller items noted along the way:
 

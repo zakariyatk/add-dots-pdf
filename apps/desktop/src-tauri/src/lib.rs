@@ -27,6 +27,7 @@ use std::sync::{Arc, Mutex};
 
 use tauri::{Emitter, Manager};
 
+mod ocr;
 mod pdfium;
 use tauri_plugin_dialog::DialogExt;
 
@@ -174,7 +175,10 @@ fn range_close(id: u32, state: tauri::State<'_, Opened>) {
 fn range_of(f: &mut std::fs::File, offset: u64, len: u32) -> Result<Vec<u8>, String> {
     use std::io::{Read, Seek, SeekFrom};
     f.seek(SeekFrom::Start(offset)).map_err(|e| e.to_string())?;
-    let mut out = Vec::with_capacity(len as usize);
+    // room for what the file has left, not for whatever was asked: a len
+    // of 4 GB would otherwise be set aside before a byte is read
+    let left = f.metadata().map_err(|e| e.to_string())?.len().saturating_sub(offset);
+    let mut out = Vec::with_capacity(left.min(len as u64) as usize);
     f.take(len as u64)
         .read_to_end(&mut out)
         .map_err(|e| e.to_string())?;
@@ -432,6 +436,38 @@ fn pdf_cancel(rid: u32) {
     pdfium::native().cancel(rid);
 }
 
+/* ---------------- text read by Windows (ocr.rs) ---------------- */
+
+/// The languages Windows can read on this computer, and the largest side
+/// of a picture it takes; no languages off Windows (js/ocr.js then uses
+/// Tesseract).
+#[tauri::command]
+async fn ocr_status() -> Result<ocr::Status, String> {
+    tauri::async_runtime::spawn_blocking(ocr::status)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// The words on a page's picture: its pixels (RGBA) in the request's body,
+/// `x-w` x `x-h`, read in the language `x-lang`.
+#[tauri::command]
+async fn ocr_page(request: tauri::ipc::Request<'_>) -> Result<Vec<ocr::Word>, String> {
+    let tauri::ipc::InvokeBody::Raw(px) = request.body() else {
+        return Err("expected the picture's pixels".into());
+    };
+    let h = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(str::to_string);
+    let n = |k: &str| h(k).and_then(|v| v.parse::<u32>().ok()).ok_or(format!("no {k}"));
+    let (w, ht) = (n("x-w")?, n("x-h")?);
+    let lang = h("x-lang").ok_or("no x-lang")?;
+    if lang.is_empty() || lang.len() > 20 || !lang.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
+        return Err("not a language".into());
+    }
+    let px = px.clone();
+    tauri::async_runtime::spawn_blocking(move || ocr::read(px, w, ht, &lang))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /* ---------------- the performance panel (js/perf.js) ---------------- */
 
 /// The app's own memory, in bytes: working set now and at its peak. (The
@@ -565,6 +601,8 @@ pub fn run() {
             pdf_close,
             pdf_render,
             pdf_cancel,
+            ocr_status,
+            ocr_page,
             perf_native
         ])
         .run(tauri::generate_context!())
@@ -589,6 +627,7 @@ mod tests {
         assert_eq!(range_of(&mut f, 2, 3).unwrap(), b"234");
         assert_eq!(range_of(&mut f, 8, 100).unwrap(), b"89");
         assert_eq!(range_of(&mut f, 20, 5).unwrap(), b"");
+        assert_eq!(range_of(&mut f, 4, u32::MAX).unwrap(), b"456789", "a huge ask is the file's end");
         /* saved over (as Save does it) while open: still the file as opened */
         write_atomic(&p, b"abcdefghij").unwrap();
         assert_eq!(range_of(&mut f, 0, 4).unwrap(), b"0123");

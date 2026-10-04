@@ -52,6 +52,13 @@ jobs:
       - run: npm run smoke -w @adddots/web
         env:
           BENCH_CHANNEL: chrome
+      # again, every page under the Windows app's content security policy
+      # (tauri.conf.json), so a tool it would block fails here first
+      - name: Smoke test under the Windows app's content security policy
+        run: npm run smoke -w @adddots/web
+        env:
+          BENCH_CHANNEL: chrome
+          ADDDOTS_CSP: '1'
 
   desktop:
     name: Windows app (Tauri)
@@ -102,6 +109,16 @@ jobs:
           "ok  installed for this user: $($app.FullName)"
           "INSTALLED_APP=$($app.FullName)" >> $env:GITHUB_ENV
           "INSTALLED_DIR=$dir" >> $env:GITHUB_ENV
+      # Windows' own text reader (src-tauri/src/ocr.rs) needs the English OCR
+      # component, which a server image may not carry; a reader's Windows
+      # has it with its display language
+      - name: English for Windows' text reader
+        shell: pwsh
+        run: |
+          $c = Get-WindowsCapability -Online -Name 'Language.OCR~~~en-US~0.0.1.0'
+          "OCR en-US: $($c.State)"
+          if ($c.State -ne 'Installed') { Add-WindowsCapability -Online -Name 'Language.OCR~~~en-US~0.0.1.0' | Out-Null }
+          (Get-WindowsCapability -Online -Name 'Language.OCR~~~en-US~0.0.1.0').State
       # the installed app driven end to end: Playwright over WebView2's
       # DevTools port
       - run: node e2e.mjs
@@ -232,13 +249,19 @@ jobs:
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm
+      # 4 cores and 4 GB, as the emulator itself advises (with 2 cores page 1
+      # often never drew); swangle_indirect (ANGLE on SwiftShader Vulkan): the
+      # older swiftshader_indirect logged "Failed to bind to texture" on the
+      # runs where the WebView stopped drawing
       - uses: reactivecircus/android-emulator-runner@v2
         with:
           api-level: 34
           target: google_apis
           arch: x86_64
+          cores: 4
+          ram-size: 4096M
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -no-snapshot -noaudio -no-boot-anim
+          emulator-options: -no-window -gpu swangle_indirect -no-snapshot -noaudio -no-boot-anim
           working-directory: apps/mobile
           script: node e2e-android.mjs "$RUNNER_TEMP/app-debug.apk"
 

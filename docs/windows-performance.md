@@ -264,3 +264,63 @@ byte-identical.
   pause whenever 30 ms have run, and so is the walk through each sheet's
   drawing. What is left is about 60–80 ms per sheet while pdf.js hands
   over the sheet's drawing operations.
+
+## Phase 5: Windows OCR — done
+
+- In the Windows app, OCR uses **Windows' own reader** (Windows.Media.Ocr,
+  `src-tauri/src/ocr.rs`): `ocr_status` lists the languages this computer
+  can read and the largest picture it takes; `ocr_page` takes a page's
+  pixels (RGBA, raw) and gives back the words with their boxes. Nothing to
+  download, no WebAssembly.
+- `js/ocr.js` still draws each page and turns the boxes into page points as
+  before; only the reader changes. Windows reads when it has the language
+  (English or Arabic, from the installed language packs), at a size within
+  its limit. Tesseract reads for "English and Arabic" together, on the
+  website, when Windows has no recogniser for the language, and from the
+  page on where Windows' reader fails. `localStorage adpdf.ocr =
+'tesseract'` always uses Tesseract, to compare. `X.ocrBy` says which read.
+- Windows gives no baseline or confidence: a word's baseline is the bottom
+  of its box, as Tesseract's words without a baseline already were.
+
+Tests: cargo (pixels to BGRA, sizes checked, on Windows a blank page reads
+as no words); the desktop end-to-end test has Windows read a picture of
+words drawn in the app (CI installs the English OCR component if the
+runner lacks it); smoke (157): with the desktop side stood in for, Windows
+reads within its size limit and its words land on the page; when it fails,
+Tesseract reads instead.
+
+## Phase 7: security — done
+
+- **A content security policy for the window** (`tauri.conf.json`, was
+  `csp: null`). Scripts only from the app itself (and the update check's
+  `latest.js`, below), WebAssembly allowed but no `eval`, workers from the
+  app or `blob:`, frames only the app's own (tabs, printing), no plugins
+  (`object-src 'none'`), no form posts. Connections stay open to `https:`:
+  the translation tool's endpoint is the reader's to set. Tauri adds the
+  hashes of the inline scripts when it builds; `style-src` is left as
+  written, as the page sets inline `style=` attributes, which a hash would
+  turn off.
+- **The update check no longer runs the website's script with the app's
+  rights.** `latest.js` used to be loaded into the page itself, where (in
+  the Windows app) it could call every command of the desktop side; a
+  website taken over could have run code in every installed app. It now
+  runs in a frame sandboxed to an origin of its own (`latest-frame.html`),
+  which hands back only a build id, a time and up to four notes.
+- **`read_range`** sets aside room for what the file has left, not for
+  whatever length was asked (a length of 4 GB was set aside before a byte
+  was read).
+- Reviewed and already sound: `read_file`, `open_plan`, `pdf_open_path`
+  serve only files the system handed over; `save_file` writes only where the
+  Save dialog says, with the name cleaned; `new_window` takes only a short
+  name of letters and digits; `pdf_render` refuses bitmaps over `MAX_PX`;
+  `open_store` opens one fixed address.
+
+Tests: the desktop end-to-end test checks the policy is in force (an inline
+script put into the page does not run; `eval` is no test there, as DevTools,
+which drives WebView2, lets the code it runs use it whatever the policy)
+and that the update frame still answers. The whole smoke test (155 checks,
+every tool) runs a second time in CI under the same policy
+(`ADDDOTS_CSP=1`: `vite preview` sends it, with the inline scripts' hashes as
+Tauri adds them). The sandboxed frame does not match `'self'`, so the app's
+own origins are named in `script-src` (`tauri://localhost` on Linux and
+macOS, `http://tauri.localhost` on Windows).

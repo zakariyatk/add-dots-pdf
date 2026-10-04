@@ -99,25 +99,47 @@
     return String(cfg.shareServer || 'https://pdf.adddots.com/').replace(/\/?$/, '/');
   }
 
-  /* latest.js is a script, so loading it from the website needs no CORS
-     header there; it sets window.ADDDOTS_LATEST */
+  /* What the website's latest.js says, in a frame sandboxed to an origin of
+     its own (latest-frame.html): a script from the website never runs with
+     the app's rights. Only a build id, a time and a few lines of notes are
+     taken from its answer. */
+  function cleanLatest(v) {
+    if (!v || typeof v !== 'object' || typeof v.time !== 'number' || !isFinite(v.time)) return null;
+    return {
+      id: String(v.id || '').slice(0, 80),
+      time: v.time,
+      notes: (Array.isArray(v.notes) ? v.notes : [])
+        .filter(function (n) { return typeof n === 'string'; })
+        .slice(0, 4)
+        .map(function (n) { return n.slice(0, 300); })
+    };
+  }
   function fetchLatest() {
     return new Promise(function (resolve) {
-      const s = document.createElement('script');
-      s.src = site() + 'latest.js?t=' + Date.now();
-      s.async = true;
-      s.dataset.quiet = '';                /* offline, or not on the site yet: not an error (js/health.js) */
-      const done = function () {
-        s.remove();
-        const v = window.ADDDOTS_LATEST || null;
-        window.ADDDOTS_LATEST = undefined;
+      const f = document.createElement('iframe');
+      f.setAttribute('sandbox', 'allow-scripts');
+      f.title = 'Update check';
+      f.hidden = true;
+      let timer = 0;
+      const done = function (v) {
+        clearTimeout(timer);
+        window.removeEventListener('message', onMessage);
+        f.remove();
         resolve(v);
       };
-      s.onload = done;
-      s.onerror = function () { s.remove(); resolve(null); };    /* offline: no notice */
-      document.head.appendChild(s);
+      const onMessage = function (e) {
+        if (e.source !== f.contentWindow || !e.data || e.data.adddotsLatest !== true) return;
+        done(cleanLatest(e.data.v));
+      };
+      window.addEventListener('message', onMessage);
+      timer = setTimeout(function () { done(null); }, 30000);    /* no answer: no notice */
+      f.src = 'latest-frame.html?site=' + encodeURIComponent(site());
+      document.body.appendChild(f);
     });
   }
+
+  /* for the desktop end-to-end test: what the website says, or null */
+  X.latestBuild = fetchLatest;
 
   function offerAppUpdate(v) {
     if (!v || !v.time || !BUILD || !BUILD.time) return;

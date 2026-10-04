@@ -728,7 +728,9 @@ try {
     /* WCAG 2.1 A and AA, and axe's best practices. The words of the PDF
        itself (the text layer) are the document's, not the app's. */
     const audit = async () => {
-      if (!(await page.evaluate(() => !!window.axe))) await page.addScriptTag({ content: AXE });
+      /* run, not added as a script tag: the page's content security policy
+         (ADDDOTS_CSP=1) rightly refuses an inline script */
+      if (!(await page.evaluate(() => !!window.axe))) await page.evaluate(AXE + '\n;0');
       return page.evaluate(async () => {
         const r = await window.axe.run(
           { exclude: [['#stage .textLayer']] },
@@ -2072,9 +2074,128 @@ try {
         return tc.items.map((i) => i.str).join(' ');
       }, bytes);
       check('and the saved PDF can be searched for it', /atrium/.test(saved), saved.slice(0, 120));
+
+      /* the Windows app: Windows' own reader (ocr_page), stood in for here.
+         It has English, takes pictures up to 1000 px, and finds one word at
+         a tenth of the way across and down; then it fails, and Tesseract
+         reads instead */
+      const runOcr = async () => {
+        await page.evaluate(() => window.ADDPDF.openOcr());
+        await page.evaluate(() => (document.getElementById('ocrNote').textContent = ''));
+        await page.click('#ocrGo');
+        await page
+          .waitForFunction(
+            () => /read on|could not/.test(document.getElementById('ocrNote').textContent),
+            null,
+            { timeout: 120000 },
+          )
+          .catch(() => {});
+        await page.click('#ocrCancel');
+        return page.evaluate(() => {
+          const X = window.ADDPDF;
+          const s = X.S.items[0].shapes.find((x) => x.t === 'ocr');
+          return { by: X.ocrBy, words: s ? s.words : [], asked: window.__ocrAsked };
+        });
+      };
+      await page.evaluate(() => {
+        window.__ocrAsked = [];
+        window.__TAURI__ = {
+          core: {
+            invoke: async (cmd, body, opts) => {
+              if (cmd === 'ocr_status') return { languages: ['ar-SA', 'en-GB', 'en-US'], max: 1000 };
+              if (cmd !== 'ocr_page') return null;
+              const hd = opts.headers;
+              const w = +hd['x-w'],
+                h = +hd['x-h'];
+              window.__ocrAsked.push({ w, h, lang: hd['x-lang'], bytes: body.length });
+              if (window.__ocrFail) throw new Error('no reader');
+              return [{ text: 'Native', x: w * 0.1, y: h * 0.1, w: w * 0.2, h: h * 0.02, line: 0 }];
+            },
+          },
+        };
+      });
+      const win = await runOcr();
+      const wd = win.words[0] || [];
+      const asked = win.asked[0] || {};
+      check(
+        "in the Windows app, Windows' own reader reads, in pictures it takes, and its words land on the page",
+        win.by === 'windows' &&
+          asked.lang === 'en-US' &&
+          Math.max(asked.w, asked.h) <= 1000 &&
+          asked.bytes === asked.w * asked.h * 4 &&
+          wd[5] === 'Native' &&
+          Math.abs(wd[0] - 59.5) < 1.5 &&
+          Math.abs(wd[1] - 842 * 0.88) < 1.5 &&
+          Math.abs(wd[2] - 178.5) < 1.5,
+        { by: win.by, asked, word: wd },
+      );
+      await page.evaluate(() => (window.__ocrFail = true));
+      const back = await runOcr();
+      check(
+        "when Windows' reader fails, Tesseract reads instead",
+        back.by === 'tesseract' && back.words.some((w) => /Inspection/.test(w[5])),
+        { by: back.by, words: back.words.map((w) => w[5]).join(' ') },
+      );
+      await page.evaluate(() => delete window.__TAURI__);
     }
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
+  }
+
+  /* ---- High-DPI: a screen at 300% gets pages drawn at 3x, and a move to a
+     screen of another density draws them again at its own ---- */
+  {
+    const dctx = await browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      deviceScaleFactor: 3,
+      serviceWorkers: 'block',
+    });
+    const page = await dctx.newPage();
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await open(page, MIXED);
+    /* how many bitmap pixels page 1 has for each pixel of its box */
+    const ratio = () =>
+      page.evaluate(() => {
+        const X = window.ADDPDF,
+          it = X.S.items[0];
+        return {
+          dpr: X.drawDpr(),
+          screen: window.devicePixelRatio,
+          ratio: +(it.canvas.width / it.box.offsetWidth).toFixed(2),
+        };
+      });
+    const at3 = await ratio();
+    /* the window moved to a screen at 150%: its density changes, and its
+       size in CSS pixels with it */
+    const cdp = await dctx.newCDPSession(page);
+    await cdp.send('Emulation.setDeviceMetricsOverride', {
+      width: 1439,
+      height: 900,
+      deviceScaleFactor: 1.5,
+      mobile: false,
+    });
+    await page
+      .waitForFunction(
+        () => {
+          const X = window.ADDPDF,
+            it = X.S.items[0];
+          return X.drawDpr() === 1.5 && it.rendered && it.canvas.width / it.box.offsetWidth < 1.6;
+        },
+        null,
+        { timeout: 20000 },
+      )
+      .catch(() => {});
+    const at15 = await ratio();
+    check(
+      'a screen at 300% gets pages sharper than 2x, and a change of density draws them again at it',
+      at3.dpr === 3 && at3.ratio > 2.05 && at15.dpr === 1.5 && Math.abs(at15.ratio - 1.5) < 0.1,
+      { at3, at15 },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await dctx.close();
   }
 
   /* ---- tabs: a second PDF opens in a tab of its own ---- */
@@ -2269,7 +2390,12 @@ try {
     );
     const page = await uctx.newPage();
     const errors = [];
-    page.on('pageerror', (e) => errors.push(e.message));
+    /* the update check's sandboxed frame (latest-frame.html) runs none of the
+       app's scripts, but this test's start-up script and Playwright's
+       service-worker block are put into it too, and fail there */
+    page.on('pageerror', (e) => {
+      if (!/sandboxed and lacks the 'allow-same-origin' flag/.test(e.message)) errors.push(e.message);
+    });
     await page.goto(URL);
     const bars = [];
     await page

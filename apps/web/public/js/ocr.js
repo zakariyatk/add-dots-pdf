@@ -1,14 +1,19 @@
 /* ADD DOTS PDF — OCR
    -----------------
-   Reads the text on scanned pages (Tesseract, in js/vendor/tesseract, loaded
-   only the first time OCR runs) and keeps it as an 'ocr' mark on each page:
+   Reads the text on scanned pages and keeps it as an 'ocr' mark on each page:
    invisible, found by Find, copied with Copy text, and written into the
    saved PDF over the words it was read from (packages/engine, painters/ocr),
    so the file can be searched and selected in any reader.
 
    The page is drawn as it is seen (with its turn), the words come back in
    that picture's pixels, and each is turned into page points by the same
-   viewport, so a rotated scan lands right too. */
+   viewport, so a rotated scan lands right too.
+
+   Who reads: in the Windows app, Windows' own text reader (Windows.Media.Ocr,
+   src-tauri/src/ocr.rs) when it has the language, much faster and with
+   nothing to download; else, and on any error there, Tesseract (in
+   js/vendor/tesseract, loaded only the first time it is needed).
+   localStorage adpdf.ocr = 'tesseract' always uses Tesseract, to compare. */
 (function () {
   'use strict';
 
@@ -138,13 +143,70 @@
       catch (e) { delete workers[lang]; throw e; }
     }
 
+    /* ---------------- Windows' own reader, in the Windows app ---------------- */
+
+    const WIN = (function () {
+      /* the desktop side, through the window when this is a document tab;
+         asked each run (the smoke test stands one in late) */
+      function desk() {
+        let T = window.__TAURI__, U8 = Uint8Array;
+        try {
+          if (!T && window.parent !== window && window.parent.__TAURI__) { T = window.parent.__TAURI__; U8 = window.parent.Uint8Array; }
+        } catch (e) { T = null; }
+        return T && T.core ? { T: T, U8: U8 } : null;
+      }
+      let status = null, seen = null;
+      const api = { max: 0 };
+      /* Windows' tag for one of the dialog's languages ('eng', 'ara'), or
+         null: not the Windows app, a pair of languages, or no recogniser for
+         it on this computer (a language pack Windows has not installed) */
+      api.tag = async function (lang) {
+        const d = desk();
+        if (!d || lang.indexOf('+') >= 0) return null;
+        try { if (localStorage.getItem('adpdf.ocr') === 'tesseract') return null; } catch (e) { /* allowed */ }
+        if (!status || seen !== d.T) {
+          seen = d.T;
+          status = d.T.core.invoke('ocr_status').catch(function (e) {
+            console.warn('[ocr] Windows reader', e);
+            return { languages: [], max: 0 };
+          });
+        }
+        const st = await status;
+        api.max = st.max || 0;
+        const want = { eng: 'en', ara: 'ar' }[lang];
+        if (!want || !api.max) return null;
+        const tags = (st.languages || []).filter(function (t) {
+          const l = String(t).toLowerCase();
+          return l === want || l.indexOf(want + '-') === 0;
+        });
+        /* English as written in the US first, the usual pack; else any */
+        return tags.filter(function (t) { return /^en-us$/i.test(t); })[0] || tags[0] || null;
+      };
+      /* the words on a canvas, as Tesseract gives them: text and box */
+      api.read = async function (c, tag) {
+        const d = desk();
+        const img = c.getContext('2d').getImageData(0, 0, c.width, c.height);
+        const words = await d.T.core.invoke('ocr_page', new d.U8(img.data.buffer), {
+          headers: { 'x-w': String(c.width), 'x-h': String(c.height), 'x-lang': tag }
+        });
+        return words.map(function (w) {
+          return { text: w.text, confidence: 100, bbox: { x0: w.x, y0: w.y, x1: w.x + w.w, y1: w.y + w.h } };
+        });
+      };
+      return api;
+    })();
+    /* who read the last run ('windows' or 'tesseract'): for the tests */
+    X.ocrBy = null;
+
     /* ---------------- reading a page ---------------- */
 
-    /* about 300 dpi, within what every browser's canvas can hold */
-    function renderScale(page, rotation) {
+    /* about 300 dpi, within what every browser's canvas can hold, and within
+       the largest picture Windows' reader takes when it is the one reading */
+    function renderScale(page, rotation, side) {
       const v = page.getViewport({ scale: 1, rotation: rotation });
-      const k = Math.min(300 / 72, 4200 / Math.max(v.width, v.height));
-      return Math.max(1, k);
+      const k = Math.min(300 / 72, Math.min(4200, side || 4200) / Math.max(v.width, v.height));
+      /* at least 1x, unless Windows' limit is smaller than the page */
+      return side ? k : Math.max(1, k);
     }
 
     async function hasOwnText(it) {
@@ -154,20 +216,26 @@
       } catch (e) { return false; }
     }
 
-    async function readPage(it, worker) {
+    /* reader: { tag } for Windows' reader, else { worker } for Tesseract */
+    async function readPage(it, reader) {
       await X.ensurePage(it);
       const page = it.page;
       const rotation = ((page.rotate || 0) + (it.rot || 0)) % 360;
-      const vp = page.getViewport({ scale: renderScale(page, rotation), rotation: rotation });
+      const side = reader.tag ? WIN.max : 0;
+      const vp = page.getViewport({ scale: renderScale(page, rotation, side), rotation: rotation });
       const c = document.createElement('canvas');
       c.width = Math.floor(vp.width); c.height = Math.floor(vp.height);
       const g = c.getContext('2d');
       g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
       await page.render({ canvasContext: g, viewport: vp }).promise;
-      const out = await worker.recognize(c);
-      c.width = c.height = 1;                 /* give the memory back now */
+      let found;
+      try {
+        found = reader.tag ? await WIN.read(c, reader.tag) : (await reader.worker.recognize(c)).data.words || [];
+      } finally {
+        c.width = c.height = 1;               /* give the memory back now */
+      }
       const words = [];
-      (out.data.words || []).forEach(function (w) {
+      found.forEach(function (w) {
         const t = (w.text || '').trim();
         if (!t || w.confidence < 25) return;
         const bb = w.bbox;
@@ -215,7 +283,10 @@
             progress(0, nums.length, 'Loading the text reader…');
           }
         };
-        const worker = await workerFor(lang);
+        /* Windows' reader when it has the language, else Tesseract */
+        const tag = await WIN.tag(lang);
+        const reader = tag ? { tag: tag } : { worker: await workerFor(lang) };
+        X.ocrBy = tag ? 'windows' : 'tesseract';
         X.snapshot();
         for (at = 0; at < nums.length; at++) {
           if (stop) break;
@@ -224,7 +295,18 @@
           await X.ensurePage(it);
           if (skip && await hasOwnText(it)) { skipped++; continue; }
           progress(at, nums.length, 'Reading page ' + nums[at] + ' (' + (at + 1) + ' of ' + nums.length + ')…');
-          const list = await readPage(it, worker);
+          let list;
+          try {
+            list = await readPage(it, reader);
+          } catch (e) {
+            if (!reader.tag) throw e;
+            /* Windows' reader failed: Tesseract from here on */
+            console.warn('[ocr] Windows reader, Tesseract instead', e);
+            delete reader.tag;
+            reader.worker = await workerFor(lang);
+            X.ocrBy = 'tesseract';
+            list = await readPage(it, reader);
+          }
           /* a page read again replaces what was read before */
           it.shapes = it.shapes.filter(function (s) { return s.t !== 'ocr'; });
           if (list.length) {
