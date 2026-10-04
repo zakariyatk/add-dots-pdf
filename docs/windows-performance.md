@@ -265,6 +265,30 @@ byte-identical.
   drawing. What is left is about 60–80 ms per sheet while pdf.js hands
   over the sheet's drawing operations.
 
+## Phase 5: Windows OCR — done
+
+- In the Windows app, OCR uses **Windows' own reader** (Windows.Media.Ocr,
+  `src-tauri/src/ocr.rs`): `ocr_status` lists the languages this computer
+  can read and the largest picture it takes; `ocr_page` takes a page's
+  pixels (RGBA, raw) and gives back the words with their boxes. Nothing to
+  download, no WebAssembly.
+- `js/ocr.js` still draws each page and turns the boxes into page points as
+  before; only the reader changes. Windows reads when it has the language
+  (English or Arabic, from the installed language packs), at a size within
+  its limit. Tesseract reads for "English and Arabic" together, on the
+  website, when Windows has no recogniser for the language, and from the
+  page on where Windows' reader fails. `localStorage adpdf.ocr =
+'tesseract'` always uses Tesseract, to compare. `X.ocrBy` says which read.
+- Windows gives no baseline or confidence: a word's baseline is the bottom
+  of its box, as Tesseract's words without a baseline already were.
+
+Tests: cargo (pixels to BGRA, sizes checked, on Windows a blank page reads
+as no words); the desktop end-to-end test has Windows read a picture of
+words drawn in the app (CI installs the English OCR component if the
+runner lacks it); smoke (157): with the desktop side stood in for, Windows
+reads within its size limit and its words land on the page; when it fails,
+Tesseract reads instead.
+
 ## Phase 7: security — done
 
 - **A content security policy for the window** (`tauri.conf.json`, was
@@ -291,7 +315,9 @@ byte-identical.
   name of letters and digits; `pdf_render` refuses bitmaps over `MAX_PX`;
   `open_store` opens one fixed address.
 
-Tests: the desktop end-to-end test checks the policy is in force (no `eval`)
+Tests: the desktop end-to-end test checks the policy is in force (an inline
+script put into the page does not run; `eval` is no test there, as DevTools,
+which drives WebView2, lets the code it runs use it whatever the policy)
 and that the update frame still answers. The whole smoke test (155 checks,
 every tool) runs a second time in CI under the same policy
 (`ADDDOTS_CSP=1`: `vite preview` sends it, with the inline scripts' hashes as

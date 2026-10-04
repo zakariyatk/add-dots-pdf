@@ -5,17 +5,16 @@ the analysis, the plan and the measured results of each phase.
 
 ## Done
 
-| Phase | What                                                                    | Where                                   |
-| ----- | ----------------------------------------------------------------------- | --------------------------------------- |
-| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                          | PR #45 (merged)                         |
-| 2     | Memory: PDFium reads from disk, render worker started only when needed  | PR #46 (merged)                         |
-| 3     | Big files (over 150 MB) read from disk by byte ranges                   | PR #47                                  |
-| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes | PR #47 (second commit)                  |
-| 7     | Window CSP; update check sandboxed; `read_range` bounded                | `claude/affectionate-archimedes-ymfdlu` |
+| Phase | What                                                                    | Where                  |
+| ----- | ----------------------------------------------------------------------- | ---------------------- |
+| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                          | PR #45 (merged)        |
+| 2     | Memory: PDFium reads from disk, render worker started only when needed  | PR #46 (merged)        |
+| 3     | Big files (over 150 MB) read from disk by byte ranges                   | PR #47                 |
+| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes | PR #47 (second commit) |
+| 5     | OCR by Windows' own reader, Tesseract as the fallback                   | PR #48                 |
+| 7     | Window CSP; update check sandboxed; `read_range` bounded                | PR #48                 |
 
-PR #47 is merged. This session's work (the Android CI changes and phase 7)
-is on `claude/affectionate-archimedes-ymfdlu`, not yet in a pull request; CI
-runs only on pull requests, so it has not run there yet.
+PR #47 is merged. This session's work (the Android CI changes, phases 5 and 7) is PR #48, branch `claude/affectionate-archimedes-ymfdlu`.
 
 ## Open problem: the Android CI job fails most of the time
 
@@ -32,7 +31,7 @@ runs only on pull requests, so it has not run there yet.
   software GPU (`-gpu swiftshader_indirect`), logs
   `Failed to find ColorBuffer` / `Failed to bind to texture`, and isn't
   pinned (`channel: stable` takes the newest emulator).
-- **Tried (this session, waiting on CI):** 4 cores, 4 GB, `-gpu
+- **Tried (this session; its first run on PR #48 passed):** 4 cores, 4 GB, `-gpu
 swangle_indirect`. The failing runs used emulator 37.2.12 and WebView
   Chrome 113; the app booted (render worker on) but page 1 was not drawn.
   `e2e-android.mjs` now prints the app's state when a check times out
@@ -52,9 +51,9 @@ swangle_indirect`. The failing runs used emulator 37.2.12 and WebView
 
 ## Remaining phases
 
-5. **Windows OCR.** Windows.Media.Ocr through the Rust side (a new Tauri
-   command that takes a page bitmap and returns words with boxes). Keep
-   Tesseract (`js/ocr.js`) for the website and as the fallback.
+5. ~~Windows OCR~~: done, see `docs/windows-performance.md`. Not yet: both
+   languages at once by Windows (today "English and Arabic" goes to
+   Tesseract), and a timing against Tesseract on a real Windows machine.
 6. **Professional UI.** Dark theme pass, icon audit, toolbar groups,
    two-page view, High-DPI audit, Windows print, context menus.
 7. ~~Security~~: done, see `docs/windows-performance.md`.

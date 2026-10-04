@@ -2074,6 +2074,69 @@ try {
         return tc.items.map((i) => i.str).join(' ');
       }, bytes);
       check('and the saved PDF can be searched for it', /atrium/.test(saved), saved.slice(0, 120));
+
+      /* the Windows app: Windows' own reader (ocr_page), stood in for here.
+         It has English, takes pictures up to 1000 px, and finds one word at
+         a tenth of the way across and down; then it fails, and Tesseract
+         reads instead */
+      const runOcr = async () => {
+        await page.evaluate(() => window.ADDPDF.openOcr());
+        await page.evaluate(() => (document.getElementById('ocrNote').textContent = ''));
+        await page.click('#ocrGo');
+        await page
+          .waitForFunction(
+            () => /read on|could not/.test(document.getElementById('ocrNote').textContent),
+            null,
+            { timeout: 120000 },
+          )
+          .catch(() => {});
+        await page.click('#ocrCancel');
+        return page.evaluate(() => {
+          const X = window.ADDPDF;
+          const s = X.S.items[0].shapes.find((x) => x.t === 'ocr');
+          return { by: X.ocrBy, words: s ? s.words : [], asked: window.__ocrAsked };
+        });
+      };
+      await page.evaluate(() => {
+        window.__ocrAsked = [];
+        window.__TAURI__ = {
+          core: {
+            invoke: async (cmd, body, opts) => {
+              if (cmd === 'ocr_status') return { languages: ['ar-SA', 'en-GB', 'en-US'], max: 1000 };
+              if (cmd !== 'ocr_page') return null;
+              const hd = opts.headers;
+              const w = +hd['x-w'],
+                h = +hd['x-h'];
+              window.__ocrAsked.push({ w, h, lang: hd['x-lang'], bytes: body.length });
+              if (window.__ocrFail) throw new Error('no reader');
+              return [{ text: 'Native', x: w * 0.1, y: h * 0.1, w: w * 0.2, h: h * 0.02, line: 0 }];
+            },
+          },
+        };
+      });
+      const win = await runOcr();
+      const wd = win.words[0] || [];
+      const asked = win.asked[0] || {};
+      check(
+        "in the Windows app, Windows' own reader reads, in pictures it takes, and its words land on the page",
+        win.by === 'windows' &&
+          asked.lang === 'en-US' &&
+          Math.max(asked.w, asked.h) <= 1000 &&
+          asked.bytes === asked.w * asked.h * 4 &&
+          wd[5] === 'Native' &&
+          Math.abs(wd[0] - 59.5) < 1.5 &&
+          Math.abs(wd[1] - 842 * 0.88) < 1.5 &&
+          Math.abs(wd[2] - 178.5) < 1.5,
+        { by: win.by, asked, word: wd },
+      );
+      await page.evaluate(() => (window.__ocrFail = true));
+      const back = await runOcr();
+      check(
+        "when Windows' reader fails, Tesseract reads instead",
+        back.by === 'tesseract' && back.words.some((w) => /Inspection/.test(w[5])),
+        { by: back.by, words: back.words.map((w) => w[5]).join(' ') },
+      );
+      await page.evaluate(() => delete window.__TAURI__);
     }
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();

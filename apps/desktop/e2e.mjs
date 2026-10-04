@@ -235,16 +235,17 @@ try {
   );
   check('the page cannot read a file it was not handed', /^refused/.test(refused), refused);
 
-  /* the window's content security policy (tauri.conf.json) is in force: no
-     eval; and the update check's sandboxed frame still runs and answers
-     (with what the website says, or nothing when offline) */
+  /* the window's content security policy (tauri.conf.json) is in force: an
+     inline script put into the page does not run (eval is no test here:
+     DevTools, which drives WebView2, lets the code it runs use eval
+     whatever the policy); and the update check's sandboxed frame still runs
+     and answers (with what the website says, or nothing when offline) */
   const policy = await runAsync(async () => {
-    let evals = true;
-    try {
-      new Function('return 1')();
-    } catch (e) {
-      evals = false;
-    }
+    const s = document.createElement('script');
+    s.textContent = 'window.__inlineRan = true;';
+    document.head.appendChild(s);
+    s.remove();
+    const inline = window.__inlineRan === true;
     /* a site that refuses at once (a closed port here), so the frame's answer
        does not wait on the network: nothing, quickly */
     const cfg = window.ADDDOTS_CONFIG;
@@ -253,11 +254,47 @@ try {
     const t = Date.now();
     const latest = window.ADDPDF.latestBuild ? await window.ADDPDF.latestBuild() : 'missing';
     cfg.shareServer = site;
-    return { evals, answered: latest === null && Date.now() - t < 20000, ms: Date.now() - t };
+    return { inline, answered: latest === null && Date.now() - t < 20000, ms: Date.now() - t };
+  });
+  /* Windows' own text reader (src-tauri/src/ocr.rs): a picture of words,
+     drawn here, read back. Off Windows there is no reader, and says so. */
+  const ocr = await runAsync(async () => {
+    const T = window.__TAURI__;
+    const st = await T.core.invoke('ocr_status');
+    const tag = (st.languages || []).filter((l) => /^en/i.test(l))[0];
+    if (!tag) return { languages: st.languages, max: st.max };
+    const c = document.createElement('canvas');
+    c.width = 1200;
+    c.height = 300;
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff';
+    g.fillRect(0, 0, c.width, c.height);
+    g.fillStyle = '#000';
+    g.font = '64px Arial';
+    g.fillText('Site Inspection Report', 60, 170);
+    const px = g.getImageData(0, 0, c.width, c.height).data;
+    const words = await T.core.invoke('ocr_page', new Uint8Array(px.buffer), {
+      headers: { 'x-w': '1200', 'x-h': '300', 'x-lang': tag },
+    });
+    return {
+      languages: st.languages,
+      max: st.max,
+      tag,
+      words: words.map((w) => w.text).join(' '),
+      first: words[0],
+    };
   });
   check(
+    WIN ? "Windows' own text reader reads a picture of words" : 'off Windows there is no Windows text reader',
+    WIN
+      ? /Inspection/.test(ocr.words || '') && ocr.first && ocr.first.x > 30 && ocr.first.x < 120
+      : !!ocr.languages && ocr.languages.length === 0,
+    ocr,
+  );
+
+  check(
     'the window has a content security policy, and the update check still answers',
-    policy.evals === false && policy.answered,
+    policy.inline === false && policy.answered,
     policy,
   );
 
