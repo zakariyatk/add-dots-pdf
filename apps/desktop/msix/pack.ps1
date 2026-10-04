@@ -29,6 +29,11 @@ $layout = Join-Path ([IO.Path]::GetTempPath()) ('adddots-msix-' + [guid]::NewGui
 New-Item -ItemType Directory -Path $layout | Out-Null
 try {
   Copy-Item $exe $layout
+  # PDFium, which the app draws pages with, beside it (scripts/get-pdfium.mjs)
+  $pdfium = Join-Path $here '..\src-tauri\pdfium\pdfium.dll'
+  if (-not (Test-Path $pdfium)) { throw "no PDFium at ${pdfium}: run 'node scripts/get-pdfium.mjs'" }
+  Copy-Item $pdfium $layout
+  Copy-Item (Join-Path $here '..\src-tauri\pdfium\LICENSE') (Join-Path $layout 'pdfium-LICENSE.txt')
   Copy-Item (Join-Path $here 'Assets') (Join-Path $layout 'Assets') -Recurse
   $manifest = Get-Content (Join-Path $here 'AppxManifest.xml') -Raw
   $manifest = $manifest.Replace('{VERSION}', $Version).Replace('{EXE}', (Split-Path $exe -Leaf))

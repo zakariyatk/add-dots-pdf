@@ -67,6 +67,8 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
       - run: npm ci
+      # PDFium, which the app draws pages with (pinned, checked by sha256)
+      - run: node apps/desktop/scripts/get-pdfium.mjs
       - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
       # builds the web app first (beforeBuildCommand), then the installers
       - run: npx tauri build
@@ -150,6 +152,7 @@ jobs:
           if (-not $pkg) { throw 'the MSIX did not install' }
           "ok  installed $($pkg.PackageFullName)"
           if (-not (Test-Path (Join-Path $pkg.InstallLocation 'adddots-pdf.exe'))) { throw 'the app is not in the package' }
+          if (-not (Test-Path (Join-Path $pkg.InstallLocation 'pdfium.dll'))) { throw 'PDFium is not in the package' }
           Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!App"
           $p = $null
           for ($i = 0; $i -lt 30 -and -not $p; $i++) { Start-Sleep 1; $p = Get-Process adddots-pdf -ErrorAction SilentlyContinue }

@@ -4,7 +4,8 @@
      npx tauri build --debug --no-bundle && node e2e.mjs
 
    - started with a PDF as its argument (a double-click in Explorer), the
-     PDF opens and page 1 is drawn, in the render worker
+     PDF opens and page 1 is drawn, natively by PDFium (the render worker
+     ready for what PDFium leaves to pdf.js)
    - no service worker in the app; the page reads only files it was handed
    - a second start with another PDF (a second double-click) opens it in a
      new tab of the window already open, and quits
@@ -173,6 +174,12 @@ try {
     return a.renderWorker() !== 'wait' && { state: a.renderWorker(), mode: a.renderWorkerMode() };
   }, 40000);
   check('pages are drawn in the render worker', !!rw && rw.state === 'on', rw);
+  /* and by PDFium, natively, once it has loaded (src-tauri/src/pdfium.rs) */
+  const native = await until(() => {
+    const n = window.ADDPDF.nativeRender();
+    return n.state !== 'wait' && n.drawn > 0 ? n : n.state === 'off' ? n : null;
+  }, 30000);
+  check('pages are drawn natively, by PDFium', !!native && native.state === 'on' && native.drawn > 0, native);
   if (!first) {
     /* why not: what the desktop side handed over, what the page did with it */
     const why = await run(() => {

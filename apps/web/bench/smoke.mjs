@@ -2567,6 +2567,94 @@ try {
     await ectx.close();
   }
 
+  /* ---- Edit Object, Text: a line the PDF writes, retyped; Esc puts one back ---- */
+  {
+    const d = await PDFDocument.create();
+    const pg = d.addPage([595, 842]);
+    const tr = await d.embedFont(StandardFonts.TimesRoman);
+    pg.drawText('Total due: 1,200 USD', { x: 60, y: 700, size: 14, font: tr });
+    pg.drawText('This line stays as it is.', { x: 60, y: 670, size: 14, font: tr });
+    const tctx = await browser.newContext({ viewport: { width: 1300, height: 900 }, acceptDownloads: true });
+    const errors = [];
+    const page = await tctx.newPage();
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.goto(URL);
+    await page.setInputFiles('#fileIn', {
+      name: 'text.pdf',
+      mimeType: 'application/pdf',
+      buffer: Buffer.from(await d.save()),
+    });
+    await page
+      .waitForFunction(() => window.ADDPDF.S.items[0] && window.ADDPDF.S.items[0].rendered, null, {
+        timeout: 20000,
+      })
+      .catch(() => {});
+    const at = (x, y) =>
+      page.evaluate(
+        ([x, y]) => {
+          const it = window.ADDPDF.S.items[0];
+          const v = it.vp.convertToViewportPoint(x, y);
+          const r = it.anno.getBoundingClientRect();
+          return [r.left + v[0], r.top + v[1]];
+        },
+        [x, y],
+      );
+    const pick = async (x, y) => {
+      await page.evaluate(() => window.ADDPDF.setTool('editobj'));
+      const [px, py] = await at(x, y);
+      await page.mouse.move(px, py);
+      await page.waitForSelector('.anno .eohl', { timeout: 5000 }).catch(() => {});
+      await page.mouse.click(px, py);
+      await page.waitForSelector('.texted textarea', { timeout: 10000 }).catch(() => {});
+      return page.evaluate(() => {
+        const ta = document.querySelector('.texted textarea');
+        return ta ? ta.value : null;
+      });
+    };
+    const first = await pick(120, 704);
+    await page.keyboard.press('Control+a');
+    await page.keyboard.type('Total due: 950 USD');
+    const [ox, oy] = await at(400, 300);
+    await page.mouse.click(ox, oy);
+    const second = await pick(120, 674);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(500);
+    const marks = await page.evaluate(() => window.ADDPDF.S.items[0].shapes.map((s) => s.text));
+    await page.evaluate(() => document.getElementById('btnSaveAs').click());
+    await page.waitForTimeout(400);
+    const [dl] = await Promise.all([
+      page.waitForEvent('download', { timeout: 30000 }),
+      page.click('#saveGo'),
+    ]);
+    const texts = await page.evaluate(
+      async (b) => {
+        const L = window.ADDPDF.PDFLib;
+        const doc = await L.PDFDocument.load(new Uint8Array(b));
+        /* the page's own text, and the retyped line, saved as an editable text comment */
+        const annots = doc.getPage(0).node.Annots();
+        const notes = (annots ? annots.asArray() : [])
+          .map((r) => doc.context.lookup(r))
+          .map((a) => a && a.lookup && a.lookup(L.PDFName.of('Contents')))
+          .filter(Boolean)
+          .map((c) => c.decodeText());
+        return (await window.ADDPDFEngine.pageTextLines(doc, 0)).map((l) => l.text).concat(notes);
+      },
+      Array.from(readFileSync(await dl.path())),
+    );
+    check(
+      'Edit Object: a line the PDF writes opens to retype, saves retyped, and Esc puts one back',
+      first === 'Total due: 1,200 USD' &&
+        second === 'This line stays as it is.' &&
+        marks.join('|') === 'Total due: 950 USD' &&
+        texts.includes('Total due: 950 USD') &&
+        texts.includes('This line stays as it is.') &&
+        !texts.some((t) => /1,200/.test(t)),
+      { first, second, marks, texts },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await tctx.close();
+  }
+
   /* ---- on the website, the Windows app's tools say where they are ---- */
   {
     const wctx = await browser.newContext({ viewport: { width: 1300, height: 900 } });

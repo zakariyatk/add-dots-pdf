@@ -19,4 +19,5 @@ export * from './painters/fields';
 export * from './pages';
 export * from './pins';
 export * from './content';
+export * from './contenttext';
 export * from './painters/vpath';

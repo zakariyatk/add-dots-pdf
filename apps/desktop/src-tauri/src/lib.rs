@@ -26,6 +26,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Mutex;
 
 use tauri::{Emitter, Manager};
+
+mod pdfium;
 use tauri_plugin_dialog::DialogExt;
 
 #[derive(Default)]
@@ -147,8 +149,31 @@ async fn save_file(app: tauri::AppHandle, request: tauri::ipc::Request<'_>) -> R
         d.blocking_save_file().and_then(|f| f.into_path().ok())
     };
     let Some(path) = path else { return Ok(None) };
-    std::fs::write(&path, bytes).map_err(|e| e.to_string())?;
+    write_atomic(&path, bytes)?;
     Ok(Some(path.to_string_lossy().into_owned()))
+}
+
+/// Writes a file whole or not at all. The bytes go to a temporary file
+/// beside it, are flushed to the disk, and then take its place in one
+/// rename: a crash, a full disk or a power cut mid-save leaves the file as
+/// it was, never cut short. (A rename replaces the old file on Windows too.)
+fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), String> {
+    use std::io::Write;
+    let dir = path.parent().filter(|d| !d.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let name = path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+    let tmp = dir.join(format!(".{name}.{}.saving", std::process::id()));
+    let res = (|| {
+        let mut f = std::fs::File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        drop(f);
+        std::fs::rename(&tmp, path)
+    })();
+    if let Err(e) = res {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e.to_string());
+    }
+    Ok(())
 }
 
 /// The main window's settings in tauri.conf.json (which leaves creating it to this).
@@ -202,6 +227,150 @@ fn new_window(app: tauri::AppHandle, handoff: String, state: tauri::State<'_, Op
     config.label = format!("doc-{n}");
     config.url = tauri::WebviewUrl::App(format!("index.html?handoff={handoff}").into());
     build_window(&app, &config).map_err(|e| e.to_string())
+}
+
+/* ---------------- pages drawn natively (pdfium.rs) ---------------- */
+
+/// Where PDFium is: bundled beside the app (its resources), else beside the
+/// .exe (the Store package), else where scripts/get-pdfium.mjs put it (a
+/// development build). ADDDOTS_NATIVE=off leaves it unloaded.
+fn pdfium_path(app: &tauri::AppHandle) -> Option<PathBuf> {
+    let name = pdfium::lib_name();
+    let mut places = vec![];
+    if let Ok(d) = app.path().resource_dir() {
+        places.push(d.join(name));
+    }
+    if let Some(d) = std::env::current_exe().ok().and_then(|e| e.parent().map(Path::to_path_buf)) {
+        places.push(d.join(name));
+    }
+    if cfg!(debug_assertions) {
+        places.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("pdfium").join(name));
+    }
+    places.into_iter().find(|p| p.exists())
+}
+
+/// Ok(where PDFium was loaded from), or Err(why pages are drawn as before).
+#[tauri::command]
+fn pdf_native_status(app: tauri::AppHandle) -> Result<String, String> {
+    if std::env::var("ADDDOTS_NATIVE").map(|v| v == "off").unwrap_or(false) {
+        return Err("turned off (ADDDOTS_NATIVE=off)".into());
+    }
+    let path = pdfium_path(&app).ok_or_else(|| format!("no {} beside the app", pdfium::lib_name()))?;
+    pdfium::native().start(path)
+}
+
+/// Waits off the command thread for what the PDFium thread answers.
+async fn answer<T: Send + 'static>(rx: std::sync::mpsc::Receiver<Result<T, String>>) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(move || rx.recv().unwrap_or_else(|_| Err("the PDFium thread stopped".into())))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// A document's bytes (the request's body) opened as `x-key`, with the
+/// password in `x-password` if it has one. Ok(its page count).
+#[tauri::command]
+async fn pdf_open(request: tauri::ipc::Request<'_>) -> Result<u32, String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("expected the document's bytes".into());
+    };
+    let h = |k: &str| request.headers().get(k).and_then(|v| v.to_str().ok()).map(percent_decode);
+    let key: u32 = h("x-key").and_then(|k| k.parse().ok()).ok_or("no x-key")?;
+    let rx = pdfium::native().open(key, bytes.clone(), h("x-password"))?;
+    answer(rx).await
+}
+
+#[tauri::command]
+fn pdf_close(key: u32) {
+    pdfium::native().close(key);
+}
+
+/// Page `page` (from 0) of document `key` into a w x h bitmap at matrix m:
+/// its pixels, RGBA, as raw bytes; with z, zlib-compressed (fast). Handing
+/// the page 32 MB of pixels took longer than PDFium took to draw them, and a
+/// page is mostly white: compressed, it is a tenth or less to hand over, and
+/// the page unpacks it natively (DecompressionStream). Compressed here, off
+/// PDFium's thread, so the next page is being drawn meanwhile.
+#[tauri::command]
+async fn pdf_render(
+    rid: u32,
+    key: u32,
+    page: u32,
+    m: [f32; 6],
+    w: u32,
+    h: u32,
+    z: Option<bool>,
+) -> Result<tauri::ipc::Response, String> {
+    let rx = pdfium::native().render(rid, pdfium::Ask { key, page, m, w, h })?;
+    let px = answer(rx).await?;
+    if !z.unwrap_or(false) {
+        return Ok(tauri::ipc::Response::new(px));
+    }
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::Write;
+        let mut e = flate2::write::ZlibEncoder::new(Vec::with_capacity(px.len() / 8), flate2::Compression::fast());
+        e.write_all(&px).and_then(|_| e.finish()).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map(tauri::ipc::Response::new)
+}
+
+#[tauri::command]
+fn pdf_cancel(rid: u32) {
+    pdfium::native().cancel(rid);
+}
+
+/* ---------------- the performance panel (js/perf.js) ---------------- */
+
+/// The app's own memory, in bytes: working set now and at its peak. (The
+/// web view's processes report theirs to the page: performance.memory.)
+#[derive(serde::Serialize)]
+struct NativeMemory {
+    now: u64,
+    peak: u64,
+}
+
+#[cfg(windows)]
+fn native_memory() -> Option<NativeMemory> {
+    #[repr(C)]
+    struct Counters {
+        cb: u32,
+        page_faults: u32,
+        peak_working_set: usize,
+        working_set: usize,
+        quota_peak_paged: usize,
+        quota_paged: usize,
+        quota_peak_nonpaged: usize,
+        quota_nonpaged: usize,
+        pagefile: usize,
+        peak_pagefile: usize,
+    }
+    extern "system" {
+        fn GetCurrentProcess() -> *mut std::ffi::c_void;
+        fn K32GetProcessMemoryInfo(p: *mut std::ffi::c_void, c: *mut Counters, cb: u32) -> i32;
+    }
+    let mut c: Counters = unsafe { std::mem::zeroed() };
+    c.cb = std::mem::size_of::<Counters>() as u32;
+    let ok = unsafe { K32GetProcessMemoryInfo(GetCurrentProcess(), &mut c, c.cb) };
+    (ok != 0).then(|| NativeMemory { now: c.working_set as u64, peak: c.peak_working_set as u64 })
+}
+
+#[cfg(not(windows))]
+fn native_memory() -> Option<NativeMemory> {
+    let s = std::fs::read_to_string("/proc/self/status").ok()?;
+    let kb = |k: &str| {
+        s.lines()
+            .find(|l| l.starts_with(k))
+            .and_then(|l| l.split_whitespace().nth(1))
+            .and_then(|v| v.parse::<u64>().ok())
+            .map(|v| v * 1024)
+    };
+    Some(NativeMemory { now: kb("VmRSS:")?, peak: kb("VmHWM:")? })
+}
+
+#[tauri::command]
+fn perf_native() -> Option<NativeMemory> {
+    native_memory()
 }
 
 /// Where a PDF handed over later goes: the window used last, if it is
@@ -268,7 +437,19 @@ pub fn run() {
             build_window(app.handle(), &main_config(app.handle()))?;
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![launch_files, read_file, save_file, open_store, new_window])
+        .invoke_handler(tauri::generate_handler![
+            launch_files,
+            read_file,
+            save_file,
+            open_store,
+            new_window,
+            pdf_native_status,
+            pdf_open,
+            pdf_close,
+            pdf_render,
+            pdf_cancel,
+            perf_native
+        ])
         .run(tauri::generate_context!())
         .expect("error while running ADD DOTS PDF");
 }
@@ -279,6 +460,27 @@ mod tests {
 
     fn args(a: &[&str]) -> Vec<String> {
         a.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn the_app_knows_its_own_memory() {
+        let m = native_memory().expect("memory readable");
+        assert!(m.now > 1_000_000 && m.peak >= m.now);
+    }
+
+    #[test]
+    fn saving_replaces_the_file_whole_and_leaves_nothing_behind() {
+        let dir = std::env::temp_dir().join(format!("adddots-save-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("a.pdf");
+        std::fs::write(&path, b"old").unwrap();
+        write_atomic(&path, b"new contents").unwrap();
+        assert_eq!(std::fs::read(&path).unwrap(), b"new contents");
+        let left: Vec<_> = std::fs::read_dir(&dir).unwrap().map(|e| e.unwrap().file_name()).collect();
+        assert_eq!(left.len(), 1, "no temporary file left: {left:?}");
+        // a folder that cannot be written to: an error, and the old file untouched
+        assert!(write_atomic(&dir.join("missing").join("b.pdf"), b"x").is_err());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

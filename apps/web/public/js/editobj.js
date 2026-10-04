@@ -11,10 +11,16 @@
    or delete like any other. It saves as a path again (painters/vpath.ts).
    Undo puts the page back as it was.
 
-   Clicking another shape while one is selected lifts that one; clicking
-   empty page lets go and Edit Object carries on until another tool is
-   picked or Esc is pressed. Text comes next (stage 2): for now its choice
-   says so.
+   Text: pointing at a line the PDF writes outlines it; clicking it cuts the
+   line out of the page's content (engine contenttext.ts: its show
+   operators become empty moves of the same width, so the rest of the line
+   stays put) and opens it to type in, in the font closest to its own (a
+   standard font or one of the Google Fonts), at its size, colour, angle and
+   place. Esc while typing puts the line back as it was.
+
+   Clicking another shape or line while one is selected lifts that one;
+   clicking empty page lets go and Edit Object carries on until another tool
+   is picked or Esc is pressed. All picks text first, then shapes.
 
    Not offered: shapes inside a form XObject, clipping paths, and shapes
    painted with a pattern or shading, as cutting those would change more
@@ -53,7 +59,7 @@
     menu.className = 'eomenu'; menu.id = 'eoMenu'; menu.hidden = true; menu.setAttribute('role', 'menu');
     menu.innerHTML =
       '<button type="button" role="menuitemradio" data-m="all"><i>✓</i>All</button>' +
-      '<button type="button" role="menuitemradio" data-m="text"><i>✓</i>Text <small>coming next</small></button>' +
+      '<button type="button" role="menuitemradio" data-m="text"><i>✓</i>Text</button>' +
       '<button type="button" role="menuitemradio" data-m="shape"><i>✓</i>Shape</button>';
     document.body.appendChild(menu);
     function paintMenu() {
@@ -79,10 +85,6 @@
     menu.addEventListener('click', function (e) {
       const b = e.target.closest('button'); if (!b) return;
       menu.hidden = true;
-      if (b.dataset.m === 'text') {
-        X.toast('Editing the PDF\'s own text is coming next. For now the <b>Text</b> tool retypes a line.');
-        return;
-      }
       mode = b.dataset.m;
       sticky = false;
       X.setTool('editobj');
@@ -92,8 +94,8 @@
     }, true);
 
     X.toolBtn.editobj = 'tEditObj';
-    X.hints.editobj = 'Point at a line, box or shape the PDF draws, and click it to edit it: move it, ' +
-      'pull its corners, change its colours or line, or delete it. <b>Esc</b> finishes.';
+    X.hints.editobj = 'Point at text, a line, a box or a shape the PDF itself has, and click it to edit it: ' +
+      'type in text; move, resize, recolour or delete a shape. <b>Esc</b> finishes.';
 
     /* ---------------- the page's shapes ---------------- */
 
@@ -121,6 +123,43 @@
         }));
       }
       return m.get(it.num);
+    }
+
+    const texts = new WeakMap();             /* src -> Map(num -> lines) */
+    function linesOf(it) {
+      let m = texts.get(it.src);
+      if (!m) texts.set(it.src, (m = new Map()));
+      if (!m.has(it.num)) {
+        const num = it.num, src = it.src;
+        m.set(num, docOf(src).then(function (d) { return E.pageTextLines(d, num - 1); }).catch(function (err) {
+          console.warn('[editobj] page text', err);
+          return null;
+        }));
+      }
+      return m.get(it.num);
+    }
+    /* the line p (PDF points) is on: in its own frame, inside its box */
+    function lineAt(list, p) {
+      let best = null, bestA = Infinity;
+      for (const l of list || []) {
+        const a = -l.angle * Math.PI / 180, dx = p[0] - l.origin[0], dy = p[1] - l.origin[1];
+        const x = dx * Math.cos(a) - dy * Math.sin(a), y = dx * Math.sin(a) + dy * Math.cos(a);
+        if (x < -2 || x > l.width + 2 || y < -0.3 * l.size || y > 0.9 * l.size) continue;
+        const area = l.width * l.size;
+        if (area < bestA) { bestA = area; best = l; }
+      }
+      return best;
+    }
+    /* what a click at p picks, as the menu says: {line} or {shape} */
+    function pickAt(it, p) {
+      const wantText = mode !== 'shape', wantShape = mode !== 'text';
+      return Promise.all([wantText ? linesOf(it) : null, wantShape ? shapesOf(it) : null]).then(function (got) {
+        if (got[0] === null && got[1] === null) return null;
+        const l = wantText && p ? lineAt(got[0], p) : null;
+        if (l) return { line: l };
+        const s = wantShape && p && got[1] ? hitAt(got[1], p) : null;
+        return s ? { shape: s } : false;
+      });
     }
 
     /* a shape as straight pieces (curves in short chords), and its outlines as rings */
@@ -228,14 +267,78 @@
     X.handleKind.vpath = 'bbox';
 
     let hover = null;                        /* {it, s} under the pointer */
-    function showHover(it, s) {
+    function showHover(it, pick) {
+      const s = pick ? pick.shape || pick.line : null;
       if (hover && hover.it === it && hover.s === s) return;
       const was = hover && hover.it;
       hover = s ? { it: it, s: s } : null;
       if (was && was !== it) X.drawShapes(was);
-      if (s) X.drawShapes(it, { t: 'vpath', hl: true, k: s.cmds, pts: s.pts, c: '#1473E6', w: 1 });
+      if (pick && pick.shape) X.drawShapes(it, { t: 'vpath', hl: true, k: s.cmds, pts: s.pts, c: '#1473E6', w: 1 });
+      else if (pick && pick.line) X.drawShapes(it, { t: 'vpath', hl: true, k: 'MLLLZ', pts: s.quad, c: '#1473E6', w: 1 });
       else if (was) X.drawShapes(was);
     }
+
+    /* ---------------- text: the closest font we have ---------------- */
+    const WINANSI = /^[\u0020-\u007E\u00A0-\u00FF\u20AC\u2018\u2019\u201C\u201D\u2022\u2013\u2014\u2026\u2122]*$/;
+    function fontFor(line) {
+      const name = String(line.font || '').toLowerCase().replace(/[-,_](bold|italic|oblique|regular|medium|light|semibold|black|mt|ps).*$/, '');
+      const flat = name.replace(/[^a-z0-9]/g, '');
+      const GF = window.ADDDOTS_FONTS;
+      let f = null;
+      if (GF) {
+        const hit = GF.list.filter(function (g) { return flat && flat.indexOf(g.name.toLowerCase().replace(/[^a-z0-9]/g, '')) === 0; })[0];
+        if (hit) f = 'g:' + hit.id;
+      }
+      if (!f) {
+        if (/times|georgia|garamond|minion|cambria|book|serif|roman|palatino/.test(flat) && !/sans/.test(flat)) f = 'times';
+        else if (/courier|mono|consol|menlo/.test(flat)) f = 'cour';
+        else f = 'helv';
+      }
+      /* the standard fonts write Latin text only: other text in Noto Sans */
+      if (!/^g:/.test(f) && !WINANSI.test(line.text) && GF && GF.is('g:noto-sans')) f = 'g:noto-sans';
+      return f;
+    }
+    let lifted = null;                       /* the line just lifted, while it is being typed in */
+    async function liftText(it, l) {
+      if (busy) return;
+      busy = true;
+      try {
+        const d = await docOf(it.src);
+        const bytes = await E.cutText(d, it.num - 1, l.id);
+        X.snapshot();
+        const src = await X.addSource(it.src.name, bytes, true);
+        const mark = {
+          t: 'text', a: [l.origin[0], l.origin[1]], text: l.text, size: Math.round(l.size * 10) / 10,
+          c: l.color, f: fontFor(l), b: l.bold, i: l.italic, u: false, k: false, align: 'left',
+          bg: null, bgOp: 1, patch: null
+        };
+        if (l.angle) mark.r = ((l.angle % 360) + 360) % 360;
+        it.shapes.push(mark);
+        hover = null;
+        sticky = true;
+        X.setTool('select');
+        S.sel = { it: it, i: it.shapes.length - 1 };
+        S.multi = null;
+        await X.swapSource(it, src);
+        X.drawShapes(it);
+        sticky = true;
+        lifted = { it: it, idx: it.shapes.length - 1 };
+        X.editText(it, it.shapes.length - 1);
+      } catch (err) {
+        console.error('[editobj] lift text', err);
+        X.toast(/protected|encrypt/i.test(String(err && err.message)) ?
+          'This PDF is password-protected: its own content cannot be edited' :
+          'That text could not be edited');
+      } finally { busy = false; }
+    }
+    /* Esc while typing in a line just lifted: the page as it was */
+    X.on('textEditClosed', function (e) {
+      const l = lifted;
+      lifted = null;
+      if (!l || e.it !== l.it || e.idx !== l.idx) return;
+      if (!e.commit) X.undo();
+      else { S.sel = { it: l.it, i: l.idx }; X.drawShapes(l.it); X.syncMarkPop(); }
+    });
 
     let busy = false;
     async function lift(it, s) {
@@ -272,24 +375,24 @@
       move: function (it, at) {
         if (busy) return;
         const p = pageAt(it, at);
-        shapesOf(it).then(function (list) {
-          if (S.tool !== 'editobj' || !list) { showHover(null, null); return; }
-          showHover(it, p ? hitAt(list, p) : null);
+        pickAt(it, p).then(function (pick) {
+          if (S.tool !== 'editobj' || !pick) { showHover(null, null); return; }
+          showHover(it, pick);
         });
       },
       up: function (it, at, e) {
         const d = down; down = null;
         if (!d || d.it !== it || Math.hypot(e.clientX - d.x, e.clientY - d.y) > 6) return;
         const p = pageAt(it, at);
-        shapesOf(it).then(function (list) {
-          if (list === null) {
+        pickAt(it, p).then(function (pick) {
+          if (pick === null) {
             X.toast(it.src.password ? 'This PDF is password-protected: its own content cannot be edited'
               : 'This page\'s content could not be read');
             return;
           }
-          const s = list && p ? hitAt(list, p) : null;
-          if (s) lift(it, s);
-          else X.toast('No shape there. Point at a line or shape: it lights up when it can be edited.');
+          if (pick && pick.line) liftText(it, pick.line);
+          else if (pick && pick.shape) lift(it, pick.shape);
+          else X.toast('Nothing to edit there. Point at text or a shape: it lights up when it can be edited.');
         });
       },
       cancel: function () { down = null; }
@@ -316,11 +419,11 @@
       if (!it || !it.vp || !it.anno) return;
       const r = it.anno.getBoundingClientRect();
       const p = it.vp.convertToPdfPoint(e.clientX - r.left, e.clientY - r.top);
-      const pending = shapesOf(it);
+      const pending = pickAt(it, p);
       e.preventDefault(); e.stopPropagation();
-      pending.then(function (list) {
-        const s = list ? hitAt(list, p) : null;
-        if (s) { lift(it, s); return; }
+      pending.then(function (pick) {
+        if (pick && pick.line) { liftText(it, pick.line); return; }
+        if (pick && pick.shape) { lift(it, pick.shape); return; }
         /* empty page: let go, and pick again */
         S.sel = null; S.multi = null;
         X.redrawAll();
