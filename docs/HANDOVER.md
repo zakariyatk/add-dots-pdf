@@ -72,7 +72,7 @@ Smaller items noted along the way:
 - Edit Text with the PDF's own embedded fonts (today the closest standard
   font or Google Font is used).
 - Edit Object: shapes in a form drawn more than once on a page, or in a
-  form inside a form (one drawn once is done, PR #53).
+  form inside a form (one drawn once is done, PR #54).
 - Real Windows numbers: open the app on Windows, press Ctrl+Shift+P, and
   "Copy" the panel for each test file.
 
