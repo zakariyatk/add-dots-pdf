@@ -13,18 +13,19 @@ measured results of each phase.
 
 ## Done
 
-| Phase | What                                                                     | Where  |
-| ----- | ------------------------------------------------------------------------ | ------ |
-| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                           | PR #45 |
-| 2     | Memory: PDFium reads from disk, render worker started only when needed   | PR #46 |
-| 3     | Big files (over 150 MB) read from disk by byte ranges                    | PR #47 |
-| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes  | PR #47 |
-| 5     | OCR by Windows' own reader (`src-tauri/src/ocr.rs`), Tesseract fallback  | PR #48 |
-| 6     | High-DPI (pages up to 3x, redrawn when the density changes)              | PR #48 |
-| 6     | Right-click page menu (`js/pagemenu.js`)                                 | PR #49 |
-| 6     | Two pages side by side; dark-interface pass; icon audit (ribbon at 24px) | PR #50 |
-| 6     | Toolbar groups: Page and Document tabs read by job                       | PR #51 |
-| 7     | Window CSP; update check sandboxed; `read_range` bounded                 | PR #48 |
+| Phase | What                                                                     | Where                                   |
+| ----- | ------------------------------------------------------------------------ | --------------------------------------- |
+| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                           | PR #45                                  |
+| 2     | Memory: PDFium reads from disk, render worker started only when needed   | PR #46                                  |
+| 3     | Big files (over 150 MB) read from disk by byte ranges                    | PR #47                                  |
+| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes  | PR #47                                  |
+| 5     | OCR by Windows' own reader (`src-tauri/src/ocr.rs`), Tesseract fallback  | PR #48                                  |
+| 6     | High-DPI (pages up to 3x, redrawn when the density changes)              | PR #48                                  |
+| 6     | Right-click page menu (`js/pagemenu.js`)                                 | PR #49                                  |
+| 6     | Two pages side by side; dark-interface pass; icon audit (ribbon at 24px) | PR #50                                  |
+| 6     | Toolbar groups: Page and Document tabs read by job                       | PR #51                                  |
+| 6     | Cover page in two-page view (View → Cover page)                          | branch `claude/dazzling-hypatia-4o8pa0` |
+| 7     | Window CSP; update check sandboxed; `read_range` bounded                 | PR #48                                  |
 
 PRs #45-#50 are merged. All work is in `main` except #51.
 
@@ -43,7 +44,6 @@ or wait for the emulator to settle after boot before starting the app.
 
 Phase 6 (professional UI):
 
-- A cover-page option for two-page view (page 1 alone, as a book's cover).
 - Windows print: check printing in the Windows app, with a CI check on the
   Windows runner.
 
@@ -82,7 +82,7 @@ Checks, as CI runs them:
 
 ```sh
 npm run lint && npm run format:check && npm run typecheck && npm test
-npm run smoke -w @adddots/web                # Chrome smoke test, 179 checks
+npm run smoke -w @adddots/web                # Chrome smoke test, 180 checks
 ADDDOTS_CSP=1 npm run smoke -w @adddots/web  # again, under the Windows app's CSP
 cd apps/desktop/src-tauri && cargo test      # Rust side
 ```

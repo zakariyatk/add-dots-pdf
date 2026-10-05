@@ -321,6 +321,10 @@
   body.spread .stage{display:grid;grid-template-columns:repeat(2,max-content);justify-content:safe center;
                      align-items:start;align-content:start;column-gap:18px;row-gap:18px}
   body.spread .stage > .pagebox:nth-child(odd){justify-self:end}
+  /* the cover: page 1 alone in the right column, the pairs 2-3, 4-5… after */
+  body.spread.cover .stage > .pagebox:first-child{grid-column:2}
+  body.spread.cover .stage > .pagebox:nth-child(odd){justify-self:start}
+  body.spread.cover .stage > .pagebox:nth-child(even){justify-self:end}
   /* the number above each page's corner: beside it, the right page's would
      stand in the gutter next to the left page */
   body.spread .tick{left:0;top:-14px}

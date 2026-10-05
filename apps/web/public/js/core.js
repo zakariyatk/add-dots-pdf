@@ -529,6 +529,8 @@
     scale: 1, fit: 'width', theme: 'paper', current: 1,
     /* two pages side by side (View → Two pages), kept for next time */
     spread: (function () { try { return localStorage.getItem('adpdf.spread') === '1'; } catch (e) { return false; } })(),
+    /* in two-page view, page 1 alone as a book's cover, then 2-3, 4-5… */
+    cover: (function () { try { return localStorage.getItem('adpdf.cover') === '1'; } catch (e) { return false; } })(),
     baseName: 'document', metaBase: '', baseCount: 0,
     undo: [], hits: [], hitIndex: -1, query: '',
     textCache: new Map(), jumping: false,
@@ -1112,21 +1114,46 @@
      3 and 4… (a grid of two columns, app.css body.spread). Not on a phone,
      nor while the translation stands beside each page. The boxes keep their
      reading order, so everything that finds a page by its offsetTop still
-     does: the two of a pair share a row. */
+     does: the two of a pair share a row. With the cover option, page 1
+     stands alone on the right, as a book's cover, and the pairs are 2 and 3,
+     4 and 5… so facing pages face each other as they were printed. */
   const SPREAD_GAP = 18;
   function spreadOn() { return !!S.spread && !trSideBySide() && !isMobile(); }
+  function coverOn() { return spreadOn() && !!S.cover; }
+  /* the pair's first, left-hand page (the cover alone is its own) */
+  function pairStart(n) {
+    if (!spreadOn()) return n;
+    if (coverOn()) return n <= 1 ? 1 : n - (n % 2);
+    return n % 2 === 0 ? n - 1 : n;
+  }
   /* how far Next and Previous go: a pair at a time in two-page view */
   function pageStep() { return spreadOn() ? 2 : 1; }
   function paintSpread() {
     document.body.classList.toggle('spread', spreadOn());
+    document.body.classList.toggle('cover', coverOn());
     const b = $('btnSpread');
     if (b) { b.classList.toggle('on', !!S.spread); b.setAttribute('aria-pressed', S.spread ? 'true' : 'false'); }
+    /* the cover means something only beside a second page */
+    const c = $('btnCover');
+    if (c) {
+      c.disabled = !S.spread;
+      c.classList.toggle('on', !!S.cover);
+      c.setAttribute('aria-pressed', S.cover ? 'true' : 'false');
+    }
   }
   function setSpread(on) {
     S.spread = !!on;
     try { localStorage.setItem('adpdf.spread', S.spread ? '1' : '0'); } catch (e) { /* this time only */ }
     paintSpread();
     if (!S.items.length) return Promise.resolve();
+    const at = S.current;
+    return relayout().then(function () { goTo(at); });
+  }
+  function setCover(on) {
+    S.cover = !!on;
+    try { localStorage.setItem('adpdf.cover', S.cover ? '1' : '0'); } catch (e) { /* this time only */ }
+    paintSpread();
+    if (!S.items.length || !spreadOn()) return Promise.resolve();
     const at = S.current;
     return relayout().then(function () { goTo(at); });
   }
@@ -6802,7 +6829,7 @@
   function goTo(n) {
     n = Math.max(1, Math.min(S.items.length, n));
     /* two to a row: the pair's left page, on the same row */
-    if (spreadOn() && n % 2 === 0) n--;
+    n = pairStart(n);
     const it = S.items[n - 1]; if (!it) return;
     S.jumping = true;
     stage.scrollTop = it.box.offsetTop - 14;
@@ -6850,7 +6877,7 @@
           if (S.items[m].box.offsetTop <= mid) { best = m + 1; lo = m + 1; } else hi = m - 1;
         }
         /* two to a row: the pair is known by its first, left-hand page */
-        if (spreadOn() && best % 2 === 0) best--;
+        best = pairStart(best);
         if (best !== S.current) setCurrent(best);
       }
       renderVisible();
@@ -8101,6 +8128,7 @@
   $('btnOut').addEventListener('click', function () { setZoom(1 / 1.2); });
   $('btnFitW').addEventListener('click', function () { S.fit = 'width'; relayout(); });
   $('btnSpread').addEventListener('click', function () { setSpread(!S.spread); });
+  $('btnCover').addEventListener('click', function () { setCover(!S.cover); });
   paintSpread();
   $('btnRotL').addEventListener('click', function (e) { e.shiftKey ? rotateAll(-90) : rotateItem(S.current - 1, -90); });
   $('btnRotR').addEventListener('click', function (e) { e.shiftKey ? rotateAll(90) : rotateItem(S.current - 1, 90); });
@@ -9044,6 +9072,7 @@
     zoom: function () { return glideTarget(); }, zoomTo: function (v, x, y) { zoomGlide(v, x, y); },
     /* two pages side by side: on now, set it, how far Next goes */
     spread: function () { return spreadOn(); }, setSpread: setSpread, pageStep: pageStep,
+    setCover: setCover, pairStart: pairStart,
     /* for the page menu (js/pagemenu.js) */
     fitPage: function () { S.fit = 'page'; relayout(); }, print: function () { return printDoc(); },
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,

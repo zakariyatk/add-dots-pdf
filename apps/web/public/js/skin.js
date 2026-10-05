@@ -84,7 +84,7 @@
       bar.hidden = !S.items.length;
       if (!S.items.length) return;
       const z = X.zoom ? X.zoom() : S.scale;
-      const k = S.current + '|' + S.items.length + '|' + z.toFixed(3) + '|' + S.fit + '|' + !$('rail').hidden + '|' + S.spread;
+      const k = S.current + '|' + S.items.length + '|' + z.toFixed(3) + '|' + S.fit + '|' + !$('rail').hidden + '|' + S.spread + '|' + S.cover;
       if (k === last) return;
       last = k;
       if (document.activeElement !== page) page.value = S.current;
@@ -93,7 +93,9 @@
       $('sbPct').textContent = Math.round(z * 100) + '%';
       bar.querySelector('[data-a="first"]').disabled = bar.querySelector('[data-a="prev"]').disabled = S.current <= 1;
       const step = X.pageStep ? X.pageStep() : 1;
-      bar.querySelector('[data-a="last"]').disabled = bar.querySelector('[data-a="next"]').disabled = S.current + step > S.items.length;
+      /* the last pair: Next would land on the page in view (with a cover, page 2 follows 1 though 1 + 2 is past a two-page file) */
+      const ahead = Math.min(S.items.length, S.current + step);
+      bar.querySelector('[data-a="last"]').disabled = bar.querySelector('[data-a="next"]').disabled = (X.pairStart ? X.pairStart(ahead) : ahead) <= S.current;
       bar.querySelector('[data-a="two"]').classList.toggle('on', !!S.spread);
       bar.querySelector('[data-a="fitw"]').classList.toggle('on', S.fit === 'width');
       bar.querySelector('[data-a="fitp"]').classList.toggle('on', S.fit === 'page');

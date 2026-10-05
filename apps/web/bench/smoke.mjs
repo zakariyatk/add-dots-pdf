@@ -2234,6 +2234,50 @@ try {
       labels,
     );
 
+    /* the cover: page 1 alone on the right, then 2 and 3, 4 and 5… */
+    await page.click('#btnCover');
+    await page.waitForTimeout(600);
+    const cover = await page.evaluate(() => {
+      const S = window.ADDPDF.S,
+        st = document.getElementById('stage').getBoundingClientRect(),
+        mid = (st.left + st.right) / 2;
+      const r = (i) => S.items[i].box.getBoundingClientRect();
+      const [a, b, c, d] = [r(0), r(1), r(2), r(3)];
+      return {
+        on: document.body.classList.contains('cover'),
+        alone: a.left >= mid - 12 && b.top >= a.bottom - 1,
+        pairRow: Math.abs(b.top - c.top) < 1 && b.right <= c.left && b.right <= mid + 12,
+        nextBelow: d.top >= Math.max(b.bottom, c.bottom) - 1 && Math.abs(d.left - b.left) < 2,
+        pressed: document.getElementById('btnCover').getAttribute('aria-pressed'),
+      };
+    });
+    await page.evaluate(() => window.ADDPDF.goTo(1));
+    await page.waitForTimeout(600);
+    await page.focus('#stage');
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(600);
+    const afterCover = await page.evaluate(() => window.ADDPDF.S.current);
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(600);
+    const pairAfter = await page.evaluate(() => window.ADDPDF.S.current);
+    await page.evaluate(() => window.ADDPDF.goTo(9));
+    await page.waitForTimeout(600);
+    const odd = await page.evaluate(() => window.ADDPDF.S.current);
+    check(
+      'Cover page: page 1 alone on the right, then 2 and 3 side by side; Next goes 1, 2, 4; page 9 shows with 8',
+      cover.on &&
+        cover.alone &&
+        cover.pairRow &&
+        cover.nextBelow &&
+        cover.pressed === 'true' &&
+        afterCover === 2 &&
+        pairAfter === 4 &&
+        odd === 8,
+      { cover, afterCover, pairAfter, odd },
+    );
+    await page.click('#btnCover');
+    await page.waitForTimeout(600);
+
     /* the ribbon's icons are 24px in both interfaces: drawn on a 24-unit grid
        and snapped to whole pixels (toolbar.js), crisp only at one unit a pixel */
     const iconSizes = async () =>
@@ -2299,10 +2343,11 @@ try {
     await page.click('#btnSpread');
     await page.waitForTimeout(500);
     const off = await layout();
+    const coverOff = await page.evaluate(() => document.getElementById('btnCover').disabled);
     check(
-      'it is kept for the next start, and off again one page under the other',
-      kept.on && kept.pairRow && !off.on && !off.pairRow && off.pressed === 'false',
-      { kept: kept.on, off: { on: off.on, pairRow: off.pairRow } },
+      'it is kept for the next start, and off again one page under the other (Cover greyed)',
+      kept.on && kept.pairRow && !off.on && !off.pairRow && off.pressed === 'false' && coverOff,
+      { kept: kept.on, off: { on: off.on, pairRow: off.pairRow }, coverOff },
     );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
