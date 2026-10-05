@@ -134,6 +134,68 @@
         throw e;
       });
     }
+    /* ---------------- retyped text, in the page's own font ----------------
+       A line lifted and retyped within the characters its font has is saved
+       in that font (engine pagefont.ts); on screen it is drawn the same way:
+       the text alone in that font, as a little PDF (only the font copied),
+       drawn by pdf.js at this zoom and turn, and shown in place of the
+       browser's text. Until it is ready, and for text underlined or struck
+       through, the browser's text in the closest font. */
+    const arts = new Map();                  /* key -> { img, box } | 'wait' | 'none' */
+    const ART_MAX = 60;
+    function artKey(it, s, vp) {
+      return [it.src.id, it.num, vp.scale.toFixed(3), vp.rotation, s.text, s.size, s.c, s.a[0], s.a[1],
+        s.r || 0, s.align || 'left', s.pf.res].join('|');
+    }
+    async function drawArt(key, it, s, vp) {
+      arts.set(key, 'wait');
+      try {
+        const doc = await docOf(it.src);
+        const got = await E.pageFontSample(doc, it.num - 1, s);
+        if (!got) { arts.set(key, 'none'); return; }
+        const pdf = await X.pdfjsLib.getDocument({ data: got.bytes, isEvalSupported: false }).promise;
+        try {
+          const page = await pdf.getPage(1);
+          const dpr = Math.min(3, window.devicePixelRatio || 1);
+          const v = page.getViewport({ scale: vp.scale * dpr, rotation: vp.rotation });
+          const c = document.createElement('canvas');
+          c.width = Math.max(1, Math.ceil(v.width)); c.height = Math.max(1, Math.ceil(v.height));
+          await page.render({ canvasContext: c.getContext('2d'), viewport: v, background: 'rgba(0,0,0,0)' }).promise;
+          arts.set(key, { url: c.toDataURL('image/png'), box: got.box });
+          c.width = c.height = 1;
+        } finally { pdf.destroy(); }
+        /* the oldest go once there are many (each zoom makes new ones) */
+        while (arts.size > ART_MAX) arts.delete(arts.keys().next().value);
+        if (S.items.indexOf(it) >= 0) X.drawShapes(it);
+      } catch (e) {
+        arts.set(key, 'none');
+      }
+    }
+    X.textArt = function (it, s, vp) {
+      if (!s.pf || s.u || s.k || !E.markInPageFont(s) || it.src.password) return null;
+      const key = artKey(it, s, vp);
+      const got = arts.get(key);
+      if (!got) { drawArt(key, it, s, vp); return null; }
+      if (typeof got !== 'object') return null;
+      /* the box's corners on screen: the image covers them, turned as the page is */
+      const b = got.box;
+      const pts = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]]
+        .map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+      const xs = pts.map(function (p) { return p[0]; }), ys = pts.map(function (p) { return p[1]; });
+      const img = document.createElementNS(SVGNS, 'image');
+      const x = Math.min.apply(null, xs), y = Math.min.apply(null, ys);
+      img.setAttribute('x', x); img.setAttribute('y', y);
+      img.setAttribute('width', Math.max.apply(null, xs) - x);
+      img.setAttribute('height', Math.max.apply(null, ys) - y);
+      img.setAttribute('href', got.url);
+      img.setAttribute('class', 'tx pfart');
+      img.setAttribute('preserveAspectRatio', 'none');
+      img.style.opacity = E.shOp ? E.shOp(s) : 1;
+      return img;
+    };
+    /* for the tests: how the mark is shown */
+    X.pageFontArt = function (it, s) { return X.textArt(it, s, it.vp) ? 'page font' : 'browser'; };
+
     function shapesOf(it) {
       let m = lists.get(it.src);
       if (!m) lists.set(it.src, (m = new Map()));
@@ -336,6 +398,9 @@
           bg: null, bgOp: 1, patch: null
         };
         if (l.angle) mark.r = ((l.angle % 360) + 360) % 360;
+        /* the page's own font, to save retyped text in again (engine
+           pagefont.ts) while the mark keeps this family, bold and italic */
+        if (l.pf) mark.pf = Object.assign({ f: mark.f, b: !!mark.b, i: !!mark.i }, l.pf);
         it.shapes.push(mark);
         hover = null;
         sticky = true;

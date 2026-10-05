@@ -20,4 +20,5 @@ export * from './pages';
 export * from './pins';
 export * from './content';
 export * from './contenttext';
+export * from './pagefont';
 export * from './painters/vpath';

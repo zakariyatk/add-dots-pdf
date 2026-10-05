@@ -54,6 +54,19 @@ export type StandardFamily = 'helv' | 'times' | 'cour';
 export type FontFamily = StandardFamily | `g:${string}`;
 export type Align = 'left' | 'center' | 'right';
 
+/** A font of the page, as a table to write text in it again: the characters
+    it can draw there, each with its code, and the codes' widths (Edit
+    Object's Text, contenttext.ts). */
+export interface PageFont {
+  /** its name in the page's resources */
+  res: string;
+  twoByte: boolean;
+  /** character -> code */
+  map: Record<string, number>;
+  /** code -> width, in thousandths of the font size */
+  w: Record<number, number>;
+}
+
 /** A text mark has one point, its baseline anchor `a`. Careful: here `b` means
     bold, not a second point. */
 export interface TextMark extends MarkBase {
@@ -71,6 +84,10 @@ export interface TextMark extends MarkBase {
   bgOp?: number;
   /** A block painted under replaced text, in PDF points. */
   patch?: (Crop & { c: string }) | null;
+  /** Lifted from the page by Edit Object: the page's own font, and the
+      family, bold and italic the mark had then. While it keeps those, text
+      the font can draw is saved in it (pagefont.ts). */
+  pf?: (PageFont & { f: FontFamily; b: boolean; i: boolean }) | null;
 }
 
 /** One page in the editor: page `num` (1-based) of `src`, plus what was done to it. */

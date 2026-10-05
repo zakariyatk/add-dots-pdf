@@ -28,6 +28,8 @@ measured results of each phase.
 | 6     | Marks on the thumbnails, redrawn as they change; an option to hide them                 | PR #53 |
 | 3     | Big files read by byte ranges are not text-indexed in the background                    | PR #53 |
 | 6     | Print checked in CI: the print PDF opens in WebView2's PDF viewer, its frame is printed | PR #53 |
+| 6     | Edit Object: shapes in a form XObject drawn once                                        | PR #54 |
+| 6     | Edit Text in the PDF's own font, saved and shown (as Acrobat)                           | PR #55 |
 | 7     | Window CSP; update check sandboxed; `read_range` bounded                                | PR #48 |
 
 PRs #45-#52 are merged.
@@ -69,8 +71,11 @@ Phase 5 follow-ups:
 
 Smaller items noted along the way:
 
-- Edit Text with the PDF's own embedded fonts (today the closest standard
-  font or Google Font is used).
+- Edit Text in the PDF's own font (done, PR #55): what is left is the
+  look of such a line in the JPG export and the thumbnails (the closest
+  font there, as before), the typing box while editing (the closest font
+  until the edit is applied), and a line underlined or struck through
+  (shown in the closest font on screen; saved in its own font).
 - Edit Object: shapes in a form drawn more than once on a page, or in a
   form inside a form (one drawn once is done, PR #54).
 - Real Windows numbers: open the app on Windows, press Ctrl+Shift+P, and

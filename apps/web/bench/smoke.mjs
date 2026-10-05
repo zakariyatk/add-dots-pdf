@@ -1801,9 +1801,11 @@ try {
     await page.mouse.click(at.x - at.w / 4, at.y - at.h / 2 + 200); /* clear of the toasts at the bottom */
     await page.waitForFunction(() => window.ADDPDF.S.editing);
     await page.keyboard.type('Double click me');
-    /* its OK button keeps it (Escape would throw it away) */
-    await page.evaluate(() => document.querySelector('.texted .acts [data-a="ok"]').click());
+    /* no Apply button: picking another tool keeps it, as in Acrobat (Escape would throw it away) */
+    const noButtons = await page.evaluate(() => !document.querySelector('.texted button'));
+    await page.evaluate(() => document.getElementById('tSelect').click());
     await page.waitForFunction(() => !window.ADDPDF.S.editing);
+    check('typing text has no Apply or Cancel buttons; another tool keeps it', noButtons, { noButtons });
     await page.keyboard.press('v');
     const tx = await page.evaluate(() => {
       const it = window.ADDPDF.S.items.find((i) =>
@@ -3377,6 +3379,33 @@ try {
     await page.keyboard.type('Total due: 950 USD');
     const [ox, oy] = await at(400, 300);
     await page.mouse.click(ox, oy);
+    /* on screen in the PDF's own font: the line as pdf.js draws it (editobj textArt) */
+    const shown = await page
+      .waitForFunction(
+        () => {
+          const im = document.querySelector('.anno image.pfart');
+          return im && im.getBoundingClientRect().width > 50 ? true : null;
+        },
+        null,
+        { timeout: 10000 },
+      )
+      .then(
+        () => true,
+        () => false,
+      );
+    /* no Done / Delete bar beside it; a click outside the pages' space (the
+       status bar) lets go of it, as in Acrobat */
+    const kept = await page.evaluate(() => ({
+      bar: !!document.getElementById('toolChip'),
+      selected: !!window.ADDPDF.S.sel,
+    }));
+    await page.click('#sbTotal');
+    const letGo = await page.evaluate(() => !window.ADDPDF.S.sel);
+    check(
+      'Edit Object: no Done or Delete bar after editing; a click outside the pages lets go of the mark',
+      !kept.bar && kept.selected && letGo,
+      { kept, letGo },
+    );
     const second = await pick(120, 674);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
@@ -3387,7 +3416,7 @@ try {
       page.waitForEvent('download', { timeout: 30000 }),
       page.click('#saveGo'),
     ]);
-    const texts = await page.evaluate(
+    const saved = await page.evaluate(
       async (b) => {
         const L = window.ADDPDF.PDFLib;
         const doc = await L.PDFDocument.load(new Uint8Array(b));
@@ -3398,10 +3427,18 @@ try {
           .map((a) => a && a.lookup && a.lookup(L.PDFName.of('Contents')))
           .filter(Boolean)
           .map((c) => c.decodeText());
-        return (await window.ADDPDFEngine.pageTextLines(doc, 0)).map((l) => l.text).concat(notes);
+        const lines = await window.ADDPDFEngine.pageTextLines(doc, 0);
+        const re = lines.find((l) => /950/.test(l.text));
+        return { texts: lines.map((l) => l.text).concat(notes), notes: notes.length, font: re && re.font };
       },
       Array.from(readFileSync(await dl.path())),
     );
+    check(
+      "Edit Object: the retyped line is shown, and saved as page text, in the PDF's own font (Times)",
+      shown && saved.notes === 0 && /Times/.test(saved.font || ''),
+      { shown, notes: saved.notes, font: saved.font },
+    );
+    const texts = saved.texts;
     check(
       'Edit Object: a line the PDF writes opens to retype, saves retyped, and Esc puts one back',
       first === 'Total due: 1,200 USD' &&

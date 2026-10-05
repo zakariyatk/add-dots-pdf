@@ -13,9 +13,19 @@ import {
   LineCapStyle,
   LineJoinStyle,
   PDFDocument,
+  PDFDict,
+  PDFHexString,
+  PDFName,
+  beginText,
   degrees,
+  endText,
   popGraphicsState,
   pushGraphicsState,
+  setFillingColor,
+  setFontAndSize,
+  setGraphicsState,
+  setTextMatrix,
+  showText,
   rgb,
   setLineCap,
   setLineJoin,
@@ -31,6 +41,7 @@ import { dashOf, hexToRgb01, shCap, shJoin, shOp } from './style';
 import { drawLine, embedFallbacks, needsUnicode, textIn, textWidth, type UnicodeFontSource } from './text';
 import { readXrefTail, reserveNumbers, snapshot, writeUpdate } from './append';
 import { annotRect, commitAnnot, isAnnotMark, scratchPage } from './annots';
+import { encodePageFont, markInPageFont } from './pagefont';
 
 const PDF_CAP = [LineCapStyle.Butt, LineCapStyle.Round, LineCapStyle.Projecting];
 const PDF_JOIN = [LineJoinStyle.Miter, LineJoinStyle.Round, LineJoinStyle.Bevel];
@@ -312,8 +323,19 @@ async function compose(
       onto(s, (p) => paintText(p, s));
     });
     function paintText(p: PDFPage, s: TextMark) {
+      /* text lifted by Edit Object and retyped within the characters the
+         page's own font has: written in that font again (pagefont.ts), if
+         the page still names it */
+      const inPf = markInPageFont(s);
+      const pf =
+        inPf && p.node.Resources()?.lookupMaybe(PDFName.of('Font'), PDFDict)?.has(PDFName.of(inPf.pf.res))
+          ? inPf.pf
+          : null;
+      const measureS: MeasureText = pf
+        ? (m, line) => ((encodePageFont(pf, line)?.w ?? 0) / 1000) * m.size
+        : measureT;
       if (s.bg) {
-        const r = textRect(s, measureT);
+        const r = textRect(s, measureS);
         const bo = s.r ? rotPt([r.x, r.y], [s.a[0], s.a[1]], s.r) : [r.x, r.y];
         p.drawRectangle({
           x: bo[0],
@@ -344,23 +366,42 @@ async function compose(
       if (!txt.trim()) return;
       const f = fontFor(s);
       if (!f) return;
+      let gsName: PDFName | null = null;
       txt.split('\n').forEach((line, li) => {
         if (!line) return;
-        const lineW = measureT(s, line) || 0;
-        const lo = lineOrigin(s, li, lineW, measureT);
-        drawLine(
-          p,
-          line,
-          { font: f, fallback: extra.fallback },
-          {
-            x: lo[0],
-            y: lo[1],
-            rotate: degrees(s.r || 0),
-            size: s.size,
-            color: hexRgb(s.c),
-            opacity: shOp(s),
-          },
-        );
+        const lineW = measureS(s, line) || 0;
+        const lo = lineOrigin(s, li, lineW, measureS);
+        const enc = pf ? encodePageFont(pf, line) : null;
+        if (pf && enc) {
+          const op = shOp(s);
+          if (op < 1 && !gsName)
+            gsName = p.node.newExtGState('GS', p.doc.context.obj({ Type: 'ExtGState', ca: op, CA: op }));
+          const t = ((s.r || 0) * Math.PI) / 180;
+          p.pushOperators(
+            pushGraphicsState(),
+            ...(gsName ? [setGraphicsState(gsName)] : []),
+            setFillingColor(hexRgb(s.c)),
+            beginText(),
+            setFontAndSize(pf.res, s.size),
+            setTextMatrix(Math.cos(t), Math.sin(t), -Math.sin(t), Math.cos(t), lo[0], lo[1]),
+            showText(PDFHexString.of(enc.hex)),
+            endText(),
+            popGraphicsState(),
+          );
+        } else
+          drawLine(
+            p,
+            line,
+            { font: f, fallback: extra.fallback },
+            {
+              x: lo[0],
+              y: lo[1],
+              rotate: degrees(s.r || 0),
+              size: s.size,
+              color: hexRgb(s.c),
+              opacity: shOp(s),
+            },
+          );
         /* standard PDF fonts carry no underline/strike glyphs, so draw the line
            ourselves, pivoted about the same baseline point as the text so it
            turns with it */
