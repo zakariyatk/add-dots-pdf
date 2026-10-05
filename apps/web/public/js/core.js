@@ -3246,6 +3246,21 @@
     }
   });
 
+  /* A click outside the pages' space ends the work on a mark too, as in
+     Acrobat and Foxit: the side panel, the status bar, or another ribbon tab
+     (the Drawing Tool tab and the mark's own panel act on it, and keep it).
+     Text being typed is kept and the mark let go of. */
+  document.addEventListener('pointerdown', function (e) {
+    if ((!S.sel && !S.editing) || !e.target.closest) return;
+    const tab = e.target.closest('[role="tab"]');
+    if (!e.target.closest('#rail') && !e.target.closest('#statusBar') && !(tab && tab.id !== 'ribTool')) return;
+    /* text being typed is kept, then let go of */
+    if (S.editing) closeEditor(true);
+    S.sel = null; S.multi = null;
+    S.items.forEach(function (x) { drawShapes(x); });
+    hideMarkPop();
+  }, true);
+
   /* ---- picking several marks: Ctrl+click, a box drag, Ctrl+A ---- */
 
   /* which page and which mark a pointer event landed on, or null */
@@ -5893,16 +5908,9 @@
                           : item.patch ? item.patch.c : 'rgba(255,255,255,.94)';
     ta.style.height = Math.max(box.height, editPx(item) * 1.35) + 'px';
 
-    const acts = document.createElement('div');
-    acts.className = 'acts';
-    acts.innerHTML = '<button class="ok" data-a="ok">Apply</button><button data-a="no">Cancel</button>';
-    acts.addEventListener('click', function (e) {
-      const b = e.target.closest('button'); if (!b) return;
-      e.stopPropagation();
-      closeEditor(b.dataset.a === 'ok');
-    });
-
-    wrapEl.appendChild(ta); wrapEl.appendChild(acts);
+    /* no Apply or Cancel: as in Acrobat and Foxit, a click anywhere else,
+       another tool, or Ctrl+Enter keeps the text; Esc takes it back */
+    wrapEl.appendChild(ta);
     it.inner.appendChild(wrapEl);
     document.body.classList.add('editing');
     S.editing = { it: it, item: item, idx: idx, box: wrapEl, at: Date.now() };
@@ -5920,7 +5928,8 @@
     ta.addEventListener('keydown', function (e) {
       e.stopPropagation();
       /* Enter drops to the next line, like a normal text editor — it does not
-         close the box. Apply, click outside, or Escape finish editing. */
+         close the box. A click outside, another tool or Ctrl+Enter keeps it;
+         Escape takes it back. */
       if ((e.key === 'Enter' || e.key === 'Return') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); closeEditor(true); }
       if (e.key === 'Escape') { e.preventDefault(); closeEditor(false); }
     });
@@ -7175,7 +7184,7 @@
     arrow: 'Drag from the tail to the head. Hold <b>Shift</b> to keep it level, plumb or at 45°.',
     pin: 'Click a drawing to drop a numbered <b>photo pin</b>. Drag a pin to move it, tap it to edit and add photos.',
     crop: 'Drag on a page to crop it. <b>Shift-drag</b> applies the same crop to every page.',
-    text: 'Click a line to retype it, or click blank space to add text. <b>Enter</b> starts a new line; <b>Apply</b> or click away to finish, <b>Esc</b> cancels.'
+    text: 'Click a line to retype it, or click blank space to add text. <b>Enter</b> starts a new line; click away to finish, <b>Esc</b> cancels.'
   };
 
   var ribOn = 'ribView', ribbonReady = false;   /* var: setTool may run before the ribbon is wired */

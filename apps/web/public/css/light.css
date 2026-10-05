@@ -71,7 +71,7 @@ body[data-ui="light"] .thumb.active .no { color: #1473E6 }
 body[data-ui="light"] :is(.thumb .tools button, .ptools button) {
   background: rgba(255, 255, 255, .96); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
 }
-body[data-ui="light"] :is(.btn .cnt, .texted .acts button.ok) { color: var(--accent-ink) }
+body[data-ui="light"] .btn .cnt { color: var(--accent-ink) }
 body[data-ui="light"] .thumb .badge,
 body[data-ui="light"] .pagebox.added .ptools::before { background: var(--marker); color: var(--accent-ink) }
 body[data-ui="light"] .hit-item mark { background: rgba(255, 196, 0, .45); color: inherit }

@@ -113,13 +113,10 @@ body[data-ui="light"][data-skin="wps"] #panTool .markpop .btn.on {
 }
 
 /* ---- main actions: a blue pill with white, bold text (Save, Done, Save PDF…) ---- */
-body[data-ui="light"][data-skin="wps"] .btn.primary,
-body[data-ui="light"][data-skin="wps"] .toolchip .btn.primary {
+body[data-ui="light"][data-skin="wps"] .btn.primary {
   background: #1473E6; border-color: transparent; color: #FFFFFF; font-weight: 700;
   border-radius: 999px; padding-left: 16px; padding-right: 16px;
 }
-body[data-ui="light"][data-skin="wps"] .btn.primary:hover:not(:disabled),
-body[data-ui="light"][data-skin="wps"] .toolchip .btn.primary:hover:not(:disabled) {
+body[data-ui="light"][data-skin="wps"] .btn.primary:hover:not(:disabled) {
   background: #0D66D0; filter: none;
 }
-body[data-ui="light"][data-skin="wps"] .toolchip .btn:not(.primary) { border-radius: 999px }

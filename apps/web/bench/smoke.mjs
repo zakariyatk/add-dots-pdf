@@ -1801,9 +1801,11 @@ try {
     await page.mouse.click(at.x - at.w / 4, at.y - at.h / 2 + 200); /* clear of the toasts at the bottom */
     await page.waitForFunction(() => window.ADDPDF.S.editing);
     await page.keyboard.type('Double click me');
-    /* its OK button keeps it (Escape would throw it away) */
-    await page.evaluate(() => document.querySelector('.texted .acts [data-a="ok"]').click());
+    /* no Apply button: picking another tool keeps it, as in Acrobat (Escape would throw it away) */
+    const noButtons = await page.evaluate(() => !document.querySelector('.texted button'));
+    await page.evaluate(() => document.getElementById('tSelect').click());
     await page.waitForFunction(() => !window.ADDPDF.S.editing);
+    check('typing text has no Apply or Cancel buttons; another tool keeps it', noButtons, { noButtons });
     await page.keyboard.press('v');
     const tx = await page.evaluate(() => {
       const it = window.ADDPDF.S.items.find((i) =>
@@ -3391,6 +3393,19 @@ try {
         () => true,
         () => false,
       );
+    /* no Done / Delete bar beside it; a click outside the pages' space (the
+       status bar) lets go of it, as in Acrobat */
+    const kept = await page.evaluate(() => ({
+      bar: !!document.getElementById('toolChip'),
+      selected: !!window.ADDPDF.S.sel,
+    }));
+    await page.click('#sbTotal');
+    const letGo = await page.evaluate(() => !window.ADDPDF.S.sel);
+    check(
+      'Edit Object: no Done or Delete bar after editing; a click outside the pages lets go of the mark',
+      !kept.bar && kept.selected && letGo,
+      { kept, letGo },
+    );
     const second = await pick(120, 674);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
