@@ -531,6 +531,8 @@
     spread: (function () { try { return localStorage.getItem('adpdf.spread') === '1'; } catch (e) { return false; } })(),
     /* in two-page view, page 1 alone as a book's cover, then 2-3, 4-5… */
     cover: (function () { try { return localStorage.getItem('adpdf.cover') === '1'; } catch (e) { return false; } })(),
+    /* the marks on the thumbnails too (the bar under them turns it off) */
+    thumbMarks: (function () { try { return localStorage.getItem('adpdf.thumbMarks') !== '0'; } catch (e) { return true; } })(),
     baseName: 'document', metaBase: '', baseCount: 0,
     undo: [], hits: [], hitIndex: -1, query: '',
     textCache: new Map(), jumping: false,
@@ -2100,11 +2102,22 @@
   }
   $('railPages').addEventListener('scroll', drawVisibleThumbs);
 
-  /* asks for a page's thumbnail; it is drawn when its turn comes */
+  /* asks for a page's thumbnail; it is drawn when its turn comes. Called
+     again after a mark changes: drawn again if it shows marks, or should */
   function drawThumb(it) {
-    if (!it || it.thumbDone || !it.thumb) return;
+    if (!it || !it.thumb) return;
+    if (it.thumbDone) {
+      if (!it.thumbMarked && !(S.thumbMarks && it.shapes && it.shapes.length)) return;
+      it.thumbDone = false;
+    }
     TQ.want.add(it);
     pumpThumbs();
+  }
+  function setThumbMarks(on) {
+    S.thumbMarks = !!on;
+    try { localStorage.setItem('adpdf.thumbMarks', S.thumbMarks ? '1' : '0'); } catch (e) { /* this time only */ }
+    const box = $('thumbMarks'); if (box) box.checked = S.thumbMarks;
+    S.items.forEach(drawThumb);
   }
   function pumpThumbs() {
     if (TQ.busy || !TQ.want.size || rail.hidden) return;
@@ -2152,6 +2165,14 @@
        only has to say which page it is, and a smaller bitmap draws in a
        fraction of the time */
     const vr = it.page.getViewport({ scale: sc * THUMB_RES, rotation: rot });
+    /* the marks first, as a picture: the page drawn from the screen's
+       bitmap then goes in with them at once, without a blank frame */
+    const marks = S.thumbMarks && it.shapes && it.shapes.length ? annoSvg(it, vr, false) : null;
+    const marksImg = marks ? await svgImage(marks) : null;
+    it.thumbMarked = !!marksImg;
+    const addMarks = function () {
+      if (marksImg) ctx.drawImage(marksImg, 0, 0, it.thumbCanvas.width, it.thumbCanvas.height);
+    };
     it.thumbCanvas.width = Math.max(1, Math.floor(vr.width));
     it.thumbCanvas.height = Math.max(1, Math.floor(vr.height));
     it.thumbCanvas.style.width = Math.floor(v.width) + 'px';
@@ -2165,6 +2186,7 @@
         it.vp.rotation === v.rotation) {
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(it.canvas, 0, 0, it.thumbCanvas.width, it.thumbCanvas.height);
+      addMarks();
       TLIVE.add(it);
       return;
     }
@@ -2179,6 +2201,7 @@
       try {
         const bitmap = await task.promise;
         if (bitmap) { ctx.drawImage(bitmap, 0, 0); bitmap.close(); }
+        addMarks();
         TLIVE.add(it);
         if (performance.now() - t0 > 300) TQ.slow = true;
       } catch (e) {
@@ -6508,6 +6531,13 @@
     '<button class="btn del" data-a="del" title="Remove the selected pages (Delete)">' + icon(ICON.del) + '</button>' +
     '</div>';
   $('railPages').after(pickBar);
+  /* under the thumbnails: whether they show the marks */
+  const thumbFoot = document.createElement('label');
+  thumbFoot.className = 'thumbfoot'; thumbFoot.title = 'Show highlights, comments and drawings on the thumbnails';
+  thumbFoot.innerHTML = '<input type="checkbox" id="thumbMarks"> Marks on thumbnails';
+  pickBar.after(thumbFoot);
+  $('thumbMarks').checked = S.thumbMarks;
+  $('thumbMarks').addEventListener('change', function () { setThumbMarks(this.checked); });
   pickBar.addEventListener('click', function (e) {
     const b = e.target.closest('button'); if (!b) return;
     const O = EXT.organize || {};
@@ -9072,7 +9102,7 @@
     zoom: function () { return glideTarget(); }, zoomTo: function (v, x, y) { zoomGlide(v, x, y); },
     /* two pages side by side: on now, set it, how far Next goes */
     spread: function () { return spreadOn(); }, setSpread: setSpread, pageStep: pageStep,
-    setCover: setCover, pairStart: pairStart,
+    setCover: setCover, pairStart: pairStart, setThumbMarks: setThumbMarks,
     /* for the page menu (js/pagemenu.js) */
     fitPage: function () { S.fit = 'page'; relayout(); }, print: function () { return printDoc(); },
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,

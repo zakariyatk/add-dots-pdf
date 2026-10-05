@@ -2142,6 +2142,49 @@ try {
     await ctx.close();
   }
 
+  /* ---- marks on the thumbnails ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+    await page.evaluate(() => {
+      if (document.getElementById('rail').hidden) document.getElementById('btnRail').click();
+    });
+    /* red pixels in page 1's thumbnail, once nothing is waiting to be drawn */
+    const red = () =>
+      page.evaluate(async () => {
+        const it = window.ADDPDF.S.items[0];
+        for (let i = 0; i < 100 && !(it.thumbDone && it.thumbCanvas.width > 1); i++) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        await new Promise((r) => setTimeout(r, 300));
+        const c = it.thumbCanvas,
+          d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i] > 180 && d[i + 1] < 110 && d[i + 2] < 100) n++;
+        return n;
+      });
+    const before = await red();
+    await page.evaluate(() => {
+      const X = window.ADDPDF,
+        it = X.S.items[0];
+      it.shapes.push({ t: 'rect', a: [60, 500], b: [400, 700], c: '#E2483D', w: 3, fill: '#E2483D' });
+      X.drawShapes(it);
+      X.drawThumb(it);
+    });
+    const marked = await red();
+    await page.click('#thumbMarks');
+    const hidden = await red();
+    await page.click('#thumbMarks');
+    const again = await red();
+    check(
+      'a mark shows on its thumbnail at once, and not with "Marks on thumbnails" off',
+      before === 0 && marked > 200 && hidden === 0 && again > 200,
+      { before, marked, hidden, again },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- two pages side by side ---- */
   {
     const { ctx, page, errors } = await fresh(browser);

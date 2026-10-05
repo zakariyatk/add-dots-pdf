@@ -13,21 +13,26 @@ measured results of each phase.
 
 ## Done
 
-| Phase | What                                                                     | Where                                   |
-| ----- | ------------------------------------------------------------------------ | --------------------------------------- |
-| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                           | PR #45                                  |
-| 2     | Memory: PDFium reads from disk, render worker started only when needed   | PR #46                                  |
-| 3     | Big files (over 150 MB) read from disk by byte ranges                    | PR #47                                  |
-| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes  | PR #47                                  |
-| 5     | OCR by Windows' own reader (`src-tauri/src/ocr.rs`), Tesseract fallback  | PR #48                                  |
-| 6     | High-DPI (pages up to 3x, redrawn when the density changes)              | PR #48                                  |
-| 6     | Right-click page menu (`js/pagemenu.js`)                                 | PR #49                                  |
-| 6     | Two pages side by side; dark-interface pass; icon audit (ribbon at 24px) | PR #50                                  |
-| 6     | Toolbar groups: Page and Document tabs read by job                       | PR #51                                  |
-| 6     | Cover page in two-page view (View → Cover page)                          | branch `claude/dazzling-hypatia-4o8pa0` |
-| 7     | Window CSP; update check sandboxed; `read_range` bounded                 | PR #48                                  |
+| Phase | What                                                                     | Where  |
+| ----- | ------------------------------------------------------------------------ | ------ |
+| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                           | PR #45 |
+| 2     | Memory: PDFium reads from disk, render worker started only when needed   | PR #46 |
+| 3     | Big files (over 150 MB) read from disk by byte ranges                    | PR #47 |
+| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes  | PR #47 |
+| 5     | OCR by Windows' own reader (`src-tauri/src/ocr.rs`), Tesseract fallback  | PR #48 |
+| 6     | High-DPI (pages up to 3x, redrawn when the density changes)              | PR #48 |
+| 6     | Right-click page menu (`js/pagemenu.js`)                                 | PR #49 |
+| 6     | Two pages side by side; dark-interface pass; icon audit (ribbon at 24px) | PR #50 |
+| 6     | Toolbar groups: Page and Document tabs read by job                       | PR #51 |
+| 6     | Cover page in two-page view (View → Cover page)                          | PR #52 |
+| 6     | Marks on the thumbnails, redrawn as they change; an option to hide them  | PR #53 |
+| 7     | Window CSP; update check sandboxed; `read_range` bounded                 | PR #48 |
 
-PRs #45-#50 are merged. All work is in `main` except #51.
+PRs #45-#52 are merged.
+
+CI: since the evening of 2026-10-04 every job fails within seconds without
+a runner (no steps, no log), on `main` too. Most likely the account's Actions
+billing or spending limit, not the code; check Settings → Billing and plans.
 
 ## The Android CI job
 
@@ -60,7 +65,6 @@ Smaller items noted along the way:
 - Edit Text with the PDF's own embedded fonts (today the closest standard
   font or Google Font is used).
 - Edit Object: shapes inside form XObjects.
-- Thumbnails without marks (an option).
 - Search on big files: pdf.js fills its copy of a big file as the
   background text indexing reads every page. Not indexing files over
   150 MB in the background would cut memory further, but search would
@@ -82,7 +86,7 @@ Checks, as CI runs them:
 
 ```sh
 npm run lint && npm run format:check && npm run typecheck && npm test
-npm run smoke -w @adddots/web                # Chrome smoke test, 180 checks
+npm run smoke -w @adddots/web                # Chrome smoke test, 182 checks
 ADDDOTS_CSP=1 npm run smoke -w @adddots/web  # again, under the Windows app's CSP
 cd apps/desktop/src-tauri && cargo test      # Rust side
 ```
