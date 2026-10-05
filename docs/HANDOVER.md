@@ -31,9 +31,10 @@ measured results of each phase.
 
 PRs #45-#52 are merged.
 
-CI: since the evening of 2026-10-04 every job fails within seconds without
-a runner (no steps, no log), on `main` too. Most likely the account's Actions
-billing or spending limit, not the code; check Settings → Billing and plans.
+CI: from the evening of 2026-10-04 to 08:50 UTC on 10-05 no job got a
+runner (the account's Actions limit); it runs again since. What `main`
+took in that time (#51, #52) first ran in CI on PR #53, where the Android
+job found the Page-tab error fixed there.
 
 ## The Android CI job
 
