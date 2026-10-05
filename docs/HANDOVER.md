@@ -44,9 +44,14 @@ Fixed in PR #48: 4 cores, 4 GB, `-gpu swangle_indirect`, and
 `apps/mobile/e2e-android.mjs` reconnects when the system recreates the
 WebView on a freshly booted emulator (it prints each time it does), reports
 the app's state when a check times out, and keeps Google's log noise out of
-the report. If it fails again, the report now says why; next ideas: pin the
-emulator version (`emulator-build:` in reactivecircus/android-emulator-runner)
-or wait for the emulator to settle after boot before starting the app.
+the report. The report showed the remaining cause (PR #53): on a freshly booted emulator
+Google Play services restarts itself, and Android kills every app using its
+font provider, as the WebView does ("depends on provider ...FontsProvider
+in dying proc"). The run now switches Play services off first
+(`pm disable-user`, printed as "Google Play services: ... disabled-user");
+the app needs nothing from them. If it fails again, the report says why;
+other ideas: pin the emulator version (`emulator-build:`), or wait for the
+emulator to settle after boot.
 
 ## What is left
 
