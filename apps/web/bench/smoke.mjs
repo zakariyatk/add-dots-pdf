@@ -2635,6 +2635,35 @@ try {
     );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
+
+    /* started on a phone (as the Android app is): Extract is in the
+       more-sheet before organize.js adds its groups */
+    const pctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+    const phone = await pctx.newPage();
+    const perr = [];
+    phone.on('pageerror', (e) => perr.push(e.message));
+    phone.on('console', (m) => m.type() === 'error' && perr.push(m.text()));
+    await phone.goto(URL);
+    await phone.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await phone.waitForTimeout(400);
+    const psheet = await phone.evaluate(() =>
+      [...document.querySelectorAll('#moreBody .btn')].map((x) => x.dataset.label),
+    );
+    await phone.setViewportSize({ width: 1440, height: 900 });
+    await phone.waitForTimeout(400);
+    const pback = await phone.evaluate(() =>
+      [...document.querySelectorAll('#panPage > .grp')].map((g) => g.id),
+    );
+    check(
+      'started on a phone: the Page groups are added without an error, and in their order on the desktop',
+      !perr.length &&
+        psheet.includes('Duplicate') &&
+        psheet.includes('Split') &&
+        JSON.stringify(pback) ===
+          JSON.stringify(['navPage', 'grpPage', 'grpOrganize', 'grpCombine', 'grpExtract', 'grpImages']),
+      { errors: perr, sheet: psheet.filter((l) => /Duplicate|Split/.test(l)), back: pback },
+    );
+    await pctx.close();
   }
 
   /* ---- High-DPI: a screen at 300% gets pages drawn at 3x, and a move to a

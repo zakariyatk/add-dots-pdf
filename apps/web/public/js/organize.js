@@ -22,11 +22,13 @@
     /* The Page tab reads by job: turn and add or remove pages | Organize |
        other PDFs in (Insert, Merge) | this one out in parts (Split, Extract) |
        Pages to JPG. These groups go in before Extract, the static groups
-       keeping the places core recorded for the phone layout. */
+       keeping the places core recorded for the phone layout. The place is
+       a marker of its own: on a phone Extract is already in the more-sheet
+       when this runs (the Android app starts that way). */
     function group(id) {
       const sep = document.createElement('span'); sep.className = 'sep';
       const g = document.createElement('div'); g.className = 'grp'; g.id = id;
-      const at = $('grpExtract');
+      const at = $('pageGroupsAt');
       panPage.insertBefore(g, at); panPage.insertBefore(sep, at);
       return g;
     }

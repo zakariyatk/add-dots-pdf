@@ -83,7 +83,7 @@ Checks, as CI runs them:
 
 ```sh
 npm run lint && npm run format:check && npm run typecheck && npm test
-npm run smoke -w @adddots/web                # Chrome smoke test, 183 checks
+npm run smoke -w @adddots/web                # Chrome smoke test, 184 checks
 ADDDOTS_CSP=1 npm run smoke -w @adddots/web  # again, under the Windows app's CSP
 cd apps/desktop/src-tauri && cargo test      # Rust side
 ```
