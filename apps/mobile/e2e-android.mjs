@@ -125,6 +125,17 @@ const watchdog = setTimeout(
   10 * 60 * 1000,
 );
 try {
+  /* Google Play services restarts itself for minutes after a fresh boot,
+     and Android then kills every app using its font provider, as the
+     WebView does ("depends on provider ...FontsProvider in dying proc"):
+     the app went with it mid-run. It needs nothing from Play services, so
+     they are switched off for the run (the shell may do so on a
+     google_apis image); the answer is printed either way. */
+  step = 'switch off Google Play services';
+  const gms = await sh('pm disable-user --user 0 com.google.android.gms').catch(
+    (e) => 'refused: ' + e.message,
+  );
+  console.log('Google Play services: ' + (gms.split('\n').pop() || '(no answer)'));
   step = 'install';
   console.log('device: ' + device.model() + ', installing ' + APK);
   await device.installApk(APK);
