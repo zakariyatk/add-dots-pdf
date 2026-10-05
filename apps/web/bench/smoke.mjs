@@ -2142,6 +2142,88 @@ try {
     await ctx.close();
   }
 
+  /* ---- Print: the document made into a PDF, shown in a frame by the
+     browser's PDF viewer, and that frame printed (CI runs Chrome, which has
+     one; the Windows app's own check is apps/desktop/e2e.mjs) ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+    const printed = await page.evaluate(async () => {
+      /* the print dialog cannot be answered here: print() is swapped for a
+         stand-in on the frame as it loads, before core calls it 300 ms on */
+      const got = { called: false, pdf: null, viewer: navigator.pdfViewerEnabled };
+      new MutationObserver((ms, mo) => {
+        const f = document.getElementById('printFrame');
+        if (!f) return;
+        mo.disconnect();
+        f.addEventListener('load', () => {
+          const w = f.contentWindow;
+          w.print = () => {
+            const d = w.document;
+            got.called = true;
+            got.pdf =
+              [...d.querySelectorAll('embed')].map((e) => e.type).join() || 'no viewer: ' + d.contentType;
+          };
+        });
+      }).observe(document.body, { childList: true });
+      window.ADDPDF.print();
+      for (let i = 0; i < 150 && !got.called; i++) await new Promise((r) => setTimeout(r, 200));
+      return got;
+    });
+    check(
+      "Print: the PDF made for printing opens in the browser's PDF viewer, and that frame is printed",
+      /* a browser with no PDF viewer (Playwright's headless shell, run here
+         without BENCH_CHANNEL) never loads the frame: nothing to check there */
+      !printed.viewer || (printed.called && /application\/pdf/.test(printed.pdf)),
+      printed,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
+  /* ---- marks on the thumbnails ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+    await page.evaluate(() => {
+      if (document.getElementById('rail').hidden) document.getElementById('btnRail').click();
+    });
+    /* red pixels in page 1's thumbnail, once nothing is waiting to be drawn */
+    const red = () =>
+      page.evaluate(async () => {
+        const it = window.ADDPDF.S.items[0];
+        for (let i = 0; i < 100 && !(it.thumbDone && it.thumbCanvas.width > 1); i++) {
+          await new Promise((r) => setTimeout(r, 100));
+        }
+        await new Promise((r) => setTimeout(r, 300));
+        const c = it.thumbCanvas,
+          d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+        let n = 0;
+        for (let i = 0; i < d.length; i += 4) if (d[i] > 180 && d[i + 1] < 110 && d[i + 2] < 100) n++;
+        return n;
+      });
+    const before = await red();
+    await page.evaluate(() => {
+      const X = window.ADDPDF,
+        it = X.S.items[0];
+      it.shapes.push({ t: 'rect', a: [60, 500], b: [400, 700], c: '#E2483D', w: 3, fill: '#E2483D' });
+      X.drawShapes(it);
+      X.drawThumb(it);
+    });
+    const marked = await red();
+    await page.click('#thumbMarks');
+    const hidden = await red();
+    await page.click('#thumbMarks');
+    const again = await red();
+    check(
+      'a mark shows on its thumbnail at once, and not with "Marks on thumbnails" off',
+      before === 0 && marked > 200 && hidden === 0 && again > 200,
+      { before, marked, hidden, again },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- two pages side by side ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
@@ -2592,6 +2674,35 @@ try {
     );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
+
+    /* started on a phone (as the Android app is): Extract is in the
+       more-sheet before organize.js adds its groups */
+    const pctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+    const phone = await pctx.newPage();
+    const perr = [];
+    phone.on('pageerror', (e) => perr.push(e.message));
+    phone.on('console', (m) => m.type() === 'error' && perr.push(m.text()));
+    await phone.goto(URL);
+    await phone.waitForFunction(() => window.ADDPDF && window.ADDPDF.hasDoc);
+    await phone.waitForTimeout(400);
+    const psheet = await phone.evaluate(() =>
+      [...document.querySelectorAll('#moreBody .btn')].map((x) => x.dataset.label),
+    );
+    await phone.setViewportSize({ width: 1440, height: 900 });
+    await phone.waitForTimeout(400);
+    const pback = await phone.evaluate(() =>
+      [...document.querySelectorAll('#panPage > .grp')].map((g) => g.id),
+    );
+    check(
+      'started on a phone: the Page groups are added without an error, and in their order on the desktop',
+      !perr.length &&
+        psheet.includes('Duplicate') &&
+        psheet.includes('Split') &&
+        JSON.stringify(pback) ===
+          JSON.stringify(['navPage', 'grpPage', 'grpOrganize', 'grpCombine', 'grpExtract', 'grpImages']),
+      { errors: perr, sheet: psheet.filter((l) => /Duplicate|Split/.test(l)), back: pback },
+    );
+    await pctx.close();
   }
 
   /* ---- High-DPI: a screen at 300% gets pages drawn at 3x, and a move to a
@@ -2949,7 +3060,15 @@ try {
       const out = [];
       for (const n of [3, 5]) {
         const d = await PDFDocument.create();
-        for (let i = 0; i < n; i++) d.addPage([595, 842]);
+        const f = await d.embedFont(StandardFonts.Helvetica);
+        for (let i = 0; i < n; i++) {
+          d.addPage([595, 842]).drawText('Page ' + (i + 1) + ' engineer', {
+            x: 40,
+            y: 780,
+            size: 20,
+            font: f,
+          });
+        }
         out.push(Array.from(await d.save()));
       }
       return out;
@@ -3022,6 +3141,31 @@ try {
       'Windows app: a big file handed over is read a part at a time, with no copy of it on the page',
       !!lazy && lazy.lazy && !lazy.bytes && lazy.reads > 0,
       lazy,
+    );
+    /* its text is not read in the background (pdf.js would keep every part
+       read), and a search still reads it */
+    let index = null;
+    if (frameOf()) {
+      const fr = frameOf();
+      await fr.waitForTimeout(1500);
+      const cached = await fr.evaluate(() => window.ADDPDF.S.textCache.size);
+      await fr.evaluate(() => {
+        if (document.getElementById('findIn').offsetParent === null)
+          document.getElementById('btnFind').click();
+      });
+      await fr.fill('#findIn', 'engineer');
+      await fr
+        .waitForFunction(() => /match/.test(document.getElementById('hitCount').textContent), null, {
+          timeout: 20000,
+        })
+        .catch(() => {});
+      index = { cached, found: await fr.textContent('#hitCount') };
+      await fr.fill('#findIn', '');
+    }
+    check(
+      'Windows app: a big file read a part at a time is not indexed in the background, and Find still reads it',
+      !!index && index.cached === 0 && /^5 matches/.test(index.found),
+      index,
     );
     const host = await page.evaluate(() => window.ADDPDF.S.items.length);
     check('Windows app: a PDF handed over with one open gets a tab of its own', inTab === 5 && host === 3, {

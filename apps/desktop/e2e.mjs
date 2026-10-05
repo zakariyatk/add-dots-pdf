@@ -298,6 +298,40 @@ try {
     policy,
   );
 
+  /* ---- Print: the PDF made for printing, in WebView2's PDF viewer ----
+     The frame core prints (printDoc) is a blob: PDF; WebView2 shows it with
+     its own PDF viewer, under the window's policy (frame-src blob:). Off
+     Windows, WebKitGTK has no PDF viewer in a frame: not checked there. */
+  if (WIN) {
+    const printed = await runAsync(async () => {
+      /* the print dialog cannot be answered here: print() is swapped for a
+         stand-in on the frame as it loads, before core calls it 300 ms on */
+      const got = { called: false, pdf: null };
+      new MutationObserver((ms, mo) => {
+        const f = document.getElementById('printFrame');
+        if (!f) return;
+        mo.disconnect();
+        f.addEventListener('load', () => {
+          const w = f.contentWindow;
+          w.print = () => {
+            const d = w.document;
+            got.called = true;
+            got.pdf =
+              [...d.querySelectorAll('embed')].map((e) => e.type).join() || 'no viewer: ' + d.contentType;
+          };
+        });
+      }).observe(document.body, { childList: true });
+      window.ADDPDF.print();
+      for (let i = 0; i < 150 && !got.called; i++) await new Promise((r) => setTimeout(r, 200));
+      return got;
+    });
+    check(
+      "Print: the PDF made for printing opens in WebView2's PDF viewer, and that frame is printed",
+      printed.called && /application\/pdf/.test(printed.pdf),
+      printed,
+    );
+  }
+
   /* ---- a second double-click, with the app open ---- */
   const second = spawn(APP, [B], { env, stdio: 'ignore' });
   const quit = await new Promise((res) => {

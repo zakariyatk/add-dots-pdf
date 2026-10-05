@@ -13,21 +13,29 @@ measured results of each phase.
 
 ## Done
 
-| Phase | What                                                                     | Where                                   |
-| ----- | ------------------------------------------------------------------------ | --------------------------------------- |
-| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                           | PR #45                                  |
-| 2     | Memory: PDFium reads from disk, render worker started only when needed   | PR #46                                  |
-| 3     | Big files (over 150 MB) read from disk by byte ranges                    | PR #47                                  |
-| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes  | PR #47                                  |
-| 5     | OCR by Windows' own reader (`src-tauri/src/ocr.rs`), Tesseract fallback  | PR #48                                  |
-| 6     | High-DPI (pages up to 3x, redrawn when the density changes)              | PR #48                                  |
-| 6     | Right-click page menu (`js/pagemenu.js`)                                 | PR #49                                  |
-| 6     | Two pages side by side; dark-interface pass; icon audit (ribbon at 24px) | PR #50                                  |
-| 6     | Toolbar groups: Page and Document tabs read by job                       | PR #51                                  |
-| 6     | Cover page in two-page view (View → Cover page)                          | branch `claude/dazzling-hypatia-4o8pa0` |
-| 7     | Window CSP; update check sandboxed; `read_range` bounded                 | PR #48                                  |
+| Phase | What                                                                                    | Where  |
+| ----- | --------------------------------------------------------------------------------------- | ------ |
+| 1     | Atomic saves; performance panel (Ctrl+Shift+P)                                          | PR #45 |
+| 2     | Memory: PDFium reads from disk, render worker started only when needed                  | PR #46 |
+| 3     | Big files (over 150 MB) read from disk by byte ranges                                   | PR #47 |
+| 4     | Edit Object's work in the save worker; DXF conversion no longer freezes                 | PR #47 |
+| 5     | OCR by Windows' own reader (`src-tauri/src/ocr.rs`), Tesseract fallback                 | PR #48 |
+| 6     | High-DPI (pages up to 3x, redrawn when the density changes)                             | PR #48 |
+| 6     | Right-click page menu (`js/pagemenu.js`)                                                | PR #49 |
+| 6     | Two pages side by side; dark-interface pass; icon audit (ribbon at 24px)                | PR #50 |
+| 6     | Toolbar groups: Page and Document tabs read by job                                      | PR #51 |
+| 6     | Cover page in two-page view (View → Cover page)                                         | PR #52 |
+| 6     | Marks on the thumbnails, redrawn as they change; an option to hide them                 | PR #53 |
+| 3     | Big files read by byte ranges are not text-indexed in the background                    | PR #53 |
+| 6     | Print checked in CI: the print PDF opens in WebView2's PDF viewer, its frame is printed | PR #53 |
+| 7     | Window CSP; update check sandboxed; `read_range` bounded                                | PR #48 |
 
-PRs #45-#50 are merged. All work is in `main` except #51.
+PRs #45-#52 are merged.
+
+CI: from the evening of 2026-10-04 to 08:50 UTC on 10-05 no job got a
+runner (the account's Actions limit); it runs again since. What `main`
+took in that time (#51, #52) first ran in CI on PR #53, where the Android
+job found the Page-tab error fixed there.
 
 ## The Android CI job
 
@@ -36,16 +44,20 @@ Fixed in PR #48: 4 cores, 4 GB, `-gpu swangle_indirect`, and
 `apps/mobile/e2e-android.mjs` reconnects when the system recreates the
 WebView on a freshly booted emulator (it prints each time it does), reports
 the app's state when a check times out, and keeps Google's log noise out of
-the report. If it fails again, the report now says why; next ideas: pin the
-emulator version (`emulator-build:` in reactivecircus/android-emulator-runner)
-or wait for the emulator to settle after boot before starting the app.
+the report. The report showed the remaining cause (PR #53): on a freshly booted emulator
+Google Play services restarts itself, and Android kills every app using its
+font provider, as the WebView does ("depends on provider ...FontsProvider
+in dying proc"). The run now switches Play services off first
+(`pm disable-user`, printed as "Google Play services: ... disabled-user");
+the app needs nothing from them. If it fails again, the report says why;
+other ideas: pin the emulator version (`emulator-build:`), or wait for the
+emulator to settle after boot.
 
 ## What is left
 
-Phase 6 (professional UI):
-
-- Windows print: check printing in the Windows app, with a CI check on the
-  Windows runner.
+Phase 6 (professional UI): done. CI checks Print up to the frame being
+printed (`e2e.mjs`, with print() swapped for a stand-in); the print dialog
+itself and the paper are for a person on a Windows machine to try once.
 
 Phase 5 follow-ups:
 
@@ -60,11 +72,6 @@ Smaller items noted along the way:
 - Edit Text with the PDF's own embedded fonts (today the closest standard
   font or Google Font is used).
 - Edit Object: shapes inside form XObjects.
-- Thumbnails without marks (an option).
-- Search on big files: pdf.js fills its copy of a big file as the
-  background text indexing reads every page. Not indexing files over
-  150 MB in the background would cut memory further, but search would
-  start later.
 - Real Windows numbers: open the app on Windows, press Ctrl+Shift+P, and
   "Copy" the panel for each test file.
 
@@ -82,7 +89,7 @@ Checks, as CI runs them:
 
 ```sh
 npm run lint && npm run format:check && npm run typecheck && npm test
-npm run smoke -w @adddots/web                # Chrome smoke test, 180 checks
+npm run smoke -w @adddots/web                # Chrome smoke test, 186 checks
 ADDDOTS_CSP=1 npm run smoke -w @adddots/web  # again, under the Windows app's CSP
 cd apps/desktop/src-tauri && cargo test      # Rust side
 ```

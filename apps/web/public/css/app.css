@@ -179,6 +179,11 @@
   .pickbar{flex:none;border-top:1px solid var(--line);background:var(--chrome);padding:8px 10px;
            display:flex;flex-direction:column;gap:6px}
   #railPages[hidden] + .pickbar{display:none}
+  /* whether the thumbnails show the marks (core.js setThumbMarks) */
+  .thumbfoot{flex:none;display:flex;align-items:center;gap:6px;padding:6px 10px;border-top:1px solid var(--line);
+             background:var(--chrome);font-size:11.5px;color:var(--text-dim);cursor:pointer;user-select:none}
+  .thumbfoot input{margin:0;accent-color:#2F86F0}
+  #railPages[hidden] ~ .thumbfoot{display:none}
   .pickbar .pickhead{display:flex;align-items:center;gap:4px;font-size:12px}
   .pickbar .pickhead .btn{height:24px;font-size:11.5px;padding:0 8px}
   .pickbar .pickacts{display:flex;gap:4px}
