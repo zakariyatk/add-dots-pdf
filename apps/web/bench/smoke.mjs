@@ -2142,6 +2142,45 @@ try {
     await ctx.close();
   }
 
+  /* ---- Print: the document made into a PDF, shown in a frame by the
+     browser's PDF viewer, and that frame printed (CI runs Chrome, which has
+     one; the Windows app's own check is apps/desktop/e2e.mjs) ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
+    const printed = await page.evaluate(async () => {
+      /* the print dialog cannot be answered here: print() is swapped for a
+         stand-in on the frame as it loads, before core calls it 300 ms on */
+      const got = { called: false, pdf: null, viewer: navigator.pdfViewerEnabled };
+      new MutationObserver((ms, mo) => {
+        const f = document.getElementById('printFrame');
+        if (!f) return;
+        mo.disconnect();
+        f.addEventListener('load', () => {
+          const w = f.contentWindow;
+          w.print = () => {
+            const d = w.document;
+            got.called = true;
+            got.pdf =
+              [...d.querySelectorAll('embed')].map((e) => e.type).join() || 'no viewer: ' + d.contentType;
+          };
+        });
+      }).observe(document.body, { childList: true });
+      window.ADDPDF.print();
+      for (let i = 0; i < 150 && !got.called; i++) await new Promise((r) => setTimeout(r, 200));
+      return got;
+    });
+    check(
+      "Print: the PDF made for printing opens in the browser's PDF viewer, and that frame is printed",
+      /* a browser with no PDF viewer (Playwright's headless shell, run here
+         without BENCH_CHANNEL) never loads the frame: nothing to check there */
+      !printed.viewer || (printed.called && /application\/pdf/.test(printed.pdf)),
+      printed,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- marks on the thumbnails ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
