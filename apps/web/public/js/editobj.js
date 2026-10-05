@@ -22,9 +22,12 @@
    clicking empty page lets go and Edit Object carries on until another tool
    is picked or Esc is pressed. All picks text first, then shapes.
 
-   Not offered: shapes inside a form XObject, clipping paths, and shapes
-   painted with a pattern or shading, as cutting those would change more
-   than the one shape; and pages of a password-protected PDF. */
+   Shapes inside a form XObject the page draws once are offered too, and cut
+   from the lifted page's own copy of the form (engine content.ts). Not
+   offered: a form drawn more than once on the page or inside another form,
+   clipping paths, shapes a form's box clips, and shapes painted with a
+   pattern or shading, as cutting those would change more than the one
+   shape; and pages of a password-protected PDF. */
 (function () {
   'use strict';
 
