@@ -14,6 +14,13 @@
    width (so text drawn after it on the same line stays put), and the line
    comes back as a text mark to type in, move or restyle.
 
+   A line drawn in one font carries that font's table (PageFont): which
+   characters it can draw and their codes and widths. Retyped text that
+   keeps to those characters is saved in the PDF's own font, as Acrobat
+   does (save.ts); other text in the closest standard or Google font. For a
+   subset font (most embedded fonts) the table holds only the codes the
+   page itself draws in it: those glyphs are surely in the font program.
+
    Not offered: Type 3 fonts, CID fonts other than Identity-H, invisible
    text (OCR layers), and text whose codes cannot be read as characters. */
 
@@ -28,7 +35,7 @@ import {
   decodePDFRawStream,
 } from 'pdf-lib';
 import type { PDFFont, PDFPage } from 'pdf-lib';
-import type { Pt } from './model';
+import type { PageFont, Pt } from './model';
 import { pageContent, parseContent, type ContentOp, type Operand } from './content';
 
 /* ---------------- fonts ---------------- */
@@ -36,6 +43,11 @@ import { pageContent, parseContent, type ContentOp, type Operand } from './conte
 interface FontInfo {
   base: string;
   twoByte: boolean;
+  /** a subset (a tag before its name) or embedded: only the codes the page
+      draws are surely in it; otherwise every code it can encode */
+  subset: boolean;
+  /** the codes it can encode, for a font that is not a subset */
+  codes(): Iterable<number>;
   /** width of a code, in thousandths of the font size */
   width(code: number): number;
   /** the characters a code stands for, or null */
@@ -179,7 +191,15 @@ async function fontInfo(
   std: (f: StandardFonts) => Promise<PDFFont>,
 ): Promise<FontInfo> {
   const ctx = page.doc.context;
-  const bad: FontInfo = { base: '', twoByte: false, width: () => 0, text: () => null, ok: false };
+  const bad: FontInfo = {
+    base: '',
+    twoByte: false,
+    subset: true,
+    codes: () => [],
+    width: () => 0,
+    text: () => null,
+    ok: false,
+  };
   const f = ctx.lookup(ref as never);
   if (!(f instanceof PDFDict)) return bad;
   const nm = (d: PDFDict, k: string) => {
@@ -191,7 +211,9 @@ async function fontInfo(
     return x instanceof PDFNumber ? x.asNumber() : 0;
   };
   const sub = nm(f, 'Subtype');
-  const base = nm(f, 'BaseFont').replace(/^[A-Z]{6}\+/, '');
+  const rawBase = nm(f, 'BaseFont');
+  const base = rawBase.replace(/^[A-Z]{6}\+/, '');
+  const tagged = base !== rawBase;
   let toUni: Map<number, string> | null = null;
   const tu = f.lookup(PDFName.of('ToUnicode'));
   if (tu instanceof PDFRawStream) {
@@ -229,9 +251,13 @@ async function fontInfo(
       }
     }
     const map = toUni;
+    /* a CID font's program holds the glyphs its ToUnicode names only when it
+       is whole: a subset is the usual case */
     return {
       base,
       twoByte: true,
+      subset: tagged || map.size > 4000,
+      codes: () => map.keys(),
       width: (c) => widths.get(c) ?? dw,
       text: (c) => map.get(c) ?? null,
       ok: true,
@@ -283,7 +309,13 @@ async function fontInfo(
     }
     return missing || 500;
   };
-  return { base, twoByte: false, width, text, ok: true };
+  /* embedded and tagged: a subset; not embedded, the reader supplies the
+     whole font, every code of the encoding */
+  const embedded = !!fd && ['FontFile', 'FontFile2', 'FontFile3'].some((k) => fd.has(PDFName.of(k)));
+  const all = function* () {
+    for (let c = 32; c < 256; c++) yield c;
+  };
+  return { base, twoByte: false, subset: embedded && (tagged || !!toUni), codes: all, width, text, ok: true };
 }
 
 /* ---------------- following the text ---------------- */
@@ -313,6 +345,9 @@ interface Run {
   font: string;
   size: number;
   color: string;
+  /** the font's resource name, and the codes the run draws */
+  res: string;
+  codes: number[];
 }
 
 /** A line of the page's text, to edit. */
@@ -334,6 +369,8 @@ export interface ContentTextLine {
   font: string;
   bold: boolean;
   italic: boolean;
+  /** its font as a table, when the whole line is in one font (pageTextLines) */
+  pf?: PageFont | null;
 }
 
 const hex2 = (v: number) =>
@@ -351,7 +388,10 @@ function colour(args: Operand[]): string {
   return '#000000';
 }
 
-async function textRuns(page: PDFPage, ops: ContentOp[]): Promise<Run[]> {
+async function textRuns(
+  page: PDFPage,
+  ops: ContentOp[],
+): Promise<{ runs: Run[]; fonts: Map<string, FontInfo> }> {
   const fontsDict = page.node.Resources()?.lookupMaybe(PDFName.of('Font'), PDFDict);
   const fonts = new Map<string, FontInfo>();
   const stdDoc = await PDFDocument.create();
@@ -367,7 +407,15 @@ async function textRuns(page: PDFPage, ops: ContentOp[]): Promise<Run[]> {
         name,
         ref
           ? await fontInfo(page, ref, std)
-          : { base: '', twoByte: false, width: () => 0, text: () => null, ok: false },
+          : {
+              base: '',
+              twoByte: false,
+              subset: true,
+              codes: () => [],
+              width: () => 0,
+              text: () => null,
+              ok: false,
+            },
       );
     }
     return fonts.get(name)!;
@@ -413,6 +461,7 @@ async function textRuns(page: PDFPage, ops: ContentOp[]): Promise<Run[]> {
     let adv = 0,
       text = '',
       ok = !!f && f.ok && st.Tr !== 3 && st.Tr !== 7;
+    const codes: number[] = [];
     for (const p of parts) {
       if (typeof p === 'number') {
         const d = (-p / 1000) * st.Tfs * st.Th;
@@ -427,6 +476,7 @@ async function textRuns(page: PDFPage, ops: ContentOp[]): Promise<Run[]> {
         const code = f.twoByte ? (b[i]! << 8) | (b[i + 1] ?? 0) : b[i]!;
         const space = !f.twoByte && code === 32;
         i += f.twoByte ? 2 : 1;
+        codes.push(code);
         adv += ((f.width(code) / 1000) * st.Tfs + st.Tc + (space ? st.Tw : 0)) * st.Th;
         const t = f.text(code);
         if (t === null) ok = false;
@@ -445,6 +495,8 @@ async function textRuns(page: PDFPage, ops: ContentOp[]): Promise<Run[]> {
       font: f ? f.base : '',
       size: scale,
       color: st.fill,
+      res: st.Tf,
+      codes,
     });
   }
 
@@ -526,7 +578,22 @@ async function textRuns(page: PDFPage, ops: ContentOp[]): Promise<Run[]> {
         break;
     }
   }
-  return runs;
+  return { runs, fonts };
+}
+
+/** A font of the page as a table: for a subset, the codes the page draws in
+    it (`used`); for a whole font, every code it encodes. */
+function pageFont(res: string, f: FontInfo, used: Iterable<number>): PageFont {
+  const map: Record<string, number> = {};
+  const w: Record<number, number> = {};
+  for (const c of f.subset ? used : f.codes()) {
+    const t = f.text(c);
+    /* one character a code: ligatures (fi) and the like are left out */
+    if (t === null || [...t].length !== 1 || t in map) continue;
+    map[t] = c;
+    w[c] = f.width(c);
+  }
+  return { res, twoByte: f.twoByte, map, w };
 }
 
 /** Runs one after another on one baseline, as lines. */
@@ -600,10 +667,26 @@ function lines(runs: Run[]): ContentTextLine[] {
   return out;
 }
 
-/** The lines of text page `index` of `doc` draws, for Edit Object. */
+/** The lines of text page `index` of `doc` draws, for Edit Object. A line
+    drawn in one font carries it as a table (pf), to write it in again. */
 export async function pageTextLines(doc: PDFDocument, index: number): Promise<ContentTextLine[]> {
   const page = doc.getPage(index);
-  return lines(await textRuns(page, parseContent(pageContent(page))));
+  const { runs, fonts } = await textRuns(page, parseContent(pageContent(page)));
+  const used = new Map<string, Set<number>>();
+  for (const r of runs) {
+    if (!used.has(r.res)) used.set(r.res, new Set());
+    r.codes.forEach((c) => used.get(r.res)!.add(c));
+  }
+  const res = new Map(runs.map((r) => [r.op, r.res]));
+  const tables = new Map<string, PageFont>();
+  return lines(runs).map((l) => {
+    const names = new Set(l.ops.map((k) => res.get(k)!));
+    const name = names.size === 1 ? [...names][0]! : '';
+    const f = name ? fonts.get(name) : null;
+    if (!f || !f.ok) return { ...l, pf: null };
+    if (!tables.has(name)) tables.set(name, pageFont(name, f, used.get(name) || []));
+    return { ...l, pf: tables.get(name)! };
+  });
 }
 
 const fmt = (v: number) => (Math.abs(v) < 1e-6 ? '0' : String(+v.toFixed(4)));
@@ -615,7 +698,7 @@ export async function cutText(doc: PDFDocument, index: number, id: number): Prom
   const page = doc.getPage(index);
   const bytes = pageContent(page);
   const ops = parseContent(bytes);
-  const runs = await textRuns(page, ops);
+  const { runs } = await textRuns(page, ops);
   const line = lines(runs).find((l) => l.id === id);
   if (!line) throw new Error('no such line of text on the page');
   const byOp = new Map(runs.map((r) => [r.op, r]));

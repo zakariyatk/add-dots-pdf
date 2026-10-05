@@ -647,6 +647,9 @@
     return fontCtx.measureText(line).width * item.size / 100;
   }
   function textWidth(item, line) {
+    /* text lifted by Edit Object, in the page's own font: its widths */
+    const pfm = E.pageFontMeasure && item.pf ? E.pageFontMeasure(item) : null;
+    if (pfm) return pfm(item, line);
     if (GF && GF.is(item.f)) return fileFontWidth(item, line);
     return measure ? measure(item, line) : null;
   }
@@ -2402,7 +2405,11 @@
       g.appendChild(clicker(r));
     }
 
-    const lines = String(s.text).split('\n');
+    /* a module may draw the text itself (Edit Object: in the page's own
+       font, as pdf.js draws it); the text below until it has */
+    const art = EXT.textArt ? EXT.textArt(it, s, vp) : null;
+    if (art) g.appendChild(clicker(art));
+    const lines = art ? [] : String(s.text).split('\n');
     lines.forEach(function (line, li) {
       if (!line) return;
       const w = textWidth(s, line);

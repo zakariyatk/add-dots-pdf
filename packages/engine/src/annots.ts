@@ -36,8 +36,10 @@ const KINDS = new Set(['markup', 'ink', 'note', 'rect', 'ellipse', 'line', 'arro
 /** Whether a mark is saved as an annotation (when marks are kept editable). */
 export function isAnnotMark(s: AnyMark): boolean {
   if (!KINDS.has(s.t)) return false;
-  /* a text edit covers the original words: that is part of the page */
-  if (s.t === 'text') return !(s as TextMark).patch && !!String((s as TextMark).text).trim();
+  /* a text edit covers the original words, and a line Edit Object lifted
+     off the page is the page's own text retyped (pf): both part of the page */
+  if (s.t === 'text')
+    return !(s as TextMark).patch && !(s as TextMark).pf && !!String((s as TextMark).text).trim();
   return true;
 }
 
