@@ -115,3 +115,87 @@ describe('a page drawn by pdf-lib', () => {
     expect(moved.box[2]).toBeCloseTo(250);
   });
 });
+
+/* A form XObject: content kept apart and drawn with Do, as CAD exports and
+   stamps often are. `content` draws it; `formBody` is its own content. */
+async function withForm(
+  formBody: string,
+  content: (name: string) => string,
+  opts: { matrix?: number[]; bbox?: number[]; pages?: number } = {},
+): Promise<PDFLib.PDFDocument> {
+  const d = await PDFLib.PDFDocument.create();
+  const ref = d.context.register(
+    d.context.flateStream(enc(formBody), {
+      Type: 'XObject',
+      Subtype: 'Form',
+      BBox: opts.bbox || [0, 0, 200, 200],
+      ...(opts.matrix ? { Matrix: opts.matrix } : {}),
+    }),
+  );
+  for (let i = 0; i < (opts.pages || 1); i++) {
+    const p = d.addPage([400, 400]);
+    const name = p.node.newXObject('Fm', ref).decodeText();
+    p.node.set(PDFLib.PDFName.of('Contents'), d.context.register(d.context.flateStream(enc(content(name)))));
+  }
+  return d;
+}
+const BODY = '1 0 0 rg 10 10 50 40 re f 0 0 1 RG 3 w 100 100 m 180 150 l S';
+
+describe('shapes inside a form XObject', () => {
+  it('a form drawn once: its shapes, through its matrix and the page transform', async () => {
+    const d = await withForm(BODY, (n) => 'q 1 0 0 1 100 50 cm /' + n + ' Do Q 0 g 300 300 20 20 re f', {
+      matrix: [2, 0, 0, 2, 0, 0],
+    });
+    const shapes = pageShapes(d, 0);
+    expect(shapes.length).toBe(3);
+    const box = shapes.find((s) => s.fill === '#ff0000')!;
+    expect(box.form).toBeTruthy();
+    expect(box.box).toEqual([120, 70, 220, 150]);
+    const line = shapes.find((s) => s.stroke === '#0000ff')!;
+    expect(line.w).toBeCloseTo(6);
+    expect(shapes.find((s) => s.fill === '#000000')!.form).toBeUndefined();
+  });
+
+  it('cuts a form shape out of the page copy, the rest of the form kept', async () => {
+    const d = await withForm(BODY, (n) => '/' + n + ' Do 0 g 300 300 20 20 re f');
+    const line = pageShapes(d, 0).find((s) => s.stroke === '#0000ff')!;
+    const after = await PDFLib.PDFDocument.load(await cutShapes(d, 0, [line.id]));
+    const left = pageShapes(after, 0);
+    expect(left.map((s) => s.fill || s.stroke).sort()).toEqual(['#000000', '#ff0000']);
+    expect(left.find((s) => s.fill === '#ff0000')!.form).toBeTruthy();
+  });
+
+  it('another page drawing the same form keeps the shape', async () => {
+    const d = await withForm(BODY, (n) => '/' + n + ' Do', { pages: 2 });
+    const line = pageShapes(d, 0).find((s) => s.stroke === '#0000ff')!;
+    await cutShapes(d, 0, [line.id]);
+    expect(pageShapes(d, 1).some((s) => s.stroke === '#0000ff')).toBe(true);
+    expect(pageShapes(d, 0).some((s) => s.stroke === '#0000ff')).toBe(true);
+  });
+
+  it('not offered: a form drawn twice on the page, or a shape its box clips', async () => {
+    const twice = await withForm(BODY, (n) => '/' + n + ' Do q 1 0 0 1 200 0 cm /' + n + ' Do Q');
+    expect(pageShapes(twice, 0)).toEqual([]);
+    const clipped = await withForm(BODY, (n) => '/' + n + ' Do', { bbox: [0, 0, 90, 90] });
+    expect(pageShapes(clipped, 0).map((s) => s.fill)).toEqual(['#ff0000']);
+  });
+
+  it('the cut shape saves back as a mark, and the form part stays', async () => {
+    const d = await withForm(BODY, (n) => '/' + n + ' Do');
+    const line = pageShapes(d, 0).find((s) => s.stroke === '#0000ff')!;
+    const cut = await cutShapes(d, 0, [line.id]);
+    const items = [
+      {
+        src: { id: 'f', name: 'f.pdf', bytes: cut },
+        num: 1,
+        rot: 0,
+        crop: null,
+        shapes: [vpathFromShape(line)],
+      },
+    ] as unknown as PageItem[];
+    const saved = await buildPdf(items, null, {}, saveHooks({}, { measure: await createTextMeasurer() }));
+    const back = pageShapes(await PDFLib.PDFDocument.load(saved), 0);
+    expect(back.filter((s) => s.stroke === '#0000ff').length).toBe(1);
+    expect(back.some((s) => s.fill === '#ff0000')).toBe(true);
+  });
+});
