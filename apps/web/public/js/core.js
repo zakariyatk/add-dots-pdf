@@ -1011,12 +1011,15 @@
   /* Then the text of every page is read, in the background, a few pages at a
      time and only while no page is being drawn: a search looks through text
      already here instead of reading every page first (seven seconds for
-     2,000 pages). */
+     2,000 pages). Not a big file read a part at a time (src.lazy): pdf.js
+     keeps every part it has read, so reading every page's text would fill
+     its copy of the whole file. A search there reads its pages when asked. */
   async function indexText(epoch) {
-    for (let i = 0; i < S.items.length; i += 8) {
+    const list = S.items.filter(function (it) { return !it.src.lazy; });
+    for (let i = 0; i < list.length; i += 8) {
       await renderIdle();
       if (epoch !== loadEpoch) return;
-      await Promise.all(S.items.slice(i, i + 8).map(textOf));
+      await Promise.all(list.slice(i, i + 8).map(textOf));
       if (epoch !== loadEpoch) return;
     }
   }

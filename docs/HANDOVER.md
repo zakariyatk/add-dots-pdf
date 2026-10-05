@@ -26,6 +26,7 @@ measured results of each phase.
 | 6     | Toolbar groups: Page and Document tabs read by job                       | PR #51 |
 | 6     | Cover page in two-page view (View → Cover page)                          | PR #52 |
 | 6     | Marks on the thumbnails, redrawn as they change; an option to hide them  | PR #53 |
+| 3     | Big files read by byte ranges are not text-indexed in the background     | PR #53 |
 | 7     | Window CSP; update check sandboxed; `read_range` bounded                 | PR #48 |
 
 PRs #45-#52 are merged.
@@ -65,10 +66,6 @@ Smaller items noted along the way:
 - Edit Text with the PDF's own embedded fonts (today the closest standard
   font or Google Font is used).
 - Edit Object: shapes inside form XObjects.
-- Search on big files: pdf.js fills its copy of a big file as the
-  background text indexing reads every page. Not indexing files over
-  150 MB in the background would cut memory further, but search would
-  start later.
 - Real Windows numbers: open the app on Windows, press Ctrl+Shift+P, and
   "Copy" the panel for each test file.
 
@@ -86,7 +83,7 @@ Checks, as CI runs them:
 
 ```sh
 npm run lint && npm run format:check && npm run typecheck && npm test
-npm run smoke -w @adddots/web                # Chrome smoke test, 182 checks
+npm run smoke -w @adddots/web                # Chrome smoke test, 183 checks
 ADDDOTS_CSP=1 npm run smoke -w @adddots/web  # again, under the Windows app's CSP
 cd apps/desktop/src-tauri && cargo test      # Rust side
 ```

@@ -229,9 +229,11 @@ first page:
 The big gain is the time to the first page: it no longer waits for the
 whole file to be read and copied. The web view stays high for two reasons:
 pdf.js sets aside room for the whole file in its worker, and it fills that
-room as the background text indexing reads every page. Not indexing big
-files in the background would be the next cut, at the price of search
-starting later.
+room as the background text indexing reads every page. So big files
+read by byte ranges are no longer indexed in the background (`indexText`
+skips `src.lazy`); a search reads their pages when it is run, with its
+"Reading text… n of N pages" count, and keeps what it read for the next
+one.
 
 ## Phase 4: off the page thread — done
 

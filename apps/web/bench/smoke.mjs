@@ -2992,7 +2992,15 @@ try {
       const out = [];
       for (const n of [3, 5]) {
         const d = await PDFDocument.create();
-        for (let i = 0; i < n; i++) d.addPage([595, 842]);
+        const f = await d.embedFont(StandardFonts.Helvetica);
+        for (let i = 0; i < n; i++) {
+          d.addPage([595, 842]).drawText('Page ' + (i + 1) + ' engineer', {
+            x: 40,
+            y: 780,
+            size: 20,
+            font: f,
+          });
+        }
         out.push(Array.from(await d.save()));
       }
       return out;
@@ -3065,6 +3073,31 @@ try {
       'Windows app: a big file handed over is read a part at a time, with no copy of it on the page',
       !!lazy && lazy.lazy && !lazy.bytes && lazy.reads > 0,
       lazy,
+    );
+    /* its text is not read in the background (pdf.js would keep every part
+       read), and a search still reads it */
+    let index = null;
+    if (frameOf()) {
+      const fr = frameOf();
+      await fr.waitForTimeout(1500);
+      const cached = await fr.evaluate(() => window.ADDPDF.S.textCache.size);
+      await fr.evaluate(() => {
+        if (document.getElementById('findIn').offsetParent === null)
+          document.getElementById('btnFind').click();
+      });
+      await fr.fill('#findIn', 'engineer');
+      await fr
+        .waitForFunction(() => /match/.test(document.getElementById('hitCount').textContent), null, {
+          timeout: 20000,
+        })
+        .catch(() => {});
+      index = { cached, found: await fr.textContent('#hitCount') };
+      await fr.fill('#findIn', '');
+    }
+    check(
+      'Windows app: a big file read a part at a time is not indexed in the background, and Find still reads it',
+      !!index && index.cached === 0 && /^5 matches/.test(index.found),
+      index,
     );
     const host = await page.evaluate(() => window.ADDPDF.S.items.length);
     check('Windows app: a PDF handed over with one open gets a tab of its own', inTab === 5 && host === 3, {
