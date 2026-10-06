@@ -8,13 +8,14 @@
    comes back as a mark (see painters/vpath.ts) that can be moved, resized,
    recoloured or deleted; nothing else in the stream changes.
 
-   A form XObject the page draws once (a block of content kept apart, as a
-   CAD export or a stamp often does) is read too, and its shapes offered:
-   cutShapes cuts them out of the copy of the form that the one-page PDF it
-   makes holds, which no other page draws. A form drawn more than once on
-   the page, a form inside a form, a clipping path, a shape the form's box
-   clips, or one painted with a pattern is not offered: cutting it would
-   change more than the one shape. */
+   A form XObject (a block of content kept apart and drawn with Do, as a CAD
+   export or a stamp often does) is read too, a form inside a form as well,
+   and its shapes offered: cutShapes cuts them out of the one-page PDF it
+   makes, which no other page draws. A form drawn there more than once is
+   copied first, for the one Do the shape was picked in, so the others still
+   draw it whole. A clipping path, a shape a form's box clips, or one
+   painted with a pattern is not offered: cutting it would change more than
+   the one shape. */
 
 import {
   decodePDFRawStream,
@@ -198,14 +199,16 @@ const apply = (m: Mat, x: number, y: number): Pt => [m[0] * x + m[2] * y + m[4],
 /** A shape the page paints, in the page's own space (PDF points). */
 export interface ContentShape {
   /** names it in this page's content: the index of its painting operator,
-      or for a shape inside a form, FORM_ID * (the page's Do operator + 1)
-      plus its index in the form's content */
+      or for a shape inside a form, FORM_ID plus its place among those */
   id: number;
   /** first and last operator of it (in the form's content, for one in a form) */
   first: number;
   last: number;
-  /** the form it is drawn in (its name in the page's resources), if any */
-  form?: string;
+  /** for a shape inside a form: the Do operator that draws the form, in the
+      page's content, then each Do in the forms inside it down to the one
+      that holds the shape; and the forms' names, the same way */
+  path?: number[];
+  forms?: string[];
   /** path commands, one letter each: M L C (three points) Z, over pts */
   cmds: string;
   pts: Pt[];
@@ -226,8 +229,10 @@ export interface ContentShape {
   box: [number, number, number, number];
 }
 
-/** ids of shapes inside a form start at FORM_ID * (its Do operator + 1) */
+/** ids of shapes inside a form start at FORM_ID */
 export const FORM_ID = 2 ** 26;
+/** forms inside forms read this deep at most */
+const FORM_DEPTH = 12;
 
 /** A form XObject's content, for contentShapes to read through. */
 export interface FormContent {
@@ -237,6 +242,10 @@ export interface FormContent {
   bbox: [number, number, number, number];
   /** its own ExtGState opacities, by name */
   gstates: Record<string, { CA?: number; ca?: number }>;
+  /** the forms it draws, by name */
+  forms: (name: string) => FormContent | null;
+  /** the same for the same form, to see a form that draws itself */
+  key: unknown;
 }
 
 interface GState {
@@ -280,21 +289,16 @@ const spaceCount: Record<string, number> = {
 
 /** The shapes a content stream paints. `gstates` gives an ExtGState's stroke
     and fill opacity by its resource name; `forms`, a form XObject's content
-    by its name, for the shapes of a form the stream draws once. */
+    by its name, for the shapes of the forms the stream draws. */
 export function contentShapes(
   ops: ContentOp[],
   gstates: Record<string, { CA?: number; ca?: number }> = {},
   forms?: (name: string) => FormContent | null,
 ): ContentShape[] {
-  /* forms drawn once, by name: one drawn twice would lose the shape twice */
-  const drawn: Record<string, number> = {};
-  if (forms) {
-    for (const o of ops) {
-      const nm = o.op === 'Do' ? nameOf(o.args[0]) : '';
-      if (nm) drawn[nm] = (drawn[nm] || 0) + 1;
-    }
-  }
-  return walk(ops, gstates, startState(), (name) => (drawn[name] === 1 && forms ? forms(name) : null));
+  let n = 0;
+  return walk(ops, gstates, startState(), forms || null, null, []).map((s) =>
+    s.path ? { ...s, id: FORM_ID + n++ } : s,
+  );
 }
 
 const nameOf = (a: Operand | undefined) => (a && typeof a === 'object' && 'name' in a ? a.name : '');
@@ -317,6 +321,9 @@ function walk(
   gstates: Record<string, { CA?: number; ca?: number }>,
   start: GState,
   form: ((name: string) => FormContent | null) | null,
+  /* the forms' boxes drawn so far, in the page's space; the forms read */
+  box: [number, number, number, number] | null,
+  inside: unknown[],
 ): ContentShape[] {
   const out: ContentShape[] = [];
   let gs: GState = { ...start, dash: start.dash && start.dash.slice() };
@@ -407,11 +414,12 @@ function walk(
         inText = false;
         return;
       case 'Do': {
-        /* a form drawn once: its shapes, through its matrix, those its box
-           does not clip; a form inside it is not read (form is null there) */
+        /* a form: its shapes, through its matrix, those its box (and the
+           boxes of the forms round it) does not clip; a form that draws
+           itself, or forms too deep, are not read */
         const nm = nameOf(a[0]);
-        const f = form && nm ? form(nm) : null;
-        if (!f) return;
+        const f = form && nm && inside.length < FORM_DEPTH ? form(nm) : null;
+        if (!f || inside.includes(f.key)) return;
         const ctm = mul(f.matrix, gs.ctm);
         const [bx1, by1, bx2, by2] = f.bbox;
         const corners = [
@@ -420,13 +428,27 @@ function walk(
           apply(ctm, bx2, by2),
           apply(ctm, bx1, by2),
         ];
-        const lo = [Math.min(...corners.map((c) => c[0])), Math.min(...corners.map((c) => c[1]))];
-        const hi = [Math.max(...corners.map((c) => c[0])), Math.max(...corners.map((c) => c[1]))];
-        const inner = walk(f.ops, { ...gstates, ...f.gstates }, { ...gs, ctm }, null);
+        let b: [number, number, number, number] = [
+          Math.min(...corners.map((c) => c[0])),
+          Math.min(...corners.map((c) => c[1])),
+          Math.max(...corners.map((c) => c[0])),
+          Math.max(...corners.map((c) => c[1])),
+        ];
+        if (box)
+          b = [
+            Math.max(b[0], box[0]),
+            Math.max(b[1], box[1]),
+            Math.min(b[2], box[2]),
+            Math.min(b[3], box[3]),
+          ];
+        const inner = walk(f.ops, { ...gstates, ...f.gstates }, { ...gs, ctm }, f.forms, b, [
+          ...inside,
+          f.key,
+        ]);
         for (const s of inner) {
           const [x1, y1, x2, y2] = s.box;
-          if (x1 < lo[0]! - 0.5 || y1 < lo[1]! - 0.5 || x2 > hi[0]! + 0.5 || y2 > hi[1]! + 0.5) continue;
-          out.push({ ...s, id: FORM_ID * (k + 1) + s.id, form: nm });
+          if (!s.path && (x1 < b[0] - 0.5 || y1 < b[1] - 0.5 || x2 > b[2] + 0.5 || y2 > b[3] + 0.5)) continue;
+          out.push({ ...s, path: [k, ...(s.path || [])], forms: [nm, ...(s.forms || [])] });
         }
         return;
       }
@@ -604,20 +626,28 @@ function gstatesOf(res: PDFDict | undefined, doc: PDFDocument): Record<string, {
   return out;
 }
 
-/** The page's form XObject `name`, as a stream, if it is a form. */
-function formStream(page: PDFPage, name: string): { ref: PDFRef | null; stream: PDFRawStream } | null {
-  const xo = page.node.Resources()?.lookupMaybe(PDFName.of('XObject'), PDFDict);
+/** The form XObject `name` in resources `res`, as a stream, if it is a form. */
+function formStream(
+  res: PDFDict | undefined,
+  doc: PDFDocument,
+  name: string,
+): { ref: PDFRef | null; stream: PDFRawStream } | null {
+  const xo = res && res.lookupMaybe(PDFName.of('XObject'), PDFDict);
   const raw = xo && xo.get(PDFName.of(name));
-  const s = raw && page.doc.context.lookup(raw);
+  const s = raw && doc.context.lookup(raw);
   if (!(s instanceof PDFRawStream)) return null;
   if (s.dict.lookupMaybe(PDFName.of('Subtype'), PDFName) !== PDFName.of('Form')) return null;
   return { ref: raw instanceof PDFRef ? raw : null, stream: s };
 }
 
-/** A page's forms, read when contentShapes asks for one. */
-function pageForms(page: PDFPage): (name: string) => FormContent | null {
+/** A form's own resources; one without draws with those of what draws it. */
+const formRes = (s: PDFRawStream, res: PDFDict | undefined) =>
+  s.dict.lookupMaybe(PDFName.of('Resources'), PDFDict) || res;
+
+/** The forms resources `res` holds, read when contentShapes asks for one. */
+function formsIn(res: PDFDict | undefined, doc: PDFDocument): (name: string) => FormContent | null {
   return (name) => {
-    const f = formStream(page, name);
+    const f = formStream(res, doc, name);
     if (!f) return null;
     try {
       const d = f.stream.dict;
@@ -626,13 +656,13 @@ function pageForms(page: PDFPage): (name: string) => FormContent | null {
           .lookupMaybe(PDFName.of(k), PDFArray)
           ?.asArray()
           .map((v) => {
-            const n = page.doc.context.lookup(v);
+            const n = doc.context.lookup(v);
             return n instanceof PDFNumber ? n.asNumber() : 0;
           });
       const m = nums('Matrix');
       const bb = nums('BBox');
       if (!bb || bb.length !== 4) return null;
-      const res = d.lookupMaybe(PDFName.of('Resources'), PDFDict);
+      const own = formRes(f.stream, res);
       return {
         ops: parseContent(decodePDFRawStream(f.stream).decode()),
         matrix: m && m.length === 6 ? (m as Mat) : [1, 0, 0, 1, 0, 0],
@@ -642,7 +672,9 @@ function pageForms(page: PDFPage): (name: string) => FormContent | null {
           Math.max(bb[0]!, bb[2]!),
           Math.max(bb[1]!, bb[3]!),
         ],
-        gstates: res ? gstatesOf(res, page.doc) : {},
+        gstates: own && own !== res ? gstatesOf(own, doc) : {},
+        forms: formsIn(own, doc),
+        key: f.ref || f.stream,
       };
     } catch {
       return null; /* a form that cannot be read: its shapes are not offered */
@@ -653,47 +685,116 @@ function pageForms(page: PDFPage): (name: string) => FormContent | null {
 /** The shapes page `index` of `doc` paints, for Edit Object. */
 export function pageShapes(doc: PDFDocument, index: number): ContentShape[] {
   const page = doc.getPage(index);
-  return contentShapes(parseContent(pageContent(page)), pageGStates(page), pageForms(page));
+  return contentShapes(
+    parseContent(pageContent(page)),
+    pageGStates(page),
+    formsIn(page.node.Resources(), doc),
+  );
+}
+
+/** How many times each form is drawn, counting each Do of each form that
+    draws it: one drawn once can be cut where it is, one drawn more is copied. */
+function formUses(
+  ops: ContentOp[],
+  res: PDFDict | undefined,
+  doc: PDFDocument,
+  uses: Map<PDFRef, number>,
+  inside: PDFRef[],
+) {
+  for (const o of ops) {
+    if (o.op !== 'Do') continue;
+    const f = formStream(res, doc, nameOf(o.args[0]));
+    if (!f || !f.ref) continue;
+    uses.set(f.ref, (uses.get(f.ref) || 0) + 1);
+    if (inside.includes(f.ref) || inside.length >= FORM_DEPTH) continue;
+    try {
+      formUses(parseContent(decodePDFRawStream(f.stream).decode()), formRes(f.stream, res), doc, uses, [
+        ...inside,
+        f.ref,
+      ]);
+    } catch {
+      /* a form that cannot be read: none of its shapes were offered */
+    }
+  }
+}
+
+/** Content `bytes` (read as `ops`, drawn with resources `res`) with `shapes`
+    cut out: those `depth` forms down are its own, the others are in the
+    forms it draws, each cut where it is if drawn once, else in a copy of it
+    that this one Do draws instead. */
+function cutIn(
+  bytes: Uint8Array,
+  ops: ContentOp[],
+  res: PDFDict | undefined,
+  doc: PDFDocument,
+  shapes: ContentShape[],
+  depth: number,
+  uses: Map<PDFRef, number>,
+): Uint8Array {
+  const out = cutContent(
+    bytes,
+    ops,
+    shapes.filter((s) => (s.path || []).length === depth),
+  );
+  const byDo = new Map<number, ContentShape[]>();
+  for (const s of shapes) {
+    const k = (s.path || [])[depth];
+    if (k !== undefined) byDo.set(k, [...(byDo.get(k) || []), s]);
+  }
+  const renamed: [number, string][] = [];
+  for (const [k, inner] of byDo) {
+    const name = nameOf(ops[k]!.args[0]);
+    const f = formStream(res, doc, name);
+    if (!f || !f.ref) throw new Error('form ' + name + ' could not be read');
+    const fbytes = decodePDFRawStream(f.stream).decode();
+    const cut = cutIn(fbytes, parseContent(fbytes), formRes(f.stream, res), doc, inner, depth + 1, uses);
+    const entries: Record<string, PDFObject> = {};
+    for (const [key, v] of f.stream.dict.entries()) {
+      const t = key.decodeText();
+      if (t !== 'Filter' && t !== 'DecodeParms' && t !== 'Length') entries[t] = v;
+    }
+    const stream = doc.context.flateStream(cut, entries);
+    if (uses.get(f.ref) === 1) {
+      doc.context.assign(f.ref, stream);
+      continue;
+    }
+    /* drawn more than once: this Do draws a copy, the others the form */
+    const xo = res!.lookup(PDFName.of('XObject'), PDFDict);
+    let n = 1;
+    while (xo.has(PDFName.of(name + '_' + n))) n++;
+    xo.set(PDFName.of(name + '_' + n), doc.context.register(stream));
+    renamed.push([k, name + '_' + n]);
+  }
+  if (!renamed.length) return out;
+  /* each renamed Do written again, from the end so the places hold */
+  let b = out;
+  for (const [k, nm] of renamed.sort((x, y) => y[0] - x[0])) {
+    const put = new TextEncoder().encode('/' + nm + ' Do');
+    const next = new Uint8Array(b.length - (ops[k]!.end - ops[k]!.start) + put.length);
+    next.set(b.subarray(0, ops[k]!.start));
+    next.set(put, ops[k]!.start);
+    next.set(b.subarray(ops[k]!.end), ops[k]!.start + put.length);
+    b = next;
+  }
+  return b;
 }
 
 /** Page `index` of `doc` on its own, as a new PDF, with the shapes `ids`
     names (from pageShapes) cut out of it. */
 export async function cutShapes(doc: PDFDocument, index: number, ids: number[]): Promise<Uint8Array> {
-  const page = doc.getPage(index);
-  const bytes = pageContent(page);
+  const bytes = pageContent(doc.getPage(index));
   const ops = parseContent(bytes);
   const want = new Set(ids);
-  const forms = pageForms(page);
-  const shapes = contentShapes(ops, pageGStates(page), forms).filter((s) => want.has(s.id));
+  const shapes = pageShapes(doc, index).filter((s) => want.has(s.id));
   const out = await PDFDocument.create();
   const [p] = await out.copyPages(doc, [index]);
   out.addPage(p!);
-  const stream = out.context.flateStream(
-    cutContent(
-      bytes,
-      ops,
-      shapes.filter((s) => !s.form),
-    ),
-  );
+  /* the forms are cut in this page's own copies of them (the ones the new
+     PDF holds), which no other page draws */
+  const res = p!.node.Resources();
+  const uses = new Map<PDFRef, number>();
+  formUses(ops, res, out, uses, []);
+  const stream = out.context.flateStream(cutIn(bytes, ops, res, out, shapes, 0, uses));
   p!.node.set(PDFName.of('Contents'), out.context.register(stream));
-  /* a form's shapes: cut out of this page's own copy of the form (the one
-     the new PDF holds), which no other page draws */
-  for (const name of new Set(shapes.filter((s) => s.form).map((s) => s.form!))) {
-    const f = formStream(p!, name);
-    const read = forms(name);
-    if (!f || !f.ref || !read) throw new Error('form ' + name + ' could not be read');
-    const fbytes = decodePDFRawStream(f.stream).decode();
-    const cut = cutContent(
-      fbytes,
-      parseContent(fbytes),
-      shapes.filter((s) => s.form === name),
-    );
-    const entries: Record<string, PDFObject> = {};
-    for (const [k, v] of f.stream.dict.entries()) {
-      const key = k.decodeText();
-      if (key !== 'Filter' && key !== 'DecodeParms' && key !== 'Length') entries[key] = v;
-    }
-    out.context.assign(f.ref, out.context.flateStream(cut, entries));
-  }
   return out.save();
 }

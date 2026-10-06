@@ -149,11 +149,11 @@ describe('shapes inside a form XObject', () => {
     const shapes = pageShapes(d, 0);
     expect(shapes.length).toBe(3);
     const box = shapes.find((s) => s.fill === '#ff0000')!;
-    expect(box.form).toBeTruthy();
+    expect(box.forms!.length).toBe(1);
     expect(box.box).toEqual([120, 70, 220, 150]);
     const line = shapes.find((s) => s.stroke === '#0000ff')!;
     expect(line.w).toBeCloseTo(6);
-    expect(shapes.find((s) => s.fill === '#000000')!.form).toBeUndefined();
+    expect(shapes.find((s) => s.fill === '#000000')!.path).toBeUndefined();
   });
 
   it('cuts a form shape out of the page copy, the rest of the form kept', async () => {
@@ -162,7 +162,7 @@ describe('shapes inside a form XObject', () => {
     const after = await PDFLib.PDFDocument.load(await cutShapes(d, 0, [line.id]));
     const left = pageShapes(after, 0);
     expect(left.map((s) => s.fill || s.stroke).sort()).toEqual(['#000000', '#ff0000']);
-    expect(left.find((s) => s.fill === '#ff0000')!.form).toBeTruthy();
+    expect(left.find((s) => s.fill === '#ff0000')!.path).toBeTruthy();
   });
 
   it('another page drawing the same form keeps the shape', async () => {
@@ -173,9 +173,80 @@ describe('shapes inside a form XObject', () => {
     expect(pageShapes(d, 0).some((s) => s.stroke === '#0000ff')).toBe(true);
   });
 
-  it('not offered: a form drawn twice on the page, or a shape its box clips', async () => {
-    const twice = await withForm(BODY, (n) => '/' + n + ' Do q 1 0 0 1 200 0 cm /' + n + ' Do Q');
-    expect(pageShapes(twice, 0)).toEqual([]);
+  it('a form drawn twice: the shape cut from the one drawing picked, the other kept', async () => {
+    const d = await withForm(BODY, (n) => '/' + n + ' Do q 1 0 0 1 200 0 cm /' + n + ' Do Q');
+    const shapes = pageShapes(d, 0);
+    expect(shapes.length).toBe(4);
+    expect(new Set(shapes.map((s) => s.id)).size).toBe(4);
+    const right = shapes.find((s) => s.stroke === '#0000ff' && s.box[0] > 250)!;
+    expect(right.box).toEqual([300, 100, 380, 150]);
+    const after = await PDFLib.PDFDocument.load(await cutShapes(d, 0, [right.id]));
+    const left = pageShapes(after, 0);
+    expect(left.length).toBe(3);
+    expect(left.filter((s) => s.stroke === '#0000ff').map((s) => s.box[0])).toEqual([100]);
+    expect(
+      left
+        .filter((s) => s.fill === '#ff0000')
+        .map((s) => s.box[0])
+        .sort(),
+    ).toEqual([10, 210]);
+  });
+
+  it('a form inside a form, drawn twice there: found, and cut from the one picked', async () => {
+    const d = await PDFLib.PDFDocument.create();
+    const inner = d.context.register(
+      d.context.flateStream(enc(BODY), { Type: 'XObject', Subtype: 'Form', BBox: [0, 0, 200, 200] }),
+    );
+    const outer = d.context.register(
+      d.context.flateStream(enc('/In Do q 0.5 0 0 0.5 0 200 cm /In Do Q'), {
+        Type: 'XObject',
+        Subtype: 'Form',
+        BBox: [0, 0, 400, 400],
+        Resources: { XObject: { In: inner } },
+      }),
+    );
+    const p = d.addPage([400, 400]);
+    const name = p.node.newXObject('Fm', outer).decodeText();
+    p.node.set(
+      PDFLib.PDFName.of('Contents'),
+      d.context.register(d.context.flateStream(enc('/' + name + ' Do'))),
+    );
+    const shapes = pageShapes(d, 0);
+    expect(shapes.length).toBe(4);
+    const small = shapes.find((s) => s.stroke === '#0000ff' && s.box[1] > 200)!;
+    expect(small.forms).toEqual([name, 'In']);
+    expect(small.box).toEqual([50, 250, 90, 275]);
+    expect(small.w).toBeCloseTo(1.5);
+    const after = await PDFLib.PDFDocument.load(await cutShapes(d, 0, [small.id]));
+    const left = pageShapes(after, 0);
+    expect(left.filter((s) => s.stroke === '#0000ff').map((s) => s.box[1])).toEqual([100]);
+    expect(left.filter((s) => s.fill === '#ff0000').length).toBe(2);
+    /* the page that was not cut still draws both */
+    expect(pageShapes(d, 0).filter((s) => s.stroke === '#0000ff').length).toBe(2);
+  });
+
+  it('a form that draws itself is read once, not for ever', async () => {
+    const d = await PDFLib.PDFDocument.create();
+    const ref = d.context.nextRef();
+    const p = d.addPage([400, 400]);
+    d.context.assign(
+      ref,
+      d.context.flateStream(enc(BODY + ' /Me Do'), {
+        Type: 'XObject',
+        Subtype: 'Form',
+        BBox: [0, 0, 200, 200],
+        Resources: { XObject: { Me: ref } },
+      }),
+    );
+    const name = p.node.newXObject('Fm', ref).decodeText();
+    p.node.set(
+      PDFLib.PDFName.of('Contents'),
+      d.context.register(d.context.flateStream(enc('/' + name + ' Do'))),
+    );
+    expect(pageShapes(d, 0).length).toBe(2);
+  });
+
+  it('not offered: a shape the form box clips', async () => {
     const clipped = await withForm(BODY, (n) => '/' + n + ' Do', { bbox: [0, 0, 90, 90] });
     expect(pageShapes(clipped, 0).map((s) => s.fill)).toEqual(['#ff0000']);
   });

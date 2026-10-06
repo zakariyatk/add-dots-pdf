@@ -1,13 +1,13 @@
 # Handover: where the Windows app work stands
 
-Last updated 2026-10-04, end of the second session. Read with
+Last updated 2026-10-06. Read with
 `docs/windows-performance.md`, which has the analysis, the plan and the
 measured results of each phase.
 
 ## Start here tomorrow
 
-1. Merge PR #51 (toolbar groups, branch `claude/toolbar-groups`) once its
-   CI is green. Everything else from these sessions is already in `main`.
+1. Merge branch `claude/relaxed-hamilton-27hwm0` (Edit Object in forms
+   drawn more than once and in forms inside forms) once its CI is green.
 2. Pull `main` on the new computer and set it up (below).
 3. Pick the next item from "What is left".
 
@@ -30,9 +30,11 @@ measured results of each phase.
 | 6     | Print checked in CI: the print PDF opens in WebView2's PDF viewer, its frame is printed | PR #53 |
 | 6     | Edit Object: shapes in a form XObject drawn once                                        | PR #54 |
 | 6     | Edit Text in the PDF's own font, saved and shown (as Acrobat)                           | PR #55 |
+| 6     | No Done / Delete / Apply popups: work kept as it is done (as Acrobat)                   | PR #55 |
+| 6     | Edit Object: forms drawn more than once, and forms inside forms                         | next   |
 | 7     | Window CSP; update check sandboxed; `read_range` bounded                                | PR #48 |
 
-PRs #45-#52 are merged.
+PRs #45-#55 are merged.
 
 CI: from the evening of 2026-10-04 to 08:50 UTC on 10-05 no job got a
 runner (the account's Actions limit); it runs again since. What `main`
@@ -76,8 +78,6 @@ Smaller items noted along the way:
   font there, as before), the typing box while editing (the closest font
   until the edit is applied), and a line underlined or struck through
   (shown in the closest font on screen; saved in its own font).
-- Edit Object: shapes in a form drawn more than once on a page, or in a
-  form inside a form (one drawn once is done, PR #54).
 - Real Windows numbers: open the app on Windows, press Ctrl+Shift+P, and
   "Copy" the panel for each test file.
 
