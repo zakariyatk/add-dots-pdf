@@ -3419,7 +3419,9 @@ try {
       { kept, letGo },
     );
     const thumb = await page
-      .waitForFunction(() => window.__kept.find((k) => k.scale < 0.5 && /950/.test(k.text)) || null, null, { timeout: 15000 })
+      .waitForFunction(() => window.__kept.find((k) => k.scale < 0.5 && /950/.test(k.text)) || null, null, {
+        timeout: 15000,
+      })
       .then(
         (h) => h.jsonValue(),
         () => null,
@@ -3433,7 +3435,9 @@ try {
       page.waitForEvent('download', { timeout: 30000 }),
       page.evaluate(() => document.getElementById('jpgGo').click()),
     ]);
-    const exported = await page.evaluate(() => window.__kept.filter((k) => k.scale >= 1 && /950/.test(k.text)));
+    const exported = await page.evaluate(() =>
+      window.__kept.filter((k) => k.scale >= 1 && /950/.test(k.text)),
+    );
     await page.evaluate(() => document.getElementById('btnJpg').click());
     check(
       "Edit Object: the retyped line is in the PDF's own font on its thumbnail and in Pages to JPG",
