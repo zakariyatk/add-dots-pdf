@@ -6,7 +6,7 @@ measured results of each phase.
 
 ## Start here tomorrow
 
-1. Merge branch `claude/relaxed-hamilton-27hwm0` (retyped text in the
+1. Merge PR #57 (retyped text in the
    PDF's own font on thumbnails and in Pages to JPG) once its CI is green.
 2. Pull `main` on the new computer and set it up (below).
 3. Pick the next item from "What is left".
@@ -32,7 +32,7 @@ measured results of each phase.
 | 6     | Edit Text in the PDF's own font, saved and shown (as Acrobat)                           | PR #55 |
 | 6     | No Done / Delete / Apply popups: work kept as it is done (as Acrobat)                   | PR #55 |
 | 6     | Edit Object: forms drawn more than once, and forms inside forms                         | PR #56 |
-| 6     | Retyped text in the PDF's own font on thumbnails and in Pages to JPG                    | next   |
+| 6     | Retyped text in the PDF's own font on thumbnails and in Pages to JPG                    | PR #57 |
 | 7     | Window CSP; update check sandboxed; `read_range` bounded                                | PR #48 |
 
 PRs #45-#56 are merged.
@@ -75,7 +75,7 @@ Phase 5 follow-ups:
 Smaller items noted along the way:
 
 - Edit Text in the PDF's own font (done, PR #55; thumbnails and Pages to
-  JPG too, next): what is left is the typing box while editing (the
+  JPG too, PR #57): what is left is the typing box while editing (the
   closest font until the edit is applied), and a line underlined or
   struck through (shown in the closest font on screen and in pictures;
   saved in its own font).
