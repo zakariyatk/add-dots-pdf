@@ -449,7 +449,8 @@ async fn ocr_status() -> Result<ocr::Status, String> {
 }
 
 /// The words on a page's picture: its pixels (RGBA) in the request's body,
-/// `x-w` x `x-h`, read in the language `x-lang`.
+/// `x-w` x `x-h`, read in the language `x-lang` (or languages, with commas
+/// between: ocr::merge).
 #[tauri::command]
 async fn ocr_page(request: tauri::ipc::Request<'_>) -> Result<Vec<ocr::Word>, String> {
     let tauri::ipc::InvokeBody::Raw(px) = request.body() else {
@@ -459,9 +460,7 @@ async fn ocr_page(request: tauri::ipc::Request<'_>) -> Result<Vec<ocr::Word>, St
     let n = |k: &str| h(k).and_then(|v| v.parse::<u32>().ok()).ok_or(format!("no {k}"));
     let (w, ht) = (n("x-w")?, n("x-h")?);
     let lang = h("x-lang").ok_or("no x-lang")?;
-    if lang.is_empty() || lang.len() > 20 || !lang.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-        return Err("not a language".into());
-    }
+    ocr::languages(&lang)?;
     let px = px.clone();
     tauri::async_runtime::spawn_blocking(move || ocr::read(px, w, ht, &lang))
         .await

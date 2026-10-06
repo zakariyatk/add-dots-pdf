@@ -10,8 +10,9 @@
    viewport, so a rotated scan lands right too.
 
    Who reads: in the Windows app, Windows' own text reader (Windows.Media.Ocr,
-   src-tauri/src/ocr.rs) when it has the language, much faster and with
-   nothing to download; else, and on any error there, Tesseract (in
+   src-tauri/src/ocr.rs) when it has the language (for English and Arabic,
+   both), much faster and with nothing to download; else, and on any error
+   there, Tesseract (in
    js/vendor/tesseract, loaded only the first time it is needed).
    localStorage adpdf.ocr = 'tesseract' always uses Tesseract, to compare. */
 (function () {
@@ -157,12 +158,14 @@
       }
       let status = null, seen = null;
       const api = { max: 0 };
-      /* Windows' tag for one of the dialog's languages ('eng', 'ara'), or
-         null: not the Windows app, a pair of languages, or no recogniser for
-         it on this computer (a language pack Windows has not installed) */
+      /* Windows' tag for the dialog's language ('eng', 'ara'), or tags with
+         a comma between for 'eng+ara' (each read by its recogniser and put
+         together, src-tauri/src/ocr.rs merge); or null: not the Windows app,
+         or no recogniser for one of them on this computer (a language pack
+         Windows has not installed) */
       api.tag = async function (lang) {
         const d = desk();
-        if (!d || lang.indexOf('+') >= 0) return null;
+        if (!d) return null;
         try { if (localStorage.getItem('adpdf.ocr') === 'tesseract') return null; } catch (e) { /* allowed */ }
         if (!status || seen !== d.T) {
           seen = d.T;
@@ -173,14 +176,19 @@
         }
         const st = await status;
         api.max = st.max || 0;
-        const want = { eng: 'en', ara: 'ar' }[lang];
-        if (!want || !api.max) return null;
-        const tags = (st.languages || []).filter(function (t) {
-          const l = String(t).toLowerCase();
-          return l === want || l.indexOf(want + '-') === 0;
-        });
-        /* English as written in the US first, the usual pack; else any */
-        return tags.filter(function (t) { return /^en-us$/i.test(t); })[0] || tags[0] || null;
+        if (!api.max) return null;
+        const one = function (code) {
+          const want = { eng: 'en', ara: 'ar' }[code];
+          if (!want) return null;
+          const tags = (st.languages || []).filter(function (t) {
+            const l = String(t).toLowerCase();
+            return l === want || l.indexOf(want + '-') === 0;
+          });
+          /* English as written in the US first, the usual pack; else any */
+          return tags.filter(function (t) { return /^en-us$/i.test(t); })[0] || tags[0] || null;
+        };
+        const got = lang.split('+').map(one);
+        return got.every(Boolean) ? got.join(',') : null;
       };
       /* the words on a canvas, as Tesseract gives them: text and box */
       api.read = async function (c, tag) {

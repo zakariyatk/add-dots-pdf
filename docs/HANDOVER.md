@@ -6,8 +6,8 @@ measured results of each phase.
 
 ## Start here tomorrow
 
-1. Merge PR #57 (retyped text in the
-   PDF's own font on thumbnails and in Pages to JPG) once its CI is green.
+1. Merge PR #58 (Windows' reader for
+   English and Arabic at once) once its CI is green.
 2. Pull `main` on the new computer and set it up (below).
 3. Pick the next item from "What is left".
 
@@ -33,9 +33,10 @@ measured results of each phase.
 | 6     | No Done / Delete / Apply popups: work kept as it is done (as Acrobat)                   | PR #55 |
 | 6     | Edit Object: forms drawn more than once, and forms inside forms                         | PR #56 |
 | 6     | Retyped text in the PDF's own font on thumbnails and in Pages to JPG                    | PR #57 |
+| 5     | Windows' reader for English and Arabic at once (each word from its language's reader)   | PR #58 |
 | 7     | Window CSP; update check sandboxed; `read_range` bounded                                | PR #48 |
 
-PRs #45-#56 are merged.
+PRs #45-#57 are merged.
 
 CI: from the evening of 2026-10-04 to 08:50 UTC on 10-05 no job got a
 runner (the account's Actions limit); it runs again since. What `main`
@@ -66,11 +67,13 @@ itself and the paper are for a person on a Windows machine to try once.
 
 Phase 5 follow-ups:
 
-- Windows reading both languages at once (today "English and Arabic" goes
-  to Tesseract).
+- Windows reading both languages at once: done (PR #58). Each recogniser
+  reads the page; a word in Arabic letters is taken from the Arabic one,
+  the others from the English one (ocr.rs `merge`). CI checks it on a line
+  "Invoice" + an Arabic word; worth trying on real mixed scans.
 - Timing Windows OCR against Tesseract on a real Windows machine. CI checks
   that Windows' reader reads a picture of words (it installs the English
-  OCR component on the runner if missing).
+  and Arabic OCR components on the runner if missing).
 
 Smaller items noted along the way:
 

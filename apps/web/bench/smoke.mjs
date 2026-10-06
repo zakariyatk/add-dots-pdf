@@ -2131,6 +2131,21 @@ try {
           Math.abs(wd[2] - 178.5) < 1.5,
         { by: win.by, asked, word: wd },
       );
+      /* English and Arabic: both asked of Windows at once, in one picture */
+      await page.evaluate(() => {
+        window.__ocrAsked = [];
+        document.getElementById('ocrLang').value = 'eng+ara';
+      });
+      const both = await runOcr();
+      await page.evaluate(() => (document.getElementById('ocrLang').value = 'eng'));
+      check(
+        "English and Arabic: Windows' reader reads it, both languages asked at once",
+        both.by === 'windows' &&
+          both.asked.length === 1 &&
+          both.asked[0].lang === 'en-US,ar-SA' &&
+          (both.words[0] || [])[5] === 'Native',
+        { by: both.by, asked: both.asked, word: both.words[0] },
+      );
       await page.evaluate(() => (window.__ocrFail = true));
       const back = await runOcr();
       check(
