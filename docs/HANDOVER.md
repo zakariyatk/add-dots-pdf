@@ -6,7 +6,7 @@ measured results of each phase.
 
 ## Start here tomorrow
 
-1. Merge branch `claude/relaxed-hamilton-27hwm0` (Edit Object in forms
+1. Merge PR #56 (Edit Object in forms
    drawn more than once and in forms inside forms) once its CI is green.
 2. Pull `main` on the new computer and set it up (below).
 3. Pick the next item from "What is left".
@@ -31,7 +31,7 @@ measured results of each phase.
 | 6     | Edit Object: shapes in a form XObject drawn once                                        | PR #54 |
 | 6     | Edit Text in the PDF's own font, saved and shown (as Acrobat)                           | PR #55 |
 | 6     | No Done / Delete / Apply popups: work kept as it is done (as Acrobat)                   | PR #55 |
-| 6     | Edit Object: forms drawn more than once, and forms inside forms                         | next   |
+| 6     | Edit Object: forms drawn more than once, and forms inside forms                         | PR #56 |
 | 7     | Window CSP; update check sandboxed; `read_range` bounded                                | PR #48 |
 
 PRs #45-#55 are merged.
