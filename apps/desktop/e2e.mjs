@@ -276,12 +276,29 @@ try {
     const words = await T.core.invoke('ocr_page', new Uint8Array(px.buffer), {
       headers: { 'x-w': '1200', 'x-h': '300', 'x-lang': tag },
     });
+    /* English and Arabic at once: each word from the reader of its letters */
+    const ar = (st.languages || []).filter((l) => /^ar/i.test(l))[0];
+    let both = null;
+    if (ar) {
+      g.fillStyle = '#fff';
+      g.fillRect(0, 0, c.width, c.height);
+      g.fillStyle = '#000';
+      g.fillText('Invoice', 60, 170);
+      g.fillText('\u0641\u0627\u062A\u0648\u0631\u0629', 700, 170);
+      const px2 = g.getImageData(0, 0, c.width, c.height).data;
+      const got = await T.core.invoke('ocr_page', new Uint8Array(px2.buffer), {
+        headers: { 'x-w': '1200', 'x-h': '300', 'x-lang': tag + ',' + ar },
+      });
+      both = got.map((w) => ({ text: w.text, x: Math.round(w.x) }));
+    }
     return {
       languages: st.languages,
       max: st.max,
       tag,
       words: words.map((w) => w.text).join(' '),
       first: words[0],
+      ar,
+      both,
     };
   });
   check(
@@ -291,6 +308,20 @@ try {
       : !!ocr.languages && ocr.languages.length === 0,
     ocr,
   );
+  if (WIN) {
+    /* the English word from the English reader, the Arabic from the Arabic
+       one, and no Latin reading of the Arabic word beside it */
+    const both = ocr.both || [];
+    const arabic = both.filter((w) => /[\u0600-\u06FF]/.test(w.text));
+    check(
+      "English and Arabic at once: each word read by Windows' reader for its letters",
+      both.some((w) => w.text === 'Invoice' && w.x < 400) &&
+        arabic.length > 0 &&
+        arabic.every((w) => w.x > 500) &&
+        !both.some((w) => w.x > 500 && /[A-Za-z]/.test(w.text)),
+      { ar: ocr.ar, both },
+    );
+  }
 
   check(
     'the window has a content security policy, and the update check still answers',
