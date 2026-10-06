@@ -6,8 +6,8 @@ measured results of each phase.
 
 ## Start here tomorrow
 
-1. Merge PR #56 (Edit Object in forms
-   drawn more than once and in forms inside forms) once its CI is green.
+1. Merge PR #57 (retyped text in the
+   PDF's own font on thumbnails and in Pages to JPG) once its CI is green.
 2. Pull `main` on the new computer and set it up (below).
 3. Pick the next item from "What is left".
 
@@ -32,9 +32,10 @@ measured results of each phase.
 | 6     | Edit Text in the PDF's own font, saved and shown (as Acrobat)                           | PR #55 |
 | 6     | No Done / Delete / Apply popups: work kept as it is done (as Acrobat)                   | PR #55 |
 | 6     | Edit Object: forms drawn more than once, and forms inside forms                         | PR #56 |
+| 6     | Retyped text in the PDF's own font on thumbnails and in Pages to JPG                    | PR #57 |
 | 7     | Window CSP; update check sandboxed; `read_range` bounded                                | PR #48 |
 
-PRs #45-#55 are merged.
+PRs #45-#56 are merged.
 
 CI: from the evening of 2026-10-04 to 08:50 UTC on 10-05 no job got a
 runner (the account's Actions limit); it runs again since. What `main`
@@ -73,11 +74,11 @@ Phase 5 follow-ups:
 
 Smaller items noted along the way:
 
-- Edit Text in the PDF's own font (done, PR #55): what is left is the
-  look of such a line in the JPG export and the thumbnails (the closest
-  font there, as before), the typing box while editing (the closest font
-  until the edit is applied), and a line underlined or struck through
-  (shown in the closest font on screen; saved in its own font).
+- Edit Text in the PDF's own font (done, PR #55; thumbnails and Pages to
+  JPG too, PR #57): what is left is the typing box while editing (the
+  closest font until the edit is applied), and a line underlined or
+  struck through (shown in the closest font on screen and in pictures;
+  saved in its own font).
 - Real Windows numbers: open the app on Windows, press Ctrl+Shift+P, and
   "Copy" the panel for each test file.
 
