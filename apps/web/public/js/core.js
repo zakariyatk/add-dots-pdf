@@ -2173,6 +2173,7 @@
     const vr = it.page.getViewport({ scale: sc * THUMB_RES, rotation: rot });
     /* the marks first, as a picture: the page drawn from the screen's
        bitmap then goes in with them at once, without a blank frame */
+    if (S.thumbMarks && it.shapes && it.shapes.length) await textArtReady(it, vr);
     const marks = S.thumbMarks && it.shapes && it.shapes.length ? annoSvg(it, vr, false) : null;
     const marksImg = marks ? await svgImage(marks) : null;
     it.thumbMarked = !!marksImg;
@@ -5831,6 +5832,7 @@
     const next = Object.assign({}, ed.item, { text: val });
     if (ed.idx >= 0) ed.it.shapes[ed.idx] = next; else ed.it.shapes.push(next);
     drawShapes(ed.it);
+    drawThumb(ed.it);
     updateMeta();
     toast(empty ? 'Text covered' : 'Text set');
   }
@@ -6737,6 +6739,17 @@
     return svg;
   }
 
+  /* text a module draws itself (Edit Object: retyped in the page's own
+     font) drawn at this size first, so a page kept as a picture has it and
+     not the closest font; after 5 s, the closest font rather than a wait */
+  function textArtReady(it, vp) {
+    if (!EXT.textArtReady) return Promise.resolve();
+    const all = Promise.all(it.shapes.filter(function (sh) { return sh.t === 'text'; }).map(function (sh) {
+      return EXT.textArtReady(it, sh, vp).catch(function () {});
+    }));
+    return Promise.race([all, new Promise(function (res) { setTimeout(res, 5000); })]);
+  }
+
   function svgImage(svg) {
     return new Promise(function (res) {
       const xml = new XMLSerializer().serializeToString(svg);
@@ -6777,6 +6790,7 @@
     await drawPageInto(it, vp, ctx, {
       background: '#FFFFFF', transform: (ox || oy) ? [1, 0, 0, 1, ox, oy] : null
     });
+    await textArtReady(it, vp);
     const svg = annoSvg(it, vp, noPins);
     if (svg) {
       const img = await svgImage(svg);

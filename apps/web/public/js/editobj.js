@@ -140,14 +140,26 @@
        the text alone in that font, as a little PDF (only the font copied),
        drawn by pdf.js at this zoom and turn, and shown in place of the
        browser's text. Until it is ready, and for text underlined or struck
-       through, the browser's text in the closest font. */
+       through, the browser's text in the closest font. A page drawn to keep
+       (Pages to JPG, a thumbnail) waits for it first: X.textArtReady. */
     const arts = new Map();                  /* key -> { img, box } | 'wait' | 'none' */
     const ART_MAX = 60;
     function artKey(it, s, vp) {
       return [it.src.id, it.num, vp.scale.toFixed(3), vp.rotation, s.text, s.size, s.c, s.a[0], s.a[1],
         s.r || 0, s.align || 'left', s.pf.res].join('|');
     }
-    async function drawArt(key, it, s, vp) {
+    const drawing = new Map();               /* key -> the drawing of it, while it is drawn */
+    const onScreen = new Set();              /* keys the screen asked for: drawn again when ready */
+    function drawArt(key, it, s, vp) {
+      if (!drawing.has(key)) {
+        drawing.set(key, paintArt(key, it, s, vp).finally(function () {
+          drawing.delete(key);
+          if (onScreen.delete(key) && S.items.indexOf(it) >= 0) X.drawShapes(it);
+        }));
+      }
+      return drawing.get(key);
+    }
+    async function paintArt(key, it, s, vp) {
       arts.set(key, 'wait');
       try {
         const doc = await docOf(it.src);
@@ -157,7 +169,10 @@
         try {
           const page = await pdf.getPage(1);
           const dpr = Math.min(3, window.devicePixelRatio || 1);
-          const v = page.getViewport({ scale: vp.scale * dpr, rotation: vp.rotation });
+          /* no side over 8192 pixels: a long text in a JPG at a high DPI */
+          const v1 = page.getViewport({ scale: 1, rotation: vp.rotation });
+          const most = 8192 / Math.max(1, v1.width, v1.height);
+          const v = page.getViewport({ scale: Math.min(vp.scale * dpr, most), rotation: vp.rotation });
           const c = document.createElement('canvas');
           c.width = Math.max(1, Math.ceil(v.width)); c.height = Math.max(1, Math.ceil(v.height));
           await page.render({ canvasContext: c.getContext('2d'), viewport: v, background: 'rgba(0,0,0,0)' }).promise;
@@ -166,16 +181,20 @@
         } finally { pdf.destroy(); }
         /* the oldest go once there are many (each zoom makes new ones) */
         while (arts.size > ART_MAX) arts.delete(arts.keys().next().value);
-        if (S.items.indexOf(it) >= 0) X.drawShapes(it);
       } catch (e) {
         arts.set(key, 'none');
       }
     }
+    const artFor = function (it, s) { return !!s.pf && !s.u && !s.k && !!E.markInPageFont(s) && !it.src.password; };
     X.textArt = function (it, s, vp) {
-      if (!s.pf || s.u || s.k || !E.markInPageFont(s) || it.src.password) return null;
+      if (!artFor(it, s)) return null;
       const key = artKey(it, s, vp);
       const got = arts.get(key);
-      if (!got) { drawArt(key, it, s, vp); return null; }
+      if (!got || got === 'wait') {
+        onScreen.add(key);
+        drawArt(key, it, s, vp);
+        return null;
+      }
       if (typeof got !== 'object') return null;
       /* the box's corners on screen: the image covers them, turned as the page is */
       const b = got.box;
@@ -192,6 +211,15 @@
       img.setAttribute('preserveAspectRatio', 'none');
       img.style.opacity = E.shOp ? E.shOp(s) : 1;
       return img;
+    };
+    /* settles once the mark's text is drawn at this size (or cannot be),
+       so that X.textArt then has it */
+    X.textArtReady = function (it, s, vp) {
+      if (!artFor(it, s)) return Promise.resolve();
+      const key = artKey(it, s, vp);
+      const got = arts.get(key);
+      if (got && got !== 'wait') return Promise.resolve();
+      return drawArt(key, it, s, vp);
     };
     /* for the tests: how the mark is shown */
     X.pageFontArt = function (it, s) { return X.textArt(it, s, it.vp) ? 'page font' : 'browser'; };

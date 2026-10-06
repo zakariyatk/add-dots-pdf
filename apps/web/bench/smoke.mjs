@@ -3375,6 +3375,18 @@ try {
       });
     };
     const first = await pick(120, 704);
+    /* the retyped line as a page kept as a picture draws it (a thumbnail,
+       Pages to JPG): at their size, in the page's own font as on screen */
+    await page.evaluate(() => {
+      const X = window.ADDPDF,
+        draw = X.textArt;
+      window.__kept = [];
+      X.textArt = (it, s, vp) => {
+        const got = draw(it, s, vp);
+        if (vp !== it.vp) window.__kept.push({ scale: vp.scale, pageFont: !!got, text: s.text });
+        return got;
+      };
+    });
     await page.keyboard.press('Control+a');
     await page.keyboard.type('Total due: 950 USD');
     const [ox, oy] = await at(400, 300);
@@ -3405,6 +3417,28 @@ try {
       'Edit Object: no Done or Delete bar after editing; a click outside the pages lets go of the mark',
       !kept.bar && kept.selected && letGo,
       { kept, letGo },
+    );
+    const thumb = await page
+      .waitForFunction(() => window.__kept.find((k) => k.scale < 0.5 && /950/.test(k.text)) || null, null, { timeout: 15000 })
+      .then(
+        (h) => h.jsonValue(),
+        () => null,
+      );
+    await page.evaluate(() => {
+      document.getElementById('btnJpg').click();
+      document.getElementById('jpgRange').value = '1';
+      document.getElementById('jpgRange').dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    const [jpg] = await Promise.all([
+      page.waitForEvent('download', { timeout: 30000 }),
+      page.evaluate(() => document.getElementById('jpgGo').click()),
+    ]);
+    const exported = await page.evaluate(() => window.__kept.filter((k) => k.scale >= 1 && /950/.test(k.text)));
+    await page.evaluate(() => document.getElementById('btnJpg').click());
+    check(
+      "Edit Object: the retyped line is in the PDF's own font on its thumbnail and in Pages to JPG",
+      !!thumb && thumb.pageFont && exported.length > 0 && exported.every((k) => k.pageFont) && !!jpg,
+      { thumb, exported },
     );
     const second = await pick(120, 674);
     await page.keyboard.press('Escape');
