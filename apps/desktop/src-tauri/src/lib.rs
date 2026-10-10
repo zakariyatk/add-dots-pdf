@@ -29,6 +29,7 @@ use tauri::{Emitter, Manager};
 
 mod ocr;
 mod pdfium;
+mod store;
 use tauri_plugin_dialog::DialogExt;
 
 #[derive(Default)]
@@ -550,6 +551,33 @@ fn open_store() -> Result<(), String> {
     }
 }
 
+/// Whether the Microsoft Store has a newer version of this app; null when
+/// this is not a Store install, such as the setup .exe (store.rs).
+#[tauri::command]
+async fn store_update() -> Result<Option<bool>, String> {
+    tauri::async_runtime::spawn_blocking(store::available)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Installs the Store's update from the app: Windows asks in a dialog of its
+/// own, closes the app, updates it and starts it again (store.rs).
+#[tauri::command]
+async fn store_install(app: tauri::AppHandle, window: tauri::WebviewWindow) -> Result<store::Installed, String> {
+    #[cfg(windows)]
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+    #[cfg(not(windows))]
+    let hwnd = {
+        let _ = window;
+        0
+    };
+    let on_main: store::OnMain =
+        Box::new(move |f| app.run_on_main_thread(f).map_err(|e| e.to_string()));
+    tauri::async_runtime::spawn_blocking(move || store::install(hwnd, on_main))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -592,6 +620,8 @@ pub fn run() {
             range_close,
             save_file,
             open_store,
+            store_update,
+            store_install,
             new_window,
             pdf_native_status,
             pdf_open,

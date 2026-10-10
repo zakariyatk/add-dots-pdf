@@ -5,10 +5,14 @@
    - On the website the service worker fetches a new version by itself
      (js/pwa.js). With no document open the page simply reloads into it; with
      one open, the bar below says an update is ready and offers to take it.
-   - The Windows and phone apps carry every file and do not change on their
-     own. They load latest.js from the website, which names the build the
-     website has; when that is newer than this one, the bar offers the update:
-     on Windows, this app's page in the Microsoft Store.
+   - The Windows app from the Microsoft Store asks the Store itself whether
+     it has a newer version (src-tauri/src/store.rs), and installs it from
+     the app. The website is no guide there: a build reaches the Store only
+     once it is submitted and certified, days after the website has it.
+   - The setup .exe and the phone apps carry every file and do not change on
+     their own. They load latest.js from the website, which names the build
+     the website has; when that is newer than this one, the bar offers the
+     update: on Windows, this app's page in the Microsoft Store.
    - After any update, the first start shows what is new (whatsnew.json,
      built into js/build.js).
 
@@ -164,9 +168,40 @@
     }
   }
 
+  /* the Store's install: the Store has a newer version */
+  function offerStoreUpdate() {
+    const later = (get(LATER) || '').split('|');
+    if (later[0] === 'store' && Date.now() - (+later[1] || 0) < 86400000) return;
+    showBar('An update for ADD DOTS PDF is available',
+      'The Microsoft Store has a new version. The app closes to install it, then starts again.',
+      [{ label: 'Update', primary: true, run: function () {
+        if (!window.confirm('ADD DOTS PDF closes to install the update. ' +
+                            'Save your PDFs first. Install the update now?')) return;
+        X.storeInstall().then(function (r) {
+          if (r === 'failed') {
+            X.toast('The Microsoft Store could not install the update; opening its page');
+            X.openStore().catch(function () {});
+          } else if (r === 'nothing') {
+            X.toast('ADD DOTS PDF is up to date');
+          }
+        }, function () {
+          X.openStore().catch(function () {
+            X.toast('Open the Microsoft Store, then Library, to update ADD DOTS PDF');
+          });
+        });
+      } }, { label: 'Later', run: function () { set(LATER, 'store|' + Date.now()); } }]);
+  }
+
   function checkApp() {
     if (!(IN_DESKTOP || IN_PHONE) || !BUILD || IN_FRAME) return;
-    fetchLatest().then(offerAppUpdate);
+    /* the Store's install asks the Store; null means this is not one */
+    const store = IN_DESKTOP && X.storeUpdate
+      ? X.storeUpdate().catch(function () { return false; })
+      : Promise.resolve(null);
+    store.then(function (has) {
+      if (has === true) offerStoreUpdate();
+      else if (has === null) fetchLatest().then(offerAppUpdate);
+    });
   }
 
   /* ---------------- after an update: what is new ---------------- */

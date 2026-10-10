@@ -83,6 +83,11 @@
   }
   /* an update: this app's page in the Microsoft Store (js/update.js) */
   api.openStore = function () { return T.core.invoke('open_store'); };
+  /* whether the Store has a newer version: true, false, or null when this
+     is not the Store's install (the setup .exe) */
+  api.storeUpdate = function () { return T.core.invoke('store_update'); };
+  /* installs it from the app: 'completed', 'canceled', 'nothing' or 'failed' */
+  api.storeInstall = function () { return T.core.invoke('store_install'); };
 
   api.saveFile = function (data, name, type) {
     return toBytes(data).then(function (body) {
