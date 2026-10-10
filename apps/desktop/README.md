@@ -124,3 +124,11 @@ certificate, starts it from its Start menu entry and removes it, then uploads
 the unsigned `.msix` as the `windows-store-msix` artifact. That file is what
 goes to Partner Center: the Store signs it, so no code-signing certificate is
 needed, and Store installs update themselves.
+
+`.github/workflows/store.yml` (Actions → **Microsoft Store** → Run workflow)
+submits it: it takes that artifact from the newest green CI run on `main` and
+uploads it to Partner Center with Microsoft's Store CLI (`msstore publish`),
+which submits it for certification. It needs the `PARTNER_CENTER_*` secrets
+listed at the top of the workflow. With the repository variable
+`STORE_AUTO_SUBMIT` set to `true` it also runs by itself after every green CI
+run on `main`.

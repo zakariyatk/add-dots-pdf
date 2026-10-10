@@ -1,0 +1,101 @@
+name: Microsoft Store
+
+# Submits the Windows app to the Microsoft Store: the MSIX that CI built
+# (the windows-store-msix artifact of a CI run on main), uploaded to the
+# product ADD DOTS PDF (9PGHPBRMLQMS) in Partner Center with Microsoft's
+# Store CLI (msstore), which replaces the package and submits it for
+# certification. The rest of the Store listing stays as it is.
+#
+#   - Actions -> Microsoft Store -> Run workflow: the newest green CI run on
+#     main, or the run given by its id. "Submit" off leaves it as a draft in
+#     Partner Center, to look over and submit there.
+#   - after CI passes on main, by itself, only while the repository variable
+#     STORE_AUTO_SUBMIT is true (a submission waiting for certification is
+#     replaced by the next one, so it is off unless asked for).
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions), from a
+# Microsoft Entra application added in Partner Center (Account settings ->
+# User management -> Microsoft Entra applications) with the Manager role:
+#   PARTNER_CENTER_TENANT_ID      the tenant ID
+#   PARTNER_CENTER_CLIENT_ID      the application (client) ID
+#   PARTNER_CENTER_CLIENT_SECRET  a key made for it there
+#   PARTNER_CENTER_SELLER_ID      Account settings -> Legal info -> Seller ID
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: CI run to take the MSIX from (empty for the newest green one on main)
+        required: false
+        default: ''
+      submit:
+        description: Submit for certification (off leaves a draft)
+        type: boolean
+        default: true
+
+concurrency:
+  group: store
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  submit:
+    name: Submit to the Microsoft Store
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (vars.STORE_AUTO_SUBMIT == 'true' &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: windows-latest
+    steps:
+      - name: Which CI run
+        id: run
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FROM_EVENT: ${{ github.event.workflow_run.id }}
+          FROM_INPUT: ${{ github.event.inputs.run_id }}
+        run: |
+          $id = if ($env:FROM_EVENT) { $env:FROM_EVENT } elseif ($env:FROM_INPUT) { $env:FROM_INPUT } else {
+            gh run list -R $env:GITHUB_REPOSITORY --workflow ci.yml --branch main --event push `
+              --status success --limit 1 --json databaseId --jq '.[0].databaseId'
+          }
+          if (-not ($id -match '^\d+$')) { throw "no green CI run on main to take the MSIX from" }
+          "CI run $id"
+          "id=$id" >> $env:GITHUB_OUTPUT
+      - uses: actions/download-artifact@v4
+        with:
+          name: windows-store-msix
+          path: msix
+          run-id: ${{ steps.run.outputs.id }}
+          github-token: ${{ github.token }}
+      - uses: microsoft/microsoft-store-apppublisher@v1.4
+      - name: Upload and submit
+        shell: pwsh
+        env:
+          TENANT: ${{ secrets.PARTNER_CENTER_TENANT_ID }}
+          CLIENT: ${{ secrets.PARTNER_CENTER_CLIENT_ID }}
+          SECRET: ${{ secrets.PARTNER_CENTER_CLIENT_SECRET }}
+          SELLER: ${{ secrets.PARTNER_CENTER_SELLER_ID }}
+          NO_COMMIT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.submit == 'false' }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not ($env:TENANT -and $env:CLIENT -and $env:SECRET -and $env:SELLER)) {
+            throw 'the PARTNER_CENTER_* secrets are not set (see the top of .github/workflows/store.yml)'
+          }
+          $msix = @(Get-ChildItem msix -Filter *.msix)
+          if ($msix.Count -ne 1) { throw "expected one .msix in the artifact, found $($msix.Count)" }
+          "package: $($msix[0].Name)"
+          msstore reconfigure --tenantId $env:TENANT --sellerId $env:SELLER --clientId $env:CLIENT --clientSecret $env:SECRET
+          if ($LASTEXITCODE) { throw "msstore reconfigure failed ($LASTEXITCODE)" }
+          $publish = @('publish', $msix[0].FullName, '--appId', '9PGHPBRMLQMS')
+          if ($env:NO_COMMIT -eq 'true') { $publish += '--noCommit' }
+          msstore @publish
+          if ($LASTEXITCODE) { throw "msstore publish failed ($LASTEXITCODE)" }
