@@ -47,8 +47,16 @@ nothing outside the app.
   comes as a new installer, so there is no offline copy to keep and no
   install offer.
 
-Not in the desktop app yet: share links (they need the web server's API), and
-updates from inside the app.
+- **Updates from the Store.** `src-tauri/src/store.rs` asks the Microsoft
+  Store (Windows.Services.Store) whether it has a newer package of the app,
+  and installs it from the app: Windows asks in a dialog of its own, closes
+  the app, updates it and starts it again (`js/update.js`). The website's
+  build is no guide for the Store install, as a build reaches the Store only
+  once its MSIX is submitted in Partner Center and certified. The setup
+  `.exe` has no package identity, so it still compares with the website and
+  opens the Store page.
+
+Not in the desktop app yet: share links (they need the web server's API).
 
 ## Commands
 
