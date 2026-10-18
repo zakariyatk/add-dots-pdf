@@ -58,6 +58,7 @@ const SHELL = [
   'js/books.js',
   'js/toolprops.js',
   'js/toolbar.js',
+  'js/appbar.js',
   'js/site-nav.js',
   'js/winonly.js',
   'js/perf.js',
