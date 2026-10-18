@@ -974,6 +974,10 @@ body.props-in-ribbon #panTool #mpExt .btn {
   --cur-crop: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M12 2.5V9M12 15v6.5M2.5 12H9M15 12h6.5' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M12 2.5V9M12 15v6.5M2.5 12H9M15 12h6.5' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='12' cy='12' r='.9' fill='black' stroke='white' stroke-width='.8'/%3E%3Cpath d='M16.5 15v5.5h5.5M15 16.5h5.5V22' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M16.5 15v5.5h5.5M15 16.5h5.5V22' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, crosshair;
   --cur-hand: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M9 11V4.6a1.6 1.6 0 0 1 3.2 0V10M12.2 10V3.8a1.6 1.6 0 0 1 3.2 0V10M15.4 10.4V5.6a1.6 1.6 0 0 1 3.2 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-4.5-2l-3-3.4a1.7 1.7 0 0 1 2.4-2.4L9 15.4V11' fill='white' stroke='black' stroke-width='1.2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, grab;
   --cur-hand-shut: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M7.2 12.2V11a1.6 1.6 0 0 1 3.2 0v-.6a1.6 1.6 0 0 1 3.2 0v.3a1.6 1.6 0 0 1 3.2 0v.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.4a5.2 5.2 0 0 1-4.1-2l-1.9-2.6a1.6 1.6 0 0 1 2.4-2z' fill='white' stroke='black' stroke-width='1.2' stroke-linejoin='round'/%3E%3Cpath d='M10.4 11v2.2M13.6 10.7v2.3M16.8 11v2.2' stroke='black' stroke-width='1' fill='none'/%3E%3C/svg%3E") 12 12, grabbing;
+  /* a side pulled up and down, or across; a mark picked up to move */
+  --cur-ns: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M12 3.5v17M12 3.5l-3.4 3.4M12 3.5l3.4 3.4M12 20.5l-3.4-3.4M12 20.5l3.4-3.4' stroke='white' stroke-width='3.3' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M12 3.5v17M12 3.5l-3.4 3.4M12 3.5l3.4 3.4M12 20.5l-3.4-3.4M12 20.5l3.4-3.4' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, ns-resize;
+  --cur-ew: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M3.5 12h17M3.5 12l3.4-3.4M3.5 12l3.4 3.4M20.5 12l-3.4-3.4M20.5 12l-3.4 3.4' stroke='white' stroke-width='3.3' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M3.5 12h17M3.5 12l3.4-3.4M3.5 12l3.4 3.4M20.5 12l-3.4-3.4M20.5 12l-3.4 3.4' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, ew-resize;
+  --cur-move: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M12 3.5v17M12 3.5l-3.4 3.4M12 3.5l3.4 3.4M12 20.5l-3.4-3.4M12 20.5l3.4-3.4M3.5 12h17M3.5 12l3.4-3.4M3.5 12l3.4 3.4M20.5 12l-3.4-3.4M20.5 12l-3.4 3.4' stroke='white' stroke-width='3.3' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M12 3.5v17M12 3.5l-3.4 3.4M12 3.5l3.4 3.4M12 20.5l-3.4-3.4M12 20.5l3.4-3.4M3.5 12h17M3.5 12l3.4-3.4M3.5 12l3.4 3.4M20.5 12l-3.4-3.4M20.5 12l-3.4 3.4' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, move;
   /* a single dot, matching the pin mark itself — no crosshair badge */
   --cur-pin: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Ccircle cx='12' cy='12' r='8' fill='%23E03616' stroke='white' stroke-width='2'/%3E%3C/svg%3E") 12 12, pointer;
 }
@@ -997,6 +1001,20 @@ body[data-tool="select"] .anno .redact-mk { cursor: var(--cur-arrow-obj) }
 .anno .kn[data-cur="nesw"] { cursor: var(--cur-nesw) }
 .anno .kn[data-cur="point"] { cursor: var(--cur-arrow-point) }
 .anno .kn.turn, .anno .kn.turn:active { cursor: var(--cur-rotate) }
+.anno .kn[data-cur="ns"] { cursor: var(--cur-ns) }
+.anno .kn[data-cur="ew"] { cursor: var(--cur-ew) }
+body[data-tool="select"] .anno .picked,
+body[data-tool="select"] .anno .picked * { cursor: var(--cur-move) }
+
+/* the grips as Acrobat draws them: a thin blue box, round corners, a pill on
+   each side, and the turn grip a blue disc with the turn arrow in it */
+.anno .hnd .halo { fill: none; stroke: #1473E6; stroke-width: 1; stroke-dasharray: none; opacity: 1 }
+.anno .hnd .kn { fill: #FFFFFF; stroke: #1473E6; stroke-width: 1.3 }
+.anno .hnd .kn:hover { fill: #DCEBFF }
+.anno .hnd .kn.turn { fill: #1473E6; stroke: #FFFFFF; stroke-width: 1.5 }
+.anno .hnd .kn.turn:hover { fill: #0D5DC2 }
+.anno .hnd .turnic { fill: none; stroke: #FFFFFF; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none }
+.anno .hnd .stem { stroke: #1473E6; stroke-width: 1.2; opacity: 1 }
 
 /* the hand */
 body[data-tool="pan"] .capture { cursor: var(--cur-hand) }

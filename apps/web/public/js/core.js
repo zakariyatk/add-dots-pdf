@@ -752,7 +752,7 @@
     $('openPanel').hidden = true;
     $('pwRow').classList.remove('show');
     /* set the rail flag only — syncAll below builds the thumbnails and lays out */
-    if (!isMobile()) { rail.hidden = false; $('btnRail').classList.add('on'); }
+    if (!isMobile() && !EXT.railOnPress) { rail.hidden = false; $('btnRail').classList.add('on'); }
     syncScrim();
     await syncAll();
     goTo(1);
@@ -2246,7 +2246,11 @@
         });
       } else {
         const sel = it.shapes[S.sel.i];
-        if (sel && sel.t !== 'pin') it.anno.appendChild(handlesEl(it, sel, vp, S.sel.i));
+        if (sel && sel.t !== 'pin') {
+          const el = it.anno.children[S.sel.i];
+          if (el && el.classList) el.classList.add('picked');      /* the move cursor */
+          it.anno.appendChild(handlesEl(it, sel, vp, S.sel.i));
+        }
       }
     }
   }
@@ -2504,6 +2508,21 @@
     let sx = w ? (p[0] - fix[0]) / w : 1, sy = h ? (p[1] - fix[1]) / h : 1;
     sx = Math.max(0.05, sx); sy = Math.max(0.05, sy);
     if (uniform) sx = sy = Math.max(sx, sy);
+    scaleBy(s, o, fix, sx, sy);
+  }
+  /* A side's grip stretches one way only, the far side staying put. Sides
+     go round as the corners do: 0 the one at y1, 1 at x2, 2 at y2, 3 at x1. */
+  function scaleSide(s, o, side, p) {
+    const b = markBox(o);
+    if (side === 0 || side === 2) {
+      const pull = side === 0 ? b.y1 : b.y2, f = side === 0 ? b.y2 : b.y1, h = pull - f;
+      scaleBy(s, o, [b.x1, f], 1, h ? Math.max(0.05, (p[1] - f) / h) : 1);
+    } else {
+      const pull = side === 1 ? b.x2 : b.x1, f = side === 1 ? b.x1 : b.x2, w = pull - f;
+      scaleBy(s, o, [f, b.y1], w ? Math.max(0.05, (p[0] - f) / w) : 1, 1);
+    }
+  }
+  function scaleBy(s, o, fix, sx, sy) {
     function f(q) { return [fix[0] + (q[0] - fix[0]) * sx, fix[1] + (q[1] - fix[1]) * sy]; }
     if (o.quads) {
       s.quads = o.quads.map(function (q) {
@@ -2606,6 +2625,21 @@
     s.b = [c1[0] + w / 2, c1[1] + h / 2];
   }
 
+  /* a box's side pulled out or in, the opposite side fixed, turned or not */
+  function stretchBox(s, o, side, p) {
+    const b = boxOf(o), c0 = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2], r = o.r || 0;
+    const loc = rotPt(p, c0, -r);
+    let x1 = b.x1, x2 = b.x2, y1 = b.y1, y2 = b.y2;
+    if (side === 0) y1 = Math.min(loc[1], y2 - 1);
+    else if (side === 1) x2 = Math.max(loc[0], x1 + 1);
+    else if (side === 2) y2 = Math.max(loc[1], y1 + 1);
+    else x1 = Math.min(loc[0], x2 - 1);
+    const w = x2 - x1, h = y2 - y1;
+    const c1 = rotPt([(x1 + x2) / 2, (y1 + y2) / 2], c0, r);
+    s.a = [c1[0] - w / 2, c1[1] - h / 2];
+    s.b = [c1[0] + w / 2, c1[1] + h / 2];
+  }
+
   function turnShape(s, o, d, p, snap) {
     const c = rotCenter(o);
     let delta = Math.atan2(p[1] - c[1], p[0] - c[0]) * 180 / Math.PI - d.a0;
@@ -2664,6 +2698,10 @@
       else resizeBox(s, o, d.extra, p, e.shiftKey);
     } else if (d.mode === 'bscale') {
       scaleMark(s, o, d.extra, p, e.shiftKey);
+    } else if (d.mode === 'bside') {
+      scaleSide(s, o, d.extra, p);
+    } else if (d.mode === 'side') {
+      stretchBox(s, o, d.extra, p);
     } else if (d.mode === 'turn') {
       turnShape(s, o, d, p, e.shiftKey);
     } else if (d.mode === 'size') {
@@ -3015,19 +3053,40 @@
   function handlesEl(it, s, vp, idx) {
     const g = document.createElementNS(SVGNS, 'g');
     g.setAttribute('class', 'hnd');
+    /* As Acrobat draws them: a round grip at each corner, a pill on each
+       side lying along it, and the turn grip a blue disc with the turn
+       arrow in it. */
     function knob(v, mode, extra, turn) {
-      const el = document.createElementNS(SVGNS, turn ? 'circle' : 'rect');
-      if (turn) { el.setAttribute('cx', v[0]); el.setAttribute('cy', v[1]); el.setAttribute('r', 6); }
-      else {
-        el.setAttribute('x', v[0] - 5); el.setAttribute('y', v[1] - 5);
-        el.setAttribute('width', 10); el.setAttribute('height', 10); el.setAttribute('rx', 2);
-      }
+      const el = document.createElementNS(SVGNS, 'circle');
+      el.setAttribute('cx', v[0]); el.setAttribute('cy', v[1]); el.setAttribute('r', turn ? 9 : 5);
       el.setAttribute('class', 'kn' + (turn ? ' turn' : ''));
       /* which cursor the grip wears: a point to drag, or a size to pull */
       el.dataset.cur = turn ? 'rotate' : (mode === 'pa' || mode === 'pb') ? 'point' : 'nwse';
       el.addEventListener('pointerdown', function (e) { beginDrag(it, idx, e, mode, extra); });
       g.appendChild(el);
+      if (turn) {
+        const ic = document.createElementNS(SVGNS, 'path');
+        ic.setAttribute('class', 'turnic');
+        ic.setAttribute('d', 'M' + (v[0] + 3.6) + ' ' + (v[1] - 2.2) + 'A4.2 4.2 0 1 0 ' + (v[0] + 3.9) + ' ' + (v[1] + 1.6) +
+          'M' + (v[0] + 3.8) + ' ' + (v[1] - 5) + 'V' + (v[1] - 2) + 'H' + (v[0] + 0.8));
+        g.appendChild(ic);
+      }
       return el;
+    }
+    /* the pill on the side from p0 to p1: up and down on a level side,
+       across on an upright one */
+    function sideGrip(p0, p1, mode, side) {
+      const mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2;
+      const ang = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]) * 180 / Math.PI;
+      const el = document.createElementNS(SVGNS, 'rect');
+      el.setAttribute('x', mx - 7); el.setAttribute('y', my - 3.5);
+      el.setAttribute('width', 14); el.setAttribute('height', 7); el.setAttribute('rx', 3.5);
+      el.setAttribute('transform', 'rotate(' + ang.toFixed(2) + ' ' + mx + ' ' + my + ')');
+      el.setAttribute('class', 'kn pill');
+      const level = Math.abs(Math.cos(ang * Math.PI / 180)) >= Math.abs(Math.sin(ang * Math.PI / 180));
+      el.dataset.cur = level ? 'ns' : 'ew';
+      el.addEventListener('pointerdown', function (e) { beginDrag(it, idx, e, mode, side); });
+      g.appendChild(el);
     }
     /* the turn grip sits off the top edge, along its outward normal */
     function turnGrip(p0, p1) {
@@ -3065,6 +3124,7 @@
       out.setAttribute('height', Math.max(4, qy2 - qy1 + pad * 2));
       g.appendChild(out);
       if (kind === 'bbox') {
+        q.forEach(function (v, i) { sideGrip(v, q[(i + 1) % 4], 'bside', i); });
         q.forEach(function (v, i) {
           knob(v, 'bscale', i).dataset.cur = (v[0] - (qx1 + qx2) / 2) * (v[1] - (qy1 + qy2) / 2) > 0 ? 'nwse' : 'nesw';
         });
@@ -3078,10 +3138,15 @@
       g.appendChild(out);
       /* each corner pulls along its own diagonal, as it sits on screen */
       const cx = (q[0][0] + q[2][0]) / 2, cy = (q[0][1] + q[2][1]) / 2;
+      /* a mark that keeps its proportions (a picture) has no sides to pull */
+      if (!(EXT.keepRatio[s.t] && EXT.keepRatio[s.t](s))) {
+        q.forEach(function (v, i) { sideGrip(v, q[(i + 1) % 4], 'side', i); });
+      }
       q.forEach(function (v, i) {
         knob(v, 'corner', i).dataset.cur = (v[0] - cx) * (v[1] - cy) > 0 ? 'nwse' : 'nesw';
       });
-      if (kind === 'rect') turnGrip(q[0], q[1]);      /* a 'box' (a stamp) does not turn */
+      /* off the top side, as in Acrobat; a 'box' (a stamp) does not turn */
+      if (kind === 'rect') turnGrip(q[3], q[2]);
     } else if (kind === 'line' || kind === 'arrow' || kind === 'ends') {
       const a = vp.convertToViewportPoint(s.a[0], s.a[1]);
       const b = vp.convertToViewportPoint(s.b[0], s.b[1]);
@@ -3096,8 +3161,15 @@
       if (kind !== 'ends') turnGrip(a, b);
     } else if (s.t === 'text') {
       const q = textQuad(s, vp);
-      knob(q[2], 'size');                       /* pull the far corner to resize the type */
-      turnGrip(q[0], q[1]);
+      const out = document.createElementNS(SVGNS, 'polygon');
+      out.setAttribute('class', 'halo'); out.setAttribute('points', vpts(q));
+      g.appendChild(out);
+      /* any corner pulled out or in sizes the type */
+      const cx = (q[0][0] + q[2][0]) / 2, cy = (q[0][1] + q[2][1]) / 2;
+      q.forEach(function (v) {
+        knob(v, 'size').dataset.cur = (v[0] - cx) * (v[1] - cy) > 0 ? 'nwse' : 'nesw';
+      });
+      turnGrip(q[3], q[2]);                     /* off the top side, as in Acrobat */
     }
     return g;
   }
@@ -5558,7 +5630,7 @@
     $('openPanel').hidden = true;
     $('errMsg').hidden = true;
     $('pwRow').classList.remove('show');
-    if (!isMobile()) { rail.hidden = false; $('btnRail').classList.add('on'); }
+    if (!isMobile() && !EXT.railOnPress) { rail.hidden = false; $('btnRail').classList.add('on'); }
     syncScrim();
     await syncAll();
     goTo(Math.max(1, Math.min(S.items.length, d.current || 1)));

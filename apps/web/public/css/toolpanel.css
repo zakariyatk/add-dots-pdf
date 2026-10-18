@@ -1,0 +1,177 @@
+/* ADD DOTS PDF — Tools as Acrobat lays them out (js/toolpanel.js)
+   ----------------------------------------------------------------
+   Only on a wide screen, where body has .acro: a row of tabs, the tools of
+   the tab in a panel down the left, the tools reached for most in a rail
+   down the right, and the page and zoom in a bar floating over the page. */
+
+/* ---------- the tabs: All tools, View, Edit, Draw, Convert, Sign ---------- */
+body.acro #ribTabs #ribInsert,
+body.acro #ribTabs #ribPage,
+body.acro #ribTabs #ribDoc,
+body.acro #ribTabs #ribBooks,
+body.acro #ribTabs #ribTool { display: none }
+body.acro #ribTabs #ribAll { order: 0 }
+body.acro #ribTabs #ribView { order: 1 }
+body.acro #ribTabs #ribEdit { order: 2 }
+body.acro #ribTabs #ribDraw { order: 3 }
+body.acro #ribTabs #ribConvert { order: 4 }
+body.acro #ribTabs #ribForm { order: 5 }
+body.acro #ribTabs .tab { order: 6 }
+/* core's own .on follows the panel it last showed; the tab lit here is the
+   one whose tools are in the panel */
+body.acro #ribTabs .tab.on { color: var(--text); font-weight: 400 }
+body.acro #ribTabs .tab.on::after { content: none }
+body.acro #ribTabs .tab.acro-on { color: var(--marker-ink); font-weight: 650 }
+body.acro #ribTabs .tab.acro-on::after {
+  content: ""; position: absolute; left: 12px; right: 12px; bottom: -9px; height: 2px;
+  background: var(--marker); border-radius: 2px
+}
+
+/* ---------- the panel down the left ---------- */
+body.acro #ribbon {
+  flex-direction: column; align-items: stretch; flex: none; width: 252px;
+  overflow-y: auto; overflow-x: hidden; padding: 4px 10px 18px; gap: 0;
+  border-right: 1px solid var(--line); box-shadow: none
+}
+body.acro #ribbon[hidden] { display: none }
+body.acro.acro-home .qrail,
+body.acro.acro-home .srail { visibility: hidden }
+body.acro.acro-home .toolstrip { display: none }
+body.acro #ribbon .rpan { display: flex; flex-direction: column; align-items: stretch; gap: 0 }
+body.acro #ribbon .rpan[hidden] { display: none }
+body.acro #ribbon #panPage { order: 1 }
+body.acro #ribbon #panInsert { order: 2 }
+body.acro #ribbon #panEdit { order: 3 }
+body.acro #ribbon #panDoc { order: 4 }
+body.acro #ribbon #panBooks { order: 5 }
+body.acro #ribbon .acro-head {
+  display: flex; align-items: center; justify-content: space-between; order: -1;
+  margin: 12px 4px 2px; font-size: 17px; font-weight: 650; color: var(--text)
+}
+body.acro #ribbon #acroClose { flex: none; width: 32px; min-height: 32px; height: 32px; padding: 0; justify-content: center }
+body.acro #ribbon #acroClose svg { width: 18px; height: 18px }
+body.acro #ribbon .sep,
+body.acro #ribbon .navtools,
+body.acro #ribbon .zoomval,
+body.acro #ribbon #tEditPan,
+body.acro #ribbon #tSelect,
+body.acro #ribbon #tDrawPan,
+body.acro #ribbon #tDrawSelect { display: none }
+body.acro #ribbon #tSelect + .tsep,
+body.acro #ribbon #tDrawSelect + .tsep { display: none }
+body.acro #ribbon .grp { flex-direction: row; flex-wrap: wrap; align-items: center; gap: 1px }
+body.acro #ribbon .grp[data-head]::before {
+  content: attr(data-head); flex: 0 0 100%; margin: 16px 6px 6px;
+  font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-dim)
+}
+body.acro #ribbon .btn {
+  flex: 1 1 100%; flex-direction: row; justify-content: flex-start; gap: 12px;
+  height: 36px; min-height: 36px; min-width: 0; max-width: none; padding: 0 8px; border-radius: 6px
+}
+body.acro #ribbon .btn::after {
+  font-size: 13.5px; line-height: 1.2; color: var(--text); text-align: left;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0
+}
+body.acro #ribbon .btn:disabled::after { color: var(--text-dim) }
+body.acro #ribbon .btn.on { background: var(--chrome-2) }
+body.acro #ribbon .btn.on::after { color: var(--marker-ink) }
+body.acro #ribbon .btn .lbl { display: none }
+body.acro #ribbon #btnTheme::after { content: attr(data-label) }
+/* a colour arrow sits beside its tool, not on a row of its own */
+body.acro #ribbon .btn:has(+ .btn[id$="Dd"]) { flex: 1 1 calc(100% - 34px) }
+body.acro #ribbon .btn[id$="Dd"] { flex: 0 0 32px; padding: 0; justify-content: center }
+body.acro #ribbon .btn[id$="Dd"]::after { content: none }
+body.acro #ribbon .tsep { flex: 0 0 100%; width: auto; height: 1px; margin: 5px 6px; background: var(--line) }
+body.acro #ribbon .cnt { margin-left: auto }
+
+/* All tools: a list of the tabs */
+body.acro #panAll .btn { height: 52px; min-height: 52px }
+body.acro #panAll .btn::after { white-space: normal }
+body.acro #panAll .btn small { display: none }
+#panAll { display: none }
+body.acro #ribbon #panAll:not([hidden]) { display: flex }
+
+/* ---------- the tool in hand: its options in a strip over the page ----------
+   A row of its own that is always there, so picking a tool up or putting it
+   down never moves the page under the pointer, and nothing covers it */
+.toolstrip { display: none }
+body.acro .toolstrip {
+  display: flex; align-items: center; flex: none; box-sizing: border-box; height: 60px;
+  padding: 2px 12px; overflow: hidden; border-bottom: 1px solid var(--line)
+}
+/* a long hint is cut to two lines rather than make the row taller */
+body.acro .toolstrip .modebar .hint {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-width: 420px
+}
+body.acro .toolstrip:not(:has(> .rpan:not([hidden])))::before {
+  content: "Pick a tool, and its options show here.";
+  font-size: 12.5px; color: var(--text-dim); padding-left: 4px
+}
+body.acro .toolstrip .rpan { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto }
+body.acro .toolstrip .navtools,
+body.acro .toolstrip .navtools + .sep { display: none }
+body.acro .toolstrip .btn { height: 40px; min-height: 40px }
+
+/* ---------- the quick tools, beside the page on the left ---------- */
+.qrail { display: none }
+body.acro .qrail {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; flex: none; order: 1;
+  align-self: flex-start; margin: 12px 0 12px 10px; padding: 8px 6px;
+  background: var(--chrome); border: 1px solid var(--line); border-radius: 12px
+}
+body.acro .qrail::before {
+  content: ""; width: 26px; height: 4px; border-radius: 2px; background: var(--line); margin-bottom: 4px
+}
+body.acro .qrail .btn {
+  width: 40px; height: 40px; min-width: 40px; padding: 0; justify-content: center; border-radius: 8px
+}
+body.acro .qrail .btn svg { width: 22px; height: 22px }
+/* the page's colour on the accent: white on blue, dark on white in the dark interface */
+body.acro .qrail .btn.on { background: var(--marker); color: var(--chrome) }
+body.acro .qrail .btn.on svg { stroke: currentColor }
+
+/* ---------- the page, and the sidebar on its right ---------- */
+body.acro .main > #ribbon { order: 0 }
+body.acro .main > .stage { order: 2 }
+body.acro .main > #rail { order: 3; border-right: none; border-left: 1px solid var(--line) }
+
+/* ---------- the rail down the right: side panels, then page and zoom ---------- */
+.srail, .sbrot { display: none }
+body.acro .srail {
+  display: flex; flex-direction: column; align-items: center; gap: 4px; flex: none; order: 4;
+  width: 54px; padding: 10px 0 12px; overflow-y: auto; scrollbar-width: none;
+  background: var(--chrome); border-left: 1px solid var(--line)
+}
+body.acro .srail > .btn {
+  width: 40px; height: 40px; min-width: 40px; padding: 0; justify-content: center; border-radius: 8px
+}
+body.acro .srail > .btn svg { width: 22px; height: 22px }
+body.acro .srail > .btn.on { background: var(--chrome-2); color: var(--marker-ink) }
+body.acro .srail .sgrow { flex: 1 0 12px }
+body.acro[data-skin="wps"] .srail .statusbar {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; position: static;
+  width: auto; height: auto; padding: 8px 0 0; margin: 0; border: none; border-top: 1px solid var(--line);
+  border-radius: 0; background: none; box-shadow: none
+}
+body.acro[data-skin="wps"] .srail .statusbar[hidden] { display: none }
+body.acro .srail .statusbar [data-a="rail"],
+body.acro .srail .statusbar [data-a="first"],
+body.acro .srail .statusbar [data-a="last"],
+body.acro .srail .statusbar .sbzoom,
+body.acro .srail .statusbar .sbgrow,
+body.acro .srail .statusbar .sbsep { display: none }
+body.acro .srail .statusbar .sbpage { order: 1; flex-direction: column; gap: 4px; margin-bottom: 2px }
+body.acro .srail .statusbar .sbpage input { width: 40px; text-align: center }
+body.acro .srail .statusbar [data-a="prev"] { order: 2 }
+body.acro .srail .statusbar [data-a="next"] { order: 3; margin-bottom: 6px }
+body.acro .srail .statusbar [data-a="prev"] svg,
+body.acro .srail .statusbar [data-a="next"] svg { transform: rotate(90deg) }
+body.acro .srail .statusbar .sbrot { display: inline-flex; order: 4 }
+body.acro .srail .statusbar [data-a="fitw"] { order: 5 }
+body.acro .srail .statusbar [data-a="fitp"] { order: 6 }
+body.acro .srail .statusbar [data-a="two"] { order: 7 }
+body.acro .srail .statusbar [data-a="in"] { order: 8; margin-top: 6px }
+body.acro .srail .statusbar .sbpct { order: 9; min-width: 0; text-align: center; font-size: 11px }
+body.acro .srail .statusbar [data-a="out"] { order: 10 }
+body.acro .srail .statusbar button { width: 36px; height: 32px; justify-content: center }
+body.acro .srail .statusbar svg { width: 19px; height: 19px }
