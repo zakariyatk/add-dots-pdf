@@ -1168,6 +1168,11 @@
   /* the website's own menu: the strip has the apps and About instead */
   body.has-appbar .adnav{display:none}
   .appbar .abgrow{flex:1;align-self:stretch}
+  .appbar .ablogo{flex:none;width:24px;height:24px;margin:0 6px 0 2px;display:block}
+  .appbar .ablogo svg,.abpop .ablogo svg{width:100%;height:100%;display:block}
+  .abpop .abappic.ablogo{background:none;padding:0}
+  /* black on the dark strip: a hairline keeps its edge */
+  body:not([data-ui="light"]) :is(.appbar,.abpop) .ablogo svg{border-radius:20%;box-shadow:0 0 0 1px #3A3A3A}
   .appbar .abbtn{height:30px;display:inline-flex;align-items:center;gap:7px;padding:0 10px;border:1px solid transparent;
                  border-radius:6px;background:none;color:inherit;font:inherit;cursor:pointer;white-space:nowrap}
   .appbar .abbtn svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;flex:none}
