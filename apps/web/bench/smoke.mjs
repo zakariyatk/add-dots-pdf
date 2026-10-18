@@ -1762,7 +1762,7 @@ try {
     at = await onScreen('.sig-mk image');
     await page.mouse.click(at.x, at.y);
     const knobs = await page.evaluate(() =>
-      [...document.querySelectorAll('.hnd .kn:not(.turn)')].map((k) => {
+      [...document.querySelectorAll('.hnd .kn:not(.turn):not(.pill)')].map((k) => {
         const r = k.getBoundingClientRect();
         return [r.left + r.width / 2, r.top + r.height / 2];
       }),
@@ -1783,6 +1783,27 @@ try {
       'a corner scales it freely, without holding its proportions',
       s2.w > s1.w * 1.2 && Math.abs(s2.w / s2.h - s1.w / s1.h) > 0.05,
       { before: [s1.w, s1.h], after: [s2.w, s2.h] },
+    );
+    /* the pill on its right side, as in Acrobat: across only, with the
+       left-right cursor */
+    const sidePill = await page.evaluate(() => {
+      const ps = [...document.querySelectorAll('.hnd .kn.pill')].map((k) => {
+        const r = k.getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2, cur: k.dataset.cur };
+      });
+      return ps.sort((a, b) => b.x - a.x)[0] || null;
+    });
+    if (sidePill) {
+      await page.mouse.move(sidePill.x, sidePill.y);
+      await page.mouse.down();
+      await page.mouse.move(sidePill.x + 50, sidePill.y + 20, { steps: 6 });
+      await page.mouse.up();
+    }
+    const sStretched = await sig();
+    check(
+      'a side grip stretches it one way only, and wears the left-right cursor',
+      !!sidePill && sidePill.cur === 'ew' && sStretched.w > s2.w + 10 && Math.abs(sStretched.h - s2.h) < 0.5,
+      { sidePill, before: [s2.w, s2.h], after: [sStretched.w, sStretched.h] },
     );
     await page.fill('#mpAngle', '20');
     await page.press('#mpAngle', 'Enter');
