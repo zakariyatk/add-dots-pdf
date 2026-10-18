@@ -2364,9 +2364,13 @@ try {
     await page.click('#btnCover');
     await page.waitForTimeout(600);
     const cover = await page.evaluate(() => {
+      /* the middle of where the pages go: inside the stage's padding (wider
+         on the left, beside the floating quick tools) */
       const S = window.ADDPDF.S,
-        st = document.getElementById('stage').getBoundingClientRect(),
-        mid = (st.left + st.right) / 2;
+        stEl = document.getElementById('stage'),
+        st = stEl.getBoundingClientRect(),
+        cs = getComputedStyle(stEl),
+        mid = (st.left + parseFloat(cs.paddingLeft) + st.right - parseFloat(cs.paddingRight)) / 2;
       const r = (i) => S.items[i].box.getBoundingClientRect();
       const [a, b, c, d] = [r(0), r(1), r(2), r(3)];
       return {
@@ -2708,6 +2712,57 @@ try {
         down.lit === 'ribEdit',
       { measuring, picked, down },
     );
+    /* the quick tools float over the page, just inside its left edge */
+    const floating = await page.evaluate(() => {
+      const q = document.getElementById('quickRail').getBoundingClientRect();
+      const s = document.getElementById('stage').getBoundingClientRect();
+      return {
+        position: getComputedStyle(document.getElementById('quickRail')).position,
+        inside: q.left >= s.left && q.right <= s.right,
+      };
+    });
+    check(
+      'the quick tools float over the page area',
+      floating.position === 'absolute' && floating.inside,
+      floating,
+    );
+
+    /* Ctrl + wheel near the left of a page that fits the width: the spot
+       under the pointer stays under it, rather than sliding to the middle */
+    const spotAt = (x, y) =>
+      page.evaluate(
+        ([x, y]) => {
+          const it = window.ADDPDF.S.items.find((i) => {
+            const r = i.box.getBoundingClientRect();
+            return y >= r.top && y <= r.bottom;
+          });
+          const r = it.box.getBoundingClientRect();
+          return { u: (x - r.left) / r.width, v: (y - r.top) / r.height, scale: window.ADDPDF.S.scale };
+        },
+        [x, y],
+      );
+    await page.evaluate(() => document.getElementById('btnFitW').click());
+    await page.waitForTimeout(400);
+    const aim = await page.evaluate(() => {
+      const r = window.ADDPDF.S.items[0].box.getBoundingClientRect();
+      return { x: Math.round(r.left + r.width * 0.2), y: Math.round(r.top + Math.min(r.height * 0.3, 200)) };
+    });
+    await page.mouse.move(aim.x, aim.y);
+    const zb = await spotAt(aim.x, aim.y);
+    await page.keyboard.down('Control');
+    for (let i = 0; i < 4; i++) {
+      await page.mouse.wheel(0, -100);
+      await page.waitForTimeout(60);
+    }
+    await page.keyboard.up('Control');
+    await page.waitForTimeout(900);
+    const za = await spotAt(aim.x, aim.y);
+    check(
+      'Ctrl + wheel zooms at the pointer: the spot under it stays there',
+      za.scale > zb.scale * 1.5 && Math.abs(za.u - zb.u) < 0.02 && Math.abs(za.v - zb.v) < 0.02,
+      { before: zb, after: za },
+    );
+
     /* narrow, the ribbon is the ribbon again */
     await page.setViewportSize({ width: 860, height: 900 });
     await page.waitForTimeout(300);

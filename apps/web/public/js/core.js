@@ -1170,7 +1170,10 @@
     const it = S.items[0];
     paintSpread();
     if (!it || !it.page) return;
-    let avail = stage.clientWidth - 34;
+    /* the stage's own side padding (16 + 16 here, more on the left where
+       the quick tools float over the page: css/toolpanel.css) */
+    const pad = getComputedStyle(stage);
+    let avail = stage.clientWidth - (parseFloat(pad.paddingLeft) || 16) - (parseFloat(pad.paddingRight) || 16) - 2;
     const availH = stage.clientHeight - 46;
     /* side by side, the page gets half of the stage less the gutter */
     if (trSideBySide()) avail = Math.max(120, (avail - TR.gap) / 2);
@@ -1369,7 +1372,10 @@
   }
 
   const ZOOM_MIN = 0.2, ZOOM_MAX = 6;
-  function zoomTo(next, cx, cy) {
+  /* held: an anchor taken before the zoom began (a glide's), kept rather
+     than measured afresh, so a spot that slid while the page was still
+     centred is put back under the pointer once there is room to scroll */
+  function zoomTo(next, cx, cy, held) {
     if (!S.items.length) return;
     next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
     if (Math.abs(next - S.scale) < 0.0005) return;
@@ -1378,8 +1384,8 @@
     landJump();
     jumpHold = null;
     const r = stage.getBoundingClientRect();
-    const anchor = grabAnchor(cx == null ? r.left + r.width / 2 : cx,
-                              cy == null ? r.top + r.height / 2 : cy);
+    const anchor = held || grabAnchor(cx == null ? r.left + r.width / 2 : cx,
+                                      cy == null ? r.top + r.height / 2 : cy);
     S.scale = next;
     document.body.classList.add('zooming');     /* scroll jumps, never animates */
     zoomPreview();
@@ -1399,7 +1405,12 @@
      over a few frames instead of jumping a fifth at once. Further notches
      while it moves add to where it is heading, so a quick spin zooms far and
      still lands softly. The point under the pointer stays put throughout. */
-  const glide = { target: 0, x: 0, y: 0, raf: 0, last: 0 };
+  /* The spot under the pointer is taken once, when the glide starts (or the
+     pointer moves), and held for every frame. Measured afresh each frame it
+     slid toward the middle while a page narrower than the window stays
+     centred, and the slips added up: a zoom at the left edge ended nearer
+     the centre. */
+  const glide = { target: 0, x: 0, y: 0, raf: 0, last: 0, anchor: null };
   function zoomGlide(next, cx, cy) {
     if (!S.items.length) return;
     glide.target = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
@@ -1407,6 +1418,7 @@
       const r = stage.getBoundingClientRect();
       cx = r.left + r.width / 2; cy = r.top + r.height / 2;
     }
+    if (glide.raf && (cx !== glide.x || cy !== glide.y)) glide.anchor = grabAnchor(cx, cy);
     glide.x = cx; glide.y = cy;
     clearTimeout(zoomTimer);
     if (glide.raf) return;
@@ -1414,6 +1426,7 @@
     anchorBox = null;
     const a = grabAnchor(cx, cy);
     anchorBox = a ? a.box : null;
+    glide.anchor = a;
     glide.last = performance.now();
     glide.raf = requestAnimationFrame(glideStep);
   }
@@ -1428,9 +1441,9 @@
     const cur = Math.log(S.scale), goal = Math.log(glide.target);
     let next = Math.exp(cur + (goal - cur) * k);
     if (Math.abs(goal - Math.log(next)) < 0.004) next = glide.target;
-    zoomTo(next, glide.x, glide.y);
+    zoomTo(next, glide.x, glide.y, glide.anchor);
     if (next !== glide.target) glide.raf = requestAnimationFrame(glideStep);
-    else zoomSettle(90);
+    else { glide.anchor = null; zoomSettle(90); }
   }
   function glideStop() {
     if (glide.raf) { cancelAnimationFrame(glide.raf); glide.raf = 0; }

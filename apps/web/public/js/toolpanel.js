@@ -153,6 +153,62 @@
       rail.appendChild(b);
     });
 
+    /* Floating, as Acrobat's: dragged by its grip anywhere over the page
+       area, and kept where it was put (on this device) */
+    const grip = document.createElement('span');
+    grip.className = 'qgrip'; grip.title = 'Drag to move the tools';
+    grip.setAttribute('aria-hidden', 'true');
+    rail.insertBefore(grip, rail.firstChild);
+    const QPOS = 'adddots.qrail.pos';
+    function keepIn(x, y) {
+      const m = main.getBoundingClientRect();
+      return [Math.max(4, Math.min(m.width - rail.offsetWidth - 4, x)),
+              Math.max(4, Math.min(m.height - rail.offsetHeight - 4, y))];
+    }
+    function putRail(x, y) {
+      const p = keepIn(x, y);
+      rail.style.left = p[0] + 'px'; rail.style.top = p[1] + 'px';
+      return p;
+    }
+    function placeRail() {
+      let pos = null;
+      try { pos = JSON.parse(localStorage.getItem(QPOS) || 'null'); } catch (e) { pos = null; }
+      if (!on) { rail.style.left = ''; rail.style.top = ''; return; }
+      if (pos && rail.offsetWidth) { putRail(pos[0], pos[1]); return; }
+      /* its own place: just inside the page area, beside the panel */
+      const st = $('stage');
+      if (!st) return;
+      rail.style.left = Math.round(st.getBoundingClientRect().left - main.getBoundingClientRect().left + 12) + 'px';
+      rail.style.top = '';
+    }
+
+    grip.addEventListener('pointerdown', function (e) {
+      if (e.button > 0) return;
+      e.preventDefault();
+      const m = main.getBoundingClientRect(), r = rail.getBoundingClientRect();
+      const dx = e.clientX - r.left, dy = e.clientY - r.top;
+      rail.classList.add('dragging');
+      try { grip.setPointerCapture(e.pointerId); } catch (err) { /* mouse works without it */ }
+      function move(ev) { putRail(ev.clientX - m.left - dx, ev.clientY - m.top - dy); }
+      function up() {
+        rail.classList.remove('dragging');
+        grip.removeEventListener('pointermove', move);
+        grip.removeEventListener('pointerup', up);
+        grip.removeEventListener('pointercancel', up);
+        try { localStorage.setItem(QPOS, JSON.stringify([parseFloat(rail.style.left), parseFloat(rail.style.top)])); }
+        catch (err) { /* not kept */ }
+      }
+      grip.addEventListener('pointermove', move);
+      grip.addEventListener('pointerup', up);
+      grip.addEventListener('pointercancel', up);
+    });
+    /* a double click on the grip puts it back beside the panel */
+    grip.addEventListener('dblclick', function () {
+      try { localStorage.removeItem(QPOS); } catch (e) { /* nothing kept */ }
+      placeRail();
+    });
+    window.addEventListener('resize', function () { if (on) placeRail(); });
+
     /* ---------------- the options of the tool in hand ----------------
        The Drawing Tool panel (js/toolprops.js) stays in the ribbon, which is
        the panel down the left here: core shows it while a tool is in hand or
@@ -255,6 +311,8 @@
       closed = c;
       document.body.classList.toggle('acro-closed', c && on);
       ribbon.hidden = c && on;
+      /* the page area moved: the quick tools go with it */
+      placeRail();
     }
 
     function show() {
@@ -350,6 +408,7 @@
       setClosed(closed);
       behindHome();
       paintSide();
+      placeRail();
     }
     if (WIDE.addEventListener) WIDE.addEventListener('change', apply);
     window.addEventListener('resize', apply);

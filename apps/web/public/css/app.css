@@ -318,8 +318,11 @@
   .hit-item .pg{display:block;font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:2px}
 
   /* ---------- stage ---------- */
+  /* safe: a page zoomed wider than the window starts at the left edge, where
+     it can be scrolled to (and a zoom can keep the spot under the pointer),
+     rather than overflowing past it on both sides */
   .stage{position:relative;flex:1 1 auto;overflow:auto;padding:22px 16px 70px;
-         display:flex;flex-direction:column;align-items:center;gap:18px;scroll-behavior:smooth;
+         display:flex;flex-direction:column;align-items:safe center;gap:18px;scroll-behavior:smooth;
          overscroll-behavior:contain;-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y}
   .pagebox{position:relative;flex:none}
   /* two pages side by side (core spreadOn): a grid of two columns keeps the
