@@ -2,15 +2,14 @@ name: Publish
 
 # Puts the web app on the server (Hostinger, over FTP).
 #
-#   - after CI passes on main:        the test site, https://staging.adddots.com/
-#   - Actions -> Publish -> Run workflow, "live":  https://pdf.adddots.com/
+#   - after CI passes on main, by itself:  the live site, https://pdf.adddots.com/
+#   - again by hand: Actions -> Publish -> Run workflow
 #
 # Repository secrets (Settings -> Secrets and variables -> Actions):
 #   FTP_SERVER        the FTP host from hPanel -> Files -> FTP Accounts
 #   FTP_USERNAME      that account's user
 #   FTP_PASSWORD      and password
-#   FTP_DIR_STAGING   the test site's folder as that account sees it, ending in /
-#   FTP_DIR_LIVE      the live site's folder, ending in /
+#   FTP_DIR_LIVE      the live site's folder as that account sees it, ending in /
 # Optional repository variable FTP_PROTOCOL: ftps (the default) or ftp.
 #
 # What goes up is apps/web/dist plus the share server, legacy/api. Never
@@ -24,30 +23,24 @@ on:
     types: [completed]
     branches: [main]
   workflow_dispatch:
-    inputs:
-      target:
-        description: Where to publish
-        type: choice
-        options: [staging, live]
-        default: staging
 
 concurrency:
-  group: publish-${{ github.event.inputs.target || 'staging' }}
+  group: publish-live
   cancel-in-progress: false
 
 jobs:
   publish:
-    name: Publish to ${{ github.event.inputs.target || 'staging' }}
+    name: Publish to live
     # after CI, only when CI passed on a push to main
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
     runs-on: ubuntu-latest
-    environment: ${{ github.event.inputs.target == 'live' && 'live' || 'staging' }}
+    environment: live
     env:
-      TARGET: ${{ github.event.inputs.target || 'staging' }}
-      SITE_URL: ${{ github.event.inputs.target == 'live' && 'https://pdf.adddots.com/' || 'https://staging.adddots.com/' }}
-      FTP_DIR_GIVEN: ${{ github.event.inputs.target == 'live' && secrets.FTP_DIR_LIVE || secrets.FTP_DIR_STAGING }}
+      TARGET: live
+      SITE_URL: https://pdf.adddots.com/
+      FTP_DIR_GIVEN: ${{ secrets.FTP_DIR_LIVE }}
       FTP_SERVER_GIVEN: ${{ secrets.FTP_SERVER }}
       FTP_USER_GIVEN: ${{ secrets.FTP_USERNAME }}
       HAS_FTP: ${{ secrets.FTP_SERVER != '' && secrets.FTP_USERNAME != '' && secrets.FTP_PASSWORD != '' }}
