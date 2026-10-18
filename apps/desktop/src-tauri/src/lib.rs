@@ -551,6 +551,36 @@ fn open_store() -> Result<(), String> {
     }
 }
 
+/// The ADD DOTS pages the top bar opens in the browser (js/appbar.js), by
+/// name: the page cannot hand it any other address to open.
+const SITES: &[(&str, &str)] = &[
+    ("about", "https://www.adddots.com/about.html"),
+    ("privacy", "https://pdf.adddots.com/privacy.html"),
+    ("opbuilder", "https://opbuilder.adddots.com/"),
+    ("call", "https://call.adddots.com/"),
+];
+
+#[tauri::command]
+fn open_site(name: String) -> Result<(), String> {
+    let url = SITES
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map(|(_, u)| *u)
+        .ok_or_else(|| "not a page this app opens".to_string())?;
+    #[cfg(windows)]
+    {
+        std::process::Command::new("explorer")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(not(windows))]
+    {
+        Err(format!("{url} opens from the Windows app only"))
+    }
+}
+
 /// Whether the Microsoft Store has a newer version of this app; null when
 /// this is not a Store install, such as the setup .exe (store.rs).
 #[tauri::command]
@@ -620,6 +650,7 @@ pub fn run() {
             range_close,
             save_file,
             open_store,
+            open_site,
             store_update,
             store_install,
             new_window,

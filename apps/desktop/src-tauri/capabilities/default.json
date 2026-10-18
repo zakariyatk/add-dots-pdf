@@ -1,7 +1,14 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "What the app's window may ask of the desktop side: the files it was opened with, and events; a tab moved to a window of its own (doc-N) asks the same",
+  "description": "What the app's window may ask of the desktop side: the files it was opened with, and events; the top bar is its title bar (minimise, maximise, close, drag); a tab moved to a window of its own (doc-N) asks the same",
   "windows": ["main", "doc-*"],
-  "permissions": ["core:default"]
+  "permissions": [
+    "core:default",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-internal-toggle-maximize",
+    "core:window:allow-start-dragging",
+    "core:window:allow-close"
+  ]
 }
