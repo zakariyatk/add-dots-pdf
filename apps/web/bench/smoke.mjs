@@ -2364,9 +2364,13 @@ try {
     await page.click('#btnCover');
     await page.waitForTimeout(600);
     const cover = await page.evaluate(() => {
+      /* the middle of where the pages go: inside the stage's padding (wider
+         on the left, beside the floating quick tools) */
       const S = window.ADDPDF.S,
-        st = document.getElementById('stage').getBoundingClientRect(),
-        mid = (st.left + st.right) / 2;
+        stEl = document.getElementById('stage'),
+        st = stEl.getBoundingClientRect(),
+        cs = getComputedStyle(stEl),
+        mid = (st.left + parseFloat(cs.paddingLeft) + st.right - parseFloat(cs.paddingRight)) / 2;
       const r = (i) => S.items[i].box.getBoundingClientRect();
       const [a, b, c, d] = [r(0), r(1), r(2), r(3)];
       return {
@@ -2737,7 +2741,7 @@ try {
         },
         [x, y],
       );
-    await page.click('#btnFitW');
+    await page.evaluate(() => document.getElementById('btnFitW').click());
     await page.waitForTimeout(400);
     const aim = await page.evaluate(() => {
       const r = window.ADDPDF.S.items[0].box.getBoundingClientRect();

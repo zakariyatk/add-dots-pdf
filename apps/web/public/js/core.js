@@ -1170,7 +1170,10 @@
     const it = S.items[0];
     paintSpread();
     if (!it || !it.page) return;
-    let avail = stage.clientWidth - 34;
+    /* the stage's own side padding (16 + 16 here, more on the left where
+       the quick tools float over the page: css/toolpanel.css) */
+    const pad = getComputedStyle(stage);
+    let avail = stage.clientWidth - (parseFloat(pad.paddingLeft) || 16) - (parseFloat(pad.paddingRight) || 16) - 2;
     const availH = stage.clientHeight - 46;
     /* side by side, the page gets half of the stage less the gutter */
     if (trSideBySide()) avail = Math.max(120, (avail - TR.gap) / 2);

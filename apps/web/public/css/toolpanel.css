@@ -136,6 +136,9 @@ body.acro .qrail {
   background: var(--chrome); border: 1px solid var(--line); border-radius: 14px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, .16)
 }
+/* room on the left of the page area, so a page fitted to its width starts
+   clear of the bar (core computeFit reads the padding) */
+body.acro .main > .stage { padding-left: 78px }
 /* the grip: drag here to move the bar */
 body.acro .qrail .qgrip {
   width: 40px; height: 14px; display: flex; align-items: center; justify-content: center;
