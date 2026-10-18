@@ -36,7 +36,6 @@ body.acro #ribbon {
 body.acro #ribbon[hidden] { display: none }
 body.acro.acro-home .qrail,
 body.acro.acro-home .srail { visibility: hidden }
-body.acro.acro-home .toolstrip { display: none }
 body.acro #ribbon .rpan { display: flex; flex-direction: column; align-items: stretch; gap: 0 }
 body.acro #ribbon .rpan[hidden] { display: none }
 body.acro #ribbon #panPage { order: 1 }
@@ -91,26 +90,41 @@ body.acro #panAll .btn small { display: none }
 #panAll { display: none }
 body.acro #ribbon #panAll:not([hidden]) { display: flex }
 
-/* ---------- the tool in hand: its options in a strip over the page ----------
-   A row of its own that is always there, so picking a tool up or putting it
-   down never moves the page under the pointer, and nothing covers it */
-.toolstrip { display: none }
-body.acro .toolstrip {
-  display: flex; align-items: center; flex: none; box-sizing: border-box; height: 60px;
-  padding: 2px 12px; overflow: hidden; border-bottom: 1px solid var(--line)
+/* ---------- the tool in hand: its options at the top of the panel ----------
+   As Acrobat's Format text over Modify page: there only while a tool is in
+   hand or a mark is picked up (core shows #panTool then), the controls
+   wrapped to the panel's width */
+body.acro #ribbon #panTool { order: -1; padding-bottom: 10px; margin-bottom: 4px; border-bottom: 1px solid var(--line); overflow: visible }
+body.acro #ribbon #panTool[hidden] { display: none }
+body.acro #ribbon #panTool .navtools,
+body.acro #ribbon #panTool .navtools + .sep { display: none }
+body.acro #ribbon #panTool #grpToolNow .btn { pointer-events: none }
+body.acro #ribbon #panTool #grpToolNow .btn::after { font-weight: 650 }
+body.acro #ribbon #panTool .toolprops { flex-direction: column; align-items: stretch; flex-wrap: nowrap }
+/* in a column the heading and the bars keep their own height */
+body.acro #ribbon #panTool .toolprops::before,
+body.acro #ribbon #panTool .toolprops > * { flex: none }
+body.acro #ribbon #panTool .toolprops[hidden] { display: none }
+body.props-in-ribbon.acro #ribbon #panTool #modeBar,
+body.props-in-ribbon.acro #ribbon #panTool .markpop {
+  flex-wrap: wrap; align-items: center; gap: 8px; min-height: 0; padding: 2px 4px;
+  background: none; border: none; box-shadow: none; overflow: visible
 }
-/* a long hint is cut to two lines rather than make the row taller */
-body.acro .toolstrip .modebar .hint {
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-width: 420px
+body.acro #ribbon #panTool #modeBar .hint {
+  flex: 0 0 100%; order: 90; max-width: none; min-width: 0; font-size: 12px; line-height: 1.4;
+  -webkit-line-clamp: 4
 }
-body.acro .toolstrip:not(:has(> .rpan:not([hidden])))::before {
-  content: "Pick a tool, and its options show here.";
-  font-size: 12.5px; color: var(--text-dim); padding-left: 4px
-}
-body.acro .toolstrip .rpan { display: flex; align-items: center; gap: 2px; min-width: 0; overflow-x: auto }
-body.acro .toolstrip .navtools,
-body.acro .toolstrip .navtools + .sep { display: none }
-body.acro .toolstrip .btn { height: 40px; min-height: 40px }
+body.acro #ribbon #panTool #modeBar .grow { display: none }
+body.acro #ribbon #panTool .btn { flex: none; width: auto; height: 32px; min-height: 32px; padding: 0 8px }
+body.acro #ribbon #panTool #grpToolNow .btn { flex: 1 1 100%; justify-content: flex-start; height: 34px }
+body.acro #ribbon #panTool select,
+body.acro #ribbon #panTool input:not([type="range"]) { max-width: 100% }
+body.acro #ribbon #panTool #txctl,
+body.acro #ribbon #panTool .swatches,
+body.acro #ribbon #panTool .widths { flex-wrap: wrap; row-gap: 6px; max-width: 100% }
+body.acro #ribbon #panTool #mpExt,
+body.acro #ribbon #panTool #mpExt > div,
+body.acro #ribbon #panTool #mpExt .row { flex-wrap: wrap }
 
 /* ---------- the quick tools, beside the page on the left ---------- */
 .qrail { display: none }

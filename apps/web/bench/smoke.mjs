@@ -2675,7 +2675,8 @@ try {
           .map((t) => t.textContent),
         lit: (document.querySelector('#ribTabs .tab.acro-on') || {}).id,
         panels: [...document.querySelectorAll('#ribbon > .rpan:not([hidden])')].map((p) => p.id).sort(),
-        strip: document.querySelector('#toolStrip > .rpan:not([hidden])') ? 'shown' : 'none',
+        /* the tool's options head the panel on the left */
+        strip: document.querySelector('#ribbon > #panTool:not([hidden])') ? 'shown' : 'none',
         tool: window.ADDPDF.S.tool,
       }));
     const first = await state();
@@ -2696,7 +2697,7 @@ try {
       { first, edit },
     );
     check(
-      'a tool from the rail opens its tab with its options over the page; another tab keeps them; Select puts it down',
+      'a tool from the rail opens its tab with its options at the top of the panel; another tab keeps them; Select puts it down',
       measuring.tool === 'dim' &&
         measuring.lit === 'ribDraw' &&
         measuring.strip === 'shown' &&
