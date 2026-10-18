@@ -3,8 +3,9 @@
    On a wide screen the ribbon becomes what Acrobat has: a row of tabs (All
    tools, View, Edit, Draw, Convert, Sign), the tools of the tab in a panel
    down the left, read as a list with a heading over each group, the tools
-   reached for most in a rail down the right, the options of the tool in hand
-   in a strip over the page, and the page and zoom in a bar floating over it.
+   reached for most beside the page, the options of the tool in hand (or of
+   the mark picked up) at the top of that panel, as Acrobat's Format text,
+   and the side panels, page and zoom in a rail down the right.
 
    Nothing is rebuilt. The buttons are the ribbon's own, with their handlers
    and shortcuts; the panels move and several show at once (Edit is the Edit,
@@ -152,10 +153,12 @@
       rail.appendChild(b);
     });
 
-    /* ---------------- the strip for the tool in hand ---------------- */
-
-    const strip = document.createElement('div');
-    strip.className = 'ribbon toolstrip'; strip.id = 'toolStrip';
+    /* ---------------- the options of the tool in hand ----------------
+       The Drawing Tool panel (js/toolprops.js) stays in the ribbon, which is
+       the panel down the left here: core shows it while a tool is in hand or
+       a mark is picked up, and it heads the panel above the tab's tools. */
+    const HEAD_OPTS = [['grpToolProps', 'Tool options'], ['grpMarkProps', 'Format']];
+    HEAD_OPTS.forEach(function (h) { const g = $(h[0]); if (g) g.dataset.head = h[1]; });
 
     /* ---------------- the rail down the right ----------------
        As Acrobat's: the side panels at the top (the sidebar opens on the
@@ -220,14 +223,12 @@
     function spot(el) {
       return el ? { el: el, parent: el.parentNode, prev: el.previousElementSibling, next: el.nextElementSibling } : null;
     }
-    const HOME = [spot(ribbon), spot($('panTool')), spot($('statusBar'))].filter(Boolean);
+    const HOME = [spot(ribbon), spot($('statusBar'))].filter(Boolean);
     let on = false;
 
     function place(wide) {
       if (wide) {
         main.insertBefore(ribbon, main.firstChild);
-        main.parentNode.insertBefore(strip, main);
-        if ($('panTool')) strip.appendChild($('panTool'));
         main.appendChild(rail);
         main.appendChild(side);
         if ($('statusBar')) { side.appendChild($('statusBar')); $('statusBar').insertBefore(rot, $('statusBar').querySelector('[data-a="fitw"]')); }
@@ -238,7 +239,6 @@
         });
         if (rail.parentNode) rail.remove();
         if (side.parentNode) side.remove();
-        if (strip.parentNode) strip.remove();
       }
     }
 
@@ -262,6 +262,7 @@
       const g = GROUPS.filter(function (x) { return x.key === group; })[0];
       const want = g ? g.pans : [group];          /* a module's own tab shows alone */
       Array.prototype.forEach.call(ribbon.querySelectorAll(':scope > .rpan'), function (p) {
+        if (p.id === 'panTool') return;           /* core shows it with a tool */
         const vis = want.indexOf(p.id) >= 0;
         if (p.hidden === vis) p.hidden = !vis;
       });
@@ -313,11 +314,11 @@
       if (g.key === 'all' || toolLive) e.stopPropagation();
     }, true);
 
-    /* the home screen covers the page: the rail and the strip go with it */
+    /* the home screen covers the page: the rails go with it */
     function behindHome() {
       const home = X.homeShown ? X.homeShown() : false;
       document.body.classList.toggle('acro-home', home);
-      rail.inert = home; strip.inert = home; side.inert = home;
+      rail.inert = home; side.inert = home;
     }
     new MutationObserver(behindHome).observe($('openPanel'), { attributes: true, attributeFilter: ['hidden'] });
 
