@@ -118,9 +118,11 @@
 
   /* ---------------- the strip ---------------- */
 
-  const bar = el('header', 'appbar');
+  /* a labelled region, not a <header>: the toolbar below is the page's banner */
+  const bar = el('div', 'appbar');
   bar.id = 'appBar';
-  bar.setAttribute('aria-label', 'ADD DOTS PDF');
+  bar.setAttribute('role', 'region');
+  bar.setAttribute('aria-label', 'App menu');
   bar.innerHTML =
     '<span class="ablogo" title="ADD DOTS PDF">' + LOGO + '</span>' +
     '<button type="button" class="abbtn abmenu-t" id="abMenu" aria-haspopup="menu" aria-expanded="false" title="Menu">' + ICON.menu + '<span>Menu</span></button>' +
