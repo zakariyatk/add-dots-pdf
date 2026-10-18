@@ -201,11 +201,11 @@ try {
   }
   check('Text opens a box to type in', editing);
 
-  /* rotate a page from the Page tab */
-  await page.click('#ribPage');
+  /* rotate a page: the Page tools are on Edit */
+  await page.click('#ribEdit');
   await page.click('#btnRotR');
   const rot = await page.evaluate(() => window.ADDPDF.S.items[window.ADDPDF.S.current - 1].rot);
-  check('Page > Rotate turns the page', rot === 90, rot);
+  check('Edit > Rotate turns the page', rot === 90, rot);
 
   /* Save as… opens its popover, and Save there downloads the file: no account.
      A site from before the Save as… arrow opens it from Save itself. */

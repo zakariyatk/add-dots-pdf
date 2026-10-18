@@ -146,6 +146,12 @@ const open = async (page, path) => {
     null,
     { timeout: 60000 },
   );
+  /* the sidebar opens only when pressed now (toolpanel.js): open its Pages,
+     as every check here was written with the thumbnails in view */
+  await page.evaluate(() => {
+    const b = document.getElementById('sTabPages');
+    if (b && document.getElementById('rail').hidden) b.click();
+  });
 };
 const allLoaded = (page) =>
   page.waitForFunction(() => window.ADDPDF.S.items.every((i) => i.page && !i.estimated), null, {
@@ -761,7 +767,7 @@ try {
     const inSave = await page.evaluate(() => document.activeElement.id);
     await page.keyboard.press('Escape');
     const backSave = await page.evaluate(() => document.activeElement.id);
-    await page.click('#ribPage');
+    await page.click('#ribEdit');
     await page.focus('#btnAdd');
     await page.keyboard.press('Enter');
     await page.waitForFunction(() => !document.getElementById('addPop').hidden);
@@ -2635,14 +2641,77 @@ try {
     await ctx.close();
   }
 
+  /* ---- tools as Acrobat lays them out (toolpanel.js) ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, MIXED);
+    const state = () =>
+      page.evaluate(() => ({
+        /* in the order they are seen, left to right */
+        tabs: [...document.querySelectorAll('#ribTabs .tab')]
+          .filter((t) => t.offsetParent)
+          .sort((a, b) => a.getBoundingClientRect().left - b.getBoundingClientRect().left)
+          .map((t) => t.textContent),
+        lit: (document.querySelector('#ribTabs .tab.acro-on') || {}).id,
+        panels: [...document.querySelectorAll('#ribbon > .rpan:not([hidden])')].map((p) => p.id).sort(),
+        strip: document.querySelector('#toolStrip > .rpan:not([hidden])') ? 'shown' : 'none',
+        tool: window.ADDPDF.S.tool,
+      }));
+    const first = await state();
+    await page.click('#ribEdit');
+    const edit = await state();
+    await page.click('#qtDim');
+    const measuring = await state();
+    await page.click('#ribEdit');
+    const picked = await state();
+    await page.click('#qtSelect');
+    const down = await state();
+    check(
+      'tabs All tools, View, Edit, Draw, Convert, Sign; Edit shows the Page, Insert, Edit and Document tools together',
+      JSON.stringify(first.tabs) ===
+        JSON.stringify(['All tools', 'View', 'Edit', 'Draw', 'Convert', 'Sign']) &&
+        first.lit === 'ribView' &&
+        JSON.stringify(edit.panels) === JSON.stringify(['panDoc', 'panEdit', 'panInsert', 'panPage']),
+      { first, edit },
+    );
+    check(
+      'a tool from the rail opens its tab with its options over the page; another tab keeps them; Select puts it down',
+      measuring.tool === 'dim' &&
+        measuring.lit === 'ribDraw' &&
+        measuring.strip === 'shown' &&
+        picked.lit === 'ribEdit' &&
+        picked.strip === 'shown' &&
+        down.tool === 'select' &&
+        down.strip === 'none' &&
+        down.lit === 'ribEdit',
+      { measuring, picked, down },
+    );
+    /* narrow, the ribbon is the ribbon again */
+    await page.setViewportSize({ width: 860, height: 900 });
+    await page.waitForTimeout(300);
+    const narrow = await page.evaluate(() => ({
+      acro: document.body.classList.contains('acro'),
+      under: document.getElementById('ribbon').previousElementSibling.id,
+      shown: document.querySelectorAll('#ribbon > .rpan:not([hidden])').length,
+    }));
+    check(
+      'on a narrow screen the ribbon is back under the bar, one panel at a time',
+      !narrow.acro && narrow.under === 'bar' && narrow.shown === 1,
+      narrow,
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- the ribbon's groups read by job ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
     await open(page, MIXED);
-    const row = (tab) =>
-      page.click('#' + tab).then(() =>
-        page.evaluate(() => {
-          const pan = document.querySelector('#ribbon .rpan:not([hidden])');
+    /* Edit shows the Page and Document panels together, down the left */
+    const row = (pan) =>
+      page.click('#ribEdit').then(() =>
+        page.evaluate((id) => {
+          const pan = document.getElementById(id);
           return [...pan.querySelectorAll(':scope > .grp')]
             .filter((g) => g.offsetParent)
             .map((g) =>
@@ -2651,13 +2720,13 @@ try {
                 .map((x) => (x.classList.contains('tsep') ? '|' : x.dataset.label))
                 .join(','),
             );
-        }),
+        }, pan),
       );
-    const pageTab = await row('ribPage');
-    const docTab = await row('ribDoc');
+    const pageTab = await row('panPage');
+    const docTab = await row('panDoc');
     check(
       'Page: turn and add or remove | Organize | other PDFs in | this one in parts | to JPG; Document: Print and Text, Compress and Properties',
-      JSON.stringify(pageTab.slice(1)) ===
+      JSON.stringify(pageTab) ===
         JSON.stringify([
           'Rotate left,Rotate right,|,Add pages,Duplicate,Remove page',
           'Organize',
@@ -2678,7 +2747,7 @@ try {
     );
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.waitForTimeout(400);
-    const back = await row('ribPage');
+    const back = await row('panPage');
     check(
       'on a phone Duplicate and Split are in the more-sheet; back on the desktop the groups are in their order',
       sheet.includes('Duplicate') &&
@@ -3357,6 +3426,10 @@ try {
     const page = await tctx.newPage();
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto(URL);
+    /* the thumbnail is checked below: the Pages panel open before the file,
+       as it was when every file opened it (now shut until pressed) */
+    await page.waitForSelector('#sTabPages', { state: 'attached' });
+    await page.evaluate(() => window.ADDPDF.setRail(true));
     await page.setInputFiles('#fileIn', {
       name: 'text.pdf',
       mimeType: 'application/pdf',
@@ -3404,8 +3477,10 @@ try {
     });
     await page.keyboard.press('Control+a');
     await page.keyboard.type('Total due: 950 USD');
-    const [ox, oy] = await at(400, 300);
-    await page.mouse.click(ox, oy);
+    /* finish the edit. (A click at the page's (400, 300) used to do it, but
+       only because that point lay below the window; on the page it is a
+       click on blank paper, which lets go of the line, as it should.) */
+    await page.keyboard.press('Control+Enter');
     /* on screen in the PDF's own font: the line as pdf.js draws it (editobj textArt) */
     const shown = await page
       .waitForFunction(

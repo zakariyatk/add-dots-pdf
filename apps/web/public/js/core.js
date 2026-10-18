@@ -752,7 +752,7 @@
     $('openPanel').hidden = true;
     $('pwRow').classList.remove('show');
     /* set the rail flag only — syncAll below builds the thumbnails and lays out */
-    if (!isMobile()) { rail.hidden = false; $('btnRail').classList.add('on'); }
+    if (!isMobile() && !EXT.railOnPress) { rail.hidden = false; $('btnRail').classList.add('on'); }
     syncScrim();
     await syncAll();
     goTo(1);
@@ -5558,7 +5558,7 @@
     $('openPanel').hidden = true;
     $('errMsg').hidden = true;
     $('pwRow').classList.remove('show');
-    if (!isMobile()) { rail.hidden = false; $('btnRail').classList.add('on'); }
+    if (!isMobile() && !EXT.railOnPress) { rail.hidden = false; $('btnRail').classList.add('on'); }
     syncScrim();
     await syncAll();
     goTo(Math.max(1, Math.min(S.items.length, d.current || 1)));
