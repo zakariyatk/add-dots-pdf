@@ -17,6 +17,8 @@ body[data-ui="light"] {
   --text: #1F2328;
   --text-dim: #646A73;
   --marker: #7B5CFF;
+  --btn: #6A4BF0;                 /* filled buttons: white text on it 5.4:1 */
+  --btn-hover: #5A3BE0;
   --marker-ink: #6141EA;          /* the violet as text: 5:1 on every grey here */
   --danger: #D7373F;
   --accent-ink: #FFFFFF;          /* text on a violet fill */
@@ -39,13 +41,13 @@ body[data-ui="light"] .bar,
 body[data-ui="light"] .ribbon { box-shadow: 0 1px 0 rgba(0, 0, 0, .02) }
 body[data-ui="light"] .btn:hover:not(:disabled) { background: var(--hover); border-color: transparent }
 body[data-ui="light"] .btn.on { background: #EFEBFF; border-color: #D6CCFF; color: var(--marker-ink) }
-body[data-ui="light"] .btn.primary { background: var(--marker); color: var(--accent-ink); border-color: transparent }
-body[data-ui="light"] .btn.primary:hover:not(:disabled) { background: #6A4BF0; border-color: transparent }
+body[data-ui="light"] .btn.primary { background: var(--btn); color: var(--accent-ink); border-color: transparent }
+body[data-ui="light"] .btn.primary:hover:not(:disabled) { background: var(--btn-hover); border-color: transparent }
 body[data-ui="light"] .ribbon .btn.on::after { color: var(--marker-ink) }
 body[data-ui="light"] .admark { color: #1F2328; border-color: #9AA0A6 }
 body[data-ui="light"] a.admark:hover { border-color: #1F2328 }
 body[data-ui="light"] #btnHome { background: #FFFFFF }
-body[data-ui="light"] #btnHome:hover:not(:disabled) { background: var(--marker); color: var(--accent-ink) }
+body[data-ui="light"] #btnHome:hover:not(:disabled) { background: var(--btn); color: var(--accent-ink) }
 body[data-ui="light"] .pager input,
 body[data-ui="light"] .search-in,
 body[data-ui="light"] .pop input,
@@ -84,7 +86,8 @@ body[data-ui="light"] .page { box-shadow: 0 1px 3px rgba(0, 0, 0, .16), 0 6px 18
 /* ---- open file / home screen ---- */
 body[data-ui="light"] :is(.drop h1, .htop h1, .hdrop h2, .hsec h3) { color: var(--text) }
 body[data-ui="light"] :is(.pick, .hdrop .art .dot) { color: var(--accent-ink) }
-body[data-ui="light"] .pick:hover { background: #6A4BF0 }
+body[data-ui="light"] .pick { background: var(--btn) }
+body[data-ui="light"] .pick:hover { background: var(--btn-hover) }
 body[data-ui="light"] .home { background: #F4F5F7 }
 body[data-ui="light"] .hnav { background: #FFFFFF }
 body[data-ui="light"] .hnav .safe svg { stroke: #7A808A }
