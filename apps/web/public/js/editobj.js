@@ -387,8 +387,8 @@
       const was = hover && hover.it;
       hover = s ? { it: it, s: s } : null;
       if (was && was !== it) X.drawShapes(was);
-      if (pick && pick.shape) X.drawShapes(it, { t: 'vpath', hl: true, k: s.cmds, pts: s.pts, c: '#1473E6', w: 1 });
-      else if (pick && pick.line) X.drawShapes(it, { t: 'vpath', hl: true, k: 'MLLLZ', pts: s.quad, c: '#1473E6', w: 1 });
+      if (pick && pick.shape) X.drawShapes(it, { t: 'vpath', hl: true, k: s.cmds, pts: s.pts, c: '#7B5CFF', w: 1 });
+      else if (pick && pick.line) X.drawShapes(it, { t: 'vpath', hl: true, k: 'MLLLZ', pts: s.quad, c: '#7B5CFF', w: 1 });
       else if (was) X.drawShapes(was);
     }
 
