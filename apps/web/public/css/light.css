@@ -16,10 +16,10 @@ body[data-ui="light"] {
   --paper: #FFFFFF;
   --text: #1F2328;
   --text-dim: #646A73;
-  --marker: #1473E6;
-  --marker-ink: #0D5FC2;          /* the blue as text: 4.5:1 on every grey here */
+  --marker: #7B5CFF;
+  --marker-ink: #6141EA;          /* the violet as text: 5:1 on every grey here */
   --danger: #D7373F;
-  --accent-ink: #FFFFFF;          /* text on a blue fill */
+  --accent-ink: #FFFFFF;          /* text on a violet fill */
   --hover: rgba(0, 0, 0, .045);
   --shadow-pop: 0 10px 30px rgba(15, 23, 42, .14), 0 2px 6px rgba(15, 23, 42, .08);
   color-scheme: light;
@@ -38,9 +38,9 @@ body[data-ui="light"] :is(#pm, #cam, #lb) {
 body[data-ui="light"] .bar,
 body[data-ui="light"] .ribbon { box-shadow: 0 1px 0 rgba(0, 0, 0, .02) }
 body[data-ui="light"] .btn:hover:not(:disabled) { background: var(--hover); border-color: transparent }
-body[data-ui="light"] .btn.on { background: #E8F1FC; border-color: #C4DAF6; color: var(--marker-ink) }
+body[data-ui="light"] .btn.on { background: #EFEBFF; border-color: #D6CCFF; color: var(--marker-ink) }
 body[data-ui="light"] .btn.primary { background: var(--marker); color: var(--accent-ink); border-color: transparent }
-body[data-ui="light"] .btn.primary:hover:not(:disabled) { background: #0D66D0; border-color: transparent }
+body[data-ui="light"] .btn.primary:hover:not(:disabled) { background: #6A4BF0; border-color: transparent }
 body[data-ui="light"] .ribbon .btn.on::after { color: var(--marker-ink) }
 body[data-ui="light"] .admark { color: #1F2328; border-color: #9AA0A6 }
 body[data-ui="light"] a.admark:hover { border-color: #1F2328 }
@@ -58,7 +58,7 @@ body[data-ui="light"] .scrim { background: rgba(15, 23, 42, .32) }
 /* a dark toast stands out over a white page, the way desktop readers do it */
 body[data-ui="light"] .toast { background: #2B2F36; border-color: #2B2F36; color: #FFFFFF;
                                box-shadow: 0 8px 24px rgba(15, 23, 42, .25) }
-body[data-ui="light"] .toast b { color: #8CC4FF }
+body[data-ui="light"] .toast b { color: #B9A8FF }
 /* a thin ring, so the white swatch does not vanish into the white bar */
 body[data-ui="light"] :is(.sw, .swpop button, .markpop .cbtn i) { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18) }
 body[data-ui="light"] .sw.on { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18), 0 0 0 2px var(--chrome-2) }
@@ -66,8 +66,8 @@ body[data-ui="light"] .sw.on { box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .18), 0
 /* ---- sidebar ---- */
 body[data-ui="light"] .rail { background: #FAFAFB }
 body[data-ui="light"] .thumb .shell { box-shadow: 0 1px 3px rgba(0, 0, 0, .12) }
-body[data-ui="light"] .thumb.picked .shell { box-shadow: 0 0 0 2px rgba(20, 115, 230, .28) }
-body[data-ui="light"] .thumb.active .no { color: #1473E6 }
+body[data-ui="light"] .thumb.picked .shell { box-shadow: 0 0 0 2px rgba(123, 92, 255, .28) }
+body[data-ui="light"] .thumb.active .no { color: #7B5CFF }
 body[data-ui="light"] :is(.thumb .tools button, .ptools button) {
   background: rgba(255, 255, 255, .96); color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, .15);
 }
@@ -84,15 +84,15 @@ body[data-ui="light"] .page { box-shadow: 0 1px 3px rgba(0, 0, 0, .16), 0 6px 18
 /* ---- open file / home screen ---- */
 body[data-ui="light"] :is(.drop h1, .htop h1, .hdrop h2, .hsec h3) { color: var(--text) }
 body[data-ui="light"] :is(.pick, .hdrop .art .dot) { color: var(--accent-ink) }
-body[data-ui="light"] .pick:hover { background: #0D66D0 }
+body[data-ui="light"] .pick:hover { background: #6A4BF0 }
 body[data-ui="light"] .home { background: #F4F5F7 }
 body[data-ui="light"] .hnav { background: #FFFFFF }
 body[data-ui="light"] .hnav .safe svg { stroke: #7A808A }
 body[data-ui="light"] .hdrop { background: #FFFFFF; border-color: #C3C7CD }
-body[data-ui="light"] .hdrop.hot { background: #EEF5FD; border-color: var(--marker) }
+body[data-ui="light"] .hdrop.hot { background: #F3F0FF; border-color: var(--marker) }
 body[data-ui="light"] .hdrop .art .pg { box-shadow: 0 4px 12px rgba(0, 0, 0, .14) }
 body[data-ui="light"] .tcard:hover { border-color: #AEB4BC; background: #FFFFFF; box-shadow: 0 4px 14px rgba(0, 0, 0, .06) }
-body[data-ui="light"] .tcard .ic { background: #EEF5FD; border-color: #CFE0F7; color: var(--marker-ink) }
+body[data-ui="light"] .tcard .ic { background: #F3F0FF; border-color: #DCD3FF; color: var(--marker-ink) }
 body[data-ui="light"] .rrow .fi { box-shadow: inset 0 0 0 1px #D5D8DC }
 body[data-ui="light"] .rrow .x:hover { background: var(--hover) }
 

@@ -3590,8 +3590,8 @@
     if (selected || (idx >= 0 && pinSel === s.id)) {
       const ring = document.createElementNS(SVGNS, 'circle');
       ring.setAttribute('cx', p[0]); ring.setAttribute('cy', p[1]); ring.setAttribute('r', r + 6);
-      ring.setAttribute('fill', 'rgba(59,130,246,.22)');
-      ring.setAttribute('stroke', '#3B82F6'); ring.setAttribute('stroke-width', 2);
+      ring.setAttribute('fill', 'rgba(123,92,255,.22)');
+      ring.setAttribute('stroke', '#7B5CFF'); ring.setAttribute('stroke-width', 2);
       g.appendChild(ring);
     }
     const c = document.createElementNS(SVGNS, 'circle');
@@ -4128,7 +4128,7 @@
     ctx.save();
     ctx.setLineDash([6 * k, 4 * k]);
     ctx.lineWidth = 1.5 * k;
-    ctx.strokeStyle = '#1F6FEB';
+    ctx.strokeStyle = '#7B5CFF';
     if (PM_LINE[m.t]) {
       const rp = pmRotPoint(m, sp);
       ctx.beginPath();
@@ -4157,7 +4157,7 @@
       if (q.round) ctx.arc(x, y, sz, 0, Math.PI * 2);
       else ctx.rect(x - sz, y - sz, sz * 2, sz * 2);
       ctx.fillStyle = '#FFFFFF'; ctx.fill();
-      ctx.lineWidth = 2 * k; ctx.strokeStyle = '#1F6FEB'; ctx.stroke();
+      ctx.lineWidth = 2 * k; ctx.strokeStyle = '#7B5CFF'; ctx.stroke();
     });
   }
 
