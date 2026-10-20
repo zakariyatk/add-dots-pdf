@@ -79,7 +79,7 @@
     const bMark = btn(g2, 'btnBookmark', 'Bookmark', 'Bookmark this page (Ctrl+B)',
       ICON.mark, function () { toggleMark(currentPage()); });
     btn(g2, 'btnBookmarks', 'Bookmarks', 'Your bookmarks, and the chapters of this PDF',
-      ICON.list, function (e) { openMarks(e.currentTarget); });
+      ICON.list, function () { showPanel(true); });
     const bResume = btn(g2, 'btnResume', 'Resume', 'Go back to the page you last read',
       ICON.resume, function () { const n = lastRead(); if (n) goPage(n); });
     bResume.disabled = true;
@@ -134,6 +134,9 @@
       bResume.disabled = !last;
       bResume.querySelector('.lbl').textContent = last ? 'Resume p.' + last : 'Resume';
       bSpeak.classList.toggle('on', T.on);
+      /* a page bookmarked or unbookmarked while the Bookmarks panel is open */
+      const bp = $('railBookmarks');
+      if (bp && !bp.hidden) renderOwn();
     }
 
     /* Note the page as you scroll, and keep the bookmark button honest. */
@@ -178,7 +181,7 @@
     document.addEventListener('mousedown', function (e) {
       if (mp.hidden || mp.contains(e.target)) return;
       const t = e.target && e.target.closest ? e.target : null;
-      if (!t || !t.closest('#btnBookmarks,#bkList')) closeMarks();
+      if (!t || !t.closest('#bkList')) closeMarks();
     });
 
     async function openMarks(anchor) {
@@ -262,6 +265,196 @@
       await walk(items, 0);
       return out;
     }
+
+    /* ---------------- the Bookmarks panel, in the sidebar ----------------
+       As Acrobat's: the PDF's own bookmarks as a tree that folds open and
+       shut, a click going to the page; your own bookmarks (Ctrl+B) under it. */
+
+    const tabMarks = document.createElement('button');
+    tabMarks.className = 'btn'; tabMarks.id = 'tabBookmarks'; tabMarks.type = 'button';
+    tabMarks.textContent = 'Bookmarks';
+    /* reached from the rail of side panels and the Bookmarks button; the
+       sidebar's own row of tabs keeps its two by two */
+    tabMarks.hidden = true;
+    document.querySelector('.rail-tabs').insertBefore(tabMarks, $('railClose'));
+
+    const panel = document.createElement('div');
+    panel.className = 'rail-body bkside'; panel.id = 'railBookmarks'; panel.hidden = true;
+    panel.innerHTML =
+      '<div class="bks-head"><h2 class="bks-title">Bookmarks</h2>' +
+      '<button type="button" class="btn bks-x" id="bksClose" title="Close" aria-label="Close bookmarks">' +
+      '<svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg></button></div>' +
+      '<div class="bks-tree" id="bksTree" role="tree" aria-label="Bookmarks in this PDF"></div>' +
+      '<div class="bks-own" id="bksOwn"></div>';
+    $('railPages').parentNode.appendChild(panel);
+
+    /* the other tabs hide this panel; this tab hides theirs */
+    function bodies() { return Array.prototype.slice.call(document.querySelectorAll('#rail > .rail-body')); }
+    /* toggle: pressed again while it shows, the Bookmarks button closes it */
+    function showPanel(toggle) {
+      if (!S.items.length) { X.toast('Open a PDF first'); return; }
+      if (toggle && !$('rail').hidden && !panel.hidden) { X.setRail(false); return; }
+      X.setRail(true);
+      bodies().forEach(function (b) { b.hidden = b !== panel; });
+      document.querySelectorAll('.rail-tabs .btn').forEach(function (t) { t.classList.toggle('on', t === tabMarks); });
+      renderPanel();
+    }
+    tabMarks.addEventListener('click', function () { showPanel(false); });
+    document.querySelectorAll('.rail-tabs .btn:not(#railClose)').forEach(function (t) {
+      if (t === tabMarks) return;
+      t.addEventListener('click', function () { panel.hidden = true; tabMarks.classList.remove('on'); });
+    });
+    $('bksClose').addEventListener('click', function () { X.setRail(false); });
+
+    let tree = null, treeKey = '', picked = null;
+    async function renderPanel() {
+      renderOwn();
+      const key = docKey() + '|' + (S.sources[0] && S.sources[0].name);
+      if (tree && treeKey === key) return;
+      treeKey = key; tree = null;
+      const host = $('bksTree');
+      host.innerHTML = '<p class="bkpop-empty">Reading…</p>';
+      const nodes = await outlineTree();
+      if (treeKey !== key) return;
+      tree = nodes;
+      host.textContent = '';
+      if (!nodes.length) {
+        host.innerHTML = '<p class="bkpop-empty">This PDF has no bookmarks.</p>';
+        return;
+      }
+      const ul = document.createElement('ul');
+      ul.className = 'bks-list';
+      nodes.forEach(function (n) { ul.appendChild(node(n, 1)); });
+      host.appendChild(ul);
+    }
+
+    function node(n, level) {
+      const li = document.createElement('li');
+      li.setAttribute('role', 'treeitem');
+      li.setAttribute('aria-level', String(level));
+      const row = document.createElement('div');
+      row.className = 'bks-row';
+      const kids = n.kids && n.kids.length;
+      const tw = document.createElement('button');
+      tw.type = 'button'; tw.className = 'bks-tw';
+      tw.tabIndex = -1;
+      if (kids) {
+        tw.setAttribute('aria-label', 'Show or hide what is under ' + n.title);
+        tw.innerHTML = '<svg viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>';
+      } else tw.classList.add('none');
+      const go = document.createElement('button');
+      go.type = 'button'; go.className = 'bks-go';
+      go.textContent = n.title;
+      go.title = n.p ? n.title + ' — page ' + n.p : n.title;
+      if (!n.p) go.disabled = true;
+      go.addEventListener('click', function () {
+        if (picked) picked.classList.remove('on');
+        picked = row; row.classList.add('on');
+        if (n.p) goPage(n.p);
+        if (isNarrow()) X.setRail(false);
+      });
+      row.appendChild(tw); row.appendChild(go);
+      li.appendChild(row);
+      if (kids) {
+        const ul = document.createElement('ul');
+        ul.setAttribute('role', 'group');
+        n.kids.forEach(function (k) { ul.appendChild(node(k, level + 1)); });
+        li.appendChild(ul);
+        /* the first level opens, as Acrobat shows it; deeper ones wait */
+        const open = function (on) {
+          li.classList.toggle('bks-open', on);
+          li.setAttribute('aria-expanded', on ? 'true' : 'false');
+        };
+        open(level === 1);
+        tw.addEventListener('click', function () { open(!li.classList.contains('bks-open')); });
+        go.addEventListener('dblclick', function () { open(!li.classList.contains('bks-open')); });
+      }
+      return li;
+    }
+    function isNarrow() { return window.matchMedia('(max-width: 760px)').matches; }
+
+    /* the arrow keys move through the tree, left and right fold it */
+    $('bksTree').addEventListener('keydown', function (e) {
+      const t = e.target.closest('.bks-go');
+      if (!t) return;
+      const all = Array.prototype.filter.call($('bksTree').querySelectorAll('.bks-go'), function (b) { return b.offsetParent !== null; });
+      const i = all.indexOf(t), li = t.closest('li');
+      if (e.key === 'ArrowDown' && all[i + 1]) { e.preventDefault(); all[i + 1].focus(); }
+      else if (e.key === 'ArrowUp' && all[i - 1]) { e.preventDefault(); all[i - 1].focus(); }
+      else if (e.key === 'ArrowRight' && li.querySelector('ul') && !li.classList.contains('bks-open')) { e.preventDefault(); li.querySelector('.bks-tw').click(); }
+      else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        if (li.classList.contains('bks-open')) li.querySelector('.bks-tw').click();
+        else { const up = li.parentNode.closest('li'); if (up) up.querySelector('.bks-go').focus(); }
+      }
+    });
+
+    /* your own bookmarks, kept in this browser */
+    function renderOwn() {
+      const list = marks();
+      const host = $('bksOwn');
+      if (!list.length) {
+        host.innerHTML = '<div class="bkpop-h">Your bookmarks</div>' +
+          '<p class="bkpop-empty"><b>Bookmark</b> (Ctrl+B) marks the page you are on.</p>';
+        return;
+      }
+      host.innerHTML = '<div class="bkpop-h">Your bookmarks</div><ul class="bkpop-list">' + list.map(function (m) {
+        return '<li><button class="bkpop-go" data-p="' + m.p + '"><b>' + m.p + '</b><span>' +
+          X.esc(m.name || ('Page ' + m.p)) + '</span></button>' +
+          '<button class="bkpop-ren" data-p="' + m.p + '" title="Rename">✎</button>' +
+          '<button class="bkpop-del" data-p="' + m.p + '" title="Remove">×</button></li>';
+      }).join('') + '</ul>';
+    }
+    $('bksOwn').addEventListener('click', function (e) {
+      const b = e.target.closest('button'); if (!b) return;
+      const p = parseInt(b.dataset.p, 10);
+      if (b.classList.contains('bkpop-go')) { goPage(p); return; }
+      const d = load(); d.marks = d.marks || [];
+      const m = d.marks.filter(function (x) { return x.p === p; })[0];
+      if (!m) return;
+      if (b.classList.contains('bkpop-del')) {
+        d.marks = d.marks.filter(function (x) { return x !== m; });
+      } else if (b.classList.contains('bkpop-ren')) {
+        const v = window.prompt('Name for this bookmark', m.name || ('Page ' + p));
+        if (v === null) return;
+        m.name = v.trim() || ('Page ' + p);
+      }
+      save(d); syncButtons(); renderOwn();
+    });
+    X.on('reset', function () { tree = null; treeKey = ''; picked = null; panel.hidden = true; tabMarks.classList.remove('on'); });
+    X.on('pages', function () { if (!panel.hidden) renderPanel(); });
+
+    /* The PDF's own outline as a tree, each entry pointed at the page it lands
+       on in the document as it is now (pages may have moved); an entry whose
+       page has gone stays, greyed, for what is under it. */
+    async function outlineTree() {
+      const src = S.sources[0];
+      if (!src || !src.doc) return [];
+      let items;
+      try { items = await src.doc.getOutline(); } catch (e) { items = null; }
+      if (!items || !items.length) return [];
+      let count = 0;
+      async function walk(list) {
+        const out = [];
+        for (const o of list) {
+          if (++count > 3000) break;
+          let p = 0;
+          try {
+            let dest = o.dest;
+            if (typeof dest === 'string') dest = await src.doc.getDestination(dest);
+            if (Array.isArray(dest) && dest[0] != null) {
+              const idx = typeof dest[0] === 'number' ? dest[0] : await src.doc.getPageIndex(dest[0]);
+              p = S.items.findIndex(function (it) { return it.src === src && it.num === idx + 1; }) + 1;
+            }
+          } catch (e) { p = 0; }
+          out.push({ title: o.title || 'Untitled', p: p, kids: o.items && o.items.length ? await walk(o.items) : [] });
+        }
+        return out;
+      }
+      return walk(items);
+    }
+
+    X.bookmarks = { show: function () { showPanel(false); } };
 
     /* ---------------- the book view ---------------- */
 

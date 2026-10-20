@@ -506,6 +506,8 @@ body.rulers-on #stage { border-top: 18px solid var(--chrome); border-left: 18px 
 .guides { position: absolute; inset: 0; z-index: 5; pointer-events: none }
 body:not(.rulers-on) .guides { display: none }
 .guide { position: absolute; pointer-events: auto }
+/* with a drawing tool in hand the guides are for snapping to, not for grabbing */
+body:not([data-tool="select"]) .guide { pointer-events: none }
 .guide.gh { left: 0; right: 0; height: 7px; margin-top: -3px; cursor: row-resize }
 .guide.gv { top: 0; bottom: 0; width: 7px; margin-left: -3px; cursor: col-resize }
 .guide::after, .rghost::after { content: ""; position: absolute; background: #00B8D9 }
@@ -930,6 +932,36 @@ body.bk-on { overflow: hidden }
   color: var(--text-dim); cursor: pointer; font-size: 15px;
 }
 .bkpop-ren:hover, .bkpop-del:hover { color: var(--text); background: rgba(127,127,127,.14) }
+
+/* ---------- the Bookmarks panel in the sidebar (js/books.js), as Acrobat's ---------- */
+.bkside { padding: 0 }
+.bks-head { display: flex; align-items: center; gap: 6px; padding: 10px 8px 6px 14px }
+.bks-title { flex: 1; margin: 0; font-size: 14px; font-weight: 650; color: var(--text) }
+.bks-x { width: 28px; height: 28px; padding: 0; display: grid; place-items: center; border: 0; border-radius: 6px; background: none }
+.bks-x svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round }
+.bks-tree { padding: 0 6px 8px }
+.bks-list, .bks-list ul { list-style: none; margin: 0; padding: 0 }
+.bks-list ul { padding-left: 18px; display: none }
+.bks-list li.bks-open > ul { display: block }
+.bks-row { display: flex; align-items: flex-start; gap: 2px; border-radius: 6px }
+.bks-row:hover { background: var(--hover, rgba(127,127,127,.12)) }
+.bks-row.on { background: rgba(127,127,127,.18) }
+.bks-tw {
+  flex: none; width: 24px; height: 30px; padding: 0; border: 0; background: none; color: var(--text);
+  display: grid; place-items: center; cursor: pointer;
+}
+.bks-tw.none { visibility: hidden; cursor: default }
+.bks-tw svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2;
+              stroke-linecap: round; stroke-linejoin: round; transition: transform .12s }
+.bks-list li.bks-open > .bks-row .bks-tw svg { transform: rotate(90deg) }
+.bks-go {
+  flex: 1; min-width: 0; padding: 7px 8px 7px 2px; border: 0; background: none; color: var(--text);
+  font: inherit; font-size: 13px; line-height: 16px; text-align: left; cursor: pointer; overflow-wrap: anywhere;
+}
+.bks-go:disabled { color: var(--text-dim); cursor: default }
+.bks-own { border-top: 1px solid var(--line); margin: 4px 8px 0; padding-top: 4px }
+.bks-own .bkpop-h { padding-left: 6px }
+.bks-own .bkpop-empty { margin-left: 6px }
 
 /* ---------- Drawing Tool tab: the tool's properties inside the ribbon ---------- */
 .tabs .tab.ctx { color: var(--marker-ink); }

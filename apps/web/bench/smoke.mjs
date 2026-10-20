@@ -2776,6 +2776,8 @@ try {
       const sr = st.getBoundingClientRect();
       return {
         on: window.ADDPDF.rulers.on(),
+        /* the quick tools beside the page have a Rulers button, lit with them */
+        quick: !!document.querySelector('#quickRail #qbtnRulers.on'),
         top: box('.ruler.rtop'),
         left: box('.ruler.rleft'),
         /* the page area's own content starts below and right of the rulers */
@@ -2808,6 +2810,34 @@ try {
     const guidesOn = (n) =>
       page.evaluate((n) => (window.ADDPDF.S.items[n - 1].guides || []).map((g) => g.v), n);
     const made = await guidesOn(pg.n);
+    /* the Line tool catches the guides: a line begun a few pixels off the
+       horizontal guide and ended a few off the vertical one lands on both */
+    await page.keyboard.press('l');
+    await page.mouse.move(pg.x + 300, pg.y + 124);
+    await page.mouse.down();
+    await page.mouse.move(pg.x + 200, pg.y + 260, { steps: 6 });
+    await page.mouse.move(pg.x + 104, pg.y + 400, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    const snapped = await page.evaluate((n) => {
+      const it = window.ADDPDF.S.items[n - 1];
+      const s = it.shapes[it.shapes.length - 1];
+      const r = it.wrap.getBoundingClientRect(),
+        off = it.off || { left: 0, top: 0 };
+      const at = (q) => {
+        const v = it.vp.convertToViewportPoint(q[0], q[1]);
+        return [r.left + v[0] - off.left, r.top + v[1] - off.top];
+      };
+      const g = (v) => it.guides.find((x) => x.v === v).at;
+      return {
+        t: s && s.t,
+        a: s && at(s.a),
+        b: s && at(s.b),
+        gy: r.top + g(false) * r.height,
+        gx: r.left + g(true) * r.width,
+      };
+    }, pg.n);
+    await page.keyboard.press('v');
     await page.mouse.move(pg.x + 100, pg.y + 300);
     await page.mouse.down();
     await page.mouse.move(rul.left.x + 9, pg.y + 300, { steps: 6 });
@@ -2818,18 +2848,24 @@ try {
     const off = await page.evaluate(() => ({
       on: window.ADDPDF.rulers.on(),
       hidden: document.querySelector('.ruler.rtop').hidden,
+      quick: document.getElementById('qbtnRulers').classList.contains('on'),
     }));
     check(
-      'Ctrl+R shows rulers beside the page; guides drag out of them and back onto them to go',
+      'Ctrl+R shows rulers beside the page; guides drag out of them, drawing snaps to them, back onto a ruler they go',
       rul.on &&
+        rul.quick &&
         rul.clear &&
         rul.top.w > 200 &&
         rul.left.h > 200 &&
         made.join() === 'false,true' &&
+        snapped.t === 'line' &&
+        Math.abs(snapped.a[1] - snapped.gy) < 1 &&
+        Math.abs(snapped.b[0] - snapped.gx) < 1 &&
         left.join() === 'false' &&
         !off.on &&
-        off.hidden,
-      { rul, made, left, off },
+        off.hidden &&
+        !off.quick,
+      { rul, made, snapped, left, off },
     );
 
     /* narrow, the ribbon is the ribbon again */
@@ -3036,6 +3072,71 @@ try {
     );
     check('no errors on the page', errors.length === 0, errors);
     await tctx.close();
+  }
+
+  /* ---- the Bookmarks panel: the PDF's own outline as a tree, as Acrobat shows it ---- */
+  {
+    const d = await PDFDocument.create();
+    for (let i = 0; i < 4; i++) d.addPage([400, 300]);
+    const c = d.context;
+    const root = c.nextRef();
+    const sheets = c.nextRef();
+    const entry = (title, parent, page, extra = {}) =>
+      c.obj({
+        Title: PDFLib.PDFHexString.fromText(title),
+        Parent: parent,
+        Dest: [d.getPage(page).ref, 'Fit'],
+        ...extra,
+      });
+    const layout = c.register(entry('LAYOUT', sheets, 1));
+    const sections = c.register(entry('SECTIONS', sheets, 2));
+    c.lookup(layout).set(PDFName.of('Next'), sections);
+    c.lookup(sections).set(PDFName.of('Prev'), layout);
+    const notes = c.register(entry('Notes', root, 3, { Prev: sheets }));
+    c.assign(
+      sheets,
+      entry('Sheets and Views', root, 0, { First: layout, Last: sections, Count: 2, Next: notes }),
+    );
+    c.assign(root, c.obj({ Type: 'Outlines', First: sheets, Last: notes, Count: 4 }));
+    d.catalog.set(PDFName.of('Outlines'), root);
+    const path = join(CORPUS_DIR, 'smoke-bookmarks.pdf');
+    writeFileSync(path, await d.save());
+
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, path);
+    await page.click('#sTabBookmarks');
+    await page.waitForSelector('#bksTree .bks-go', { timeout: 10000 });
+    const shown = await page.evaluate(() => ({
+      open: !document.getElementById('rail').hidden && !document.getElementById('railBookmarks').hidden,
+      others: Array.from(document.querySelectorAll('#rail > .rail-body'))
+        .filter((b) => b.id !== 'railBookmarks' && !b.hidden)
+        .map((b) => b.id),
+      /* the entries that show: the first level opens, so its children do too */
+      visible: Array.from(document.querySelectorAll('#bksTree .bks-go'))
+        .filter((b) => b.offsetParent !== null)
+        .map((b) => b.textContent),
+    }));
+    await page.click('#bksTree .bks-go >> text=SECTIONS');
+    await page.waitForTimeout(600);
+    const went = await page.evaluate(() => window.ADDPDF.S.current);
+    /* folding the parent hides its children */
+    await page.click('#bksTree li[aria-level="1"] .bks-tw');
+    const folded = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('#bksTree .bks-go'))
+        .filter((b) => b.offsetParent !== null)
+        .map((b) => b.textContent),
+    );
+    check(
+      'Bookmarks opens a sidebar panel with the PDF bookmarks as a tree; a click goes to the page',
+      shown.open &&
+        shown.others.length === 0 &&
+        shown.visible.join() === 'Sheets and Views,LAYOUT,SECTIONS,Notes' &&
+        went === 3 &&
+        folded.join() === 'Sheets and Views,Notes',
+      { shown, went, folded },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
   }
 
   /* ---- every mark stays editable once placed: select, move, scale ---- */

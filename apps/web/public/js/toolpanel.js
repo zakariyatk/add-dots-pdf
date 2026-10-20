@@ -131,7 +131,8 @@
     }
     [
       ['tSelect', 'Select (V)'], ['tPan', 'Pan (H)'], ['tNote', 'Comment'], ['tHighlight', 'Highlight text'],
-      ['tInk', 'Draw'], ['tText', 'Add or edit text'], ['tDim', 'Measure'], ['btnSign', 'Sign']
+      ['tInk', 'Draw'], ['tText', 'Add or edit text'], ['tDim', 'Measure'], ['btnRulers', 'Rulers (Ctrl+R)'],
+      ['btnSign', 'Sign']
     ].forEach(function (q) {
       const src = $(q[0]);
       if (!src) return;
@@ -144,6 +145,14 @@
       if (tool) {
         b.dataset.toolBtn = tool;           /* core lights it with the tool */
         b.classList.toggle('on', X.S.tool === tool);
+      } else if (q[0] === 'btnRulers') {
+        /* a switch rather than a tool: lit while the rulers show, however turned on */
+        const mirror = function () {
+          b.classList.toggle('on', src.classList.contains('on'));
+          b.setAttribute('aria-pressed', src.classList.contains('on') ? 'true' : 'false');
+        };
+        mirror();
+        new MutationObserver(mirror).observe(src, { attributes: true, attributeFilter: ['class'] });
       }
       b.addEventListener('click', function () {
         if (q[0] === 'tSelect') X.setTool('select');
@@ -229,11 +238,11 @@
       tabFind: ic('<circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/>'),
       tabPins: ic('<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>'),
       tabComments: ic('<path d="M4 5h16v11H9l-5 4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="12" x2="13" y2="12"/>'),
-      btnBookmarks: ic('<path d="M6 3h10v18l-5-4-5 4z"/><line x1="19" y1="7" x2="22" y2="7"/><line x1="19" y1="11" x2="22" y2="11"/>')
+      tabBookmarks: ic('<path d="M6 3h10v18l-5-4-5 4z"/><line x1="19" y1="7" x2="22" y2="7"/><line x1="19" y1="11" x2="22" y2="11"/>')
     };
     const SIDE = [
       ['tabPages', 'Pages'], ['tabFind', 'Find'], ['tabComments', 'Notes'],
-      ['tabPins', 'Site photos'], ['btnBookmarks', 'Bookmarks']
+      ['tabPins', 'Site photos'], ['tabBookmarks', 'Bookmarks']
     ];
     SIDE.forEach(function (s) {
       if (!$(s[0])) return;
@@ -243,7 +252,6 @@
       b.innerHTML = SIDE_ICON[s[0]];
       b.addEventListener('click', function () {
         const src = $(s[0]);
-        if (s[0] === 'btnBookmarks') { src.click(); return; }
         const railEl = $('rail');
         /* pressed again, it closes */
         if (!railEl.hidden && src.classList.contains('on')) { X.setRail(false); }
@@ -266,8 +274,7 @@
       SIDE.forEach(function (s) {
         const b = $('s' + s[0][0].toUpperCase() + s[0].slice(1)), src = $(s[0]);
         if (!b || !src) return;
-        b.classList.toggle('on', s[0] === 'btnBookmarks' ? src.classList.contains('on')
-          : !railEl.hidden && src.classList.contains('on'));
+        b.classList.toggle('on', !railEl.hidden && src.classList.contains('on'));
       });
     }
     setInterval(function () { if (on) paintSide(); }, 400);
