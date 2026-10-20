@@ -484,6 +484,62 @@ body.panning #stage, body.midpan #stage { scroll-behavior: auto }
 body.midpan, body.midpan * { cursor: grabbing !important }
 
 /* ---------------------------------------------------------------
+   Rulers and guides (js/rulers.js)
+   --------------------------------------------------------------- */
+
+/* the page area gives itself a border for the rulers to sit in, so they
+   never cover the page */
+body.rulers-on #stage { border-top: 18px solid var(--chrome); border-left: 18px solid var(--chrome) }
+.ruler, .rcorner { position: fixed; z-index: 30 }
+.ruler[hidden], .rcorner[hidden], .rghost[hidden] { display: none }
+.ruler.rtop { cursor: row-resize; touch-action: none }
+.ruler.rleft { cursor: col-resize; touch-action: none }
+.rcorner {
+  width: 18px; height: 18px; padding: 0; border: 0;
+  border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  background: var(--chrome); color: var(--text-dim);
+  font: 600 8px/1 var(--sans); cursor: crosshair; touch-action: none;
+}
+.rcorner:hover, .rcorner[aria-expanded="true"] { color: var(--marker-ink) }
+
+/* a guide: a thin line on its page, with a wider strip to catch the pointer */
+.guides { position: absolute; inset: 0; z-index: 5; pointer-events: none }
+body:not(.rulers-on) .guides { display: none }
+.guide { position: absolute; pointer-events: auto }
+.guide.gh { left: 0; right: 0; height: 7px; margin-top: -3px; cursor: row-resize }
+.guide.gv { top: 0; bottom: 0; width: 7px; margin-left: -3px; cursor: col-resize }
+.guide::after, .rghost::after { content: ""; position: absolute; background: #00B8D9 }
+.guide.gh::after { left: 0; right: 0; top: 3px; height: 1px }
+.guide.gv::after { top: 0; bottom: 0; left: 3px; width: 1px }
+.guide[hidden] { display: none }
+
+/* the line that follows the pointer while a guide is dragged */
+.rghost { position: fixed; z-index: 31; pointer-events: none }
+.rghost.gh { height: 1px }
+.rghost.gv { width: 1px }
+.rghost.gh::after { inset: 0 }
+.rghost.gv::after { inset: 0 }
+body.rdrag-h, body.rdrag-h * { cursor: row-resize !important }
+body.rdrag-v, body.rdrag-v * { cursor: col-resize !important }
+body.rdrag-zero, body.rdrag-zero * { cursor: crosshair !important }
+body.rdrag { user-select: none; -webkit-user-select: none }
+
+/* the corner's menu: units, the zero point and clearing guides */
+.rmenu {
+  position: fixed; z-index: 400; min-width: 200px; padding: 4px;
+  background: var(--chrome); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: var(--shadow-pop, 0 8px 24px rgba(0, 0, 0, .35)); font: 13px/1.2 var(--sans);
+}
+.rmenu button {
+  display: block; width: 100%; padding: 7px 10px 7px 26px; border: 0; border-radius: 5px;
+  background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; position: relative;
+}
+.rmenu button:hover:not(:disabled), .rmenu button:focus-visible { background: var(--hover, rgba(127, 127, 127, .12)) }
+.rmenu button:disabled { color: var(--text-dim); cursor: default; opacity: .6 }
+.rmenu button[aria-checked="true"]::before { content: "\2713"; position: absolute; left: 9px; color: var(--marker-ink) }
+.rmenu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 2px }
+
+/* ---------------------------------------------------------------
    Toolbar arrangement, touch targets and the phone dock
    --------------------------------------------------------------- */
 
