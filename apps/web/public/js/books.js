@@ -362,12 +362,12 @@
         li.appendChild(ul);
         /* the first level opens, as Acrobat shows it; deeper ones wait */
         const open = function (on) {
-          li.classList.toggle('open', on);
+          li.classList.toggle('bks-open', on);
           li.setAttribute('aria-expanded', on ? 'true' : 'false');
         };
         open(level === 1);
-        tw.addEventListener('click', function () { open(!li.classList.contains('open')); });
-        go.addEventListener('dblclick', function () { open(!li.classList.contains('open')); });
+        tw.addEventListener('click', function () { open(!li.classList.contains('bks-open')); });
+        go.addEventListener('dblclick', function () { open(!li.classList.contains('bks-open')); });
       }
       return li;
     }
@@ -381,10 +381,10 @@
       const i = all.indexOf(t), li = t.closest('li');
       if (e.key === 'ArrowDown' && all[i + 1]) { e.preventDefault(); all[i + 1].focus(); }
       else if (e.key === 'ArrowUp' && all[i - 1]) { e.preventDefault(); all[i - 1].focus(); }
-      else if (e.key === 'ArrowRight' && li.querySelector('ul') && !li.classList.contains('open')) { e.preventDefault(); li.querySelector('.bks-tw').click(); }
+      else if (e.key === 'ArrowRight' && li.querySelector('ul') && !li.classList.contains('bks-open')) { e.preventDefault(); li.querySelector('.bks-tw').click(); }
       else if (e.key === 'ArrowLeft') {
         e.preventDefault();
-        if (li.classList.contains('open')) li.querySelector('.bks-tw').click();
+        if (li.classList.contains('bks-open')) li.querySelector('.bks-tw').click();
         else { const up = li.parentNode.closest('li'); if (up) up.querySelector('.bks-go').focus(); }
       }
     });
