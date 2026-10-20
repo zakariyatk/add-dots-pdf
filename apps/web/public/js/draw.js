@@ -980,12 +980,14 @@
     const SNAP_TOOLS = { rect: 1, line: 1, arrow: 1, ellipse: 1, cloud: 1, arc: 1,
                          dim: 1, dimc: 1, dimr: 1, dimd: 1, dima: 1 };
     const SNAP_KINDS = [['end', 'Endpoint'], ['mid', 'Midpoint'], ['int', 'Intersection'],
-                        ['near', 'Nearest'], ['mark', 'Points of your marks']];
-    const SNAP_RANK = { end: 0, mark: 0, cen: 0, int: 1, mid: 2, near: 3 };
-    const snap = { on: true, kinds: { end: 1, mid: 1, int: 1, near: 1, mark: 1 } };
+                        ['near', 'Nearest'], ['mark', 'Points of your marks'], ['guide', 'Guides']];
+    const SNAP_RANK = { end: 0, mark: 0, cen: 0, int: 1, gint: 1, mid: 2, guide: 2, near: 3 };
+    const snap = { on: true, kinds: { end: 1, mid: 1, int: 1, near: 1, mark: 1, guide: 1 } };
     try {
       const pref = JSON.parse(localStorage.getItem('adpdf.snap') || 'null');
       if (pref) { snap.on = pref.on !== false; if (pref.kinds) snap.kinds = pref.kinds; }
+      /* settings kept before guides could be caught: catch them */
+      if (snap.kinds.guide === undefined) snap.kinds.guide = 1;
     } catch (e) { /* defaults */ }
     function saveSnap() {
       try { localStorage.setItem('adpdf.snap', JSON.stringify(snap)); } catch (e) { /* fine */ }
@@ -1110,6 +1112,28 @@
         }
       }
 
+      /* the ruler guides on this page (js/rulers.js), while they show: the
+         point lines up with a guide near it, or sits where two cross */
+      if (K.guide && it.guides && it.guides.length && it.wrap && document.body.classList.contains('rulers-on')) {
+        const v = it.vp.convertToViewportPoint(p[0], p[1]);
+        const off = it.off || { left: 0, top: 0 };
+        const W = it.wrap.clientWidth, H = it.wrap.clientHeight;
+        const px = tol * S.scale;
+        let gx = null, gy = null;
+        it.guides.forEach(function (g) {
+          if (g.v) {
+            const x = g.at * W + off.left;
+            if (Math.abs(x - v[0]) <= px && (gx === null || Math.abs(x - v[0]) < Math.abs(gx - v[0]))) gx = x;
+          } else {
+            const y = g.at * H + off.top;
+            if (Math.abs(y - v[1]) <= px && (gy === null || Math.abs(y - v[1]) < Math.abs(gy - v[1]))) gy = y;
+          }
+        });
+        if (gx !== null && gy !== null) consider(it.vp.convertToPdfPoint(gx, gy), 'gint', 'Guide crossing');
+        if (gx !== null) consider(it.vp.convertToPdfPoint(gx, v[1]), 'guide', 'Guide');
+        if (gy !== null) consider(it.vp.convertToPdfPoint(v[0], gy), 'guide', 'Guide');
+      }
+
       if (K.mark) {
         it.shapes.forEach(function (s, idx) {
           if (opts && opts.skip === idx) return;
@@ -1132,7 +1156,9 @@
       cen: '<circle cx="9" cy="9" r="5.5"/><path d="M9 6.5v5M6.5 9h5"/>',
       mid: '<path d="M9 3.2L15 14.3H3z"/>',
       int: '<path d="M4 4l10 10M14 4L4 14"/>',
-      near: '<path d="M4 4h10L4 14h10z"/>'
+      near: '<path d="M4 4h10L4 14h10z"/>',
+      guide: '<path d="M2 9h14" stroke-dasharray="2.5 1.5"/><circle cx="9" cy="9" r="2.6"/>',
+      gint: '<path d="M2 9h14M9 2v14" stroke-dasharray="2.5 1.5"/><circle cx="9" cy="9" r="2.6"/>'
     };
     let markerKind = '';
     function snapHide() { if (!marker.hidden) marker.hidden = true; }
@@ -1195,7 +1221,7 @@
 
     /* ---- the switch, in the tool's properties ---- */
     const snapCtl = ctl('snapCtl',
-      '<button class="snapbtn" id="snapOn" title="Object snap (F3) — catch ends, middles, crossings and edges. Hold Ctrl to ignore it for a moment.">' +
+      '<button class="snapbtn" id="snapOn" title="Object snap (F3) — catch ends, middles, crossings, edges and ruler guides. Hold Ctrl to ignore it for a moment.">' +
       '<svg viewBox="0 0 18 18"><rect x="3.5" y="3.5" width="11" height="11"/></svg>Snap</button>' +
       '<button class="snapbtn more" id="snapMore" title="Which points to snap to" aria-label="Snap settings">▾</button>');
     const snapPop = document.createElement('div');

@@ -2776,6 +2776,8 @@ try {
       const sr = st.getBoundingClientRect();
       return {
         on: window.ADDPDF.rulers.on(),
+        /* the quick tools beside the page have a Rulers button, lit with them */
+        quick: !!document.querySelector('#quickRail #qbtnRulers.on'),
         top: box('.ruler.rtop'),
         left: box('.ruler.rleft'),
         /* the page area's own content starts below and right of the rulers */
@@ -2808,6 +2810,34 @@ try {
     const guidesOn = (n) =>
       page.evaluate((n) => (window.ADDPDF.S.items[n - 1].guides || []).map((g) => g.v), n);
     const made = await guidesOn(pg.n);
+    /* the Line tool catches the guides: a line begun a few pixels off the
+       horizontal guide and ended a few off the vertical one lands on both */
+    await page.keyboard.press('l');
+    await page.mouse.move(pg.x + 300, pg.y + 124);
+    await page.mouse.down();
+    await page.mouse.move(pg.x + 200, pg.y + 260, { steps: 6 });
+    await page.mouse.move(pg.x + 104, pg.y + 400, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    const snapped = await page.evaluate((n) => {
+      const it = window.ADDPDF.S.items[n - 1];
+      const s = it.shapes[it.shapes.length - 1];
+      const r = it.wrap.getBoundingClientRect(),
+        off = it.off || { left: 0, top: 0 };
+      const at = (q) => {
+        const v = it.vp.convertToViewportPoint(q[0], q[1]);
+        return [r.left + v[0] - off.left, r.top + v[1] - off.top];
+      };
+      const g = (v) => it.guides.find((x) => x.v === v).at;
+      return {
+        t: s && s.t,
+        a: s && at(s.a),
+        b: s && at(s.b),
+        gy: r.top + g(false) * r.height,
+        gx: r.left + g(true) * r.width,
+      };
+    }, pg.n);
+    await page.keyboard.press('v');
     await page.mouse.move(pg.x + 100, pg.y + 300);
     await page.mouse.down();
     await page.mouse.move(rul.left.x + 9, pg.y + 300, { steps: 6 });
@@ -2818,18 +2848,24 @@ try {
     const off = await page.evaluate(() => ({
       on: window.ADDPDF.rulers.on(),
       hidden: document.querySelector('.ruler.rtop').hidden,
+      quick: document.getElementById('qbtnRulers').classList.contains('on'),
     }));
     check(
-      'Ctrl+R shows rulers beside the page; guides drag out of them and back onto them to go',
+      'Ctrl+R shows rulers beside the page; guides drag out of them, drawing snaps to them, back onto a ruler they go',
       rul.on &&
+        rul.quick &&
         rul.clear &&
         rul.top.w > 200 &&
         rul.left.h > 200 &&
         made.join() === 'false,true' &&
+        snapped.t === 'line' &&
+        Math.abs(snapped.a[1] - snapped.gy) < 1 &&
+        Math.abs(snapped.b[0] - snapped.gx) < 1 &&
         left.join() === 'false' &&
         !off.on &&
-        off.hidden,
-      { rul, made, left, off },
+        off.hidden &&
+        !off.quick,
+      { rul, made, snapped, left, off },
     );
 
     /* narrow, the ribbon is the ribbon again */

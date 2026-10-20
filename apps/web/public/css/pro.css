@@ -506,6 +506,8 @@ body.rulers-on #stage { border-top: 18px solid var(--chrome); border-left: 18px 
 .guides { position: absolute; inset: 0; z-index: 5; pointer-events: none }
 body:not(.rulers-on) .guides { display: none }
 .guide { position: absolute; pointer-events: auto }
+/* with a drawing tool in hand the guides are for snapping to, not for grabbing */
+body:not([data-tool="select"]) .guide { pointer-events: none }
 .guide.gh { left: 0; right: 0; height: 7px; margin-top: -3px; cursor: row-resize }
 .guide.gv { top: 0; bottom: 0; width: 7px; margin-left: -3px; cursor: col-resize }
 .guide::after, .rghost::after { content: ""; position: absolute; background: #00B8D9 }

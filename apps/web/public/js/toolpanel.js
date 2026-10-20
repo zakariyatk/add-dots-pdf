@@ -131,7 +131,8 @@
     }
     [
       ['tSelect', 'Select (V)'], ['tPan', 'Pan (H)'], ['tNote', 'Comment'], ['tHighlight', 'Highlight text'],
-      ['tInk', 'Draw'], ['tText', 'Add or edit text'], ['tDim', 'Measure'], ['btnSign', 'Sign']
+      ['tInk', 'Draw'], ['tText', 'Add or edit text'], ['tDim', 'Measure'], ['btnRulers', 'Rulers (Ctrl+R)'],
+      ['btnSign', 'Sign']
     ].forEach(function (q) {
       const src = $(q[0]);
       if (!src) return;
@@ -144,6 +145,14 @@
       if (tool) {
         b.dataset.toolBtn = tool;           /* core lights it with the tool */
         b.classList.toggle('on', X.S.tool === tool);
+      } else if (q[0] === 'btnRulers') {
+        /* a switch rather than a tool: lit while the rulers show, however turned on */
+        const mirror = function () {
+          b.classList.toggle('on', src.classList.contains('on'));
+          b.setAttribute('aria-pressed', src.classList.contains('on') ? 'true' : 'false');
+        };
+        mirror();
+        new MutationObserver(mirror).observe(src, { attributes: true, attributeFilter: ['class'] });
       }
       b.addEventListener('click', function () {
         if (q[0] === 'tSelect') X.setTool('select');
