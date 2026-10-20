@@ -58,10 +58,16 @@
 
   /* the other ADD DOTS apps, as on www.adddots.com; `site` is the name the
      Windows app opens in the browser (src-tauri open_site) */
+  /* the Option Builder mark: an "A" with rising candles and a violet trend
+     arrow, as in that app's public/favicon.svg */
+  const LOGO_OB = '<svg viewBox="162 157 928 935" aria-hidden="true"><rect x="162" y="157" width="928" height="935" rx="220" fill="#000"/><g fill="#fff"><path d="M578,322 C600,285 658,285 680,322 L790,527 L706,612 L626,472 L520,655 C440,738 360,805 286,866 C276,873 266,866 272,856 Z"/><path d="M276,903 L382,816 L382,918 C382,926 376,932 368,932 L286,932 C266,932 262,914 276,903 Z"/><rect x="410" y="793" width="55" height="140" rx="9"/><rect x="573" y="679" width="55" height="156" rx="9"/><path d="M828,606 L982,888 C996,912 984,932 958,932 L842,932 C822,932 808,924 800,910 L724,768 C712,744 716,722 732,704 Z"/></g><g fill="#7B61FF" stroke="#000" stroke-width="14" stroke-linejoin="round" paint-order="stroke"><rect x="488" y="739" width="63" height="138" rx="9" stroke="none"/><path d="M482,710 L604,584 C610,578 618,578 624,584 L692,648 L832,516 L852,540 L702,704 C694,712 684,712 678,704 L606,622 Z"/><path d="M806,488 L900,458 C910,455 916,462 913,472 L894,560 C891,570 882,572 876,566 Z"/></g></svg>';
+  /* the Add Call mark: an "A" whose crossbar is a violet "+", on its app-icon
+     tile (that app's branding/logo.ts, icon variant) */
+  const LOGO_AC = '<svg viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="13" fill="#0A0A0A"/><g transform="translate(32 32) scale(.82) translate(-32 -32)" fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M19.5 45L32 15.5L44.5 45" stroke="#fff" stroke-width="6.5"/><path d="M32 30.5V41.5M26.5 36H37.5" stroke="#7B61FF" stroke-width="4.5"/></g></svg>';
   const APPS = [
-    { name: 'PDF Reader + Editor', sub: 'This app', here: true, logo: true },
-    { name: 'Option Builder', sub: 'Web app', url: 'https://opbuilder.adddots.com/', site: 'opbuilder', mark: 'OB', c: '#1473E6' },
-    { name: 'Add Call', sub: 'Web app', url: 'https://call.adddots.com/', site: 'call', mark: 'AC', c: '#22A06B' }
+    { name: 'PDF Reader + Editor', sub: 'This app', here: true, logo: LOGO },
+    { name: 'Option Builder', sub: 'Web app', url: 'https://opbuilder.adddots.com/', site: 'opbuilder', logo: LOGO_OB },
+    { name: 'Add Call', sub: 'Web app', url: 'https://call.adddots.com/', site: 'call', logo: LOGO_AC }
   ];
 
   function el(tag, cls, html) {
@@ -310,8 +316,7 @@
     const html = '<div class="abhead">Other ADD DOTS apps</div>' +
       APPS.map(function (a, i) {
         return '<div class="abapprow">' +
-          (a.logo ? '<span class="abappic ablogo">' + LOGO + '</span>' :
-            '<span class="abappic" style="--c:' + a.c + '">' + esc(a.mark) + '</span>') +
+          '<span class="abappic ablogo">' + a.logo + '</span>' +
           '<span class="abappn"><b>' + esc(a.name) + '</b><small>' + esc(a.sub) + '</small></span>' +
           (a.here ? '<span class="abhere">In use</span>' :
             '<button type="button" class="abapp" data-i="' + i + '">Open</button>') + '</div>';
