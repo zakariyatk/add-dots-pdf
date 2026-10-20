@@ -2763,6 +2763,75 @@ try {
       { before: zb, after: za },
     );
 
+    /* Ctrl+R shows the rulers beside the page, not over it; a guide drags
+       out of each, a guide dragged back onto a ruler goes, Ctrl+R hides them */
+    await page.keyboard.press('Control+r');
+    await page.waitForTimeout(500);
+    const rul = await page.evaluate(() => {
+      const box = (s) => {
+        const r = document.querySelector(s).getBoundingClientRect();
+        return { x: r.x, y: r.y, w: r.width, h: r.height };
+      };
+      const st = document.getElementById('stage');
+      const sr = st.getBoundingClientRect();
+      return {
+        on: window.ADDPDF.rulers.on(),
+        top: box('.ruler.rtop'),
+        left: box('.ruler.rleft'),
+        /* the page area's own content starts below and right of the rulers */
+        clear:
+          sr.top + st.clientTop >= box('.ruler.rtop').y + 18 &&
+          sr.left + st.clientLeft >= box('.ruler.rleft').x + 18,
+        page: (() => {
+          const it = window.ADDPDF.S.items[window.ADDPDF.S.current - 1];
+          const r = it.wrap.getBoundingClientRect();
+          /* the part of it in view: zoomed in, it runs on under the panels */
+          const x = Math.max(r.x, sr.left + st.clientLeft + 40);
+          return {
+            n: window.ADDPDF.S.current,
+            x,
+            y: Math.max(r.y, sr.top + 40),
+            w: Math.min(r.right, sr.right - 40) - x,
+          };
+        })(),
+      };
+    });
+    const pg = rul.page;
+    await page.mouse.move(pg.x + pg.w / 2, rul.top.y + 9);
+    await page.mouse.down();
+    await page.mouse.move(pg.x + pg.w / 2, pg.y + 120, { steps: 6 });
+    await page.mouse.up();
+    await page.mouse.move(rul.left.x + 9, pg.y + 200);
+    await page.mouse.down();
+    await page.mouse.move(pg.x + 100, pg.y + 200, { steps: 6 });
+    await page.mouse.up();
+    const guidesOn = (n) =>
+      page.evaluate((n) => (window.ADDPDF.S.items[n - 1].guides || []).map((g) => g.v), n);
+    const made = await guidesOn(pg.n);
+    await page.mouse.move(pg.x + 100, pg.y + 300);
+    await page.mouse.down();
+    await page.mouse.move(rul.left.x + 9, pg.y + 300, { steps: 6 });
+    await page.mouse.up();
+    const left = await guidesOn(pg.n);
+    await page.keyboard.press('Control+r');
+    await page.waitForTimeout(300);
+    const off = await page.evaluate(() => ({
+      on: window.ADDPDF.rulers.on(),
+      hidden: document.querySelector('.ruler.rtop').hidden,
+    }));
+    check(
+      'Ctrl+R shows rulers beside the page; guides drag out of them and back onto them to go',
+      rul.on &&
+        rul.clear &&
+        rul.top.w > 200 &&
+        rul.left.h > 200 &&
+        made.join() === 'false,true' &&
+        left.join() === 'false' &&
+        !off.on &&
+        off.hidden,
+      { rul, made, left, off },
+    );
+
     /* narrow, the ribbon is the ribbon again */
     await page.setViewportSize({ width: 860, height: 900 });
     await page.waitForTimeout(300);

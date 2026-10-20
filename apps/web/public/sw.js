@@ -43,6 +43,7 @@ const SHELL = [
   'js/fonts.js',
   'js/core.js',
   'js/navigate.js',
+  'js/rulers.js',
   'js/annotate.js',
   'js/draw.js',
   'js/organize.js',
