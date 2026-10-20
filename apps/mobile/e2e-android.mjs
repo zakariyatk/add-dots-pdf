@@ -209,12 +209,14 @@ try {
   const shell = await page.evaluate(async () => ({
     native: !!(window.Capacitor && window.Capacitor.isNativePlatform()),
     engine: !!window.ADDPDFEngine,
+    /* the phone's own screens (js/phone.js) are on */
+    phone: document.body.dataset.phone === '1' && !!document.getElementById('ph'),
     workers: navigator.serviceWorker ? (await navigator.serviceWorker.getRegistrations()).length : 0,
     webview: navigator.userAgent.replace(/^.*(Chrome\/[\d.]+).*$/, '$1'),
   }));
   check(
-    'the phone app, with the engine bundle, and no service worker',
-    shell.native && shell.engine && shell.workers === 0,
+    'the phone app, with its own screens, the engine bundle, and no service worker',
+    shell.native && shell.phone && shell.engine && shell.workers === 0,
     shell,
   );
 

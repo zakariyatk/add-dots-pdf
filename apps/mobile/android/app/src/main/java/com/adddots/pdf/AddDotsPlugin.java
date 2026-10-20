@@ -9,6 +9,7 @@ import android.provider.OpenableColumns;
 import android.util.Base64;
 
 import androidx.activity.result.ActivityResult;
+import androidx.core.content.FileProvider;
 
 import com.getcapacitor.JSObject;
 import com.getcapacitor.Plugin;
@@ -34,6 +35,10 @@ import java.io.OutputStream;
  *
  * Saving: the page sends the file's bytes (saveFile) and Android's own
  * "save to" picker asks where. Cancelling resolves { cancelled: true }.
+ *
+ * Sharing: the page sends the file's bytes (shareFile) and Android's share
+ * sheet offers the apps that take it (WhatsApp, Gmail, Drive...). The copy
+ * lives in the app's cache, under shared/, and is replaced by the next one.
  */
 @CapacitorPlugin(name = "AddDots")
 public class AddDotsPlugin extends Plugin {
@@ -157,6 +162,42 @@ public class AddDotsPlugin extends Plugin {
         intent.setType(type);
         intent.putExtra(Intent.EXTRA_TITLE, name);
         startActivityForResult(call, intent, "saved");
+    }
+
+    /** The bytes (base64) handed to the app the reader picks from the share sheet. */
+    @PluginMethod
+    public void shareFile(PluginCall call) {
+        String name = call.getString("name", "document.pdf").replaceAll("[\\\\/:*?\"<>|]", "_");
+        String type = call.getString("type", "application/pdf");
+        String data = call.getString("data");
+        if (data == null) {
+            call.reject("nothing to share");
+            return;
+        }
+        File dir = new File(getContext().getCacheDir(), "shared");
+        //noinspection ResultOfMethodCallIgnored
+        dir.mkdirs();
+        File[] old = dir.listFiles();
+        if (old != null) for (File f : old) {
+            //noinspection ResultOfMethodCallIgnored
+            f.delete();
+        }
+        File f = new File(dir, name);
+        try (OutputStream out = new FileOutputStream(f)) {
+            out.write(Base64.decode(data, Base64.DEFAULT));
+        } catch (IOException e) {
+            call.reject("Could not share: " + e.getMessage());
+            return;
+        }
+        Uri uri = FileProvider.getUriForFile(getContext(), getContext().getPackageName() + ".fileprovider", f);
+        Intent send = new Intent(Intent.ACTION_SEND);
+        send.setType(type);
+        send.putExtra(Intent.EXTRA_STREAM, uri);
+        send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        Intent chooser = Intent.createChooser(send, name);
+        chooser.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        getActivity().startActivity(chooser);
+        call.resolve(new JSObject());
     }
 
     @ActivityCallback

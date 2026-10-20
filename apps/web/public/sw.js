@@ -38,6 +38,7 @@ const SHELL = [
   'css/light.css',
   'css/wps.css',
   'css/toolpanel.css',
+  'css/phone.css',
   'js/engine.js',
   'js/fonts-list.js',
   'js/fonts.js',
@@ -69,6 +70,7 @@ const SHELL = [
   'js/update.js',
   'js/desktop.js',
   'js/mobile.js',
+  'js/phone.js',
   'js/config.js',
   'js/vendor/supabase.js',
   /* shown in the account dialog, offline too */
