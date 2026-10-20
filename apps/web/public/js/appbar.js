@@ -137,8 +137,7 @@
     '<span class="abgrow"></span>' +
     '<button type="button" class="abbtn abicon" id="abHelp" aria-haspopup="menu" aria-expanded="false" title="Help" aria-label="Help">' + ICON.help + '</button>' +
     '<button type="button" class="abbtn abicon" id="abNews" aria-haspopup="dialog" aria-expanded="false" title="What is new" aria-label="What is new">' + ICON.bell + '<i class="abdot" hidden></i></button>' +
-    '<button type="button" class="abbtn abicon" id="abApps" aria-haspopup="dialog" aria-expanded="false" title="Other ADD DOTS apps" aria-label="Other ADD DOTS apps">' + ICON.apps + '</button>' +
-    '<a class="abme" href="https://www.adddots.com/" title="ADD DOTS" aria-label="ADD DOTS home">AD</a>';
+    '<button type="button" class="abbtn abicon" id="abApps" aria-haspopup="dialog" aria-expanded="false" title="Other ADD DOTS apps" aria-label="Other ADD DOTS apps">' + ICON.apps + '</button>';
   if (win) {
     bar.insertAdjacentHTML('beforeend',
       '<span class="abwin">' +

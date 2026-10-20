@@ -1150,10 +1150,8 @@
   .appbar .abcreate svg{width:16px;height:16px;stroke-width:2}
   .appbar .abdot{position:absolute;top:5px;right:6px;width:7px;height:7px;border-radius:50%;background:#D7372F;
                  box-shadow:0 0 0 2px var(--chrome)}
-  .appbar .abme{flex:none;width:28px;height:28px;margin:0 6px 0 4px;border-radius:50%;display:grid;place-items:center;
-                background:#050505;color:#fff;text-decoration:none;font:700 8.5px/1 Arial,Helvetica,sans-serif;letter-spacing:1px;
-                padding-left:1px;box-shadow:0 0 0 1px var(--line)}
-  .appbar .abme:hover{box-shadow:0 0 0 2px var(--marker)}
+  /* the last icon keeps a little room from the edge (and the window's controls) */
+  .appbar #abApps{margin-right:6px}
   .appbar .abwin{display:flex;align-self:stretch;margin-left:2px}
   .appbar .abw{width:46px;height:100%;border:0;background:none;color:inherit;display:grid;place-items:center;cursor:default}
   .appbar .abw svg{width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:1;shape-rendering:crispEdges}
