@@ -3038,6 +3038,71 @@ try {
     await tctx.close();
   }
 
+  /* ---- the Bookmarks panel: the PDF's own outline as a tree, as Acrobat shows it ---- */
+  {
+    const d = await PDFDocument.create();
+    for (let i = 0; i < 4; i++) d.addPage([400, 300]);
+    const c = d.context;
+    const root = c.nextRef();
+    const sheets = c.nextRef();
+    const entry = (title, parent, page, extra = {}) =>
+      c.obj({
+        Title: PDFLib.PDFHexString.fromText(title),
+        Parent: parent,
+        Dest: [d.getPage(page).ref, 'Fit'],
+        ...extra,
+      });
+    const layout = c.register(entry('LAYOUT', sheets, 1));
+    const sections = c.register(entry('SECTIONS', sheets, 2));
+    c.lookup(layout).set(PDFName.of('Next'), sections);
+    c.lookup(sections).set(PDFName.of('Prev'), layout);
+    const notes = c.register(entry('Notes', root, 3, { Prev: sheets }));
+    c.assign(
+      sheets,
+      entry('Sheets and Views', root, 0, { First: layout, Last: sections, Count: 2, Next: notes }),
+    );
+    c.assign(root, c.obj({ Type: 'Outlines', First: sheets, Last: notes, Count: 4 }));
+    d.catalog.set(PDFName.of('Outlines'), root);
+    const path = join(CORPUS_DIR, 'smoke-bookmarks.pdf');
+    writeFileSync(path, await d.save());
+
+    const { ctx, page, errors } = await fresh(browser);
+    await open(page, path);
+    await page.click('#sTabBookmarks');
+    await page.waitForSelector('#bksTree .bks-go', { timeout: 10000 });
+    const shown = await page.evaluate(() => ({
+      open: !document.getElementById('rail').hidden && !document.getElementById('railBookmarks').hidden,
+      others: Array.from(document.querySelectorAll('#rail > .rail-body'))
+        .filter((b) => b.id !== 'railBookmarks' && !b.hidden)
+        .map((b) => b.id),
+      /* the entries that show: the first level opens, so its children do too */
+      visible: Array.from(document.querySelectorAll('#bksTree .bks-go'))
+        .filter((b) => b.offsetParent !== null)
+        .map((b) => b.textContent),
+    }));
+    await page.click('#bksTree .bks-go >> text=SECTIONS');
+    await page.waitForTimeout(600);
+    const went = await page.evaluate(() => window.ADDPDF.S.current);
+    /* folding the parent hides its children */
+    await page.click('#bksTree li[aria-level="1"] .bks-tw');
+    const folded = await page.evaluate(() =>
+      Array.from(document.querySelectorAll('#bksTree .bks-go'))
+        .filter((b) => b.offsetParent !== null)
+        .map((b) => b.textContent),
+    );
+    check(
+      'Bookmarks opens a sidebar panel with the PDF bookmarks as a tree; a click goes to the page',
+      shown.open &&
+        shown.others.length === 0 &&
+        shown.visible.join() === 'Sheets and Views,LAYOUT,SECTIONS,Notes' &&
+        went === 3 &&
+        folded.join() === 'Sheets and Views,Notes',
+      { shown, went, folded },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- every mark stays editable once placed: select, move, scale ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
