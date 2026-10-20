@@ -64,6 +64,20 @@
     });
   };
 
+  /* Android's share sheet, for Send a copy (EXT.shareCopy). Resolves true
+     once the sheet is up; where the app went is not reported back. */
+  if (C.getPlatform && C.getPlatform() === 'android') {     /* not written for iOS yet */
+    api.shareFile = function (data, name, type) {
+      return toBytes(data).then(function (bytes) {
+        return P.shareFile({ name: name, type: type || 'application/pdf', data: toBase64(bytes) });
+      }).then(function () { return true; }, function (e) {
+        console.error('[mobile] share', e);
+        if (api.toast) api.toast('Could not share: ' + String(e && e.message || e).slice(0, 120));
+        return false;
+      });
+    };
+  }
+
   P.launchFile().then(openHanded, function (e) { console.error('[mobile] launch file', e); });
   P.addListener('openFile', openHanded);
 })();

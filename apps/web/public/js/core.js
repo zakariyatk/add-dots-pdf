@@ -1106,6 +1106,7 @@
     m.innerHTML = S.metaBase + ' · ' + n + 'p' + (changed ? ' <span class="dirty">· edited</span>' : '');
     m.title = m.textContent;   /* the bar truncates it on narrow screens */
     $('docTitle').textContent = n ? docName() + ', ' + n + (n === 1 ? ' page' : ' pages') : 'ADD DOTS PDF';
+    EXT.emit('meta');
   }
 
   /* ---------------- layout ---------------- */
@@ -4997,22 +4998,31 @@
      The choices are remembered on this device. */
   const STAMP_KEY = 'adpdf-camstamp';
   const STAMP = (function () {
-    const d = { date: true, pin: true, text: '' };
-    try { return Object.assign(d, JSON.parse(localStorage.getItem(STAMP_KEY) || '{}')); }
-    catch (err) { return d; }
+    const d = { date: true, time: true, pin: true, text: '' };
+    try {
+      const got = JSON.parse(localStorage.getItem(STAMP_KEY) || '{}');
+      /* saved before the date and the time were two choices: one went with the other */
+      if (got.time === undefined && got.date !== undefined) got.time = got.date;
+      return Object.assign(d, got);
+    } catch (err) { return d; }
   })();
   function stampSave() {
     try { localStorage.setItem(STAMP_KEY, JSON.stringify(STAMP)); } catch (err) { /* private window */ }
   }
-  function stampWhen(d) {
-    try {
-      return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) + '  ' +
-             d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    } catch (err) { return camStamp(d); }
+  function stampDay(d) {
+    try { return d.toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }); }
+    catch (err) { return camStamp(d).slice(0, 10); }
   }
+  function stampTime(d) {
+    try { return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', second: '2-digit' }); }
+    catch (err) { return camStamp(d).slice(11); }
+  }
+  /* how many of the first lines are the date and the time (drawn in yellow) */
+  function stampWhenLines() { return (STAMP.date ? 1 : 0) + (STAMP.time ? 1 : 0); }
   function stampLines(p, when) {
-    const out = [];
-    if (STAMP.date) out.push(stampWhen(when || new Date()));
+    const out = [], d = when || new Date();
+    if (STAMP.date) out.push('Date: ' + stampDay(d));
+    if (STAMP.time) out.push('Time: ' + stampTime(d));
     if (STAMP.pin && p) out.push('Pin ' + p.L.n + (p.L.ref ? '  ·  ' + p.L.ref : ''));
     const t = (STAMP.text || '').trim();
     if (t) out.push(t);
@@ -5035,7 +5045,7 @@
     roundRect(g, x, y, bw, bh, fs * 0.3);
     g.fill();
     lines.forEach(function (l, i) {
-      g.fillStyle = i === 0 && STAMP.date ? '#FFD34D' : '#FFFFFF';
+      g.fillStyle = i < stampWhenLines() ? '#FFD34D' : '#FFFFFF';
       g.fillText(l, w - edge - pad, y + pad / 2 + lh * (i + 0.5), tw);
     });
     g.restore();
@@ -5060,18 +5070,21 @@
     box.style.bottom = (mr.height - py - ph + fs * 0.7) + 'px';
     box.style.maxWidth = Math.max(40, pw - fs * 1.4) + 'px';
     box.innerHTML = lines.map(function (l, i) {
-      return '<div' + (i === 0 && STAMP.date ? ' class="d"' : '') + '>' + esc(l) + '</div>';
+      return '<div' + (i < stampWhenLines() ? ' class="d"' : '') + '>' + esc(l) + '</div>';
     }).join('');
   }
   function stampSync() {
     $('camStDate').classList.toggle('on', STAMP.date);
+    $('camStTime').classList.toggle('on', STAMP.time);
     $('camStPin').classList.toggle('on', STAMP.pin);
     $('camStDate').setAttribute('aria-pressed', STAMP.date);
+    $('camStTime').setAttribute('aria-pressed', STAMP.time);
     $('camStPin').setAttribute('aria-pressed', STAMP.pin);
     if ($('camStText').value !== STAMP.text) $('camStText').value = STAMP.text;
     stampPreview();
   }
   $('camStDate').addEventListener('click', function () { STAMP.date = !STAMP.date; stampSave(); stampSync(); });
+  $('camStTime').addEventListener('click', function () { STAMP.time = !STAMP.time; stampSave(); stampSync(); });
   $('camStPin').addEventListener('click', function () { STAMP.pin = !STAMP.pin; stampSave(); stampSync(); });
   $('camStText').addEventListener('input', function () { STAMP.text = this.value; stampSave(); stampPreview(); });
   $('camStText').addEventListener('keydown', function (e) {
@@ -6510,6 +6523,22 @@
     } finally {
       saving = false;
       $('btnSave').disabled = false; $('btnSave').textContent = was;
+    }
+  }
+
+  /* Send a copy (the phone app): the document as it stands, handed to the
+     app the reader picks from the system's share sheet (EXT.shareFile, in
+     js/mobile.js). Nothing is saved here, so the work stays unsaved. */
+  async function shareCopy() {
+    if (!S.items.length || saving || !EXT.shareFile) return;
+    closePops();
+    const name = /\.pdf$/i.test($('saveName').value.trim()) ? $('saveName').value.trim() : S.baseName + '-edited.pdf';
+    toast('Preparing to share…');
+    try {
+      const blob = await buildPdf(S.items, null, { photos: livePins().length > 0, append: true, annots: true }, 'blob');
+      await EXT.shareFile(blob, name);
+    } catch (e) {
+      toast(esc(saveError(e, 'The document could not be prepared for sharing')));
     }
   }
 
@@ -8522,6 +8551,7 @@
     else if (t === 'jpg') openPop('jpgPop', $('btnJpg'));
     else if (t === 'translate') openPop('trPop', $('btnTr'));
     else if (t === 'merge') toast('Merged · use <b>Add</b> to join more PDFs');
+    else if (t === 'sign' && $('btnSign')) $('btnSign').click();
   }
 
   $('toolGrid').addEventListener('click', function (e) {
@@ -8623,6 +8653,7 @@
     if (my !== recentToken) return;
     recentRecs = all;
     refreshHello();
+    EXT.emit('recent', all);
     $('recentClear').hidden = !all.length;
     const list = $('recentList');
     if (!all.length) {
@@ -9215,7 +9246,16 @@
     isMobile: isMobile,
     openFiles: takeFiles,
     okToReplace: okToReplace,
-    isDirty: isDirty, docName: docName, homeShown: homeShown, showHome: showHome,
+    isDirty: isDirty, docName: docName, homeShown: homeShown, showHome: showHome, hideHome: hideHome,
+    /* the recent files, newest first, for the phone's home (js/phone.js) */
+    recent: function () { return recentRecs.slice(); }, openRecent: openRecent,
+    forgetRecent: async function (i) {
+      const r = recentRecs[i];
+      if (r) { try { await idbRun('readwrite', function (st) { st.delete(r.key); }); } catch (err) {} }
+      renderRecent();
+    },
+    /* the file picker, then tool t (as the home screen's tool cards) on what was picked */
+    pickFile: pickNew, runTool: runTool, shareCopy: shareCopy,
     /* the zoom, for the status bar (js/skin.js): read it, or glide to one */
     zoom: function () { return glideTarget(); }, zoomTo: function (v, x, y) { zoomGlide(v, x, y); },
     /* two pages side by side: on now, set it, how far Next goes */

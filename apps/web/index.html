@@ -25,6 +25,7 @@
 <link rel="stylesheet" href="css/light.css">
 <link rel="stylesheet" href="css/wps.css">
 <link rel="stylesheet" href="css/toolpanel.css">
+<link rel="stylesheet" href="css/phone.css">
 
 <script src="js/health.js"></script>
 <script src="js/vendor/pdf.min.js"></script>
@@ -38,6 +39,14 @@
     var m = 'light';
     try { m = localStorage.getItem('adpdf-ui') || 'light'; } catch (e) {}
     document.body.dataset.ui = m === 'dark' ? 'dark' : 'light';
+    /* the phone app's own screens (js/phone.js, css/phone.css): in the
+       Capacitor app, or with ?phone=1 to try them in a browser */
+    try {
+      var C = window.Capacitor;
+      if ((C && C.isNativePlatform && C.isNativePlatform()) || /[?&]phone=1(&|$)/.test(location.search)) {
+        document.body.dataset.phone = '1';
+      }
+    } catch (e) {}
   })();
 </script>
 <div class="app">
@@ -864,8 +873,10 @@
     <div id="camstampview" hidden=""></div>
   </div>
   <div id="camstamp" role="group" aria-label="Stamp on each photo">
-    <button class="chip on" id="camStDate" aria-pressed="true" title="Stamp the date and time on each photo">
-      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>Date &amp; time</button>
+    <button class="chip on" id="camStDate" aria-pressed="true" title="Stamp the date on each photo">
+      <svg viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="15" rx="2"></rect><path d="M4 10h16M8 3v4M16 3v4"></path></svg>Date</button>
+    <button class="chip on" id="camStTime" aria-pressed="true" title="Stamp the time on each photo">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><polyline points="12 7 12 12 15.5 14"></polyline></svg>Time</button>
     <button class="chip on" id="camStPin" aria-pressed="true" title="Stamp the pin number and reference on each photo">
       <svg viewBox="0 0 24 24"><path d="M12 21s-6-5.5-6-11a6 6 0 0 1 12 0c0 5.5-6 11-6 11z"></path><circle cx="12" cy="10" r="2"></circle></svg>Pin</button>
     <input id="camStText" maxlength="80" placeholder="Add text to the photo…" aria-label="Text to stamp on each photo" enterkeyhint="done">
@@ -1108,6 +1119,7 @@
 <script src="js/pwa.js"></script>
 <script src="js/desktop.js"></script>
 <script src="js/mobile.js"></script>
+<script src="js/phone.js"></script>
 <script src="js/config.js"></script>
 </body>
 </html>
