@@ -1287,7 +1287,7 @@ body.props-in-ribbon #panTool #modeBar { min-width: 0; flex: 0 1 auto }
 
 /* ---------- side panel tabs: Pages / Find / Properties / Notes ----------
    Real buttons in a tidy two-by-two grid: the same size, the names centred,
-   and the open one plainly different — filled blue, the rest outlined. */
+   and the open one plainly different — filled violet, the rest outlined. */
 body .rail-tabs { gap: 6px; padding: 10px 10px 4px }
 body .rail-tabs .btn:not(#railClose) {
   height: 32px; justify-content: center; text-align: center; padding: 0 8px;
@@ -1299,8 +1299,8 @@ body .rail-tabs .btn:not(#railClose):hover:not(.on) {
   background: var(--chrome-2); border-color: color-mix(in srgb, var(--marker) 45%, var(--line));
 }
 body .rail-tabs .btn.on:not(#railClose) {
-  background: var(--marker); border-color: var(--marker); color: var(--accent-ink, #050505);
-  font-weight: 650; box-shadow: 0 1px 3px color-mix(in srgb, var(--marker) 40%, transparent);
+  background: var(--btn, var(--marker)); border-color: var(--btn, var(--marker)); color: var(--accent-ink, #050505);
+  font-weight: 650; box-shadow: 0 1px 3px color-mix(in srgb, var(--btn, var(--marker)) 40%, transparent);
 }
 .markpop .mfield[hidden] { display: none }
 
