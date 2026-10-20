@@ -483,26 +483,6 @@ body.panning #stage, body.midpan #stage { scroll-behavior: auto }
    whatever that tool was showing. */
 body.midpan, body.midpan * { cursor: grabbing !important }
 
-/* Recentre rides over the page rather than in the toolbar: it exists only
-   while the page is off its mark, and should not make the toolbar jump. */
-.panhome {
-  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%);
-  z-index: 40; display: flex; align-items: center; gap: 7px;
-  padding: 8px 14px; border-radius: 999px;
-  background: var(--chrome-2); color: var(--text);
-  border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.45);
-  font: inherit; font-size: 12.5px; cursor: pointer;
-}
-.panhome[hidden] { display: none }
-.panhome:hover { border-color: var(--text-dim) }
-.panhome svg {
-  width: 15px; height: 15px; fill: none;
-  stroke: currentColor; stroke-width: 1.7;
-  stroke-linecap: round; stroke-linejoin: round;
-}
-/* it must not sit under the pointer while a drag is in progress */
-body.panning .panhome { opacity: 0; pointer-events: none }
-
 /* ---------------------------------------------------------------
    Toolbar arrangement, touch targets and the phone dock
    --------------------------------------------------------------- */
@@ -526,7 +506,6 @@ body.panning .panhome { opacity: 0; pointer-events: none }
   .docbox .btn { min-height: 40px }
   /* hover-only affordances have to be permanently visible on a touch screen */
   .thumb .tools, .ptools { opacity: 1 }
-  .panhome { padding: 12px 18px }
 }
 
 /* --- the phone dock --- */
@@ -571,7 +550,6 @@ body.panning .panhome { opacity: 0; pointer-events: none }
   #moreBody .grp:last-child { border-bottom: 0 }
 
   /* our own overlays must clear the dock and the safe area */
-  .panhome { bottom: calc(76px + env(safe-area-inset-bottom)) }
   .cthread { max-width: calc(100vw - 20px) }
   .orgview > header { gap: 6px; padding: 8px 10px }
   .orggrid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 12px }
@@ -589,14 +567,11 @@ body.panning .panhome { opacity: 0; pointer-events: none }
 @media (max-width: 400px) {
   .dock[data-crowded="yes"] .btn { min-width: 54px }
   .dock .btn::after { font-size: 8.5px }
-  .panhome span { display: none }
-  .panhome { padding: 12px 14px }
 }
 
 /* --- landscape phone: vertical space is the scarce thing --- */
 @media (max-width: 900px) and (max-height: 480px) {
   .dock .btn { height: 40px }
-  .panhome { bottom: calc(52px + env(safe-area-inset-bottom)); padding: 8px 12px }
   .sigbox, .docbox { max-height: calc(100vh - 20px) }
   #sigCanvas { height: 130px }
 }
