@@ -48,7 +48,7 @@
   .btn:hover:not(:disabled){background:var(--chrome-2);border-color:var(--line)}
   .btn:disabled{opacity:.3;cursor:default}
   .btn.on{background:var(--chrome-2);border-color:var(--line);color:var(--marker-ink)}
-  .btn.primary{background:var(--marker);color:#050505;font-weight:650}
+  .btn.primary{background:var(--btn,var(--marker));color:#050505;font-weight:650}
   .btn.primary:hover:not(:disabled){background:#DDDDDD;border-color:transparent}
   .btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
   .sep{width:1px;height:20px;background:var(--line);margin:0 3px;flex:none}
@@ -618,7 +618,7 @@
   #pmtools::-webkit-scrollbar{display:none}
   #pmtools .btn{flex:none}
   #pmtools .btn{height:32px;gap:6px;padding:0 10px;border-color:var(--line)}
-  #pmtools .btn.on{background:var(--marker);color:#050505;border-color:transparent}
+  #pmtools .btn.on{background:var(--btn,var(--marker));color:#050505;border-color:transparent}
   #pm .unit{display:flex;align-items:center;gap:4px;color:var(--text-dim);font-size:11.5px}
   #pm .unit input{width:58px;height:28px;text-align:center;background:var(--chrome-2);
                   border:1px solid var(--line);border-radius:6px;color:var(--text);
@@ -812,7 +812,7 @@
   .drop.hot{border-color:var(--marker);background:var(--chrome-2)}
   .drop h1{font-family:var(--serif);font-weight:400;font-size:34px;line-height:1.15;margin:0 0 10px;color:#fff;letter-spacing:-.01em}
   .drop p{margin:0 0 22px;font-size:13.5px;color:var(--text-dim);line-height:1.6}
-  .pick{height:38px;padding:0 18px;border-radius:8px;cursor:pointer;background:var(--marker);color:#050505;border:none;font-weight:650;font-size:13.5px}
+  .pick{height:38px;padding:0 18px;border-radius:8px;cursor:pointer;background:var(--btn,var(--marker));color:#050505;border:none;font-weight:650;font-size:13.5px}
   .pick:hover{background:#DDDDDD}
   .fineprint{margin-top:26px;font-family:var(--mono);font-size:10.5px;letter-spacing:.05em;color:var(--text-dim);text-transform:uppercase}
   .err{margin-top:18px;font-size:13px;color:var(--danger);line-height:1.5}
@@ -920,7 +920,7 @@
   #btnHome{height:34px;gap:7px;padding:0 12px;border-color:var(--line);background:var(--chrome-2);
            font-weight:600;letter-spacing:.01em}
   #btnHome svg{width:19px;height:19px;stroke-width:1.9}
-  #btnHome:hover:not(:disabled){background:var(--marker);color:#050505;border-color:transparent}
+  #btnHome:hover:not(:disabled){background:var(--btn,var(--marker));color:#050505;border-color:transparent}
   #btnHome:hover:not(:disabled) svg{stroke-width:2.1}
   @media (max-width:900px){ #btnHome .lbl{display:none} #btnHome{padding:0 9px} }
   @media (max-width:900px){

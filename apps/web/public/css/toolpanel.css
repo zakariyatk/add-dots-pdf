@@ -151,7 +151,7 @@ body.acro .qrail .btn {
 }
 body.acro .qrail .btn svg { width: 22px; height: 22px }
 /* the page's colour on the accent: white on blue, dark on white in the dark interface */
-body.acro .qrail .btn.on { background: var(--marker); color: var(--chrome) }
+body.acro .qrail .btn.on { background: var(--btn, var(--marker)); color: var(--chrome) }
 body.acro .qrail .btn.on svg { stroke: currentColor }
 
 /* ---------- the page, and the sidebar on its right ---------- */
