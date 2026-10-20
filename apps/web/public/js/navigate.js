@@ -40,7 +40,6 @@
       stage.style.setProperty('--pan-y', y + 'px');
       const floated = (x !== 0 || y !== 0);
       stage.classList.toggle('floated', floated);
-      recentreBtn.hidden = !floated;
     }
 
     function recentre() {
@@ -120,22 +119,6 @@
     b.addEventListener('click', function () { X.toggleTool('pan'); });
 
     X.toolBtn.pan = 'tPan';
-
-    /* A pill over the page rather than a toolbar button: it only exists while
-       the page is off its mark, and it should not make the toolbar jump. */
-    const recentreBtn = document.createElement('button');
-    recentreBtn.className = 'panhome';
-    recentreBtn.id = 'panRecentre';
-    recentreBtn.type = 'button';
-    recentreBtn.hidden = true;
-    recentreBtn.title = 'Put the page back where it started';
-    recentreBtn.innerHTML =
-      '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/>' +
-      '<line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/>' +
-      '<line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>' +
-      '<span>Recentre</span>';
-    recentreBtn.addEventListener('click', recentre);
-    document.body.appendChild(recentreBtn);
 
     /* ---------------- the tool (Pan button held on) ---------------- */
 
