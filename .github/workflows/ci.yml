@@ -226,6 +226,21 @@ jobs:
         working-directory: apps/mobile
       - run: ./gradlew assembleDebug --no-daemon
         working-directory: apps/mobile/android
+      # the release bundle as the Play Store workflow builds it, signed with
+      # a key made for this run only, so the signing set-up keeps working
+      - name: Signed release bundle (throwaway key)
+        working-directory: apps/mobile/android
+        env:
+          ANDROID_KEYSTORE_FILE: ${{ runner.temp }}/ci.jks
+          ANDROID_KEYSTORE_PASSWORD: ci-only
+          ANDROID_KEY_ALIAS: ci
+          ANDROID_KEY_PASSWORD: ci-only
+        run: |
+          keytool -genkeypair -keystore "$ANDROID_KEYSTORE_FILE" -alias ci -keyalg RSA -keysize 2048 \
+            -validity 1 -storepass ci-only -keypass ci-only -dname CN=ci
+          ./gradlew bundleRelease --no-daemon -PversionCode=2 -PversionName=ci
+          jarsigner -verify app/build/outputs/bundle/release/app-release.aab | tee "$RUNNER_TEMP/verify.txt"
+          grep -q "jar verified" "$RUNNER_TEMP/verify.txt"
       # unsigned test build: a debug APK, installable after allowing
       # "install unknown apps"
       - uses: actions/upload-artifact@v4

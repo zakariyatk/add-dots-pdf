@@ -65,8 +65,60 @@ test also checks `mobile.js` in Chrome with the native side faked.
 
 The APK is a debug build, not from the Play Store: on the phone, allow
 "Install unknown apps" for the app you open it with (Files, Chrome), then open
-the APK. A Play Store release needs a signed release build (an upload key) and
-a Google Play developer account.
+the APK. A Play Store release is a signed release bundle, below.
+
+## Releasing to Google Play
+
+Google Play takes a signed Android App Bundle (AAB). The Play Store workflow
+(`.github/workflows/play.yml`, Actions -> Google Play -> Run workflow) builds
+it, signs it with the upload key, keeps it as the `android-aab` artifact and
+uploads it to a track (internal by default, as a draft). Its versionCode is
+the run number, so every run is higher than the last. CI builds the release
+bundle too, unsigned, so it keeps building.
+
+Once:
+
+1. **The upload key.** Make it on your own computer (`keytool` comes with
+   Android Studio, in `jbr/bin`), and keep the file and both passwords safe:
+   every update must be signed with it.
+
+   ```bash
+   keytool -genkeypair -v -keystore adddots-upload.jks -alias upload -keyalg RSA -keysize 4096 -validity 10000
+   ```
+
+2. **Its secrets**, in GitHub (Settings -> Secrets and variables -> Actions):
+   `ANDROID_KEYSTORE_BASE64` (the file, base64-encoded: in PowerShell,
+   `[Convert]::ToBase64String([IO.File]::ReadAllBytes("adddots-upload.jks"))`),
+   `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (`upload`) and
+   `ANDROID_KEY_PASSWORD`.
+3. **The app in Play Console** (a Google Play developer account): create
+   ADD DOTS PDF, fill in the store listing, content rating, data safety and
+   privacy policy, and keep Play App Signing on (Google holds the key that
+   signs what phones install; ours only proves an upload is from us).
+4. **The first bundle, by hand.** Google Play takes uploads through its API
+   only once the app has a release: run the workflow with "Upload" off,
+   download `android-aab` from the run, and upload it to Internal testing in
+   Play Console.
+5. **Uploads from the workflow.** In Google Cloud, make a service account
+   and a JSON key for it, and turn on the Google Play Android Developer API;
+   in Play Console (Users and permissions) invite the service account's
+   email with release rights for the app. Put the JSON in the secret
+   `PLAY_SERVICE_ACCOUNT_JSON`.
+
+After that, each release is a run of the workflow: pick the track, and
+"completed" to release at once or "draft" to roll it out in Play Console.
+
+A signed release on your own computer: put the same four values in
+`android/keystore.properties` (never in git):
+
+```properties
+storeFile=C:/path/to/adddots-upload.jks
+storePassword=...
+keyAlias=upload
+keyPassword=...
+```
+
+then `./gradlew bundleRelease` (`app/build/outputs/bundle/release/app-release.aab`).
 
 ## iOS
 

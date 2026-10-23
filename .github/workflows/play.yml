@@ -1,0 +1,121 @@
+name: Google Play
+
+# Builds the Android app as a signed release bundle (AAB) and uploads it to
+# Google Play (com.adddots.pdf). Run it by hand: Actions -> Google Play ->
+# Run workflow, from main.
+#
+#   - the bundle is kept as the android-aab artifact of the run, so the very
+#     first one can be uploaded by hand in Play Console (Google Play takes
+#     uploads through its API only after the app's first release there)
+#   - its versionCode is the run number, so each upload is higher than the
+#     last; versionName is 1.0.<run number> unless given
+#   - "draft" leaves the release in Play Console to look over and roll out
+#     there; an app Google Play has not yet published takes drafts only
+#
+# Repository secrets (Settings -> Secrets and variables -> Actions); see
+# apps/mobile/README.md, "Releasing to Google Play":
+#   ANDROID_KEYSTORE_BASE64    the upload key (.jks), base64-encoded
+#   ANDROID_KEYSTORE_PASSWORD  its password
+#   ANDROID_KEY_ALIAS          the key's alias in it
+#   ANDROID_KEY_PASSWORD       the key's password
+#   PLAY_SERVICE_ACCOUNT_JSON  a Google Cloud service account's JSON key,
+#                              invited in Play Console with release rights.
+#                              Without it the bundle is built but not uploaded
+
+on:
+  workflow_dispatch:
+    inputs:
+      track:
+        description: Play track
+        type: choice
+        options: [internal, alpha, beta, production]
+        default: internal
+      status:
+        description: Release status (draft leaves it to roll out in Play Console)
+        type: choice
+        options: [draft, completed]
+        default: draft
+      version_name:
+        description: Version name readers see (empty for 1.0.<run number>)
+        required: false
+        default: ''
+      upload:
+        description: Upload to Google Play (off only builds the AAB)
+        type: boolean
+        default: true
+
+concurrency:
+  group: play
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    name: Signed release bundle for Google Play
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      HAS_PLAY_KEY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci
+      # the engine bundle first, then the web app it loads
+      - run: npx turbo run build --filter=@adddots/web...
+      - run: npx cap sync android
+        working-directory: apps/mobile
+      - name: The upload key
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::no ANDROID_KEYSTORE_BASE64 secret: see apps/mobile/README.md, Releasing to Google Play"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
+      - name: Build the release bundle
+        working-directory: apps/mobile/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          VERSION_NAME: ${{ github.event.inputs.version_name }}
+        run: |
+          name="${VERSION_NAME:-1.0.${{ github.run_number }}}"
+          echo "versionCode ${{ github.run_number }}, versionName $name"
+          ./gradlew bundleRelease --no-daemon \
+            -PversionCode=${{ github.run_number }} -PversionName="$name"
+      - name: Check it is signed
+        run: |
+          aab=apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          jarsigner -verify "$aab" | tee "$RUNNER_TEMP/verify.txt"
+          grep -q "jar verified" "$RUNNER_TEMP/verify.txt"
+          rm -f "$RUNNER_TEMP/upload.jks"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-aab
+          path: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+      - name: Upload to Google Play
+        if: github.event.inputs.upload == 'true' && env.HAS_PLAY_KEY == 'true'
+        uses: r0adkll/upload-google-play@v1.1.3
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.adddots.pdf
+          releaseFiles: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          track: ${{ github.event.inputs.track }}
+          status: ${{ github.event.inputs.status }}
+      - name: Not uploaded
+        if: github.event.inputs.upload == 'true' && env.HAS_PLAY_KEY != 'true'
+        run: echo "::warning::no PLAY_SERVICE_ACCOUNT_JSON secret, so the bundle was not uploaded; it is in the android-aab artifact"
