@@ -329,8 +329,50 @@ try {
     policy,
   );
 
-  /* ---- Print: the PDF made for printing, in WebView2's PDF viewer ----
-     The frame core prints (printDoc) is a blob: PDF; WebView2 shows it with
+  /* ---- Print: the app's own Print dialog (js/print.js) ----
+     It lists the computer's printers (print.rs), shows the first sheet, and
+     asks the printer picked what paper it has. Nothing is printed: a
+     runner's printers (if any) save to a file through a dialog of their own. */
+  if (WIN) {
+    const dialog = await runAsync(async () => {
+      const T = window.__TAURI__;
+      const listed = await T.core.invoke('print_printers');
+      await window.ADDPDF.print();
+      const $ = (id) => document.getElementById(id);
+      for (let i = 0; i < 150 && !$('prWait').hidden; i++) await new Promise((r) => setTimeout(r, 200));
+      await new Promise((r) => setTimeout(r, 500));
+      const shown = [...$('prPrinter').options].map((o) => o.value);
+      const caps = listed.list.length
+        ? await T.core.invoke('print_caps', { name: $('prPrinter').value, setup: {} }).catch((e) => String(e))
+        : null;
+      const got = {
+        open: !$('printModal').hidden,
+        listed,
+        shown,
+        sheets: $('prOf').textContent,
+        preview: $('prCanvas').width,
+        papers: caps && caps.papers ? caps.papers.length : caps,
+        margins: caps && caps.margins,
+      };
+      $('prCancel').click();
+      got.closed = $('printModal').hidden;
+      return got;
+    });
+    check(
+      "Print: the app's own dialog lists the printers, shows the sheet, and asks the printer for its paper",
+      dialog.open &&
+        dialog.closed &&
+        /^Page 1 of \d+$/.test(dialog.sheets) &&
+        dialog.preview > 0 &&
+        (dialog.listed.list.length
+          ? dialog.listed.list.every((n) => dialog.shown.includes(n)) && dialog.papers > 0
+          : true),
+      dialog,
+    );
+  }
+
+  /* ---- Print using system dialog: the PDF made for printing, in WebView2's PDF viewer ----
+     The frame core prints (printSystem) is a blob: PDF; WebView2 shows it with
      its own PDF viewer, under the window's policy (frame-src blob:). Off
      Windows, WebKitGTK has no PDF viewer in a frame: not checked there. */
   if (WIN) {
@@ -352,7 +394,7 @@ try {
           };
         });
       }).observe(document.body, { childList: true });
-      window.ADDPDF.print();
+      window.ADDPDF.printSystem();
       for (let i = 0; i < 150 && !got.called; i++) await new Promise((r) => setTimeout(r, 200));
       return got;
     });

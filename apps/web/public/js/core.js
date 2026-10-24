@@ -6542,33 +6542,43 @@
     }
   }
 
+  /* Print: the Print dialog (js/print.js), when it is there. */
+  function printDoc() {
+    if (EXT.printDialog) return EXT.printDialog.open();
+    return printSystem();
+  }
+
   /* Print the document as it stands, marks and all, with the browser's own
      print dialog: the PDF is built with the marks painted in, loaded into
      a hidden frame, and printed from there. */
-  async function printDoc() {
+  async function printSystem() {
     if (!S.items.length) return;
     toast('Preparing to print…');
-    let url = null;
     try {
-      const blob = await buildPdf(S.items, null, { photos: false, annots: false }, 'blob');
-      url = URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-      const old = document.getElementById('printFrame');
-      if (old) old.remove();
-      const f = document.createElement('iframe');
-      f.id = 'printFrame'; f.title = 'Print';
-      f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
-      f.src = url;
-      f.onload = function () {
-        setTimeout(function () {
-          try { f.contentWindow.focus(); f.contentWindow.print(); }
-          catch (e) { window.open(url, '_blank'); }   /* no printing from a frame here: a tab of its own */
-        }, 300);
-      };
-      document.body.appendChild(f);
-      setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
+      printFrame(await buildPdf(S.items, null, { photos: false, annots: false }, 'blob'));
     } catch (e) {
       toast(esc(saveError(e, 'The document could not be prepared for printing')));
     }
+  }
+
+  /* a PDF (its bytes or a Blob) printed from a hidden frame, with the
+     browser's own print dialog */
+  function printFrame(pdf) {
+    const url = URL.createObjectURL(new Blob([pdf], { type: 'application/pdf' }));
+    const old = document.getElementById('printFrame');
+    if (old) old.remove();
+    const f = document.createElement('iframe');
+    f.id = 'printFrame'; f.title = 'Print';
+    f.style.cssText = 'position:fixed;right:0;bottom:0;width:1px;height:1px;border:0;opacity:0;pointer-events:none';
+    f.src = url;
+    f.onload = function () {
+      setTimeout(function () {
+        try { f.contentWindow.focus(); f.contentWindow.print(); }
+        catch (e) { window.open(url, '_blank'); }   /* no printing from a frame here: a tab of its own */
+      }, 300);
+    };
+    document.body.appendChild(f);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
   }
 
   /* Resolves false only when the reader turned the save down (the desktop
@@ -9263,6 +9273,8 @@
     setCover: setCover, pairStart: pairStart, setThumbMarks: setThumbMarks,
     /* for the page menu (js/pagemenu.js) */
     fitPage: function () { S.fit = 'page'; relayout(); }, print: function () { return printDoc(); },
+    /* the system's print dialog, and a PDF printed with it (js/print.js) */
+    printSystem: printSystem, printFrame: printFrame,
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
     ZOOM_MIN: ZOOM_MIN, ZOOM_MAX: ZOOM_MAX,
     /* the document put away (its tab closed): back to the home screen */

@@ -19,6 +19,10 @@
 //! document in the browser storage the windows share and names it; the new
 //! window opens with that name and takes it from there. A PDF handed over
 //! later goes to the window used last.
+//!
+//! Printing: the page's Print dialog lists the printers and prints to the
+//! one picked itself (print.rs), as Acrobat does, rather than through the
+//! web view's own print dialog.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -29,6 +33,7 @@ use tauri::{Emitter, Manager};
 
 mod ocr;
 mod pdfium;
+mod print;
 mod store;
 use tauri_plugin_dialog::DialogExt;
 
@@ -437,6 +442,68 @@ fn pdf_cancel(rid: u32) {
     pdfium::native().cancel(rid);
 }
 
+/* ---------------- printing (print.rs) ---------------- */
+
+/// The computer's printers, and which is its default.
+#[tauri::command]
+async fn print_printers() -> Result<print::Printers, String> {
+    tauri::async_runtime::spawn_blocking(print::printers)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// What printer `name` can do, set up as `setup`: its papers, the paper's
+/// size and margins, colour and both sides.
+#[tauri::command]
+async fn print_caps(name: String, setup: print::Setup) -> Result<print::Caps, String> {
+    tauri::async_runtime::spawn_blocking(move || print::caps(&name, &setup))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// The printer's own settings dialog, over this window. Null when it was
+/// cancelled, else the settings chosen (kept for the printer's next jobs).
+#[tauri::command]
+async fn print_properties(
+    window: tauri::WebviewWindow,
+    name: String,
+    setup: print::Setup,
+) -> Result<Option<print::Setup>, String> {
+    #[cfg(windows)]
+    let hwnd = window.hwnd().map_err(|e| e.to_string())?.0 as isize;
+    #[cfg(not(windows))]
+    let hwnd = {
+        let _ = window;
+        0
+    };
+    tauri::async_runtime::spawn_blocking(move || print::properties(hwnd, &name, &setup))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// A job printed: the request's body is the job's JSON (print::Job), its
+/// length first as 4 bytes (little-endian), then the PDF made for printing.
+/// Ok(the sheets printed).
+#[tauri::command]
+async fn print_send(request: tauri::ipc::Request<'_>) -> Result<u32, String> {
+    let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
+        return Err("expected the job and the document".into());
+    };
+    let (job, pdf) = split_job(body)?;
+    let rx = pdfium::native().print(pdf.to_vec(), job)?;
+    answer(rx).await
+}
+
+fn split_job(body: &[u8]) -> Result<(print::Job, &[u8]), String> {
+    let n = body
+        .get(..4)
+        .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize)
+        .ok_or("no job")?;
+    let json = body.get(4..4 + n).ok_or("the job is cut short")?;
+    let job: print::Job = serde_json::from_slice(json).map_err(|e| format!("not a print job: {e}"))?;
+    Ok((job, &body[4 + n..]))
+}
+
 /* ---------------- text read by Windows (ocr.rs) ---------------- */
 
 /// The languages Windows can read on this computer, and the largest side
@@ -661,6 +728,10 @@ pub fn run() {
             pdf_close,
             pdf_render,
             pdf_cancel,
+            print_printers,
+            print_caps,
+            print_properties,
+            print_send,
             ocr_status,
             ocr_page,
             perf_native
@@ -725,6 +796,23 @@ mod tests {
             &cwd,
         );
         assert_eq!(got, vec![cwd.join("plan.PDF"), abs]);
+    }
+
+    #[test]
+    fn a_print_job_comes_apart_from_its_document() {
+        let json = br#"{"printer":"P","setup":{"duplex":"long"},"title":"t","copies":2,"gray":false,"annots":true,
+            "sheets":[{"cells":[{"page":0,"x":1,"y":2,"w":3,"h":4,"rot":1,"clip":[0,0,10,10]}]}]}"#;
+        let mut body = (json.len() as u32).to_le_bytes().to_vec();
+        body.extend_from_slice(json);
+        body.extend_from_slice(b"%PDF-1.7");
+        let (job, pdf) = split_job(&body).unwrap();
+        assert_eq!(pdf, b"%PDF-1.7");
+        assert_eq!(job.copies, 2);
+        assert_eq!(job.setup.duplex.as_deref(), Some("long"));
+        assert_eq!(job.sheets[0].cells[0].rot, 1);
+        assert!(!job.sheets[0].cells[0].border);
+        assert!(split_job(&body[..10]).is_err(), "cut short");
+        assert!(split_job(b"\x02\0\0\0{}").is_err(), "not a job");
     }
 
     #[test]

@@ -11,6 +11,9 @@
 //! bitmap lives and dies there, and the commands talk to it over a channel.
 //! Without the library (a build that did not bundle it) `pdf_native_status`
 //! says so and the page draws as it always has.
+//!
+//! Printing (print.rs) is done here too: the document made for printing is
+//! opened on this thread and each page drawn into the printer's surface.
 
 use std::collections::{HashMap, HashSet};
 use std::ffi::{c_int, c_void, CString};
@@ -60,6 +63,9 @@ struct Lib {
     annot_get: unsafe extern "system" fn(Page, c_int) -> Annot,
     annot_subtype: unsafe extern "system" fn(Annot) -> c_int,
     annot_close: unsafe extern "system" fn(Annot),
+    /// FPDF_RenderPage, into a Windows drawing surface: a printer's (print.rs).
+    /// Windows builds of PDFium only.
+    render_dc: Option<unsafe extern "system" fn(isize, Page, c_int, c_int, c_int, c_int, c_int, c_int)>,
 }
 
 /// annotations drawn; bytes in R G B A order, as an ImageData wants them
@@ -98,6 +104,7 @@ impl Lib {
                 annot_get: sym!("FPDFPage_GetAnnot"),
                 annot_subtype: sym!("FPDFAnnot_GetSubtype"),
                 annot_close: sym!("FPDFPage_CloseAnnot"),
+                render_dc: lib.get(b"FPDF_RenderPage\0").ok().map(|f| *f),
                 _lib: lib,
             })
         }
@@ -189,6 +196,12 @@ enum Job {
         rid: u32,
         ask: Ask,
         reply: Sender<Result<Vec<u8>, String>>,
+    },
+    /// a document's bytes, printed as `job` lays them out: Ok(sheets printed)
+    Print {
+        bytes: Vec<u8>,
+        job: crate::print::Job,
+        reply: Sender<Result<u32, String>>,
     },
 }
 
@@ -283,6 +296,14 @@ impl Native {
         Ok(rx)
     }
 
+    /// Prints a document (its bytes) as the job lays it out.
+    pub fn print(&self, bytes: Vec<u8>, job: crate::print::Job) -> Result<Receiver<Result<u32, String>>, String> {
+        job.check()?;
+        let (reply, rx) = channel();
+        self.send(Job::Print { bytes, job, reply })?;
+        Ok(rx)
+    }
+
     /// A render the page no longer wants: skipped if it has not started.
     pub fn cancel(&self, rid: u32) {
         self.cancelled.lock().unwrap().insert(rid);
@@ -334,6 +355,9 @@ fn serve(lib: Lib, jobs: Receiver<Job>, cancelled: Arc<Mutex<HashSet<u32>>>) {
                     None => Err(format!("document {} is not open", ask.key)),
                 };
                 let _ = reply.send(got);
+            }
+            Job::Print { bytes, job, reply } => {
+                let _ = reply.send(print(&lib, bytes, &job));
             }
         }
     }
@@ -449,6 +473,29 @@ fn draw(lib: &Lib, l: &Loaded, ask: &Ask) -> Result<Vec<u8>, String> {
         (lib.bmp_destroy)(bmp);
         Ok(out)
     }
+}
+
+/// `job` printed from the document `bytes`, each page loaded as it is drawn
+/// and let go after: a print of a thousand pages holds one at a time.
+fn print(lib: &Lib, bytes: Vec<u8>, job: &crate::print::Job) -> Result<u32, String> {
+    let render = lib.render_dc.ok_or("this PDFium cannot draw for a printer")?;
+    let o = open_doc(lib, From::Bytes(bytes), None)?;
+    let res = crate::print::run(job, &mut |dc, num, r, rot, flags| {
+        if num as c_int >= o.pages {
+            return Err(format!("no page {}", num + 1));
+        }
+        unsafe {
+            let page = (lib.load_page)(o.doc, num as c_int);
+            if page.is_null() {
+                return Err(format!("PDFium could not load page {}", num + 1));
+            }
+            render(dc, page, r[0], r[1], r[2], r[3], rot, flags);
+            (lib.close_page)(page);
+        }
+        Ok(())
+    });
+    unsafe { (lib.close_doc)(o.doc) };
+    res
 }
 
 /// The library's file name on this system.

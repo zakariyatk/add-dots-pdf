@@ -607,30 +607,10 @@
 
     /* ---------------- print ---------------- */
 
-    async function doPrint() {
+    /* the Print dialog (js/print.js), as Ctrl+P and the quick-access button */
+    function doPrint() {
       if (!S.items.length) { X.toast('Open a PDF first'); return; }
-      X.toast('Preparing the document for printing…');
-      try {
-        const bytes = await X.buildPdf(S.items, null, {});
-        const blob = new Blob([bytes], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const frame = document.createElement('iframe');
-        frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
-        frame.src = url;
-        /* the frame has to outlive its print dialog, so the last one is
-           cleared when the next print starts rather than piling up */
-        if (doPrint.frame && doPrint.frame.parentNode) doPrint.frame.parentNode.removeChild(doPrint.frame);
-        doPrint.frame = frame;
-        frame.onload = function () {
-          try { frame.contentWindow.focus(); frame.contentWindow.print(); }
-          catch (e) { window.open(url, '_blank'); }
-          /* leave it alive: removing the frame cancels the print dialog */
-          setTimeout(function () { URL.revokeObjectURL(url); }, 120000);
-        };
-        document.body.appendChild(frame);
-      } catch (e) {
-        X.toast(X.esc(X.saveError(e, 'This file could not be prepared for printing')));
-      }
+      return X.print();
     }
 
     /* ---------------- export text ---------------- */

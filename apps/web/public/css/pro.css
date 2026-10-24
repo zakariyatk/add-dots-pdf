@@ -383,6 +383,81 @@ body[data-tool="select"] .anno .redact-mk { cursor: move }
 .docnote .bad { color: var(--danger) }
 .docbox .btn:disabled { opacity: .45; cursor: default }
 
+/* --- Print (js/print.js): Acrobat's layout, the choices left, the sheet right --- */
+.prbox { width: min(900px, 100%) }
+.prbody {
+  display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px;
+  padding: 12px 14px; overflow: auto; min-height: 0;
+}
+.prleft { display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.prtop { display: flex; flex-direction: column; gap: 8px }
+.prtop .drow > span:first-child { width: 64px }
+.prtop .btn { flex: none }
+.prtop #prCopies { flex: 0 0 72px }
+.prset {
+  border: 1px solid var(--line); border-radius: 8px; margin: 0; padding: 8px 10px 10px;
+  display: flex; flex-direction: column; gap: 7px; min-width: 0;
+}
+.prset legend { padding: 0 5px; font-size: 12.5px; font-weight: 600; color: var(--text) }
+.prset select, .prline input:not([type="radio"]), .prgrid input[type="number"] {
+  background: var(--stage); color: var(--text); border: 1px solid var(--line);
+  border-radius: 7px; padding: 6px 8px; font: inherit; font-size: 13px; min-width: 0;
+}
+.prset select:focus, .prset input:focus { outline: none; border-color: var(--text-dim) }
+.prline { display: flex; align-items: center; gap: 4px 14px; flex-wrap: wrap }
+.prline #prRange { flex: 1; min-width: 120px }
+.prline .prlab { font-size: 13px; color: var(--text-dim) }
+.prsub { padding-left: 22px }
+.prgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px }
+.prgrid #prScale { width: 64px }
+.prchk { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; white-space: nowrap }
+.prchk input { margin: 0; accent-color: var(--marker) }
+.prchk input:disabled + span { opacity: .45 }
+.prmore {
+  align-self: flex-start; background: none; border: 0; padding: 0; color: var(--text-dim);
+  font: inherit; font-size: 12.5px; cursor: pointer;
+}
+.prmore::before { content: '\25B8'; display: inline-block; margin-right: 5px; transition: transform .15s }
+.prmore[aria-expanded="true"]::before { transform: rotate(90deg) }
+.prmoreb { display: flex; flex-direction: column; gap: 7px; padding-left: 14px }
+.prmoreb[hidden], .prmode[hidden] { display: none }
+.prmode { display: flex; flex-direction: column; gap: 7px }
+.prset .drow > span:first-child { width: 110px }
+.prseg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px }
+.prseg button {
+  background: var(--stage); color: var(--text); border: 1px solid var(--line); border-radius: 7px;
+  padding: 7px 6px; font: inherit; font-size: 13px; cursor: pointer;
+}
+.prseg button:hover { border-color: var(--text-dim) }
+.prseg button.on { border-color: var(--marker); box-shadow: inset 0 0 0 1px var(--marker); font-weight: 600 }
+.prright { display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.prfacts { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 12.5px; color: var(--text-dim) }
+.prpaper {
+  position: relative; flex: 1; min-height: 300px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--stage); display: flex; align-items: center; justify-content: center; overflow: hidden;
+}
+.prpaper canvas { box-shadow: 0 2px 10px rgba(0,0,0,.45); outline: 1px solid rgba(0,0,0,.6) }
+.prwait {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 13px; color: var(--text-dim); background: var(--stage); text-align: center; padding: 12px;
+}
+.prwait[hidden] { display: none }
+.prnav { display: flex; align-items: center; gap: 8px }
+.prnav input { flex: 1; accent-color: var(--marker) }
+.prnav .btn { min-width: 34px; padding: 0 8px; font-size: 18px }
+.prof { text-align: center; font-size: 12.5px; color: var(--text-dim) }
+.prlink {
+  background: none; border: 0; padding: 0; color: var(--text-dim); font: inherit; font-size: 12.5px;
+  text-decoration: underline; cursor: pointer;
+}
+.prlink:hover { color: var(--text) }
+#prRange.bad { border-color: var(--danger) }
+@media (max-width: 760px) {
+  .prbody { grid-template-columns: 1fr }
+  .prpaper { min-height: 240px }
+  .prgrid { grid-template-columns: 1fr }
+}
+
 /* --- loading / fatal splash --- */
 .shsplash {
   position: fixed; inset: 0; z-index: 96; background: var(--chrome);
