@@ -24,7 +24,7 @@ type Plan = {
 type Api = {
   PAPERS: { id: string; w: number; h: number }[];
   parseRange: (t: string, n: number) => number[] | null;
-  plan: (sizes: { w: number; h: number }[], o: Record<string, unknown>) => Plan;
+  plan: (sizes: { w: number; h: number; r?: number }[], o: Record<string, unknown>) => Plan;
 };
 const ctx: { ADDPRINT?: Api } = {};
 runInNewContext(src, ctx);

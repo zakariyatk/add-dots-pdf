@@ -91,6 +91,8 @@ async function detailDiff() {
   const dpr = d.width / parseFloat(d.style.width);
   const x = parseFloat(d.style.left),
     y = parseFloat(d.style.top);
+  /* its pixels first: drawn again meanwhile, the detail is replaced */
+  const pa = d.getContext('2d').getImageData(0, 0, d.width, d.height).data;
   const ref = document.createElement('canvas');
   ref.width = d.width;
   ref.height = d.height;
@@ -99,7 +101,6 @@ async function detailDiff() {
     viewport: it.vp,
     transform: [dpr, 0, 0, dpr, -x * dpr, -y * dpr],
   }).promise;
-  const pa = d.getContext('2d').getImageData(0, 0, d.width, d.height).data;
   const pb = ref.getContext('2d').getImageData(0, 0, d.width, d.height).data;
   let off = 0;
   for (let i = 0; i < pa.length; i += 4) {
@@ -371,17 +372,20 @@ try {
     /* a text page stays pdf.js's, in the worker: the same picture as pdf.js here */
     const same = await page.evaluate(async () => {
       const it = window.ADDPDF.S.items[0];
-      const a = it.canvas;
+      /* the page's pixels and size as they are now: drawn again meanwhile
+         (a relayout), its canvas is swapped and the old one emptied */
+      const a = it.canvas,
+        vp = it.vp;
+      const pa = a.getContext('2d').getImageData(0, 0, a.width, a.height).data;
       const b = document.createElement('canvas');
       b.width = a.width;
       b.height = a.height;
-      const rs = a.width / Math.floor(it.vp.width);
+      const rs = a.width / Math.floor(vp.width);
       await it.page.render({
         canvasContext: b.getContext('2d', { alpha: false }),
-        viewport: it.vp,
+        viewport: vp,
         transform: Math.abs(rs - 1) > 0.01 ? [rs, 0, 0, rs, 0, 0] : null,
       }).promise;
-      const pa = a.getContext('2d').getImageData(0, 0, a.width, a.height).data;
       const pb = b.getContext('2d').getImageData(0, 0, b.width, b.height).data;
       let off = 0;
       for (let i = 0; i < pa.length; i += 4) {
