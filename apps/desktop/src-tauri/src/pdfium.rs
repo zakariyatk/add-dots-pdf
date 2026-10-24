@@ -59,6 +59,9 @@ struct Lib {
     bmp_stride: unsafe extern "system" fn(Bitmap) -> c_int,
     bmp_destroy: unsafe extern "system" fn(Bitmap),
     render: unsafe extern "system" fn(Bitmap, Page, *const FsMatrix, *const FsRectF, c_int),
+    /// FPDF_RenderPageBitmap: a page into a bitmap at a size and a turn
+    /// (print as image, print.rs)
+    render_bmp: unsafe extern "system" fn(Bitmap, Page, c_int, c_int, c_int, c_int, c_int, c_int),
     annot_count: unsafe extern "system" fn(Page) -> c_int,
     annot_get: unsafe extern "system" fn(Page, c_int) -> Annot,
     annot_subtype: unsafe extern "system" fn(Annot) -> c_int,
@@ -100,6 +103,7 @@ impl Lib {
                 bmp_stride: sym!("FPDFBitmap_GetStride"),
                 bmp_destroy: sym!("FPDFBitmap_Destroy"),
                 render: sym!("FPDF_RenderPageBitmapWithMatrix"),
+                render_bmp: sym!("FPDF_RenderPageBitmap"),
                 annot_count: sym!("FPDFPage_GetAnnotCount"),
                 annot_get: sym!("FPDFPage_GetAnnot"),
                 annot_subtype: sym!("FPDFAnnot_GetSubtype"),
@@ -480,7 +484,7 @@ fn draw(lib: &Lib, l: &Loaded, ask: &Ask) -> Result<Vec<u8>, String> {
 fn print(lib: &Lib, bytes: Vec<u8>, job: &crate::print::Job) -> Result<u32, String> {
     let render = lib.render_dc.ok_or("this PDFium cannot draw for a printer")?;
     let o = open_doc(lib, From::Bytes(bytes), None)?;
-    let res = crate::print::run(job, &mut |dc, num, r, rot, flags| {
+    let res = crate::print::run(job, &mut |dc, num, r, rot, flags, raster| {
         if num as c_int >= o.pages {
             return Err(format!("no page {}", num + 1));
         }
@@ -489,7 +493,21 @@ fn print(lib: &Lib, bytes: Vec<u8>, job: &crate::print::Job) -> Result<u32, Stri
             if page.is_null() {
                 return Err(format!("PDFium could not load page {}", num + 1));
             }
-            render(dc, page, r[0], r[1], r[2], r[3], rot, flags);
+            match raster {
+                None => render(dc, page, r[0], r[1], r[2], r[3], rot, flags),
+                Some([w, h]) => {
+                    // BGRx, as a Windows picture has it: no 0x10 (RGBA) in the flags
+                    let bmp = (lib.bmp_create)(w, h, 0);
+                    if bmp.is_null() {
+                        (lib.close_page)(page);
+                        return Err(format!("no memory to print page {} as a {w}x{h} picture", num + 1));
+                    }
+                    (lib.bmp_fill)(bmp, 0, 0, w, h, 0xFFFF_FFFF);
+                    (lib.render_bmp)(bmp, page, 0, 0, w, h, rot, flags);
+                    crate::print::blit(dc, r, w, h, (lib.bmp_stride)(bmp), (lib.bmp_buffer)(bmp));
+                    (lib.bmp_destroy)(bmp);
+                }
+            }
             (lib.close_page)(page);
         }
         Ok(())

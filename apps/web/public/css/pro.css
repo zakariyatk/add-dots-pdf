@@ -383,8 +383,8 @@ body[data-tool="select"] .anno .redact-mk { cursor: move }
 .docnote .bad { color: var(--danger) }
 .docbox .btn:disabled { opacity: .45; cursor: default }
 
-/* --- Print (js/print.js): Acrobat's layout, the choices left, the sheet right --- */
-.prbox { width: min(900px, 100%) }
+/* --- Print (js/print.js, the Windows app): Acrobat's layout, the choices left, the sheet right --- */
+.prbox { width: min(900px, 100%); position: relative }
 .prbody {
   display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 14px;
   padding: 12px 14px; overflow: auto; min-height: 0;
@@ -423,7 +423,7 @@ body[data-tool="select"] .anno .redact-mk { cursor: move }
 .prmoreb[hidden], .prmode[hidden] { display: none }
 .prmode { display: flex; flex-direction: column; gap: 7px }
 .prset .drow > span:first-child { width: 110px }
-.prseg { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px }
+.prseg { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px }
 .prseg button {
   background: var(--stage); color: var(--text); border: 1px solid var(--line); border-radius: 7px;
   padding: 7px 6px; font: inherit; font-size: 13px; cursor: pointer;
@@ -452,6 +452,22 @@ body[data-tool="select"] .anno .redact-mk { cursor: move }
 }
 .prlink:hover { color: var(--text) }
 #prRange.bad { border-color: var(--danger) }
+.prunit { flex: none; font-size: 13px; color: var(--text-dim) }
+/* Properties, Advanced, Page Setup: buttons, as Acrobat draws them, not links */
+.prbox .btn:not(.primary):not(.x) { border: 1px solid var(--line); padding: 0 12px; min-height: 32px }
+.prnav .btn:not(.primary) { padding: 0 8px }
+.prset .drow input[type="number"] { flex: 0 0 90px }
+/* Advanced and Page Setup, over the Print dialog */
+.prpop {
+  position: absolute; inset: 0; z-index: 2; background: rgba(0,0,0,.45); border-radius: 12px;
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.prpop[hidden] { display: none }
+.prpopb {
+  width: min(400px, 100%); background: var(--chrome-2); border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(0,0,0,.5); padding: 14px; display: flex; flex-direction: column; gap: 10px;
+}
+.prpopf { display: flex; justify-content: flex-end }
 @media (max-width: 760px) {
   .prbody { grid-template-columns: 1fr }
   .prpaper { min-height: 240px }

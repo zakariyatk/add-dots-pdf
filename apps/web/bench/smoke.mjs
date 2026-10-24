@@ -2190,10 +2190,10 @@ try {
     await ctx.close();
   }
 
-  /* ---- Print: the app's Print dialog (js/print.js), pages 2-9 four to a
-     sheet, laid out as a PDF, shown in a frame by the browser's PDF viewer,
-     and that frame printed (CI runs Chrome, which has one; the Windows app's
-     own check is apps/desktop/e2e.mjs) ---- */
+  /* ---- Print: the document made into a PDF, shown in a frame by the
+     browser's PDF viewer, and that frame printed: a website has no Print
+     dialog of its own, only the browser's (CI runs Chrome, which has one;
+     the Windows app's own dialog is checked in apps/desktop/e2e.mjs) ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
     await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
@@ -2215,35 +2215,16 @@ try {
           };
         });
       }).observe(document.body, { childList: true });
-      const $ = (id) => document.getElementById(id);
-      await window.ADDPDF.print();
-      for (let i = 0; i < 150 && !$('prWait').hidden; i++) await new Promise((r) => setTimeout(r, 200));
-      const pick = document.querySelector('input[name="prPick"][value="range"]');
-      pick.checked = true;
-      pick.dispatchEvent(new Event('change', { bubbles: true }));
-      $('prRange').value = '2-9';
-      $('prRange').dispatchEvent(new Event('input', { bubbles: true }));
-      document.querySelector('.prseg [data-mode="multiple"]').click();
-      $('prPer').value = '4';
-      $('prPer').dispatchEvent(new Event('change', { bubbles: true }));
-      await new Promise((r) => setTimeout(r, 600));
-      got.sheets = $('prOf').textContent;
-      got.preview = $('prCanvas').width;
-      $('prGo').click();
+      got.dialog = !!document.getElementById('printModal');
+      window.ADDPDF.print();
       for (let i = 0; i < 150 && !got.called; i++) await new Promise((r) => setTimeout(r, 200));
-      got.closed = $('printModal').hidden;
       return got;
     });
     check(
-      'Print: the dialog plans pages 2-9 four to a sheet as 2 sheets, with a preview',
-      printed.sheets === 'Page 1 of 2' && printed.preview > 0,
-      printed,
-    );
-    check(
-      "Print: the sheets laid out as a PDF open in the browser's PDF viewer, and that frame is printed",
+      "Print: no dialog of the app's own; the PDF made for printing opens in the browser's PDF viewer, and that frame is printed",
       /* a browser with no PDF viewer (Playwright's headless shell, run here
          without BENCH_CHANNEL) never loads the frame: nothing to check there */
-      !printed.viewer || (printed.called && /application\/pdf/.test(printed.pdf)),
+      !printed.dialog && (!printed.viewer || (printed.called && /application\/pdf/.test(printed.pdf))),
       printed,
     );
     check('no errors on the page', errors.length === 0, errors);

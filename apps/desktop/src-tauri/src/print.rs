@@ -12,8 +12,14 @@
 //!
 //! A printer's settings are a DEVMODE, the driver's own block of bytes. The
 //! one a reader set up in Properties is kept, by printer, until the app
-//! closes; the dialog's choices (paper, orientation, colour, both sides) are
-//! written over it for each job.
+//! closes; the dialog's choices (paper, tray, orientation, colour, both
+//! sides) are written over it for each job. A sheet with a paper or a way
+//! round of its own (paper by page size, a poster's tiles) has the printer
+//! set up again for it before it is printed (ResetDC), as Acrobat does.
+//!
+//! Advanced, Print as image: each page is drawn into a picture at the
+//! resolution asked for and the picture is sent, for a printer that cannot
+//! cope with a drawing's vectors.
 
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +34,10 @@ pub struct Setup {
     pub color: Option<bool>,
     /// "off", "long" or "short": which edge the paper turns over on
     pub duplex: Option<String>,
+    /// the tray the paper comes from: the driver's number (DMBIN_*), 7 for
+    /// the printer's own choice
+    #[serde(default)]
+    pub source: Option<i16>,
 }
 
 #[derive(Serialize, Debug)]
@@ -45,10 +55,19 @@ pub struct Paper {
     pub h: f32,
 }
 
+/// A tray the printer takes paper from.
+#[derive(Serialize, Debug, Clone)]
+pub struct Bin {
+    pub id: i16,
+    pub name: String,
+}
+
 /// What a printer can do, and its paper as it is set now.
 #[derive(Serialize, Debug)]
 pub struct Caps {
     pub papers: Vec<Paper>,
+    /// its trays
+    pub bins: Vec<Bin>,
     /// the paper set now
     pub paper: i16,
     /// its size in points, portrait
@@ -76,9 +95,15 @@ pub struct Cell {
     pub border: bool,
 }
 
-#[derive(Deserialize, Debug, Clone)]
+/// A sheet of paper and the pages on it; `paper` and `landscape` when it
+/// has a paper of its own, else the job's.
+#[derive(Deserialize, Debug, Clone, Default)]
 pub struct Sheet {
     pub cells: Vec<Cell>,
+    #[serde(default)]
+    pub paper: Option<i16>,
+    #[serde(default)]
+    pub landscape: Option<bool>,
 }
 
 /// A job: which printer, set up how, and the sheets, `copies` times over.
@@ -93,6 +118,9 @@ pub struct Job {
     /// the document's comments and form fields drawn too
     pub annots: bool,
     pub sheets: Vec<Sheet>,
+    /// printed as pictures at this many dots an inch (Advanced, Print as image)
+    #[serde(default)]
+    pub image: Option<u32>,
 }
 
 /// The most sheets a job may have and the most copies: a mistyped number
@@ -108,6 +136,9 @@ impl Job {
         if self.sheets.len() > MAX_SHEETS || self.copies == 0 || self.copies > MAX_COPIES {
             return Err("too many sheets or copies".into());
         }
+        if self.image.is_some_and(|d| !(36..=1200).contains(&d)) {
+            return Err("print as image takes 36 to 1200 dots an inch".into());
+        }
         let ok = |v: f32| v.is_finite() && v.abs() < 100_000.0;
         for s in &self.sheets {
             for c in &s.cells {
@@ -120,13 +151,31 @@ impl Job {
     }
 }
 
+/// The most pixels a page printed as a picture is drawn with (about 160 MB):
+/// past it the resolution is lowered for that page.
+pub const MAX_IMAGE_PX: f64 = 40_000_000.0;
+
 /// Draws page `page` (from 0) into the printer's surface `dc` in the box
 /// x, y, w, h (device pixels), `rot` quarter turns clockwise, with PDFium's
-/// `flags`.
-pub type DrawPage<'a> = dyn FnMut(isize, u32, [i32; 4], i32, i32) -> Result<(), String> + 'a;
+/// `flags`; with `raster` (w, h), as a picture of that many pixels
+/// stretched over the box (`blit`).
+pub type DrawPage<'a> = dyn FnMut(isize, u32, [i32; 4], i32, i32, Option<[i32; 2]>) -> Result<(), String> + 'a;
+
+/// The pixels for a box w x h device pixels drawn at `dpi` on a printer of
+/// `dev` dots an inch, kept under MAX_IMAGE_PX.
+pub fn raster_size(w: i32, h: i32, dpi: u32, dev: i32) -> [i32; 2] {
+    let k = dpi as f64 / dev.max(1) as f64;
+    let (mut rw, mut rh) = ((w.abs() as f64 * k).max(1.0), (h.abs() as f64 * k).max(1.0));
+    if rw * rh > MAX_IMAGE_PX {
+        let f = (MAX_IMAGE_PX / (rw * rh)).sqrt();
+        rw *= f;
+        rh *= f;
+    }
+    [rw.round().max(1.0) as i32, rh.round().max(1.0) as i32]
+}
 
 #[cfg(windows)]
-pub use win::{caps, printers, properties, run};
+pub use win::{blit, caps, printers, properties, run};
 
 #[cfg(not(windows))]
 mod off {
@@ -144,9 +193,10 @@ mod off {
     pub fn run(_: &Job, _: &mut DrawPage) -> Result<u32, String> {
         Err(OFF.into())
     }
+    pub fn blit(_: isize, _: [i32; 4], _: i32, _: i32, _: i32, _: *const u8) {}
 }
 #[cfg(not(windows))]
-pub use off::{caps, printers, properties, run};
+pub use off::{blit, caps, printers, properties, run};
 
 #[cfg(windows)]
 mod win {
@@ -171,6 +221,21 @@ mod win {
         output: *const u16,
         datatype: *const u16,
         kind: u32,
+    }
+
+    #[repr(C)]
+    struct BitmapInfoHeader {
+        size: u32,
+        width: i32,
+        height: i32,
+        planes: u16,
+        bit_count: u16,
+        compression: u32,
+        size_image: u32,
+        x_ppm: i32,
+        y_ppm: i32,
+        clr_used: u32,
+        clr_important: u32,
     }
 
     #[link(name = "winspool")]
@@ -199,6 +264,25 @@ mod win {
         fn GetStockObject(kind: i32) -> isize;
         fn SelectObject(dc: isize, obj: isize) -> isize;
         fn Rectangle(dc: isize, l: i32, t: i32, r: i32, b: i32) -> i32;
+        fn ResetDCW(dc: isize, dm: *const u8) -> isize;
+        fn SetStretchBltMode(dc: isize, mode: i32) -> i32;
+        fn SetBrushOrgEx(dc: isize, x: i32, y: i32, old: *mut c_void) -> i32;
+        #[allow(clippy::too_many_arguments)]
+        fn StretchDIBits(
+            dc: isize,
+            x: i32,
+            y: i32,
+            w: i32,
+            h: i32,
+            sx: i32,
+            sy: i32,
+            sw: i32,
+            sh: i32,
+            bits: *const c_void,
+            info: *const BitmapInfoHeader,
+            usage: u32,
+            rop: u32,
+        ) -> i32;
     }
 
     const PRINTER_ENUM_LOCAL: u32 = 2;
@@ -209,6 +293,8 @@ mod win {
     const IDOK: i32 = 1;
     const DC_PAPERS: u16 = 2;
     const DC_PAPERSIZE: u16 = 3;
+    const DC_BINS: u16 = 6;
+    const DC_BINNAMES: u16 = 12;
     const DC_DUPLEX: u16 = 7;
     const DC_PAPERNAMES: u16 = 16;
     const DC_COLORDEVICE: u16 = 32;
@@ -222,15 +308,19 @@ mod win {
     const PHYSICALOFFSETY: i32 = 113;
     const NULL_BRUSH: i32 = 5;
     const BLACK_PEN: i32 = 7;
+    const HALFTONE: i32 = 4;
+    const SRCCOPY: u32 = 0x00CC_0020;
 
     /* DEVMODEW, by offset: only the printer fields the dialog sets */
     const DM_FIELDS: usize = 72;
     const DM_ORIENTATION: usize = 76;
     const DM_PAPERSIZE: usize = 78;
+    const DM_DEFAULTSOURCE: usize = 88;
     const DM_COLOR: usize = 92;
     const DM_DUPLEX: usize = 94;
     const F_ORIENTATION: u32 = 0x1;
     const F_PAPERSIZE: u32 = 0x2;
+    const F_DEFAULTSOURCE: u32 = 0x200;
     const F_COLOR: u32 = 0x800;
     const F_DUPLEX: u32 = 0x1000;
     /// dmSize + dmDriverExtra past these is the driver's own
@@ -325,6 +415,10 @@ mod win {
             set16(dm, DM_DUPLEX, match d.as_str() { "long" => 2, "short" => 3, _ => 1 });
             fields(dm, F_DUPLEX);
         }
+        if let Some(b) = s.source {
+            set16(dm, DM_DEFAULTSOURCE, b);
+            fields(dm, F_DEFAULTSOURCE);
+        }
     }
 
     fn read(dm: &[u8]) -> Setup {
@@ -333,6 +427,7 @@ mod win {
             paper: Some(get16(dm, DM_PAPERSIZE)),
             color: Some(get16(dm, DM_COLOR) != 1),
             duplex: Some(match get16(dm, DM_DUPLEX) { 2 => "long", 3 => "short", _ => "off" }.into()),
+            source: Some(get16(dm, DM_DEFAULTSOURCE)),
         }
     }
 
@@ -409,6 +504,19 @@ mod win {
                 }
             }
         }
+        let nb = dc_cap(DC_BINS, std::ptr::null_mut(), &dm).max(0) as usize;
+        let mut bins = vec![];
+        if nb > 0 && nb < 200 {
+            let mut ids = vec![0u16; nb];
+            let mut names = vec![0u16; nb * 24];
+            dc_cap(DC_BINS, ids.as_mut_ptr(), &dm);
+            dc_cap(DC_BINNAMES, names.as_mut_ptr(), &dm);
+            for i in 0..nb {
+                let raw = &names[i * 24..i * 24 + 24];
+                let end = raw.iter().position(|c| *c == 0).unwrap_or(24);
+                bins.push(Bin { id: ids[i] as i16, name: String::from_utf16_lossy(&raw[..end]) });
+            }
+        }
         let color = dc_cap(DC_COLORDEVICE, std::ptr::null_mut(), &dm) == 1;
         let duplex = dc_cap(DC_DUPLEX, std::ptr::null_mut(), &dm) == 1;
         // the paper's size and its margins, measured portrait
@@ -423,6 +531,7 @@ mod win {
         let y = |v: f32| (v / dy * 72.0).max(0.0);
         Ok(Caps {
             papers,
+            bins,
             paper: setup.paper.unwrap_or(0),
             size: [x(pw), y(ph)],
             margins: [x(ox), y(oy), x(pw - ox - hw), y(ph - oy - vh)],
@@ -465,11 +574,11 @@ mod win {
         if unsafe { StartDocW(dc.0, &info) } <= 0 {
             return Err("the printer did not take the job".into());
         }
-        // points from the paper's corner to the printer's pixels from where it starts printing
-        let (sx, sy) = (dc.cap(LOGPIXELSX) as f32 / 72.0, dc.cap(LOGPIXELSY) as f32 / 72.0);
-        let (ox, oy) = (dc.cap(PHYSICALOFFSETX) as f32, dc.cap(PHYSICALOFFSETY) as f32);
-        let px = |x: f32| (x * sx - ox).round() as i32;
-        let py = |y: f32| (y * sy - oy).round() as i32;
+        // points from the paper's corner to the printer's pixels from where
+        // it starts printing: read again when a sheet sets the printer up anew
+        let mut m = Metrics::of(&dc);
+        // the paper and way round the printer is set to now
+        let mut now = (over.paper, over.orientation.clone());
         // the flags PDFium draws with: comments and fields, for a printer, in grey
         let flags = (if job.annots { 0x01 } else { 0 }) | 0x800 | (if job.gray { 0x08 } else { 0 });
         let both = job.setup.duplex.as_deref().is_some_and(|d| d != "off");
@@ -481,6 +590,24 @@ mod win {
                     page(dc.0, |_| Ok(()))?;
                 }
                 for s in &job.sheets {
+                    let want = (
+                        s.paper.or(job.setup.paper),
+                        s.landscape
+                            .map(|l| if l { "landscape" } else { "portrait" }.to_string())
+                            .or(job.setup.orientation.clone()),
+                    );
+                    if want != now {
+                        let mut o2 = over.clone();
+                        o2.paper = want.0;
+                        o2.orientation = want.1.clone();
+                        let dm2 = p.devmode(&job.printer, &o2)?;
+                        if unsafe { ResetDCW(dc.0, dm2.as_ptr()) } == 0 {
+                            return Err("the printer could not change paper".into());
+                        }
+                        m = Metrics::of(&dc);
+                        now = want;
+                    }
+                    let (px, py) = (|x: f32| m.x(x), |y: f32| m.y(y));
                     page(dc.0, |dc| {
                         for c in &s.cells {
                             let saved = unsafe { SaveDC(dc) };
@@ -488,7 +615,8 @@ mod win {
                             unsafe { IntersectClipRect(dc, px(cx), py(cy), px(cx + cw), py(cy + ch)) };
                             let (l, t) = (px(c.x), py(c.y));
                             let rect = [l, t, px(c.x + c.w) - l, py(c.y + c.h) - t];
-                            let r = draw(dc, c.page, rect, (c.rot % 4) as i32, flags);
+                            let raster = job.image.map(|d| raster_size(rect[2], rect[3], d, m.dpi));
+                            let r = draw(dc, c.page, rect, (c.rot % 4) as i32, flags, raster);
                             unsafe { RestoreDC(dc, saved) };
                             r?;
                             if c.border {
@@ -520,6 +648,56 @@ mod win {
         }
     }
 
+    /// Where a point on the paper falls among the printer's pixels.
+    struct Metrics {
+        sx: f32,
+        sy: f32,
+        ox: f32,
+        oy: f32,
+        dpi: i32,
+    }
+    impl Metrics {
+        fn of(dc: &Dc) -> Metrics {
+            let (dx, dy) = (dc.cap(LOGPIXELSX), dc.cap(LOGPIXELSY));
+            Metrics {
+                sx: dx as f32 / 72.0,
+                sy: dy as f32 / 72.0,
+                ox: dc.cap(PHYSICALOFFSETX) as f32,
+                oy: dc.cap(PHYSICALOFFSETY) as f32,
+                dpi: dx.max(dy),
+            }
+        }
+        fn x(&self, x: f32) -> i32 {
+            (x * self.sx - self.ox).round() as i32
+        }
+        fn y(&self, y: f32) -> i32 {
+            (y * self.sy - self.oy).round() as i32
+        }
+    }
+
+    /// A picture w x h (BGRx, rows `stride` bytes apart, top row first)
+    /// stretched over the box x, y, w, h of the printer's surface.
+    pub fn blit(dc: isize, r: [i32; 4], w: i32, h: i32, stride: i32, bits: *const u8) {
+        let info = BitmapInfoHeader {
+            size: std::mem::size_of::<BitmapInfoHeader>() as u32,
+            width: stride / 4,
+            height: -h,
+            planes: 1,
+            bit_count: 32,
+            compression: 0,
+            size_image: 0,
+            x_ppm: 0,
+            y_ppm: 0,
+            clr_used: 0,
+            clr_important: 0,
+        };
+        unsafe {
+            SetStretchBltMode(dc, HALFTONE);
+            SetBrushOrgEx(dc, 0, 0, std::ptr::null_mut());
+            StretchDIBits(dc, r[0], r[1], r[2], r[3], 0, 0, w, h, bits as *const c_void, &info, 0, SRCCOPY);
+        }
+    }
+
     fn page(dc: isize, f: impl FnOnce(isize) -> Result<(), String>) -> Result<(), String> {
         if unsafe { StartPage(dc) } <= 0 {
             return Err("the printer stopped taking pages".into());
@@ -540,15 +718,22 @@ mod win {
             let mut dm = vec![0u8; DM_MIN];
             apply(
                 &mut dm,
-                &Setup { orientation: Some("landscape".into()), paper: Some(8), color: Some(false), duplex: Some("short".into()) },
+                &Setup {
+                    orientation: Some("landscape".into()),
+                    paper: Some(8),
+                    color: Some(false),
+                    duplex: Some("short".into()),
+                    source: Some(15),
+                },
             );
             let s = read(&dm);
             assert_eq!(s.orientation.as_deref(), Some("landscape"));
             assert_eq!(s.paper, Some(8));
             assert_eq!(s.color, Some(false));
             assert_eq!(s.duplex.as_deref(), Some("short"));
+            assert_eq!(s.source, Some(15));
             let f = u32::from_le_bytes(dm[DM_FIELDS..DM_FIELDS + 4].try_into().unwrap());
-            assert_eq!(f, F_ORIENTATION | F_PAPERSIZE | F_COLOR | F_DUPLEX);
+            assert_eq!(f, F_ORIENTATION | F_PAPERSIZE | F_COLOR | F_DUPLEX | F_DEFAULTSOURCE);
         }
 
         #[test]
@@ -570,16 +755,43 @@ mod tests {
         Cell { page: 0, x: 0.0, y: 0.0, w, h: 10.0, rot: 0, clip: [0.0, 0.0, 10.0, 10.0], border: false }
     }
     fn job(sheets: Vec<Sheet>, copies: u32) -> Job {
-        Job { printer: "p".into(), setup: Setup::default(), title: String::new(), copies, gray: false, annots: true, sheets }
+        Job {
+            printer: "p".into(),
+            setup: Setup::default(),
+            title: String::new(),
+            copies,
+            gray: false,
+            annots: true,
+            sheets,
+            image: None,
+        }
+    }
+    fn one(c: Cell) -> Vec<Sheet> {
+        vec![Sheet { cells: vec![c], ..Default::default() }]
     }
 
     #[test]
     fn a_job_is_checked_before_it_reaches_a_printer() {
-        assert!(job(vec![Sheet { cells: vec![cell(10.0)] }], 1).check().is_ok());
+        assert!(job(one(cell(10.0)), 1).check().is_ok());
         assert!(job(vec![], 1).check().is_err(), "no sheets");
-        assert!(job(vec![Sheet { cells: vec![cell(10.0)] }], 0).check().is_err(), "no copies");
-        assert!(job(vec![Sheet { cells: vec![cell(10.0)] }], MAX_COPIES + 1).check().is_err());
-        assert!(job(vec![Sheet { cells: vec![cell(f32::NAN)] }], 1).check().is_err());
-        assert!(job(vec![Sheet { cells: vec![cell(-1.0)] }], 1).check().is_err());
+        assert!(job(one(cell(10.0)), 0).check().is_err(), "no copies");
+        assert!(job(one(cell(10.0)), MAX_COPIES + 1).check().is_err());
+        assert!(job(one(cell(f32::NAN)), 1).check().is_err());
+        assert!(job(one(cell(-1.0)), 1).check().is_err());
+        let mut j = job(one(cell(10.0)), 1);
+        j.image = Some(300);
+        assert!(j.check().is_ok());
+        j.image = Some(5000);
+        assert!(j.check().is_err(), "an image resolution no printer has");
+    }
+
+    #[test]
+    fn a_page_printed_as_a_picture_is_drawn_at_the_resolution_asked_and_no_bigger() {
+        // an A4 box on a 600 dpi printer, as a picture at 300 dpi: half each way
+        assert_eq!(raster_size(4960, 7016, 300, 600), [2480, 3508]);
+        // an A0 sheet at 600 dpi would be 560 megapixels: brought down to the cap
+        let [w, h] = raster_size(19866, 28087, 600, 600);
+        assert!((w as f64) * (h as f64) <= MAX_IMAGE_PX * 1.001);
+        assert!((w as f64 / h as f64 - 19866.0 / 28087.0).abs() < 0.001, "the same shape");
     }
 }

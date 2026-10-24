@@ -16,7 +16,7 @@ type Plan = {
   w: number;
   h: number;
   landscape: boolean;
-  sheets: { cells: Cell[] }[];
+  sheets: { cells: Cell[]; w?: number; h?: number; landscape?: boolean; paper?: string }[];
   scale: number;
   pages: number[];
   error?: string;
@@ -125,5 +125,46 @@ describe('print plan', () => {
       [7, 0],
       [5, 2],
     ]);
+  });
+
+  it('chooses the paper by page size: an A3 drawing on A3, turned its way, an A4 page on A4', () => {
+    const A3 = P.PAPERS.find((p) => p.id === 'a3')!;
+    const p = P.plan([{ w: 1190.55, h: 841.89 }, ...portrait(1), { w: 2384, h: 1684 }], {
+      byPage: true,
+      papers: [A4, A3],
+      fit: 'actual',
+      paper: A4,
+    });
+    expect(p.sheets.map((s) => s.paper)).toEqual(['a3', 'a4', 'a3']);
+    expect(p.sheets.map((s) => s.landscape)).toEqual([true, false, true]);
+    near(p.sheets[0]!.w!, A3.h);
+    /* bigger than every paper: the biggest, and actual size cuts it there */
+    expect(p.sheets[2]!.cells[0]!.w).toBeCloseTo(2384, 0);
+  });
+
+  it('tiles a poster: an A1 drawing at 100% on A4 sheets, overlapping, centred on the tiles', () => {
+    const margins = { l: 12, t: 12, r: 12, b: 12 };
+    const p = P.plan([{ w: 2384, h: 1684 }], { mode: 'poster', tile: 100, overlap: 36, paper: A4, margins });
+    /* the paper's way that takes fewer tiles: here portrait, 5 x 3 against 4 x 4 */
+    const tiles = (w: number, h: number): [number, number] => [
+      Math.ceil((2384 - 36) / (w - 60)),
+      Math.ceil((1684 - 36) / (h - 60)),
+    ];
+    const [cols, rows] = tiles(A4.w, A4.h);
+    expect([cols, rows]).toEqual([5, 3]);
+    expect(tiles(A4.h, A4.w)).toEqual([4, 4]);
+    expect(p.sheets.every((s) => s.landscape === false)).toBe(true);
+    expect(p.sheets.length).toBe(15);
+    const stepX = A4.w - 60;
+    const [a, b] = [p.sheets[0]!.cells[0]!, p.sheets[1]!.cells[0]!];
+    near(a.x - b.x, stepX);
+    near(a.w, 2384);
+    expect(a.clip).toEqual({ x: 12, y: 12, w: A4.w - 24, h: A4.h - 24 });
+    /* the tiles' cover, less the page, split either side */
+    near(a.x - 12, (cols * stepX + 36 - 2384) / 2);
+    /* a small page, large pages only: one sheet */
+    const small = P.plan(portrait(1), { mode: 'poster', tile: 100, overlap: 36, paper: A4, largeOnly: true });
+    expect(small.sheets.length).toBe(1);
+    expect(P.plan(portrait(1), { mode: 'poster', tile: 200, paper: A4 }).sheets.length).toBe(4);
   });
 });

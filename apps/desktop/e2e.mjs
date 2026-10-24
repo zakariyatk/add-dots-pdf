@@ -352,8 +352,26 @@ try {
         sheets: $('prOf').textContent,
         preview: $('prCanvas').width,
         papers: caps && caps.papers ? caps.papers.length : caps,
+        bins: caps && caps.bins ? caps.bins.length : null,
         margins: caps && caps.margins,
       };
+      /* Advanced and Page Setup open over the dialog and close again */
+      $('prAdvanced').click();
+      got.advanced = !$('prAdvBox').hidden && !!$('prImage');
+      $('prAdvBox').querySelector('[data-pop="ok"]').click();
+      $('prSetup').click();
+      got.setup = !$('prSetupBox').hidden;
+      got.setupPapers = $('prPaper').options.length;
+      got.setupSources = $('prSource').options.length;
+      $('prSetupBox').querySelector('[data-pop="ok"]').click();
+      got.popsClosed = $('prAdvBox').hidden && $('prSetupBox').hidden;
+      /* Poster: the first page at 400% takes more than one sheet */
+      document.querySelector('.prseg [data-mode="poster"]').click();
+      $('prTile').value = '400';
+      $('prTile').dispatchEvent(new Event('input', { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 600));
+      got.poster = $('prOf').textContent;
+      document.querySelector('.prseg [data-mode="size"]').click();
       $('prCancel').click();
       got.closed = $('printModal').hidden;
       return got;
@@ -367,6 +385,17 @@ try {
         (dialog.listed.list.length
           ? dialog.listed.list.every((n) => dialog.shown.includes(n)) && dialog.papers > 0
           : true),
+      dialog,
+    );
+    check(
+      'Print: Advanced (print as image) and Page Setup (paper, tray) open over it; Poster tiles a page',
+      dialog.advanced &&
+        dialog.setup &&
+        dialog.setupPapers > 0 &&
+        dialog.setupSources > 0 &&
+        dialog.popsClosed &&
+        /^Page 1 of (\d+)$/.test(dialog.poster) &&
+        +/of (\d+)$/.exec(dialog.poster)[1] > 1,
       dialog,
     );
   }

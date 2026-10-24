@@ -8,6 +8,9 @@
 
    Everything is in PDF points (1/72 inch), from the sheet's top left corner,
    y running down. A page's size is as it is shown: its own turn (r) applied.
+   A sheet may have a paper of its own (paper by page size, a poster's
+   tiles turned the page's way): then it carries its w, h, landscape and
+   paper (the paper's id), else it is the plan's paper.
    A cell's `rot` is a further turn, in quarters clockwise: 0, or 1 or 3 when
    the page is turned to fit, whichever way puts a page that was turned
    itself back the right way up.
@@ -102,6 +105,19 @@
     return !best || s > best.s * 1.001 || (s > best.s * 0.999 && best.rot && !rot);
   }
 
+  /* the smallest paper a page w x h fits on, either way round; the
+     biggest when none is big enough */
+  function paperFor(papers, w, h) {
+    const lo = Math.min(w, h) * 0.98, hi = Math.max(w, h) * 0.98;
+    let fit = null, big = null;
+    papers.forEach(function (p) {
+      const a = p.w * p.h;
+      if (Math.min(p.w, p.h) >= lo && Math.max(p.w, p.h) >= hi && (!fit || a < fit.w * fit.h)) fit = p;
+      if (!big || a > big.w * big.h) big = p;
+    });
+    return fit || big;
+  }
+
   /* a quarter turn to fit, back against the page's own turn when it has one */
   function upright(sheets, sizes) {
     sheets.forEach(function (s) {
@@ -113,8 +129,13 @@
   /* The sheets for pages `sizes` ([{w, h, r}], every page of the document) and
      the dialog's choices `o`:
        pick, current, range, subset, reverse — which pages (choosePages)
-       mode       'size' | 'multiple' | 'booklet'
+       mode       'size' | 'multiple' | 'booklet' | 'poster'
        fit        'fit' | 'actual' | 'shrink' | 'custom', with scale (%)
+       byPage     for 'size': each page on the smallest of `papers`
+                  ([{ id, w, h }]) it fits on, turned its way
+       tile       for 'poster': the page's scale (%); overlap, in points,
+                  repeated on the next tile; largeOnly, a page that fits
+                  on one sheet at that scale is printed on one
        per        pages a sheet, for 'multiple' (2, 4, 6, 9, 16)
        order      'h' | 'hr' | 'v' | 'vr' (across, across from the right,
                   down, down from the right); border
@@ -133,7 +154,63 @@
     const pw = Math.min(paper.w, paper.h), ph = Math.max(paper.w, paper.h);
     const sheetOf = function (land) { return land ? { w: ph, h: pw, land: true } : { w: pw, h: ph, land: false }; };
     const fixed = o.orient === 'portrait' ? [false] : o.orient === 'landscape' ? [true] : [false, true];
-    const mode = o.mode === 'multiple' || o.mode === 'booklet' ? o.mode : 'size';
+    const mode = o.mode === 'multiple' || o.mode === 'booklet' || o.mode === 'poster' ? o.mode : 'size';
+
+    if (mode === 'size' && o.byPage && o.papers && o.papers.length) {
+      let first = null;
+      const sheets = pages.map(function (i) {
+        const z = sizes[i], land = z.w > z.h;
+        const pp = paperFor(o.papers, z.w, z.h);
+        const w = land ? Math.max(pp.w, pp.h) : Math.min(pp.w, pp.h);
+        const h = land ? Math.min(pp.w, pp.h) : Math.max(pp.w, pp.h);
+        const b = printable(w, h, o.margins, land);
+        const s = scaleFor(o.fit, o.scale, z.w, z.h, b.w, b.h);
+        if (first === null) first = s;
+        return { w: w, h: h, landscape: land, paper: pp.id, cells: [place(i, z.w, z.h, 0, s, b, 0.5, 0.5, false)] };
+      });
+      const f = sheets[0];
+      return { w: f.w, h: f.h, landscape: f.landscape, sheets: sheets, scale: first, pages: pages };
+    }
+
+    if (mode === 'poster') {
+      const s = Math.max(0.01, (+o.tile || 100) / 100);
+      const ov = Math.max(0, +o.overlap || 0);
+      let first = null;
+      const sheets = [];
+      pages.forEach(function (i) {
+        const z = sizes[i], W = z.w * s, H = z.h * s;
+        /* the paper's way that takes the fewest tiles (the page's way when equal) */
+        let best = null;
+        fixed.forEach(function (land) {
+          const sh = sheetOf(land), b = printable(sh.w, sh.h, o.margins, land);
+          const sx = Math.max(1, b.w - ov), sy = Math.max(1, b.h - ov);
+          const cols = Math.max(1, Math.ceil((W - ov) / sx - 1e-6)), rows = Math.max(1, Math.ceil((H - ov) / sy - 1e-6));
+          const n = cols * rows, mine = land === z.w > z.h;
+          if (!best || n < best.n || (n === best.n && mine && !best.mine)) {
+            best = { n: n, cols: cols, rows: rows, sh: sh, b: b, sx: sx, sy: sy, land: land, mine: mine };
+          }
+        });
+        if (first === null) first = s;
+        const b = best.b, sh = best.sh;
+        const one = function (cell) { sheets.push({ w: sh.w, h: sh.h, landscape: best.land, cells: [cell] }); };
+        if (o.largeOnly && W <= b.w + 0.5 && H <= b.h + 0.5) {
+          one(place(i, z.w, z.h, 0, s, b, 0.5, 0.5, false));
+          return;
+        }
+        /* the tiles cover a little more than the page: it sits centred on them */
+        const ox = (best.cols * best.sx + ov - W) / 2, oy = (best.rows * best.sy + ov - H) / 2;
+        for (let r = 0; r < best.rows; r++) {
+          for (let c = 0; c < best.cols; c++) {
+            one({
+              page: i, rot: 0, x: b.x + ox - c * best.sx, y: b.y + oy - r * best.sy, w: W, h: H,
+              clip: { x: b.x, y: b.y, w: b.w, h: b.h }, border: false, tile: [r + 1, c + 1]
+            });
+          }
+        }
+      });
+      const f = sheets[0];
+      return { w: f.w, h: f.h, landscape: f.landscape, sheets: sheets, scale: first, pages: pages };
+    }
 
     if (mode === 'size') {
       /* auto: the paper the way most of the pages are */
