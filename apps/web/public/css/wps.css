@@ -26,7 +26,7 @@ body[data-ui="light"][data-skin="wps"] {
 }
 
 /* ---- the top strip: tabs in the middle, red for the one in use ---- */
-body[data-ui="light"][data-skin="wps"] .bar { background: var(--wps-desk); border-bottom: none; padding-top: 7px; padding-bottom: 5px }
+body[data-ui="light"][data-skin="wps"] .bar { background: var(--wps-desk); border-bottom: none; padding-top: calc(7px + env(safe-area-inset-top)); padding-bottom: 5px }
 body[data-ui="light"][data-skin="wps"] .tabs .tab { font-size: 14px; color: #3B414B; padding: 0 16px }
 body[data-ui="light"][data-skin="wps"] .tabs .tab:hover { color: var(--wps-red) }
 body[data-ui="light"][data-skin="wps"] .tabs .tab.on { color: var(--wps-red); font-weight: 600 }
