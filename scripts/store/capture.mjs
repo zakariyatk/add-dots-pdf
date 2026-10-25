@@ -531,6 +531,16 @@ async function sitePhotos() {
   return out;
 }
 
+/* the photo on show in the viewer */
+function viewerBox(p) {
+  return p.evaluate(() => {
+    const im = [...document.querySelectorAll('#lb img')].filter((x) => x.offsetParent)
+      .sort((a, b) => b.width * b.height - a.width * a.height)[0];
+    const r = (im || document.getElementById('lb')).getBoundingClientRect();
+    return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
+  });
+}
+
 async function planScenes(kind) {
   const pp = await browser.newPage();
   await pp.goto(pathToFileURL(join(here, 'plan.html')).href);
@@ -540,15 +550,18 @@ async function planScenes(kind) {
   const photos = await sitePhotos();
   /* the plan's metres as PDF points (plan.html: 1:50, origin at 120, 130) */
   const M = 56.693, PX = (m) => 120 + m * M, PY = (m) => 841.89 - (130 + m * M);
+  /* assets/site-photos in name order: lobby finishes, ceiling framing,
+     ceiling boards, edge protection, crane lift (the drawn ones repeat) */
+  const ph = (i, cap) => ({ src: photos[i % photos.length], cap });
   const LOCS = [
-    { id: 'Lk', n: '1', ref: 'K-01', desc: 'Kitchen · wall tiling', boq: '6.2.1', note: 'Splashback 60% done',
-      photos: [{ src: photos[0], cap: 'Splashback tiling' }, { src: photos[3 % photos.length], cap: 'Power points' }], at: [1.0, 7.4] },
-    { id: 'Lb', n: '2', ref: 'WC-02', desc: 'Bath · waterproofing', boq: '7.1.4', note: 'Second coat dry',
-      photos: [{ src: photos[1 % photos.length], cap: 'Membrane, second coat' }], at: [8.6, 6.4] },
-    { id: 'Ll', n: '3', ref: 'W-05', desc: 'Living · window frame', boq: '4.3.2', note: '',
-      photos: [{ src: photos[2 % photos.length], cap: 'Frame fixed, glazing next' }], at: [5.9, 2.3] },
-    { id: 'Le', n: '4', ref: 'E-11', desc: 'Bedroom 1 · electrical', boq: '8.4.1', note: 'Rough-in inspected',
-      photos: [{ src: photos[3 % photos.length], cap: 'Rough-in' }], at: [12.4, 2.6] },
+    { id: 'Lk', n: '1', ref: 'F-01', desc: 'Living · finishes', boq: '9.2.1', note: 'Marble and brass trims done',
+      photos: [ph(0, 'Finishes complete'), ph(1, 'Ceiling before boarding')], at: [1.0, 7.4] },
+    { id: 'Lb', n: '2', ref: 'C-02', desc: 'Kitchen · ceiling framing', boq: '7.4.2', note: 'Grid levelled and checked',
+      photos: [ph(1, 'Ceiling grid, levels checked')], at: [5.9, 2.3] },
+    { id: 'Ll', n: '3', ref: 'C-03', desc: 'Bath · ceiling boards', boq: '7.4.3', note: 'Moisture-resistant boards',
+      photos: [ph(2, 'First boards fixed')], at: [8.6, 6.4] },
+    { id: 'Le', n: '4', ref: 'S-04', desc: 'Structure · edge protection', boq: '2.1.6', note: 'Loading bays in place',
+      photos: [ph(3, 'Loading bays, levels 6 to 9'), ph(4, 'Rebar lift to the roof')], at: [12.4, 2.6] },
     { id: 'Lr', n: '5', ref: 'D-07', desc: 'Laundry · door', boq: '5.1.7', note: '', photos: [], at: [12.2, 6.2] }
   ];
   const DIMS = [
@@ -598,13 +611,7 @@ async function planScenes(kind) {
     });
     await settle(p, 1000);
     await shot(p, 'd7-viewer');
-    boxes.d7.viewer = await p.evaluate(() => {
-      const lb = document.getElementById('lb');
-      const all = [...lb.querySelectorAll('*')].filter((x) => x.offsetParent).map((x) => x.getBoundingClientRect())
-        .filter((r) => r.width > 300 && r.height > 250 && r.width < innerWidth - 40).sort((a, b) => b.width * b.height - a.width * a.height);
-      const r = all[0] || lb.getBoundingClientRect();
-      return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
-    });
+    boxes.d7.viewer = await viewerBox(p);
     await p.keyboard.press('Escape');
     await p.evaluate(() => { const lb = document.getElementById('lb'); if (lb) lb.hidden = true; });
     await click(p, 'sTabPins');
@@ -652,6 +659,7 @@ async function planScenes(kind) {
     });
     await settle(p, 1000);
     await shot(p, 'p6-viewer');
+    boxes.p6 = { viewer: await viewerBox(p) };
   }
   await ctx.close();
 }
