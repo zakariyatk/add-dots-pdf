@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Convert
+/* Add Dots PDF — Convert
    ---------------------
    The Convert tab: the open PDF out to Word, Excel, PowerPoint, pictures and
    plain text, all on this device.

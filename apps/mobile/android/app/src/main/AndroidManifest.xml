@@ -22,7 +22,7 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- "Open with ADD DOTS PDF" for a PDF in Files, Gmail, WhatsApp... -->
+            <!-- "Open with Add Dots PDF" for a PDF in Files, Gmail, WhatsApp... -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />

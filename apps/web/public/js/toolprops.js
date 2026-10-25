@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Drawing Tool tab
+/* Add Dots PDF — Drawing Tool tab
    ------------------------------
    The properties of the tool in hand — colour, width, font, style, scale and
    the rest — used to open as a bar under the ribbon. On a desktop they live in

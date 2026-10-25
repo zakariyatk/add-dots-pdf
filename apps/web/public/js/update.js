@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Updates
+/* Add Dots PDF — Updates
    ---------------------
    Telling the reader about a new version, wherever the app runs:
 
@@ -79,7 +79,7 @@
 
   /* js/pwa.js calls this when an update is ready but a document is open */
   X.updateReady = function () {
-    showBar('A new version of ADD DOTS PDF is ready', 'Update now to get the latest tools.', [
+    showBar('A new version of Add Dots PDF is ready', 'Update now to get the latest tools.', [
       {
         label: 'Update now', primary: true,
         run: function () {
@@ -153,16 +153,16 @@
     if (later[0] === v.id && Date.now() - (+later[1] || 0) < 86400000) return;
     const later1 = { label: 'Later', run: function () { set(LATER, v.id + '|' + Date.now()); } };
     if (IN_DESKTOP && X.openStore) {
-      showBar('An update for ADD DOTS PDF is available',
+      showBar('An update for Add Dots PDF is available',
         'The Microsoft Store installs it. What is new:' + notesHtml(v.notes),
         [{ label: 'Update', primary: true, run: function () {
           X.openStore().catch(function () {
-            X.toast('Open the Microsoft Store, then Library, to update ADD DOTS PDF');
+            X.toast('Open the Microsoft Store, then Library, to update Add Dots PDF');
           });
         } }, later1]);
     } else {
       /* the phone apps, until they are in their stores: the website has it */
-      showBar('A newer version of ADD DOTS PDF is available',
+      showBar('A newer version of Add Dots PDF is available',
         'It is on the website now. What is new:' + notesHtml(v.notes),
         [{ label: 'Open website', primary: true, run: function () { window.open(site(), '_blank'); } }, later1]);
     }
@@ -172,21 +172,21 @@
   function offerStoreUpdate() {
     const later = (get(LATER) || '').split('|');
     if (later[0] === 'store' && Date.now() - (+later[1] || 0) < 86400000) return;
-    showBar('An update for ADD DOTS PDF is available',
+    showBar('An update for Add Dots PDF is available',
       'The Microsoft Store has a new version. The app closes to install it, then starts again.',
       [{ label: 'Update', primary: true, run: function () {
-        if (!window.confirm('ADD DOTS PDF closes to install the update. ' +
+        if (!window.confirm('Add Dots PDF closes to install the update. ' +
                             'Save your PDFs first. Install the update now?')) return;
         X.storeInstall().then(function (r) {
           if (r === 'failed') {
             X.toast('The Microsoft Store could not install the update; opening its page');
             X.openStore().catch(function () {});
           } else if (r === 'nothing') {
-            X.toast('ADD DOTS PDF is up to date');
+            X.toast('Add Dots PDF is up to date');
           }
         }, function () {
           X.openStore().catch(function () {
-            X.toast('Open the Microsoft Store, then Library, to update ADD DOTS PDF');
+            X.toast('Open the Microsoft Store, then Library, to update Add Dots PDF');
           });
         });
       } }, { label: 'Later', run: function () { set(LATER, 'store|' + Date.now()); } }]);
@@ -212,7 +212,7 @@
     set(SEEN, BUILD.id);
     /* the very first start is not an update */
     if (!seen || seen === BUILD.id || !(BUILD.notes && BUILD.notes.length)) return;
-    const b = showBar('ADD DOTS PDF has been updated', 'What is new:' + notesHtml(BUILD.notes), [
+    const b = showBar('Add Dots PDF has been updated', 'What is new:' + notesHtml(BUILD.notes), [
       { label: 'Got it', primary: true }
     ]);
     b.classList.add('updnew');

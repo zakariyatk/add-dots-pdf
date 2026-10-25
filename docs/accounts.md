@@ -59,7 +59,7 @@ the next step (below). There people sign in with email.
    credentials > **OAuth client ID** > Web application.
 2. Authorised redirect URI:
    `https://jrdbuifhcxwyjxgyaowz.supabase.co/auth/v1/callback`
-3. OAuth consent screen: app name "ADD DOTS PDF", support email, the
+3. OAuth consent screen: app name "Add Dots PDF", support email, the
    privacy policy link (`https://pdf.adddots.com/privacy.html`), and publish
    it.
 4. Supabase dashboard > Authentication > Sign In / Providers > **Google**:
@@ -163,7 +163,7 @@ and it can only ever reach the caller's own account.
 
      ```html
      <h2>Confirm your email</h2>
-     <p>Enter this code in ADD DOTS PDF:</p>
+     <p>Enter this code in Add Dots PDF:</p>
      <p style="font-size:28px;letter-spacing:6px"><b>{{ .Token }}</b></p>
      <p>If you did not create an ADD DOTS account, ignore this email.</p>
      ```

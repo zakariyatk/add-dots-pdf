@@ -140,7 +140,7 @@ Every path in the manifest and the worker is relative, so the app installs the
 same from `adddots.com/pdfreader/` as it would from the root of a domain.
 
 Installed, it runs in its own window with no browser chrome, and it registers
-as a handler for `.pdf`, so **Open with → ADD DOTS PDF** hands the file to
+as a handler for `.pdf`, so **Open with → Add Dots PDF** hands the file to
 `ADDPDF.openFiles` — the same path the file picker uses, which is why several
 files selected at once still merge in order.
 

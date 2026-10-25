@@ -1,7 +1,7 @@
 {
   "name": "@adddots/desktop",
   "private": true,
-  "description": "ADD DOTS PDF for Windows: the web app in a Tauri window",
+  "description": "Add Dots PDF for Windows: the web app in a Tauri window",
   "scripts": {
     "tauri": "tauri",
     "desktop:build": "tauri build",

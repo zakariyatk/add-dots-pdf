@@ -149,7 +149,7 @@
       if (!rec || !rec.doc) throw new Error('nothing was handed over');
       api.on('ready', function () {
         api.importSession(rec.doc).then(function (ok) {
-          if (ok && rec.doc.name) document.title = rec.doc.name + ' · ADD DOTS PDF';
+          if (ok && rec.doc.name) document.title = rec.doc.name + ' · Add Dots PDF';
         });
       });
     }).catch(function (e) {

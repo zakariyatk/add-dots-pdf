@@ -569,7 +569,7 @@ mod win {
         }
         let dm = p.devmode(&job.printer, &over)?;
         let dc = Dc::new(&p.1, &dm)?;
-        let title = wide(if job.title.is_empty() { "ADD DOTS PDF" } else { &job.title });
+        let title = wide(if job.title.is_empty() { "Add Dots PDF" } else { &job.title });
         let info = DocInfo { size: std::mem::size_of::<DocInfo>() as i32, name: title.as_ptr(), output: std::ptr::null(), datatype: std::ptr::null(), kind: 0 };
         if unsafe { StartDocW(dc.0, &info) } <= 0 {
             return Err("the printer did not take the job".into());

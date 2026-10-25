@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Look
+/* Add Dots PDF — Look
    -------------------
    The WPS look (css/wps.css) over the light interface, with the status bar
    it brings: the sidebar, the page and the zoom along the bottom, as WPS

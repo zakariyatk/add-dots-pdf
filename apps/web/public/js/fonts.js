@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Google Fonts for text
+/* Add Dots PDF — Google Fonts for text
    ------------------------------------
    The fonts the Text tool offers beyond Helvetica, Times and Courier: the
    families in js/fonts-list.js, their files in assets/fonts/google/ (fetched

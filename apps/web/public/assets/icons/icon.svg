@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512">
-  <!-- The ADD DOTS PDF logo. Drawn by scripts/icons.mjs, with every PNG in the apps. -->
+  <!-- The Add Dots PDF logo. Drawn by scripts/icons.mjs, with every PNG in the apps. -->
   <rect width="100" height="100" rx="20" fill="#000"/>
   <g transform="translate(50 50.5) scale(1) translate(-50 -50.5)"><path d="M33 18.5H54V31a7 7 0 0 0 7 7H74.5V75a7.5 7.5 0 0 1-7.5 7.5H33a7.5 7.5 0 0 1-7.5-7.5V26a7.5 7.5 0 0 1 7.5-7.5z" fill="#fff"/><path d="M57.8 19.2L74 35.4H62a4.2 4.2 0 0 1-4.2-4.2z" fill="#7357FF"/><path d="M36.3 58.8L41.7 52.2L43.9 58.8z" fill="#7357FF"/><path d="M45.8 61.4H33.6L42 47.4L51.1 63.8H58.8A9 9 0 0 0 58.8 45.8H49.9" fill="none" stroke="#000" stroke-width="4.6"/><g fill="#7357FF"><circle cx="40.7" cy="73" r="3.3"/><circle cx="49.9" cy="73" r="3.3"/><circle cx="59" cy="73" r="3.3"/></g></g>
 </svg>

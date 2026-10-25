@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Forms & signatures
+/* Add Dots PDF — Forms & signatures
    ---------------------------------
    Reads the AcroForm fields pdf.js finds on each page, floats a real HTML
    control over each one so they can be filled in, and writes the answers back

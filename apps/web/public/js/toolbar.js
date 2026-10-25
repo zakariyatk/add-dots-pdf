@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Toolbar arrangement
+/* Add Dots PDF — Toolbar arrangement
    ----------------------------------
    Loads last, once every module has registered its buttons, and decides where
    they all live.

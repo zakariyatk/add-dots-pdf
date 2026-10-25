@@ -1,4 +1,4 @@
-# ADD DOTS PDF
+# Add Dots PDF
 
 PDF reader and editor for web, Windows, iOS and Android.
 

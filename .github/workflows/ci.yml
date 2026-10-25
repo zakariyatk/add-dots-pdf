@@ -96,8 +96,8 @@ jobs:
           # where it went, as Windows records it: this user's list of
           # installed programs (HKCU), not the computer's (HKLM)
           $keys = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
-          $mine = Get-ItemProperty "HKCU:\$keys" -ErrorAction SilentlyContinue | Where-Object DisplayName -like 'ADD DOTS PDF*'
-          $all = Get-ItemProperty "HKLM:\$keys", "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue | Where-Object DisplayName -like 'ADD DOTS PDF*'
+          $mine = Get-ItemProperty "HKCU:\$keys" -ErrorAction SilentlyContinue | Where-Object DisplayName -like 'Add Dots PDF*'
+          $all = Get-ItemProperty "HKLM:\$keys", "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue | Where-Object DisplayName -like 'Add Dots PDF*'
           if ($all) { throw 'installed for the whole computer (HKLM): that needs an administrator' }
           if (-not $mine) { throw 'not in this user''s installed programs' }
           $dir = ($mine | Select-Object -First 1).InstallLocation

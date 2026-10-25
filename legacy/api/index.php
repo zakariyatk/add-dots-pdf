@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 /**
- * ADD DOTS PDF — API front controller.
+ * Add Dots PDF — API front controller.
  *
  * Every request under /api lands here. Routing is a short explicit table
  * rather than a framework: on shared hosting the whole point is that this

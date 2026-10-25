@@ -1,4 +1,4 @@
-/* ADD DOTS — PDF Editor service worker.
+/* Add Dots — PDF Editor service worker.
 
    The app runs from a cache, so it opens instantly and works with no connection
    at all. The moment there is a connection it checks what it is holding against

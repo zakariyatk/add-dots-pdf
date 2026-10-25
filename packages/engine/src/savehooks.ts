@@ -65,7 +65,7 @@ function metaFinish(meta: DocMeta | null | undefined) {
       if (m.author) out.setAuthor(m.author);
       if (m.subject) out.setSubject(m.subject);
       if (m.keywords) out.setKeywords(m.keywords.split(/\s*[,;]\s*/).filter(Boolean));
-      out.setProducer('ADD DOTS PDF Editor');
+      out.setProducer('Add Dots PDF Editor');
       out.setModificationDate(new Date());
     } catch {
       /* details are a nicety: never fail a save over them */

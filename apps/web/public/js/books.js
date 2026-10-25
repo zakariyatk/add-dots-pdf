@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Books
+/* Add Dots PDF — Books
    -------------------
    The Books tab, for reading rather than editing: a full-screen book view
    with one or two pages and page turns, read aloud, bookmarks, the PDF's own

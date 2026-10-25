@@ -81,7 +81,7 @@
   function diagnostics(extra) {
     const n = navigator, m = performance.memory;
     const lines = [
-      'ADD DOTS PDF diagnostics, ' + new Date().toISOString(),
+      'Add Dots PDF diagnostics, ' + new Date().toISOString(),
       'Browser: ' + n.userAgent,
       'Screen: ' + screen.width + 'x' + screen.height + ' at ' + (window.devicePixelRatio || 1) + 'x, window ' +
         innerWidth + 'x' + innerHeight,

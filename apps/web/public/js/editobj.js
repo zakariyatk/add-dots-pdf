@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Edit Object
+/* Add Dots PDF — Edit Object
    -------------------------
    The page's own content made editable, as in Foxit's Edit Object: Edit tab,
    Edit Object, then All, Text or Shape.

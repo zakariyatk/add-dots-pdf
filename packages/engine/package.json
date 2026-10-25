@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "ADD DOTS PDF engine: page model, marks, geometry, save. No UI.",
+  "description": "Add Dots PDF engine: page model, marks, geometry, save. No UI.",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {

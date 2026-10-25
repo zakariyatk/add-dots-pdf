@@ -1,7 +1,7 @@
 {
   "name": "add-dots-pdf",
   "private": true,
-  "description": "ADD DOTS PDF reader and editor: web, Windows and mobile",
+  "description": "Add Dots PDF reader and editor: web, Windows and mobile",
   "packageManager": "npm@11.17.0",
   "engines": {
     "node": ">=20"

@@ -2,7 +2,7 @@ name: Microsoft Store
 
 # Submits the Windows app to the Microsoft Store: the MSIX that CI built
 # (the windows-store-msix artifact of a CI run on main), uploaded to the
-# product ADD DOTS PDF (9PGHPBRMLQMS) in Partner Center with Microsoft's
+# product Add Dots PDF (9PGHPBRMLQMS) in Partner Center with Microsoft's
 # Store CLI (msstore), which replaces the package and submits it for
 # certification. The rest of the Store listing stays as it is.
 #

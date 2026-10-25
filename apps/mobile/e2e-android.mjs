@@ -153,7 +153,7 @@ try {
     await sh('cat /data/local/tmp/' + name + ' | run-as ' + PKG + " sh -c 'cat > files/" + name + "'");
   }
 
-  /* "Open with ADD DOTS PDF", as from Files: a content:// URI */
+  /* "Open with Add Dots PDF", as from Files: a content:// URI */
   await sh(
     'am start -W -a android.intent.action.VIEW -t application/pdf -d content://' +
       PKG +

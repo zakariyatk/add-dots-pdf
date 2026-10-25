@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Drawing tools
+/* Add Dots PDF — Drawing tools
    ----------------------------
    Circle, revision cloud, arc and linear dimension.
 

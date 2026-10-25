@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Organize & combine
+/* Add Dots PDF — Organize & combine
    ---------------------------------
    Drag-to-reorder thumbnails, an Organize Pages grid, merge, insert pages
    from another PDF, split, duplicate and page-range selection.

@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Print (the Windows app)
+/* Add Dots PDF — Print (the Windows app)
    ----------------------------------------
    The Print dialog, laid out as Acrobat's: the printer, its Properties and
    Advanced, copies, grey, which pages, how they sit on the paper (Size,
@@ -588,7 +588,7 @@
     /* straight to the printer */
     async function printHere() {
       const job = {
-        printer: o.printer, setup: setup(plan), title: S.baseName || 'ADD DOTS PDF', copies: o.copies,
+        printer: o.printer, setup: setup(plan), title: S.baseName || 'Add Dots PDF', copies: o.copies,
         gray: o.gray, annots: o.annots !== 'doc', image: o.image ? o.dpi : null,
         sheets: plan.sheets.map(function (s) {
           return {

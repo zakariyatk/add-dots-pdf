@@ -1,4 +1,4 @@
-//! ADD DOTS PDF on the desktop: the web app (apps/web/dist) in a window.
+//! Add Dots PDF on the desktop: the web app (apps/web/dist) in a window.
 //!
 //! The only thing the desktop side adds is PDFs handed over by the system.
 //! Double-clicking a PDF in Explorer starts the app with the file's path as
@@ -737,7 +737,7 @@ pub fn run() {
             perf_native
         ])
         .run(tauri::generate_context!())
-        .expect("error while running ADD DOTS PDF");
+        .expect("error while running Add Dots PDF");
 }
 
 #[cfg(test)]

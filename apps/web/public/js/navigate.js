@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Pan
+/* Add Dots PDF — Pan
    ------------------
    The hand tool. It lives on the View tab beside the zoom controls, because
    panning is a way of looking at the document rather than a way of marking it.

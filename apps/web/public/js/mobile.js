@@ -1,6 +1,6 @@
 /* The phone app (apps/mobile, Capacitor): files handed over by the system.
 
-   A PDF opened from another app ("Open with ADD DOTS PDF" in Files, Gmail,
+   A PDF opened from another app ("Open with Add Dots PDF" in Files, Gmail,
    WhatsApp...) starts the app, or reaches the one already open. This asks
    the native side for it once, listens for later ones, and opens each the
    way the file picker does. Saving goes to Android's own "save to" picker.

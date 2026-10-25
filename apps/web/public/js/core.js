@@ -1105,7 +1105,7 @@
     const m = $('meta');
     m.innerHTML = S.metaBase + ' · ' + n + 'p' + (changed ? ' <span class="dirty">· edited</span>' : '');
     m.title = m.textContent;   /* the bar truncates it on narrow screens */
-    $('docTitle').textContent = n ? docName() + ', ' + n + (n === 1 ? ' page' : ' pages') : 'ADD DOTS PDF';
+    $('docTitle').textContent = n ? docName() + ', ' + n + (n === 1 ? ' page' : ' pages') : 'Add Dots PDF';
     EXT.emit('meta');
   }
 

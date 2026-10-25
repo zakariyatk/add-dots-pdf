@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — rulers and guides, as Photoshop and Illustrator have them.
+/* Add Dots PDF — rulers and guides, as Photoshop and Illustrator have them.
 
    Rulers: a strip along the top and the left of the page area, measuring the
    page in view (the one under the pointer, else the current one) from its

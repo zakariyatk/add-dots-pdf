@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — OCR
+/* Add Dots PDF — OCR
    -----------------
    Reads the text on scanned pages and keeps it as an 'ocr' mark on each page:
    invisible, found by Find, copied with Copy text, and written into the

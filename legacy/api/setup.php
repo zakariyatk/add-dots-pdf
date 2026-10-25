@@ -145,7 +145,7 @@ header('Content-Type: text/html; charset=utf-8');
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>ADD DOTS PDF — API setup</title>
+<title>Add Dots PDF — API setup</title>
 <style>
   :root { color-scheme: dark }
   body { margin:0; padding:32px 20px; background:#050505; color:#E4E4E4;
@@ -167,7 +167,7 @@ header('Content-Type: text/html; charset=utf-8');
 </style>
 </head>
 <body><main>
-<h1>ADD DOTS PDF — API setup</h1>
+<h1>Add Dots PDF — API setup</h1>
 <p class="sub">Checking that this server can run the collaboration backend.</p>
 
 <ul>

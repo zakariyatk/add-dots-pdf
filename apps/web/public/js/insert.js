@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Insert
+/* Add Dots PDF — Insert
    ----------------------
    Image, video, link and table marks. Each is an ordinary rectangular mark —
    an a/b box in PDF points, same as a rectangle shape — so the existing

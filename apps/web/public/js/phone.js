@@ -86,7 +86,7 @@
       'stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="' +
       P[name] + '"></path></svg>';
   }
-  const LOGO = '<svg class="ph-logo" width="36" height="36" viewBox="0 0 100 100" role="img" aria-label="ADD DOTS PDF">' +
+  const LOGO = '<svg class="ph-logo" width="36" height="36" viewBox="0 0 100 100" role="img" aria-label="Add Dots PDF">' +
     '<rect width="100" height="100" rx="20" fill="#000"></rect>' +
     '<path d="M33 18.5H54V31a7 7 0 0 0 7 7H74.5V75a7.5 7.5 0 0 1-7.5 7.5H33a7.5 7.5 0 0 1-7.5-7.5V26a7.5 7.5 0 0 1 7.5-7.5z" fill="#fff"></path>' +
     '<path d="M57.8 19.2L74 35.4H62a4.2 4.2 0 0 1-4.2-4.2z" fill="#7357FF"></path>' +
@@ -165,7 +165,7 @@
     /* Home */
     '<section class="ph-view" data-v="home" aria-label="Home">' +
       '<header class="ph-head"><div class="ph-brand">' + LOGO +
-        '<span class="ph-word">ADD DOTS <em>PDF</em></span></div>' +
+        '<span class="ph-word">Add Dots <em>PDF</em></span></div>' +
         '<button type="button" class="ph-round" data-go="settings" aria-label="Settings">' + ic('gear') + '</button></header>' +
       '<h1 class="ph-h1">Read, edit and mark up any PDF</h1>' +
       '<button type="button" class="ph-resume" id="phResume" hidden>' +

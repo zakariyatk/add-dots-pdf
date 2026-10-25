@@ -7,7 +7,7 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
-        // a PDF the app was opened with ("Open in ADD DOTS PDF"), before the
+        // a PDF the app was opened with ("Open in Add Dots PDF"), before the
         // page asks for it
         if let url = connectionOptions.urlContexts.first?.url {
             AddDotsPlugin.handOver(url)

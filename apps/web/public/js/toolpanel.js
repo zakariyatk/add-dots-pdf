@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Tools as Acrobat lays them out
+/* Add Dots PDF — Tools as Acrobat lays them out
    ---------------------------------------------
    On a wide screen the ribbon becomes what Acrobat has: a row of tabs (All
    tools, View, Edit, Draw, Convert, Sign), the tools of the tab in a panel

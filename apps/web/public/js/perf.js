@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Performance panel
+/* Add Dots PDF — Performance panel
    -------------------------------
    Ctrl+Shift+P shows what the app is doing and what it costs, to measure
    before and after a change on the computer it runs on (see

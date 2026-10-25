@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Document tabs
+/* Add Dots PDF — Document tabs
    ----------------------------
    Each PDF in a tab of its own, as in Acrobat and WPS. The first document is
    the app itself; every other one is the same app in a frame of its own

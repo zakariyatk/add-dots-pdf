@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — tools for the Windows app
+/* Add Dots PDF — tools for the Windows app
    ---------------------------------------
    The website keeps the everyday tools; the heavy ones — editing the PDF's
    own content (Edit Object), Convert and OCR — are in the Windows app, which
@@ -43,7 +43,7 @@
         '<rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/>' +
         '<rect x="13" y="13" width="8" height="8"/></svg>' +
         '<b id="woTitle"></b><p id="woWhat"></p>' +
-        '<p class="wonote">It runs in the ADD DOTS PDF app for Windows, which has the memory and speed big ' +
+        '<p class="wonote">It runs in the Add Dots PDF app for Windows, which has the memory and speed big ' +
         'files need. Everything else works here as before.</p>' +
         '<div class="woacts"><button type="button" class="btn" id="woClose">Not now</button>' +
         '<a class="btn primary" id="woGet" href="' + STORE + '" target="_blank" rel="noopener">' +

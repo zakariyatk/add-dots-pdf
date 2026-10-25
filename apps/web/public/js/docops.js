@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Document operations
+/* Add Dots PDF — Document operations
    ----------------------------------
    Watermark, header & footer, Bates numbering, redaction, print, document
    properties and compression.

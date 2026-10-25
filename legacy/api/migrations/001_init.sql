@@ -1,4 +1,4 @@
--- ADD DOTS PDF — collaboration schema
+-- Add Dots PDF — collaboration schema
 --
 -- There are no user accounts. Access is by secret token, which is what lets a
 -- reviewer open a link and comment without signing up for anything. Tokens are

@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — where each page goes on the paper
+/* Add Dots PDF — where each page goes on the paper
    ------------------------------------------------
    The Print dialog (js/print.js) asks this for its sheets: which pages are
    printed, on how many sheets of paper, and where on each sheet each page

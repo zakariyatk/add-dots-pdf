@@ -1,4 +1,4 @@
-/* Every icon of the app, drawn from the ADD DOTS PDF logo: a page with AD
+/* Every icon of the app, drawn from the Add Dots PDF logo: a page with AD
    and three dots on a black square.
 
      node scripts/icons.mjs
@@ -260,7 +260,7 @@ console.log('ico, icns  ', D + 'src-tauri/icons/');
 writeFileSync(
   join(root, W + 'icon.svg'),
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="512" height="512">\n' +
-    '  <!-- The ADD DOTS PDF logo. Drawn by scripts/icons.mjs, with every PNG in the apps. -->\n' +
+    '  <!-- The Add Dots PDF logo. Drawn by scripts/icons.mjs, with every PNG in the apps. -->\n' +
     `  <rect width="100" height="100" rx="20" fill="${BLACK}"/>\n  ${page(1)}\n</svg>\n`,
 );
 const tabIco = ico(await Promise.all([16, 32, 48].map(async (n) => [n, await pngOf(n, n, rounded, true)])));

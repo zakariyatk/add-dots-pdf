@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Round 2 enhancements
+/* Add Dots PDF — Round 2 enhancements
    ------------------------------------
    Everything from the second feedback pass that isn't a new Insert-tab mark
    (those extend js/insert.js instead): the blank-page dialog, copy/paste for

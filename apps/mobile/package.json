@@ -1,7 +1,7 @@
 {
   "name": "@adddots/mobile",
   "private": true,
-  "description": "ADD DOTS PDF for Android and iOS: the web app in a Capacitor shell",
+  "description": "Add Dots PDF for Android and iOS: the web app in a Capacitor shell",
   "scripts": {
     "cap": "cap",
     "sync": "cap sync",

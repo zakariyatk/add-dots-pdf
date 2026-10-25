@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Page menu
+/* Add Dots PDF — Page menu
    ------------------------
    A right-click on a page opens the app's own menu instead of the browser's
    (Back, Reload, Inspect…), with what is wanted where the click was:

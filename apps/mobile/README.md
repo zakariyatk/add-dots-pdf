@@ -1,4 +1,4 @@
-# ADD DOTS PDF for Android and iOS
+# Add Dots PDF for Android and iOS
 
 The web app (`apps/web/dist`) in a Capacitor 8 shell. On Android the app runs
 in the system WebView, which is Chromium, the engine the web app's smoke test
@@ -11,7 +11,7 @@ The web app runs unchanged. The app's own plugin
 what a WebView cannot do; `apps/web/public/js/mobile.js` is its other half and
 does nothing outside the app.
 
-- **"Open with ADD DOTS PDF".** A PDF opened from Files, Gmail, WhatsApp and
+- **"Open with Add Dots PDF".** A PDF opened from Files, Gmail, WhatsApp and
   the like starts the app with a VIEW intent, or reaches it when already open.
   The page asks for it once (`launchFile`) or is told of it (`openFile`). Only
   the file the system handed over is read.
@@ -75,7 +75,7 @@ has a Swift twin with the same name and methods, in
 `ios/App/App/SceneDelegate.swift` (kept in a file the Xcode project already
 lists, so the project file needs no hand edits).
 
-- **"Open in ADD DOTS PDF"** from Files, Mail and other apps: the app is
+- **"Open in Add Dots PDF"** from Files, Mail and other apps: the app is
   registered for PDFs (`Info.plist`, `CFBundleDocumentTypes`); iOS hands it a
   copy of the file, read once by the page (`launchFile`) or announced to it
   (`openFile`).

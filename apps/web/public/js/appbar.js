@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Top bar
+/* Add Dots PDF — Top bar
    ---------------------
    The strip along the top of the window, as Acrobat has it: Menu, Home and
    Create on the left; help, what is new and the other ADD DOTS apps on the
@@ -53,7 +53,7 @@
     wclose: '<svg viewBox="0 0 10 10" aria-hidden="true"><line x1="0" y1="0" x2="10" y2="10"/><line x1="10" y1="0" x2="0" y2="10"/></svg>'
   };
 
-  /* the ADD DOTS PDF logo: a page with AD and three dots */
+  /* the Add Dots PDF logo: a page with AD and three dots */
   const LOGO = '<svg viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="20" fill="#000"/><path d="M33 18.5H54V31a7 7 0 0 0 7 7H74.5V75a7.5 7.5 0 0 1-7.5 7.5H33a7.5 7.5 0 0 1-7.5-7.5V26a7.5 7.5 0 0 1 7.5-7.5z" fill="#fff"/><path d="M57.8 19.2L74 35.4H62a4.2 4.2 0 0 1-4.2-4.2z" fill="#7357FF"/><path d="M36.3 58.8L41.7 52.2L43.9 58.8z" fill="#7357FF"/><path d="M45.8 61.4H33.6L42 47.4L51.1 63.8H58.8A9 9 0 0 0 58.8 45.8H49.9" fill="none" stroke="#000" stroke-width="4.6"/><g fill="#7357FF"><circle cx="40.7" cy="73" r="3.3"/><circle cx="49.9" cy="73" r="3.3"/><circle cx="59" cy="73" r="3.3"/></g></svg>';
 
   /* the other ADD DOTS apps, as on www.adddots.com; `site` is the name the
@@ -130,7 +130,7 @@
   bar.setAttribute('role', 'region');
   bar.setAttribute('aria-label', 'App menu');
   bar.innerHTML =
-    '<span class="ablogo" title="ADD DOTS PDF">' + LOGO + '</span>' +
+    '<span class="ablogo" title="Add Dots PDF">' + LOGO + '</span>' +
     '<button type="button" class="abbtn abmenu-t" id="abMenu" aria-haspopup="menu" aria-expanded="false" title="Menu">' + ICON.menu + '<span>Menu</span></button>' +
     '<button type="button" class="abbtn abicon abhome" id="abHome" title="Home (H)" aria-label="Home">' + ICON.home + '</button>' +
     '<button type="button" class="abbtn abcreate" id="abCreate" aria-haspopup="menu" aria-expanded="false" title="Create">' + ICON.plus + '<span>Create</span></button>' +

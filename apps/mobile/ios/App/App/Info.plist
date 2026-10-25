@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>ADD DOTS PDF</string>
+        <string>Add Dots PDF</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -66,7 +66,7 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
-	<!-- "Open in ADD DOTS PDF" for a PDF in Files, Mail and other apps; iOS
+	<!-- "Open in Add Dots PDF" for a PDF in Files, Mail and other apps; iOS
 	     hands the app a copy of the file -->
 	<key>CFBundleDocumentTypes</key>
 	<array>

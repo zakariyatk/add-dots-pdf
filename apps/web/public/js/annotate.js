@@ -1,4 +1,4 @@
-/* ADD DOTS PDF — Annotate & comment
+/* Add Dots PDF — Annotate & comment
    ----------------------------------
    Text markup (highlight / underline / strike-out), freehand ink, sticky
    notes, callouts and rubber stamps, plus a Comments panel that lists every

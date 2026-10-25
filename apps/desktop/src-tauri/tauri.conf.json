@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ADD DOTS PDF",
+  "productName": "Add Dots PDF",
   "version": "1.0.0",
   "identifier": "com.adddots.pdf",
   "build": {
@@ -14,7 +14,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "ADD DOTS PDF",
+        "title": "Add Dots PDF",
         "width": 1280,
         "height": 860,
         "minWidth": 360,

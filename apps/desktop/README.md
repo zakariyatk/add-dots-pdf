@@ -1,4 +1,4 @@
-# ADD DOTS PDF for Windows
+# Add Dots PDF for Windows
 
 **In the Microsoft Store:** https://apps.microsoft.com/detail/9PGHPBRMLQMS.
 That is the way to install it: the Store signs the app, so there is no
@@ -109,7 +109,7 @@ certificate), from secrets added to GitHub.
 ## Microsoft Store (MSIX)
 
 `msix/` packs the same app as an MSIX for the Microsoft Store, with the
-identity Partner Center gave the product "ADD DOTS PDF" (Store ID
+identity Partner Center gave the product "Add Dots PDF" (Store ID
 9PGHPBRMLQMS): `Name ADDDOTS.ADDDOTSPDF`, publisher `ADD DOTS`.
 
 - `msix/AppxManifest.xml`: the package manifest (identity, Start menu
