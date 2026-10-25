@@ -1,0 +1,121 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+  @page { size: A3 landscape; margin: 0 }
+  * { margin: 0; padding: 0 }
+  body { width: 1190px; height: 841px; overflow: hidden; background: #fff }
+  svg { display: block; font-family: 'Segoe UI', Arial, sans-serif }
+</style></head>
+<body>
+<svg id="s" width="1191" height="841" viewBox="0 0 1191 841" xmlns="http://www.w3.org/2000/svg"></svg>
+<script>
+/* A ground-floor plan at 1:50 on A3: 1 m on site is 20 mm on paper, 56.69 pt.
+   The plan's origin (0, 0) m is its top-left outside corner. */
+const M = 56.693, OX = 120, OY = 130;
+const X = (m) => OX + m * M, Y = (m) => OY + m * M;
+const s = document.getElementById('s');
+let h = '';
+const add = (t) => { h += t; };
+const T = 0.3;                                    /* wall thickness, m */
+
+/* border and title block */
+add(`<rect x="14" y="14" width="1163" height="813" fill="none" stroke="#111" stroke-width="1.6"/>`);
+add(`<rect x="20" y="20" width="1151" height="801" fill="none" stroke="#111" stroke-width=".5"/>`);
+const TB = 975;
+add(`<line x1="${TB}" y1="20" x2="${TB}" y2="821" stroke="#111" stroke-width=".8"/>`);
+const row = (y, label, val, big) => add(`<line x1="${TB}" y1="${y}" x2="1171" y2="${y}" stroke="#111" stroke-width=".5"/>
+  <text x="${TB + 12}" y="${y + 15}" font-size="7" letter-spacing="1.2" fill="#555">${label}</text>
+  <text x="${TB + 12}" y="${y + (big ? 40 : 32)}" font-size="${big ? 17 : 11}" font-weight="${big ? 700 : 500}" fill="#111">${val}</text>`);
+add(`<rect x="${TB + 12}" y="40" width="30" height="30" rx="6" fill="#111"/><circle cx="${TB + 42}" cy="70" r="6" fill="#6A4BF0"/>
+  <text x="${TB + 54}" y="62" font-size="13" font-weight="800" letter-spacing="1.5" fill="#111">NORTHWIND</text>`);
+row(96, 'PROJECT', 'Lakeside Residence', true);
+row(150, 'DRAWING', 'Ground floor plan');
+row(194, 'DRAWING NO.', 'A-101  ·  Rev C');
+row(238, 'SCALE', '1:50 @ A3');
+row(282, 'DATE', '25 Oct 2026');
+row(326, 'DRAWN · CHECKED', 'M. Singh  ·  L. Fischer');
+add(`<line x1="${TB}" y1="370" x2="1171" y2="370" stroke="#111" stroke-width=".5"/>`);
+add(`<text x="${TB + 12}" y="392" font-size="7" letter-spacing="1.2" fill="#555">NOTES</text>`);
+['All dimensions in millimetres.', 'Do not scale from this drawing.', 'Finishes as per schedule FS-01.', 'Check all levels on site.'].forEach((t, i) =>
+  add(`<text x="${TB + 12}" y="${412 + i * 16}" font-size="9" fill="#333">${i + 1}. ${t}</text>`));
+/* north arrow */
+add(`<g transform="translate(${TB + 98} 640)"><circle r="34" fill="none" stroke="#111" stroke-width=".8"/>
+  <path d="M0 -30 L10 12 L0 4 L-10 12 Z" fill="#111"/><text y="-38" text-anchor="middle" font-size="11" font-weight="700">N</text></g>`);
+
+/* grid lines and bubbles */
+const gx = [0, 7, 10.5, 14], gy = [0, 4, 6, 10];
+gx.forEach((m, i) => {
+  add(`<line x1="${X(m)}" y1="${Y(-1.25)}" x2="${X(m)}" y2="${Y(10.9)}" stroke="#9AA3B5" stroke-width=".5" stroke-dasharray="10 3 2 3"/>`);
+  add(`<circle cx="${X(m)}" cy="${Y(-1.55)}" r="10" fill="#fff" stroke="#111" stroke-width=".8"/><text x="${X(m)}" y="${Y(-1.55) + 4}" text-anchor="middle" font-size="11" font-weight="600">${'ABCD'[i]}</text>`);
+});
+gy.forEach((m, i) => {
+  add(`<line x1="${X(-1.25)}" y1="${Y(m)}" x2="${X(14.6)}" y2="${Y(m)}" stroke="#9AA3B5" stroke-width=".5" stroke-dasharray="10 3 2 3"/>`);
+  add(`<circle cx="${X(-1.55)}" cy="${Y(m)}" r="10" fill="#fff" stroke="#111" stroke-width=".8"/><text x="${X(-1.55)}" y="${Y(m) + 4}" text-anchor="middle" font-size="11" font-weight="600">${i + 1}</text>`);
+});
+
+/* floor finishes: timber in the living room, tiles in the wet rooms */
+add(`<defs>
+  <pattern id="tile" width="17" height="17" patternUnits="userSpaceOnUse"><path d="M17 0H0V17" fill="none" stroke="#C9CED8" stroke-width=".5"/></pattern>
+  <pattern id="wood" width="60" height="9" patternUnits="userSpaceOnUse"><path d="M0 9H60M30 0V9" fill="none" stroke="#E2E5EC" stroke-width=".5"/></pattern>
+  <pattern id="hatch" width="5" height="5" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0V5" stroke="#111" stroke-width="1"/></pattern>
+</defs>`);
+const room = (x1, y1, x2, y2, fill) => add(`<rect x="${X(x1)}" y="${Y(y1)}" width="${(x2 - x1) * M}" height="${(y2 - y1) * M}" fill="url(#${fill})"/>`);
+room(0, 0, 7, 6, 'wood'); room(10.5, 4, 14, 7, 'tile'); room(7, 4, 10.5, 7, 'tile'); room(0, 6, 7, 10, 'tile');
+
+/* walls: solid outside, hatched inside */
+const wall = (x1, y1, x2, y2, outer) => add(`<rect x="${X(x1)}" y="${Y(y1)}" width="${(x2 - x1) * M}" height="${(y2 - y1) * M}" fill="${outer ? '#111' : 'url(#hatch)'}" stroke="#111" stroke-width=".8"/>`);
+/* outer walls, with openings for windows (filled in after) and the entrance */
+wall(0, 0, 14, T, 1); wall(0, 10 - T, 14, 10, 1); wall(0, 0, T, 10, 1); wall(14 - T, 0, 14, 10, 1);
+/* inner */
+wall(7 - T / 2, 0, 7 + T / 2, 10); wall(0, 6 - T / 2, 7, 6 + T / 2);
+wall(7, 4 - T / 2, 14, 4 + T / 2); wall(7, 7 - T / 2, 14, 7 + T / 2); wall(10.5 - T / 2, 4, 10.5 + T / 2, 7);
+
+/* windows: a white gap in the outer wall with the glass drawn in */
+function win(x1, y1, x2, y2) {
+  add(`<rect x="${X(x1)}" y="${Y(y1)}" width="${(x2 - x1) * M}" height="${(y2 - y1) * M}" fill="#fff" stroke="#111" stroke-width=".8"/>`);
+  if (x2 - x1 > y2 - y1) add(`<line x1="${X(x1)}" y1="${Y((y1 + y2) / 2)}" x2="${X(x2)}" y2="${Y((y1 + y2) / 2)}" stroke="#111" stroke-width=".6"/>`);
+  else add(`<line x1="${X((x1 + x2) / 2)}" y1="${Y(y1)}" x2="${X((x1 + x2) / 2)}" y2="${Y(y2)}" stroke="#111" stroke-width=".6"/>`);
+}
+win(1.5, 0, 5.5, T); win(8.5, 0, 12.5, T); win(0, 1.5, T, 4.5); win(14 - T, 8, 14, 9.4); win(1.5, 10 - T, 4, 10); win(11, 10 - T, 13, 10); win(14 - T, 1, 14, 3);
+
+/* doors: an opening, the leaf and its swing */
+function door(cx, cy, w, dir) {
+  /* dir: 'h' in a horizontal wall, 'v' in a vertical one */
+  const r = w * M;
+  if (dir === 'h') {
+    add(`<rect x="${X(cx)}" y="${Y(cy - T / 2) - 0.5}" width="${r}" height="${T * M + 1}" fill="#fff"/>`);
+    add(`<line x1="${X(cx)}" y1="${Y(cy)}" x2="${X(cx)}" y2="${Y(cy) + r}" stroke="#111" stroke-width="1.2"/>`);
+    add(`<path d="M${X(cx)} ${Y(cy) + r} A${r} ${r} 0 0 0 ${X(cx) + r} ${Y(cy)}" fill="none" stroke="#111" stroke-width=".5" stroke-dasharray="3 2"/>`);
+  } else {
+    add(`<rect x="${X(cx - T / 2) - 0.5}" y="${Y(cy)}" width="${T * M + 1}" height="${r}" fill="#fff"/>`);
+    add(`<line x1="${X(cx)}" y1="${Y(cy)}" x2="${X(cx) + r}" y2="${Y(cy)}" stroke="#111" stroke-width="1.2"/>`);
+    add(`<path d="M${X(cx) + r} ${Y(cy)} A${r} ${r} 0 0 1 ${X(cx)} ${Y(cy) + r}" fill="none" stroke="#111" stroke-width=".5" stroke-dasharray="3 2"/>`);
+  }
+}
+door(7, 1, 0.9, 'v'); door(7, 4.6, 0.8, 'v'); door(7, 8, 0.9, 'v'); door(8, 4, 0.8, 'h'); door(11.2, 7, 0.8, 'h'); door(2, 6, 0.9, 'h'); door(0.15, 7.4, 1.0, 'v');
+
+/* fittings */
+add(`<g stroke="#111" stroke-width=".7" fill="#fff">
+  <rect x="${X(0.35)}" y="${Y(6.2)}" width="${3.6 * M}" height="${0.65 * M}"/>
+  <rect x="${X(4.2)}" y="${Y(7.6)}" width="${1.8 * M}" height="${1 * M}"/>
+  <circle cx="${X(2.3)}" cy="${Y(8.5)}" r="${0.75 * M}"/>
+  <rect x="${X(7.35)}" y="${Y(5.6)}" width="${1.7 * M}" height="${0.75 * M}" rx="8"/>
+  <ellipse cx="${X(9.9)}" cy="${Y(4.75)}" rx="${0.28 * M}" ry="${0.36 * M}"/>
+  <rect x="${X(9.4)}" y="${Y(6.3)}" width="${0.9 * M}" height="${0.5 * M}" rx="4"/>
+  <rect x="${X(1)}" y="${Y(1.2)}" width="${2.6 * M}" height="${0.9 * M}" rx="6"/>
+  <rect x="${X(1)}" y="${Y(2.1)}" width="${0.9 * M}" height="${1.8 * M}" rx="6"/>
+  <rect x="${X(8)}" y="${Y(0.8)}" width="${1.8 * M}" height="${2.1 * M}"/>
+  <rect x="${X(11.6)}" y="${Y(7.8)}" width="${1.8 * M}" height="${2.1 * M}"/>
+</g>`);
+
+/* room names and areas */
+const label = (x, y, name, area) => add(`<text x="${X(x)}" y="${Y(y)}" text-anchor="middle" font-size="12" font-weight="700" letter-spacing="1.4" fill="#111">${name}</text>
+  <text x="${X(x)}" y="${Y(y) + 15}" text-anchor="middle" font-size="9.5" fill="#555">${area}</text>`);
+label(4.4, 3.6, 'LIVING', '40.3 m²'); label(10.5, 2.2, 'BEDROOM 1', '23.5 m²'); label(8.75, 5.35, 'BATH', '8.9 m²');
+label(12.25, 5.6, 'LAUNDRY', '8.9 m²'); label(4.5, 9.35, 'KITCHEN · DINING', '25.2 m²'); label(10.5, 8.7, 'BEDROOM 2', '17.5 m²');
+
+add(`<text x="${X(0)}" y="${Y(11.55)}" font-size="16" font-weight="800" fill="#111">GROUND FLOOR PLAN</text>
+  <text x="${X(0)}" y="${Y(11.55) + 15}" font-size="9.5" fill="#555">SCALE 1:50</text>`);
+s.innerHTML = h;
+</script>
+</body></html>

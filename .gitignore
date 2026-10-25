@@ -35,3 +35,6 @@ apps/desktop/src-tauri/gen/
 
 # PDFium for the Windows app, fetched by apps/desktop/scripts/get-pdfium.mjs
 apps/desktop/src-tauri/pdfium/
+
+# store screenshots: raw captures and work files (scripts/store)
+scripts/store/out/
