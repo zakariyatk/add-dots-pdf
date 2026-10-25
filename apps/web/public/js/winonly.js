@@ -23,7 +23,7 @@
 
   const FEATURES = {
     editobj: { name: 'Edit Object', what: 'Edit the shapes and text the PDF itself is made of: move, resize, recolour or delete them.',
-      buttons: ['tEditObj'] },
+      buttons: ['tEditObj', 'tEditText', 'tEditShape'] },
     convert: { name: 'Convert', what: 'Turn a PDF into Word, Excel, PowerPoint, pictures, text or an AutoCAD drawing.',
       buttons: ['btnToWord', 'btnToExcel', 'btnToPpt', 'btnToImg', 'btnToTxt', 'btnToCad'] },
     ocr: { name: 'OCR', what: 'Read the text on scanned pages, so it can be searched and copied.',

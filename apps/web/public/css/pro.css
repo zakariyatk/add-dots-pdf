@@ -1525,21 +1525,6 @@ body .rail-tabs .btn.on:not(#railClose) {
 @media (prefers-reduced-motion: reduce) { .updbar { animation: none } }
 
 /* ---- Edit Object (js/editobj.js) ---- */
-.eobtn { position: relative }
-.eobtn .eocaret { position: absolute; right: 3px; bottom: 3px; font-size: 9px; font-weight: 400; opacity: .7 }
-.eomenu {
-  position: fixed; z-index: 200; min-width: 170px; padding: 5px; border-radius: 8px; background: var(--chrome);
-  border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0, 0, 0, .28); display: flex; flex-direction: column
-}
-.eomenu[hidden] { display: none }
-.eomenu button {
-  display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 10px; border: none; background: none;
-  color: var(--text); text-align: left; border-radius: 5px; font-size: 13px; cursor: pointer
-}
-.eomenu button:hover { background: var(--chrome-2) }
-.eomenu button i { width: 12px; font-style: normal; visibility: hidden; color: #7B5CFF }
-.eomenu button.on i { visibility: visible }
-.eomenu button small { margin-left: auto; color: var(--text-dim); font-size: 11px }
 /* the shape under the pointer, about to be picked */
 .anno .eohl { fill: rgba(123, 92, 255, .12); stroke: #7B5CFF; stroke-width: 2; stroke-dasharray: 5 3; pointer-events: none }
 body[data-tool="editobj"] .capture { cursor: pointer }

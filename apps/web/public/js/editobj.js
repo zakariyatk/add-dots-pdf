@@ -1,7 +1,7 @@
 /* Add Dots PDF — Edit Object
    -------------------------
    The page's own content made editable, as in Foxit's Edit Object: Edit tab,
-   Edit Object, then All, Text or Shape.
+   Edit Object (all), Edit Text or Edit Shape.
 
    Shapes (this file): pointing at a line, box, curve or filled area the PDF
    itself draws outlines it; clicking it lifts it off the page. The page is
@@ -38,63 +38,48 @@
     const S = X.S, $ = X.$, E = window.ADDPDFEngine, SVGNS = X.SVGNS;
     if (!E || !E.pageShapes) return;
 
-    /* ---------------- the button and its choices ---------------- */
+    /* ---------------- the buttons: Edit Object, Edit Text, Edit Shape ---------------- */
 
     let mode = 'all';                        /* all | text | shape */
     const grp = document.createElement('div');
     grp.className = 'grp'; grp.id = 'grpEditObj'; grp.setAttribute('role', 'group');
-    grp.setAttribute('aria-label', 'Edit object');
-    const btn = document.createElement('button');
-    btn.className = 'btn eobtn'; btn.id = 'tEditObj'; btn.type = 'button';
-    btn.title = 'Edit Object: the PDF\'s own text and shapes (Shift+O)';
-    btn.setAttribute('aria-label', 'Edit Object');
-    btn.setAttribute('aria-haspopup', 'menu');
-    btn.dataset.label = 'Edit Object';
-    btn.innerHTML = '<svg viewBox="0 0 24 24"><path d="M4 4h9l4 4v5"/><path d="M13 4v4h4"/>' +
-      '<path d="M4 4v16h7"/><path d="M14.5 20.5l1-3.5 5-5 2.5 2.5-5 5z"/></svg><b class="eocaret">▾</b>';
-    grp.appendChild(btn);
+    grp.setAttribute('aria-label', 'Edit objects');
+    const PEN = '<path d="M14.5 20.5l1-3.5 5-5 2.5 2.5-5 5z"/>';
+    const BTNS = [
+      { m: 'all', id: 'tEditObj', label: 'Edit Object', title: 'Edit Object: the PDF\'s own text and shapes (Shift+O)',
+        icon: '<path d="M4 4h9l4 4v5"/><path d="M13 4v4h4"/><path d="M4 4v16h7"/>' },
+      { m: 'text', id: 'tEditText', label: 'Edit Text', title: 'Edit Text: the PDF\'s own text',
+        icon: '<path d="M3 5h12"/><path d="M9 5v14"/><path d="M6 19h6"/>' },
+      { m: 'shape', id: 'tEditShape', label: 'Edit Shape', title: 'Edit Shape: the PDF\'s own lines, boxes and shapes',
+        icon: '<rect x="3" y="3" width="9" height="9"/><circle cx="8" cy="16" r="4"/>' }
+    ];
+    const btns = BTNS.map(function (o) {
+      const b = document.createElement('button');
+      b.className = 'btn'; b.id = o.id; b.type = 'button';
+      b.title = o.title;
+      b.setAttribute('aria-label', o.label);
+      b.dataset.label = o.label;
+      b.innerHTML = '<svg viewBox="0 0 24 24">' + o.icon + PEN + '</svg>';
+      b.addEventListener('click', function () {
+        if (X.winOnly && X.winOnly('editobj')) return;
+        if (!S.items.length) { X.toast('Open a PDF first'); return; }
+        mode = o.m;
+        sticky = false;
+        X.setTool('editobj');
+        paintBtns(S.tool);
+      });
+      grp.appendChild(b);
+      return b;
+    });
+    /* the one lit: the kind being edited, while Edit Object is in hand */
+    function paintBtns(t) {
+      const live = t === 'editobj' || (t === 'select' && sticky);
+      btns.forEach(function (b, i) { b.classList.toggle('on', live && BTNS[i].m === mode); });
+    }
     const sep = document.createElement('span'); sep.className = 'sep'; sep.setAttribute('aria-hidden', 'true');
     const tools = $('grpTools');
     tools.insertAdjacentElement('afterend', grp);
     tools.insertAdjacentElement('afterend', sep);
-
-    const menu = document.createElement('div');
-    menu.className = 'eomenu'; menu.id = 'eoMenu'; menu.hidden = true; menu.setAttribute('role', 'menu');
-    menu.innerHTML =
-      '<button type="button" role="menuitemradio" data-m="all"><i>✓</i>All</button>' +
-      '<button type="button" role="menuitemradio" data-m="text"><i>✓</i>Text</button>' +
-      '<button type="button" role="menuitemradio" data-m="shape"><i>✓</i>Shape</button>';
-    document.body.appendChild(menu);
-    function paintMenu() {
-      Array.prototype.forEach.call(menu.children, function (b) {
-        b.classList.toggle('on', b.dataset.m === mode);
-        b.setAttribute('aria-checked', b.dataset.m === mode ? 'true' : 'false');
-      });
-    }
-    function openMenu() {
-      paintMenu();
-      menu.hidden = false;
-      const r = btn.getBoundingClientRect();
-      menu.style.left = Math.max(6, Math.min(window.innerWidth - menu.offsetWidth - 6, r.left)) + 'px';
-      menu.style.top = (r.bottom + 4) + 'px';
-    }
-    btn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      if (X.winOnly && X.winOnly('editobj')) return;
-      if (!S.items.length) { X.toast('Open a PDF first'); return; }
-      if (!menu.hidden) { menu.hidden = true; return; }
-      openMenu();
-    });
-    menu.addEventListener('click', function (e) {
-      const b = e.target.closest('button'); if (!b) return;
-      menu.hidden = true;
-      mode = b.dataset.m;
-      sticky = false;
-      X.setTool('editobj');
-    });
-    document.addEventListener('pointerdown', function (e) {
-      if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) menu.hidden = true;
-    }, true);
 
     X.toolBtn.editobj = 'tEditObj';
     X.hints.editobj = 'Point at text, a line, a box or a shape the PDF itself has, and click it to edit it: ' +
@@ -522,7 +507,7 @@
       if (t !== 'select' && t !== 'editobj') sticky = false;
       if (t === 'editobj') sticky = false;
       if (t !== 'editobj') showHover(null, null);
-      btn.classList.toggle('on', t === 'editobj' || (t === 'select' && sticky));
+      paintBtns(t);
     });
     $('stage').addEventListener('pointerdown', function (e) {
       if (!sticky || S.tool !== 'select' || e.button !== 0 || busy) return;
@@ -555,6 +540,7 @@
       if (e.target.matches && e.target.matches('input,textarea,select')) return;
       if (e.ctrlKey || e.metaKey || e.altKey || e.key !== 'O' || !S.items.length) return;
       e.preventDefault();
+      if (S.tool !== 'editobj') mode = 'all';
       X.setTool(S.tool === 'editobj' ? 'select' : 'editobj');
     });
     X.on('reset', function () { sticky = false; hover = null; });
