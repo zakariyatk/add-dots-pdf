@@ -1768,7 +1768,7 @@
     it.rendered = true;
     LIVE.add(it);
     if (PERF.open && PERF.open.first == null) PERF.open.first = performance.now() - PERF.open.t0;
-    if (it.src.synthetic && !it.blankMark) {
+    if (it.src.blank && !it.blankMark) {
       it.blankMark = document.createElement('div');
       it.blankMark.className = 'blankmark';
       it.blankMark.textContent = 'BLANK PAGE';
@@ -5572,6 +5572,7 @@
       sources: Object.keys(used).map(function (k) {
         const s = used[k];
         const out = { id: s.id, name: s.name, synthetic: !!s.synthetic };
+        if (s.blank) out.blank = true;
         if (withBytes !== false) out.b64 = bytesToB64(s.bytes);
         return out;
       }),
@@ -5607,7 +5608,10 @@
         }
         const bytes = s.bytes || b64ToBytes(s.b64);
         const doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
+        /* projects saved before blank pages were told apart from edited
+           copies: a blank one is the synthetic source called Blank page */
         srcs.push({ old: s.id, name: s.name || 'document.pdf', synthetic: !!s.synthetic,
+                    blank: !!s.blank || (!!s.synthetic && s.name === 'Blank page'),
                     bytes: bytes, doc: doc });
       }
     } catch (err) {
@@ -5622,6 +5626,7 @@
     srcs.forEach(function (s) {
       const src = { id: ++srcId, name: s.name, bytes: s.bytes, doc: s.doc };
       if (s.synthetic) src.synthetic = true;
+      if (s.blank) src.blank = true;
       if (s.lazy) { src.lazy = s.lazy; src.path = s.path; }
       S.sources.push(src);
       byOld[s.old] = src;
@@ -6182,10 +6187,13 @@
 
   /* Register a PDF the modules produced (merge, insert, blank, stamp sheet)
      so its pages can join S.items like any opened file. */
-  async function addSource(name, bytes, synthetic) {
+  /* synthetic: made here rather than read from a file (its bytes go in a saved
+     project); blank: an inserted blank page, which says so on the page */
+  async function addSource(name, bytes, synthetic, blank) {
     const doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
     const src = { id: ++srcId, name: name, bytes: bytes, doc: doc };
     if (synthetic) src.synthetic = true;
+    if (blank) src.blank = true;
     S.sources.push(src);
     return src;
   }
@@ -6199,7 +6207,7 @@
     const bytes = await d.save();
     const doc = await pdfjsLib.getDocument({ data: bytes.slice(0) }).promise;
     snapshot();
-    const src = { id: ++srcId, name: 'Blank page', bytes: bytes, doc: doc, synthetic: true };
+    const src = { id: ++srcId, name: 'Blank page', bytes: bytes, doc: doc, synthetic: true, blank: true };
     S.sources.push(src);
     S.items.splice(S.current, 0, newItem(src, 1, 0, true));
     await syncAll();

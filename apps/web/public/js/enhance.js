@@ -134,7 +134,7 @@
         if (fill) page.drawRectangle({ x: 0, y: 0, width: w, height: h, color: fill });
       }
       const bytes = await d.save();
-      const src = await X.addSource('Blank page', bytes, true);
+      const src = await X.addSource('Blank page', bytes, true, true);
 
       X.snapshot();
       gaps.forEach(function (at) {
