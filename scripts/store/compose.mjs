@@ -207,7 +207,9 @@ const PHONE = [
   { file: '05-site-photos', theme: 'dark', screen: 'p6-pins', eyebrow: 'Site photos', title: 'Site photos,<br><em>pinned in place.</em>',
     sub: 'Drop a pin, snap photos, add the BOQ item.',
     extra: badge('pin', 92, 1040, 168) + card('p6-viewer', { x: 9, y: 292, w: 396, h: 298 }, 2.625, 1082, 2402, 1.2, { x: 500, y: 1300 }) },
-  { file: '06-tools', theme: 'light', screen: 'p0-home', eyebrow: 'All tools', title: 'Every PDF tool<br><em>in one place.</em>',
+  { file: '06-organize', theme: 'light', screen: 'p4-organize', eyebrow: 'Organize pages', title: 'Organize pages<br><em>with a tap.</em>',
+    sub: 'Reorder, rotate, duplicate and extract.', extra: badge('pages', 92, 1040, 168) },
+  { file: '07-tools', theme: 'dark', screen: 'p0-home', eyebrow: 'All tools', title: 'Every PDF tool<br><em>in one place.</em>',
     sub: 'Edit text, merge, split, organize, convert and more.', extra: badge('tools', 92, 1040, 168) }
 ];
 

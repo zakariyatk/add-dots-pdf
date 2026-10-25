@@ -155,7 +155,8 @@ async function openAppWith(kind, file, beforeOpen) {
   });
   const p = await ctx.newPage();
   p.on('pageerror', (e) => console.log('[' + kind + '] pageerror', e.message));
-  await p.goto(APP);
+  /* the phone: the Android app's own screens (js/phone.js), as ?phone=1 turns them on */
+  await p.goto(desk ? APP : APP + (APP.includes('?') ? '&' : '?') + 'phone=1');
   await p.waitForFunction(() => window.ADDPDF && window.ADDPDF.S);
   if (beforeOpen) await beforeOpen(p);
   await p.setInputFiles('#fileIn', file);
