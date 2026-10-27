@@ -1,188 +1,713 @@
 <!doctype html>
-<html><head><meta charset="utf-8">
-<style>
-  @page { size: A4; margin: 0 }
-  * { box-sizing: border-box; margin: 0; padding: 0 }
-  body { font-family: 'Segoe UI', Arial, sans-serif; color: #111 }
-  .page:last-child { page-break-after: auto }
-  .page { width: 595px; height: 841px; position: relative; overflow: hidden; page-break-after: always }
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      @page {
+        size: A4;
+        margin: 0;
+      }
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+      body {
+        font-family: 'Segoe UI', Arial, sans-serif;
+        color: #111;
+      }
+      .page:last-child {
+        page-break-after: auto;
+      }
+      .page {
+        width: 595px;
+        height: 841px;
+        position: relative;
+        overflow: hidden;
+        page-break-after: always;
+      }
 
-  /* 1: cover */
-  .cover { background: #0B0B0F; color: #fff }
-  .cover svg.art { position: absolute; inset: 0 }
-  .cover .kicker { position: absolute; left: 48px; top: 56px; font-size: 11px; letter-spacing: .32em; font-weight: 600; color: #8FB4FF }
-  .cover h1 { position: absolute; left: 44px; top: 440px; font-size: 72px; line-height: .92; font-weight: 800; letter-spacing: -.02em }
-  .cover h1 span { color: #2F6BFF }
-  .cover .sub { position: absolute; left: 48px; top: 690px; width: 360px; font-size: 13px; line-height: 1.55; color: #C9CCD6 }
-  .cover .foot { position: absolute; left: 48px; right: 48px; bottom: 44px; display: flex; justify-content: space-between;
-    font-size: 10px; letter-spacing: .18em; color: #8A8F9C; border-top: 1px solid #2A2D36; padding-top: 14px }
+      /* 1: cover */
+      .cover {
+        background: #0b0b0f;
+        color: #fff;
+      }
+      .cover svg.art {
+        position: absolute;
+        inset: 0;
+      }
+      .cover .kicker {
+        position: absolute;
+        left: 48px;
+        top: 56px;
+        font-size: 11px;
+        letter-spacing: 0.32em;
+        font-weight: 600;
+        color: #8fb4ff;
+      }
+      .cover h1 {
+        position: absolute;
+        left: 44px;
+        top: 440px;
+        font-size: 72px;
+        line-height: 0.92;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .cover h1 span {
+        color: #2f6bff;
+      }
+      .cover .sub {
+        position: absolute;
+        left: 48px;
+        top: 690px;
+        width: 360px;
+        font-size: 13px;
+        line-height: 1.55;
+        color: #c9ccd6;
+      }
+      .cover .foot {
+        position: absolute;
+        left: 48px;
+        right: 48px;
+        bottom: 44px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 10px;
+        letter-spacing: 0.18em;
+        color: #8a8f9c;
+        border-top: 1px solid #2a2d36;
+        padding-top: 14px;
+      }
 
-  /* 2: article */
-  .art2 { padding: 56px 52px }
-  .eyebrow { font-size: 10px; letter-spacing: .28em; font-weight: 700; color: #2F6BFF }
-  .art2 h2 { font-family: Georgia, 'Times New Roman', serif; font-size: 38px; line-height: 1.08; margin: 12px 0 18px; font-weight: 700 }
-  .lede { font-size: 13.5px; line-height: 1.6; color: #333; margin-bottom: 22px }
-  .cols { columns: 2; column-gap: 26px; font-size: 10.5px; line-height: 1.65; color: #2a2a2a }
-  .cols p { margin-bottom: 10px }
-  .chart { margin: 26px 0 0; border: 1px solid #E4E6EB; border-radius: 8px; padding: 18px 20px }
-  .chart h3 { font-size: 12px; font-weight: 700; margin-bottom: 14px }
-  .bars { display: flex; align-items: flex-end; gap: 18px; height: 150px; border-bottom: 1px solid #ccc }
-  .bars div { flex: 1; background: #111; border-radius: 3px 3px 0 0; position: relative }
-  .bars div.b { background: #2F6BFF }
-  .lbls { display: flex; gap: 18px; font-size: 9px; color: #666; margin-top: 6px }
-  .lbls span { flex: 1; text-align: center }
-  .quote { margin-top: 22px; border-left: 3px solid #2F6BFF; padding: 4px 0 4px 16px; font-family: Georgia, serif;
-    font-size: 16px; line-height: 1.45; font-style: italic }
-  .pno { position: absolute; bottom: 30px; left: 52px; right: 52px; display: flex; justify-content: space-between; font-size: 9px; color: #888 }
+      /* 2: article */
+      .art2 {
+        padding: 56px 52px;
+      }
+      .eyebrow {
+        font-size: 10px;
+        letter-spacing: 0.28em;
+        font-weight: 700;
+        color: #2f6bff;
+      }
+      .art2 h2 {
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 38px;
+        line-height: 1.08;
+        margin: 12px 0 18px;
+        font-weight: 700;
+      }
+      .lede {
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: #333;
+        margin-bottom: 22px;
+      }
+      .cols {
+        columns: 2;
+        column-gap: 26px;
+        font-size: 10.5px;
+        line-height: 1.65;
+        color: #2a2a2a;
+      }
+      .cols p {
+        margin-bottom: 10px;
+      }
+      .chart {
+        margin: 26px 0 0;
+        border: 1px solid #e4e6eb;
+        border-radius: 8px;
+        padding: 18px 20px;
+      }
+      .chart h3 {
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 14px;
+      }
+      .bars {
+        display: flex;
+        align-items: flex-end;
+        gap: 18px;
+        height: 150px;
+        border-bottom: 1px solid #ccc;
+      }
+      .bars div {
+        flex: 1;
+        background: #111;
+        border-radius: 3px 3px 0 0;
+        position: relative;
+      }
+      .bars div.b {
+        background: #2f6bff;
+      }
+      .lbls {
+        display: flex;
+        gap: 18px;
+        font-size: 9px;
+        color: #666;
+        margin-top: 6px;
+      }
+      .lbls span {
+        flex: 1;
+        text-align: center;
+      }
+      .quote {
+        margin-top: 22px;
+        border-left: 3px solid #2f6bff;
+        padding: 4px 0 4px 16px;
+        font-family: Georgia, serif;
+        font-size: 16px;
+        line-height: 1.45;
+        font-style: italic;
+      }
+      .pno {
+        position: absolute;
+        bottom: 30px;
+        left: 52px;
+        right: 52px;
+        display: flex;
+        justify-content: space-between;
+        font-size: 9px;
+        color: #888;
+      }
 
-  /* 3: form */
-  .form { padding: 56px 52px }
-  .form .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 15px; letter-spacing: .08em }
-  .form .brand i { width: 26px; height: 26px; background: #111; border-radius: 6px; display: inline-block; position: relative }
-  .form .brand i:after { content: ''; position: absolute; right: -4px; bottom: -4px; width: 11px; height: 11px; background: #2F6BFF; border-radius: 50% }
-  .form h2 { font-size: 30px; font-weight: 800; margin: 34px 0 6px; letter-spacing: -.01em }
-  .form .note { font-size: 11px; color: #666; margin-bottom: 28px }
-  .row { display: flex; gap: 22px; margin-bottom: 22px }
-  .fld { flex: 1 }
-  .fld label { display: block; font-size: 9px; font-weight: 700; letter-spacing: .16em; color: #2F6BFF; margin-bottom: 8px }
-  .fld .line { border-bottom: 1px solid #111; height: 24px }
-  .checks { font-size: 11px; display: flex; gap: 28px; margin: 6px 0 26px }
-  .checks span:before { content: ''; display: inline-block; width: 11px; height: 11px; border: 1px solid #111; margin-right: 7px; vertical-align: -1px }
-  .terms { font-size: 9.5px; line-height: 1.6; color: #555; background: #F4F6FA; border-radius: 6px; padding: 14px 16px; margin-bottom: 34px }
-  .sig { display: flex; gap: 22px; align-items: flex-end }
-  .sig .box { flex: 2; height: 70px; border-bottom: 1px solid #111; position: relative }
-  .sig .box b { position: absolute; left: 0; bottom: -18px; font-size: 9px; letter-spacing: .16em; color: #2F6BFF }
+      /* 3: form */
+      .form {
+        padding: 56px 52px;
+      }
+      .form .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 800;
+        font-size: 15px;
+        letter-spacing: 0.08em;
+      }
+      .form .brand i {
+        width: 26px;
+        height: 26px;
+        background: #111;
+        border-radius: 6px;
+        display: inline-block;
+        position: relative;
+      }
+      .form .brand i:after {
+        content: '';
+        position: absolute;
+        right: -4px;
+        bottom: -4px;
+        width: 11px;
+        height: 11px;
+        background: #2f6bff;
+        border-radius: 50%;
+      }
+      .form h2 {
+        font-size: 30px;
+        font-weight: 800;
+        margin: 34px 0 6px;
+        letter-spacing: -0.01em;
+      }
+      .form .note {
+        font-size: 11px;
+        color: #666;
+        margin-bottom: 28px;
+      }
+      .row {
+        display: flex;
+        gap: 22px;
+        margin-bottom: 22px;
+      }
+      .fld {
+        flex: 1;
+      }
+      .fld label {
+        display: block;
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        color: #2f6bff;
+        margin-bottom: 8px;
+      }
+      .fld .line {
+        border-bottom: 1px solid #111;
+        height: 24px;
+      }
+      .checks {
+        font-size: 11px;
+        display: flex;
+        gap: 28px;
+        margin: 6px 0 26px;
+      }
+      .checks span:before {
+        content: '';
+        display: inline-block;
+        width: 11px;
+        height: 11px;
+        border: 1px solid #111;
+        margin-right: 7px;
+        vertical-align: -1px;
+      }
+      .terms {
+        font-size: 9.5px;
+        line-height: 1.6;
+        color: #555;
+        background: #f4f6fa;
+        border-radius: 6px;
+        padding: 14px 16px;
+        margin-bottom: 34px;
+      }
+      .sig {
+        display: flex;
+        gap: 22px;
+        align-items: flex-end;
+      }
+      .sig .box {
+        flex: 2;
+        height: 70px;
+        border-bottom: 1px solid #111;
+        position: relative;
+      }
+      .sig .box b {
+        position: absolute;
+        left: 0;
+        bottom: -18px;
+        font-size: 9px;
+        letter-spacing: 0.16em;
+        color: #2f6bff;
+      }
 
-  /* 4: timeline */
-  .tl { padding: 56px 52px }
-  .tl h2 { font-size: 30px; font-weight: 800; margin: 12px 0 26px; letter-spacing: -.01em }
-  .tl table { width: 100%; border-collapse: collapse; font-size: 10.5px }
-  .tl th { text-align: left; font-size: 9px; letter-spacing: .14em; color: #666; border-bottom: 2px solid #111; padding: 8px 6px }
-  .tl td { border-bottom: 1px solid #E4E6EB; padding: 11px 6px }
-  .tl .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 9px; font-weight: 700 }
-  .done { background: #111; color: #fff } .prog { background: #2F6BFF; color: #fff } .next { background: #EEF1F6; color: #333 }
-  .gantt { margin-top: 30px }
-  .gantt div { height: 16px; border-radius: 3px; margin-bottom: 9px; background: #111 }
-  .gantt div.b { background: #2F6BFF } .gantt div.g { background: #D5DAE3 }
+      /* 4: timeline */
+      .tl {
+        padding: 56px 52px;
+      }
+      .tl h2 {
+        font-size: 30px;
+        font-weight: 800;
+        margin: 12px 0 26px;
+        letter-spacing: -0.01em;
+      }
+      .tl table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 10.5px;
+      }
+      .tl th {
+        text-align: left;
+        font-size: 9px;
+        letter-spacing: 0.14em;
+        color: #666;
+        border-bottom: 2px solid #111;
+        padding: 8px 6px;
+      }
+      .tl td {
+        border-bottom: 1px solid #e4e6eb;
+        padding: 11px 6px;
+      }
+      .tl .pill {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 10px;
+        font-size: 9px;
+        font-weight: 700;
+      }
+      .done {
+        background: #111;
+        color: #fff;
+      }
+      .prog {
+        background: #2f6bff;
+        color: #fff;
+      }
+      .next {
+        background: #eef1f6;
+        color: #333;
+      }
+      .gantt {
+        margin-top: 30px;
+      }
+      .gantt div {
+        height: 16px;
+        border-radius: 3px;
+        margin-bottom: 9px;
+        background: #111;
+      }
+      .gantt div.b {
+        background: #2f6bff;
+      }
+      .gantt div.g {
+        background: #d5dae3;
+      }
 
-  /* 5: invoice */
-  .inv { padding: 56px 52px }
-  .inv .top { display: flex; justify-content: space-between; align-items: flex-start }
-  .inv h2 { font-size: 36px; font-weight: 800; letter-spacing: -.02em }
-  .inv .meta { font-size: 10px; line-height: 1.7; text-align: right; color: #444 }
-  .inv .to { margin: 34px 0 30px; font-size: 10.5px; line-height: 1.7 }
-  .inv table { width: 100%; border-collapse: collapse; font-size: 10.5px }
-  .inv th { text-align: left; background: #111; color: #fff; padding: 9px 8px; font-size: 9px; letter-spacing: .12em }
-  .inv td { padding: 11px 8px; border-bottom: 1px solid #E4E6EB }
-  .inv td:last-child, .inv th:last-child { text-align: right }
-  .inv .total { margin-top: 18px; margin-left: auto; width: 220px; font-size: 11px }
-  .inv .total div { display: flex; justify-content: space-between; padding: 6px 0 }
-  .inv .total .big { border-top: 2px solid #111; font-size: 16px; font-weight: 800; color: #2F6BFF; padding-top: 10px }
+      /* 5: invoice */
+      .inv {
+        padding: 56px 52px;
+      }
+      .inv .top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+      }
+      .inv h2 {
+        font-size: 36px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+      }
+      .inv .meta {
+        font-size: 10px;
+        line-height: 1.7;
+        text-align: right;
+        color: #444;
+      }
+      .inv .to {
+        margin: 34px 0 30px;
+        font-size: 10.5px;
+        line-height: 1.7;
+      }
+      .inv table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 10.5px;
+      }
+      .inv th {
+        text-align: left;
+        background: #111;
+        color: #fff;
+        padding: 9px 8px;
+        font-size: 9px;
+        letter-spacing: 0.12em;
+      }
+      .inv td {
+        padding: 11px 8px;
+        border-bottom: 1px solid #e4e6eb;
+      }
+      .inv td:last-child,
+      .inv th:last-child {
+        text-align: right;
+      }
+      .inv .total {
+        margin-top: 18px;
+        margin-left: auto;
+        width: 220px;
+        font-size: 11px;
+      }
+      .inv .total div {
+        display: flex;
+        justify-content: space-between;
+        padding: 6px 0;
+      }
+      .inv .total .big {
+        border-top: 2px solid #111;
+        font-size: 16px;
+        font-weight: 800;
+        color: #2f6bff;
+        padding-top: 10px;
+      }
 
-  /* 6: back cover */
-  .back { background: #0B0B0F; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center }
-  .back .mk { width: 64px; height: 64px; border-radius: 16px; background: #fff; position: relative; margin-bottom: 26px }
-  .back .mk:after { content: ''; position: absolute; right: -8px; bottom: -8px; width: 24px; height: 24px; border-radius: 50%; background: #2F6BFF }
-  .back h3 { font-size: 26px; font-weight: 800; letter-spacing: .14em }
-  .back p { margin-top: 12px; font-size: 11px; color: #9AA0AC; letter-spacing: .2em }
-</style></head>
-<body>
+      /* 6: back cover */
+      .back {
+        background: #0b0b0f;
+        color: #fff;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      .back .mk {
+        width: 64px;
+        height: 64px;
+        border-radius: 16px;
+        background: #fff;
+        position: relative;
+        margin-bottom: 26px;
+      }
+      .back .mk:after {
+        content: '';
+        position: absolute;
+        right: -8px;
+        bottom: -8px;
+        width: 24px;
+        height: 24px;
+        border-radius: 50%;
+        background: #2f6bff;
+      }
+      .back h3 {
+        font-size: 26px;
+        font-weight: 800;
+        letter-spacing: 0.14em;
+      }
+      .back p {
+        margin-top: 12px;
+        font-size: 11px;
+        color: #9aa0ac;
+        letter-spacing: 0.2em;
+      }
+    </style>
+  </head>
+  <body>
+    <section class="page cover">
+      <svg class="art" viewBox="0 0 595 842" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" stop-color="#2F6BFF" />
+            <stop offset="1" stop-color="#0A2A8F" />
+          </linearGradient>
+          <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#ffffff" stop-opacity=".95" />
+            <stop offset="1" stop-color="#ffffff" stop-opacity=".15" />
+          </linearGradient>
+        </defs>
+        <circle cx="430" cy="250" r="190" fill="url(#g1)" />
+        <circle cx="430" cy="250" r="120" fill="none" stroke="#fff" stroke-opacity=".35" />
+        <circle cx="430" cy="250" r="160" fill="none" stroke="#fff" stroke-opacity=".15" />
+        <rect x="250" y="120" width="120" height="300" rx="2" fill="url(#g2)" opacity=".9" />
+        <rect x="270" y="140" width="80" height="6" fill="#0B0B0F" opacity=".5" />
+        <rect x="270" y="156" width="60" height="6" fill="#0B0B0F" opacity=".35" />
+        <g fill="#fff">
+          <circle cx="110" cy="200" r="5" />
+          <circle cx="132" cy="200" r="5" />
+          <circle cx="154" cy="200" r="5" fill="#2F6BFF" />
+        </g>
+        <path
+          d="M0 430 C 150 380, 300 470, 595 400"
+          stroke="#2F6BFF"
+          stroke-width="1.5"
+          fill="none"
+          opacity=".7"
+        />
+        <path
+          d="M0 450 C 160 400, 320 490, 595 420"
+          stroke="#fff"
+          stroke-width="1"
+          fill="none"
+          opacity=".25"
+        />
+      </svg>
+      <div class="kicker">ANNUAL DESIGN REPORT · 2026</div>
+      <h1>Ideas<br />that move<br /><span>forward.</span></h1>
+      <p class="sub">
+        How small, focused teams turn research into products people love — with fewer meetings, clearer
+        documents and faster reviews.
+      </p>
+      <div class="foot"><span>NORTHWIND STUDIO</span><span>VOL. 12</span></div>
+    </section>
 
-<section class="page cover">
-  <svg class="art" viewBox="0 0 595 842" xmlns="http://www.w3.org/2000/svg">
-    <defs>
-      <linearGradient id="g1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2F6BFF"/><stop offset="1" stop-color="#0A2A8F"/></linearGradient>
-      <linearGradient id="g2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff" stop-opacity=".95"/><stop offset="1" stop-color="#ffffff" stop-opacity=".15"/></linearGradient>
-    </defs>
-    <circle cx="430" cy="250" r="190" fill="url(#g1)"/>
-    <circle cx="430" cy="250" r="120" fill="none" stroke="#fff" stroke-opacity=".35"/>
-    <circle cx="430" cy="250" r="160" fill="none" stroke="#fff" stroke-opacity=".15"/>
-    <rect x="250" y="120" width="120" height="300" rx="2" fill="url(#g2)" opacity=".9"/>
-    <rect x="270" y="140" width="80" height="6" fill="#0B0B0F" opacity=".5"/>
-    <rect x="270" y="156" width="60" height="6" fill="#0B0B0F" opacity=".35"/>
-    <g fill="#fff"><circle cx="110" cy="200" r="5"/><circle cx="132" cy="200" r="5"/><circle cx="154" cy="200" r="5" fill="#2F6BFF"/></g>
-    <path d="M0 430 C 150 380, 300 470, 595 400" stroke="#2F6BFF" stroke-width="1.5" fill="none" opacity=".7"/>
-    <path d="M0 450 C 160 400, 320 490, 595 420" stroke="#fff" stroke-width="1" fill="none" opacity=".25"/>
-  </svg>
-  <div class="kicker">ANNUAL DESIGN REPORT · 2026</div>
-  <h1>Ideas<br>that move<br><span>forward.</span></h1>
-  <p class="sub">How small, focused teams turn research into products people love — with fewer meetings, clearer documents and faster reviews.</p>
-  <div class="foot"><span>NORTHWIND STUDIO</span><span>VOL. 12</span></div>
-</section>
+    <section class="page art2">
+      <div class="eyebrow">CHAPTER 02 · PROCESS</div>
+      <h2>Clear documents make faster decisions</h2>
+      <p class="lede">
+        The teams we studied shipped 38% faster when every review happened on a single shared document, with
+        comments, approvals and signatures in one place.
+      </p>
+      <div class="cols">
+        <p>
+          Most projects do not slow down because the work is hard. They slow down while people wait: for
+          feedback, for a signature, for the latest version of a file that lives in someone else's inbox.
+        </p>
+        <p>
+          Across forty product teams, the pattern was the same. Reviews that started in a shared PDF closed in
+          two days on average. Reviews that bounced between email threads took more than a week.
+        </p>
+        <p>
+          The best teams kept their documents short, marked them up directly, and resolved every comment
+          before moving on. Decisions were written down where everyone could see them.
+        </p>
+        <p>
+          We also found that teams who signed off digitally, rather than printing and scanning, cut the final
+          approval step from days to minutes — and never lost track of the latest version.
+        </p>
+      </div>
+      <div class="chart">
+        <h3>Average review time, in days</h3>
+        <div class="bars">
+          <div style="height: 92%"></div>
+          <div style="height: 74%"></div>
+          <div style="height: 55%"></div>
+          <div class="b" style="height: 36%"></div>
+          <div class="b" style="height: 22%"></div>
+        </div>
+        <div class="lbls">
+          <span>2022</span><span>2023</span><span>2024</span><span>2025</span><span>2026</span>
+        </div>
+      </div>
+      <p class="quote">“When the document is the meeting, everyone arrives prepared.”</p>
+      <div class="pno"><span>Northwind Studio · Annual Design Report</span><span>14</span></div>
+    </section>
 
-<section class="page art2">
-  <div class="eyebrow">CHAPTER 02 · PROCESS</div>
-  <h2>Clear documents make faster decisions</h2>
-  <p class="lede">The teams we studied shipped 38% faster when every review happened on a single shared document, with comments, approvals and signatures in one place.</p>
-  <div class="cols">
-    <p>Most projects do not slow down because the work is hard. They slow down while people wait: for feedback, for a signature, for the latest version of a file that lives in someone else's inbox.</p>
-    <p>Across forty product teams, the pattern was the same. Reviews that started in a shared PDF closed in two days on average. Reviews that bounced between email threads took more than a week.</p>
-    <p>The best teams kept their documents short, marked them up directly, and resolved every comment before moving on. Decisions were written down where everyone could see them.</p>
-    <p>We also found that teams who signed off digitally, rather than printing and scanning, cut the final approval step from days to minutes — and never lost track of the latest version.</p>
-  </div>
-  <div class="chart">
-    <h3>Average review time, in days</h3>
-    <div class="bars">
-      <div style="height:92%"></div><div style="height:74%"></div><div style="height:55%"></div>
-      <div class="b" style="height:36%"></div><div class="b" style="height:22%"></div>
-    </div>
-    <div class="lbls"><span>2022</span><span>2023</span><span>2024</span><span>2025</span><span>2026</span></div>
-  </div>
-  <p class="quote">“When the document is the meeting, everyone arrives prepared.”</p>
-  <div class="pno"><span>Northwind Studio · Annual Design Report</span><span>14</span></div>
-</section>
+    <section class="page form">
+      <div class="brand"><i></i>NORTHWIND</div>
+      <h2>Client Onboarding Form</h2>
+      <p class="note">Please complete every field and sign at the bottom of the page.</p>
+      <div class="row">
+        <div class="fld">
+          <label>FULL NAME</label>
+          <div class="line"></div>
+        </div>
+        <div class="fld">
+          <label>COMPANY</label>
+          <div class="line"></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="fld">
+          <label>EMAIL</label>
+          <div class="line"></div>
+        </div>
+        <div class="fld">
+          <label>PHONE</label>
+          <div class="line"></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="fld">
+          <label>PROJECT START DATE</label>
+          <div class="line"></div>
+        </div>
+        <div class="fld">
+          <label>BUDGET</label>
+          <div class="line"></div>
+        </div>
+      </div>
+      <div class="fld"><label>SERVICES REQUIRED</label></div>
+      <div class="checks">
+        <span>Brand identity</span><span>Web design</span><span>Mobile app</span><span>Research</span>
+      </div>
+      <div class="terms">
+        By signing this form, the client confirms that the information above is correct and agrees to
+        Northwind Studio's standard terms of service, including the payment schedule and confidentiality terms
+        described in the proposal.
+      </div>
+      <div class="sig">
+        <div class="box"><b>SIGNATURE</b></div>
+        <div class="fld">
+          <label>DATE</label>
+          <div class="line"></div>
+        </div>
+      </div>
+    </section>
 
-<section class="page form">
-  <div class="brand"><i></i>NORTHWIND</div>
-  <h2>Client Onboarding Form</h2>
-  <p class="note">Please complete every field and sign at the bottom of the page.</p>
-  <div class="row"><div class="fld"><label>FULL NAME</label><div class="line"></div></div><div class="fld"><label>COMPANY</label><div class="line"></div></div></div>
-  <div class="row"><div class="fld"><label>EMAIL</label><div class="line"></div></div><div class="fld"><label>PHONE</label><div class="line"></div></div></div>
-  <div class="row"><div class="fld"><label>PROJECT START DATE</label><div class="line"></div></div><div class="fld"><label>BUDGET</label><div class="line"></div></div></div>
-  <div class="fld"><label>SERVICES REQUIRED</label></div>
-  <div class="checks"><span>Brand identity</span><span>Web design</span><span>Mobile app</span><span>Research</span></div>
-  <div class="terms">By signing this form, the client confirms that the information above is correct and agrees to Northwind Studio's standard terms of service, including the payment schedule and confidentiality terms described in the proposal.</div>
-  <div class="sig"><div class="box"><b>SIGNATURE</b></div><div class="fld"><label>DATE</label><div class="line"></div></div></div>
-</section>
+    <section class="page tl">
+      <div class="eyebrow">CHAPTER 03 · DELIVERY</div>
+      <h2>Project timeline</h2>
+      <table>
+        <tr>
+          <th>PHASE</th>
+          <th>OWNER</th>
+          <th>DUE</th>
+          <th>STATUS</th>
+        </tr>
+        <tr>
+          <td>Discovery &amp; research</td>
+          <td>Maya Chen</td>
+          <td>12 Jan</td>
+          <td><span class="pill done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>Brand strategy</td>
+          <td>Omar Haddad</td>
+          <td>02 Feb</td>
+          <td><span class="pill done">DONE</span></td>
+        </tr>
+        <tr>
+          <td>Visual identity</td>
+          <td>Lena Fischer</td>
+          <td>28 Feb</td>
+          <td><span class="pill prog">IN PROGRESS</span></td>
+        </tr>
+        <tr>
+          <td>Website design</td>
+          <td>Arjun Rao</td>
+          <td>21 Mar</td>
+          <td><span class="pill prog">IN PROGRESS</span></td>
+        </tr>
+        <tr>
+          <td>Mobile app</td>
+          <td>Sara Novak</td>
+          <td>18 Apr</td>
+          <td><span class="pill next">NEXT</span></td>
+        </tr>
+        <tr>
+          <td>Launch &amp; review</td>
+          <td>Maya Chen</td>
+          <td>09 May</td>
+          <td><span class="pill next">NEXT</span></td>
+        </tr>
+      </table>
+      <div class="gantt">
+        <div style="width: 22%"></div>
+        <div style="width: 30%; margin-left: 14%"></div>
+        <div class="b" style="width: 34%; margin-left: 30%"></div>
+        <div class="b" style="width: 30%; margin-left: 44%"></div>
+        <div class="g" style="width: 26%; margin-left: 62%"></div>
+        <div class="g" style="width: 18%; margin-left: 82%"></div>
+      </div>
+      <div class="pno"><span>Northwind Studio · Annual Design Report</span><span>15</span></div>
+    </section>
 
-<section class="page tl">
-  <div class="eyebrow">CHAPTER 03 · DELIVERY</div>
-  <h2>Project timeline</h2>
-  <table>
-    <tr><th>PHASE</th><th>OWNER</th><th>DUE</th><th>STATUS</th></tr>
-    <tr><td>Discovery &amp; research</td><td>Maya Chen</td><td>12 Jan</td><td><span class="pill done">DONE</span></td></tr>
-    <tr><td>Brand strategy</td><td>Omar Haddad</td><td>02 Feb</td><td><span class="pill done">DONE</span></td></tr>
-    <tr><td>Visual identity</td><td>Lena Fischer</td><td>28 Feb</td><td><span class="pill prog">IN PROGRESS</span></td></tr>
-    <tr><td>Website design</td><td>Arjun Rao</td><td>21 Mar</td><td><span class="pill prog">IN PROGRESS</span></td></tr>
-    <tr><td>Mobile app</td><td>Sara Novak</td><td>18 Apr</td><td><span class="pill next">NEXT</span></td></tr>
-    <tr><td>Launch &amp; review</td><td>Maya Chen</td><td>09 May</td><td><span class="pill next">NEXT</span></td></tr>
-  </table>
-  <div class="gantt">
-    <div style="width:22%"></div><div style="width:30%;margin-left:14%"></div><div class="b" style="width:34%;margin-left:30%"></div>
-    <div class="b" style="width:30%;margin-left:44%"></div><div class="g" style="width:26%;margin-left:62%"></div><div class="g" style="width:18%;margin-left:82%"></div>
-  </div>
-  <div class="pno"><span>Northwind Studio · Annual Design Report</span><span>15</span></div>
-</section>
+    <section class="page inv">
+      <div class="top">
+        <div>
+          <div
+            class="brand"
+            style="
+              display: flex;
+              align-items: center;
+              gap: 10px;
+              font-weight: 800;
+              font-size: 15px;
+              letter-spacing: 0.08em;
+            "
+          >
+            NORTHWIND
+          </div>
+          <h2 style="margin-top: 28px">Invoice</h2>
+        </div>
+        <div class="meta">Invoice no. NW-2026-0418<br />Issued 18 April 2026<br />Due 18 May 2026</div>
+      </div>
+      <div class="to"><b>Billed to</b><br />Brightline Labs Ltd.<br />42 Harbour Street, London</div>
+      <table>
+        <tr>
+          <th>DESCRIPTION</th>
+          <th>QTY</th>
+          <th>RATE</th>
+          <th>AMOUNT</th>
+        </tr>
+        <tr>
+          <td>Brand identity system</td>
+          <td>1</td>
+          <td>$8,400</td>
+          <td>$8,400</td>
+        </tr>
+        <tr>
+          <td>Website design, 12 pages</td>
+          <td>12</td>
+          <td>$650</td>
+          <td>$7,800</td>
+        </tr>
+        <tr>
+          <td>Mobile app UI kit</td>
+          <td>1</td>
+          <td>$5,200</td>
+          <td>$5,200</td>
+        </tr>
+        <tr>
+          <td>User research sessions</td>
+          <td>8</td>
+          <td>$300</td>
+          <td>$2,400</td>
+        </tr>
+      </table>
+      <div class="total">
+        <div><span>Subtotal</span><span>$23,800</span></div>
+        <div><span>Tax (10%)</span><span>$2,380</span></div>
+        <div class="big"><span>Total</span><span>$26,180</span></div>
+      </div>
+    </section>
 
-<section class="page inv">
-  <div class="top"><div><div class="brand" style="display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px;letter-spacing:.08em">NORTHWIND</div><h2 style="margin-top:28px">Invoice</h2></div>
-    <div class="meta">Invoice no. NW-2026-0418<br>Issued 18 April 2026<br>Due 18 May 2026</div></div>
-  <div class="to"><b>Billed to</b><br>Brightline Labs Ltd.<br>42 Harbour Street, London</div>
-  <table>
-    <tr><th>DESCRIPTION</th><th>QTY</th><th>RATE</th><th>AMOUNT</th></tr>
-    <tr><td>Brand identity system</td><td>1</td><td>$8,400</td><td>$8,400</td></tr>
-    <tr><td>Website design, 12 pages</td><td>12</td><td>$650</td><td>$7,800</td></tr>
-    <tr><td>Mobile app UI kit</td><td>1</td><td>$5,200</td><td>$5,200</td></tr>
-    <tr><td>User research sessions</td><td>8</td><td>$300</td><td>$2,400</td></tr>
-  </table>
-  <div class="total"><div><span>Subtotal</span><span>$23,800</span></div><div><span>Tax (10%)</span><span>$2,380</span></div>
-    <div class="big"><span>Total</span><span>$26,180</span></div></div>
-</section>
-
-<section class="page back">
-  <div class="mk"></div>
-  <h3>NORTHWIND STUDIO</h3>
-  <p>DESIGN · RESEARCH · PRODUCT</p>
-</section>
-
-</body></html>
+    <section class="page back">
+      <div class="mk"></div>
+      <h3>NORTHWIND STUDIO</h3>
+      <p>DESIGN · RESEARCH · PRODUCT</p>
+    </section>
+  </body>
+</html>

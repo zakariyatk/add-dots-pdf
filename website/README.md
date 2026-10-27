@@ -7,6 +7,7 @@ A single page (`index.html`) with its images (`img/`). No build step.
 The images in `img/t-*.webp` are WebP crops of the store images in `design/store` (the device only, without the headline). If those change, re-make the crops.
 
 Links on the page:
+
 - Microsoft Store: `https://apps.microsoft.com/detail/9PGHPBRMLQMS`
 - Google Play: `https://play.google.com/store/apps/details?id=com.adddots.pdf` (works once the app is live on Play)
 - Open in browser: `https://pdf.adddots.com/`

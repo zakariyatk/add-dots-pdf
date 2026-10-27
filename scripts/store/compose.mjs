@@ -14,28 +14,49 @@ const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'out');
 const raw = join(out, 'raw');
 const html = join(out, 'html');
-for (const d of [html, join(out, 'microsoft-store'), join(out, 'google-play')]) mkdirSync(d, { recursive: true });
+for (const d of [html, join(out, 'microsoft-store'), join(out, 'google-play')])
+  mkdirSync(d, { recursive: true });
 
-const B = Object.assign({},
+const B = Object.assign(
+  {},
   JSON.parse(readFileSync(join(raw, 'boxes-desk.json'), 'utf8')),
   JSON.parse(readFileSync(join(raw, 'boxes-phone.json'), 'utf8')),
-  JSON.parse(readFileSync(join(raw, 'boxes-plan.json'), 'utf8')));
-const LOGO = readFileSync(join(here, '../../apps/web/public/assets/icons/icon.svg'), 'utf8').replace(/<!--.*?-->/s, '');
+  JSON.parse(readFileSync(join(raw, 'boxes-plan.json'), 'utf8')),
+);
+const LOGO = readFileSync(join(here, '../../apps/web/public/assets/icons/icon.svg'), 'utf8').replace(
+  /<!--.*?-->/s,
+  '',
+);
 const img = (n) => pathToFileURL(join(raw, n + '.png')).href;
 
 /* ---------------- icons for the round badges ---------------- */
-const I = (d) => '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' + d + '</svg>';
+const I = (d) =>
+  '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">' +
+  d +
+  '</svg>';
 const ICON = {
-  read: I('<path d="M2.5 5.5c3-1.3 6.2-1.3 9.5.8 3.3-2.1 6.5-2.1 9.5-.8v13c-3-1.3-6.2-1.3-9.5.8-3.3-2.1-6.5-2.1-9.5-.8z"/><path d="M12 6.3v13"/>'),
+  read: I(
+    '<path d="M2.5 5.5c3-1.3 6.2-1.3 9.5.8 3.3-2.1 6.5-2.1 9.5-.8v13c-3-1.3-6.2-1.3-9.5.8-3.3-2.1-6.5-2.1-9.5-.8z"/><path d="M12 6.3v13"/>',
+  ),
   comment: I('<path d="M4 4.5h16v11.5H10l-5 4v-4H4z"/><path d="M8 9h8M8 12.3h5"/>'),
   edit: I('<path d="M4 6h10M9 6v13"/><path d="M13.5 19.5l1-3.5 5.2-5.2 2.5 2.5-5.2 5.2z"/>'),
   sign: I('<path d="M3 17c2.5 0 3.5-9 6-9s1 7 3 7 2-3 3.5-3 1 3 2.5 3 2-1 3-1"/><path d="M3 21h18"/>'),
-  pages: I('<rect x="3.5" y="3.5" width="7" height="8" rx="1.2"/><rect x="13.5" y="3.5" width="7" height="8" rx="1.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.2"/>'),
+  pages: I(
+    '<rect x="3.5" y="3.5" width="7" height="8" rx="1.2"/><rect x="13.5" y="3.5" width="7" height="8" rx="1.2"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.2"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.2"/>',
+  ),
   convert: I('<path d="M4 8h13l-3.5-3.5"/><path d="M20 16H7l3.5 3.5"/>'),
-  pin: I('<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>'),
-  measure: I('<path d="M3 12h18"/><path d="M6.5 8.5L3 12l3.5 3.5M17.5 8.5L21 12l-3.5 3.5"/><path d="M3 5v3M21 5v3"/>'),
-  ruler: I('<path d="M3 3h18v5H8v13H3z"/><path d="M7 3v2.5M11 3v2.5M15 3v2.5M19 3v2.5M3 11h2.5M3 15h2.5M3 19h2.5"/>'),
-  tools: I('<path d="M14.5 5.5a4 4 0 0 0-5 5L3.8 16.2a1.8 1.8 0 0 0 2.5 2.5L12 13a4 4 0 0 0 5-5l-2.4 2.4-2.5-.6-.6-2.5z"/>')
+  pin: I(
+    '<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>',
+  ),
+  measure: I(
+    '<path d="M3 12h18"/><path d="M6.5 8.5L3 12l3.5 3.5M17.5 8.5L21 12l-3.5 3.5"/><path d="M3 5v3M21 5v3"/>',
+  ),
+  ruler: I(
+    '<path d="M3 3h18v5H8v13H3z"/><path d="M7 3v2.5M11 3v2.5M15 3v2.5M19 3v2.5M3 11h2.5M3 15h2.5M3 19h2.5"/>',
+  ),
+  tools: I(
+    '<path d="M14.5 5.5a4 4 0 0 0-5 5L3.8 16.2a1.8 1.8 0 0 0 2.5 2.5L12 13a4 4 0 0 0 5-5l-2.4 2.4-2.5-.6-.6-2.5z"/>',
+  ),
 };
 
 /* ---------------- the look ---------------- */
@@ -86,20 +107,25 @@ h1 em { font-style: normal; color: ${BLUE} }
 /* a crop of a raw screen as a card: box in CSS px of the capture, which is
    at `dpr` device pixels per CSS px; shown `k` times its CSS size */
 function card(name, box, dpr, rawW, rawH, k, pos) {
-  const w = box.w * k, h = box.h * k;
-  const bw = rawW / dpr * k, bh = rawH / dpr * k;
+  const w = box.w * k,
+    h = box.h * k;
+  const bw = (rawW / dpr) * k,
+    bh = (rawH / dpr) * k;
   return `<div class="card" style="left:${pos.x}px;top:${pos.y}px;width:${w}px;height:${h}px;
     background-image:url('${img(name)}');background-size:${bw}px ${bh}px;background-position:${-box.x * k}px ${-box.y * k}px"></div>`;
 }
 function cardImg(name, w, h, pos) {
   return `<div class="card" style="left:${pos.x}px;top:${pos.y}px;width:${w}px;height:${h}px;background:#fff url('${img(name)}') 0 0 / ${w}px ${h}px no-repeat"></div>`;
 }
-const badge = (icon, x, y, d) => `<div class="badge" style="left:${x}px;top:${y}px;width:${d}px;height:${d}px">${ICON[icon]}</div>`;
+const badge = (icon, x, y, d) =>
+  `<div class="badge" style="left:${x}px;top:${y}px;width:${d}px;height:${d}px">${ICON[icon]}</div>`;
 
 /* ---------------- Microsoft Store: 1920 x 1080, a laptop ---------------- */
 
 function laptop(screen, x, y, w) {
-  const sw = w, sh = w * 10 / 16, bez = 18;
+  const sw = w,
+    sh = (w * 10) / 16,
+    bez = 18;
   return `
   <div style="position:absolute;left:${x}px;top:${y}px;width:${sw + bez * 2}px;z-index:2">
     <div style="background:linear-gradient(180deg,#24262C,#0E0F12);border-radius:26px 26px 6px 6px;padding:${bez}px ${bez}px ${bez + 8}px;
@@ -130,42 +156,108 @@ function page(w, h, theme, inner) {
 }
 
 const DESK = [
-  { file: '01-read-edit-sign', theme: 'dark', screen: 'd1-read', eyebrow: 'Add Dots PDF for Windows',
-    title: 'Read, edit and sign PDFs.<br><em>All in one app.</em>', hsize: 72, sub: '',
-    extra: badge('read', 300, 500, 168) },
-  { file: '02-comment', theme: 'light', screen: 'd2-comment', eyebrow: 'Review together',
-    title: 'Comment and highlight, <em>together.</em>', sub: 'Highlights, sticky notes and threaded replies, all in one panel.',
-    extra: badge('comment', 300, 500, 168) + card('d2-comment', { x: 1346, y: 226, w: 194, h: 380 }, 2, 3200, 2000, 1.55, { x: 1430, y: 420 }) },
-  { file: '03-edit-text', theme: 'dark', screen: 'd3-edit', eyebrow: 'Edit objects',
-    title: 'Edit text <em>right on the page.</em>', sub: 'Change the PDF’s own words, in its own font. Edit shapes the same way.',
-    extra: badge('edit', 300, 500, 168) + cardImg('d3-group', 259 * 1.75, 162 * 1.75, { x: 1390, y: 600 }) },
-  { file: '04-fill-sign', theme: 'light', screen: 'd4-sign', eyebrow: 'Fill & Sign',
-    title: 'Fill and e-sign forms <em>in seconds.</em>', sub: 'Type into any form, then draw your signature and place it.',
-    extra: badge('sign', 300, 500, 168) + card('d4-pad', { x: 470, y: 313, w: 660, h: 415 }, 2, 3200, 2000, 0.84, { x: 1300, y: 600 }) },
-  { file: '05-site-photos', theme: 'dark', screen: 'd7-pins', eyebrow: 'Site photos',
-    title: 'Pin site photos <em>to the drawing.</em>', sub: 'Numbered pins with photos, references, BOQ items and notes, all on the plan.',
-    extra: badge('pin', 300, 500, 168) + card('d7-viewer', B.d7.viewer, 2, 3200, 2000, 500 / B.d7.viewer.w, { x: 1380, y: 590 }) },
-  { file: '06-dimensions', theme: 'light', screen: 'd8-dims', eyebrow: 'Measure',
-    title: 'Dimension drawings <em>to scale.</em>', sub: 'Set 1:50 or calibrate, then measure lengths, runs, radii and angles.',
-    extra: badge('measure', 300, 500, 168) + card('d8-dims', { x: 22, y: 722, w: 240, h: 196 }, 2, 3200, 2000, 1.75, { x: 1430, y: 640 }) },
-  { file: '07-rulers', theme: 'dark', screen: 'd9-rulers', eyebrow: 'Rulers & guides',
-    title: 'Rulers and guides, <em>like a design app.</em>', sub: 'Rulers in mm, cm or inches. Drag out guides to line things up.',
-    extra: badge('ruler', 300, 500, 168) },
-  { file: '08-organize', theme: 'light', eyebrow: 'Organize pages',
-    title: 'Organize pages <em>with a drag.</em>', sub: 'Reorder, rotate, duplicate and extract. Merge and split files too.',
-    body: `<div style="position:absolute;left:150px;top:350px;width:1620px;height:${Math.round(1620 * 560 / 1600)}px;border-radius:20px;overflow:hidden;z-index:2;
-      background:#fff url('${img('d5-organize')}') 0 0 / 1620px ${1620 * 1000 / 1600}px no-repeat;
+  {
+    file: '01-read-edit-sign',
+    theme: 'dark',
+    screen: 'd1-read',
+    eyebrow: 'Add Dots PDF for Windows',
+    title: 'Read, edit and sign PDFs.<br><em>All in one app.</em>',
+    hsize: 72,
+    sub: '',
+    extra: badge('read', 300, 500, 168),
+  },
+  {
+    file: '02-comment',
+    theme: 'light',
+    screen: 'd2-comment',
+    eyebrow: 'Review together',
+    title: 'Comment and highlight, <em>together.</em>',
+    sub: 'Highlights, sticky notes and threaded replies, all in one panel.',
+    extra:
+      badge('comment', 300, 500, 168) +
+      card('d2-comment', { x: 1346, y: 226, w: 194, h: 380 }, 2, 3200, 2000, 1.55, { x: 1430, y: 420 }),
+  },
+  {
+    file: '03-edit-text',
+    theme: 'dark',
+    screen: 'd3-edit',
+    eyebrow: 'Edit objects',
+    title: 'Edit text <em>right on the page.</em>',
+    sub: 'Change the PDF’s own words, in its own font. Edit shapes the same way.',
+    extra: badge('edit', 300, 500, 168) + cardImg('d3-group', 259 * 1.75, 162 * 1.75, { x: 1390, y: 600 }),
+  },
+  {
+    file: '04-fill-sign',
+    theme: 'light',
+    screen: 'd4-sign',
+    eyebrow: 'Fill & Sign',
+    title: 'Fill and e-sign forms <em>in seconds.</em>',
+    sub: 'Type into any form, then draw your signature and place it.',
+    extra:
+      badge('sign', 300, 500, 168) +
+      card('d4-pad', { x: 470, y: 313, w: 660, h: 415 }, 2, 3200, 2000, 0.84, { x: 1300, y: 600 }),
+  },
+  {
+    file: '05-site-photos',
+    theme: 'dark',
+    screen: 'd7-pins',
+    eyebrow: 'Site photos',
+    title: 'Pin site photos <em>to the drawing.</em>',
+    sub: 'Numbered pins with photos, references, BOQ items and notes, all on the plan.',
+    extra:
+      badge('pin', 300, 500, 168) +
+      card('d7-viewer', B.d7.viewer, 2, 3200, 2000, 500 / B.d7.viewer.w, { x: 1380, y: 590 }),
+  },
+  {
+    file: '06-dimensions',
+    theme: 'light',
+    screen: 'd8-dims',
+    eyebrow: 'Measure',
+    title: 'Dimension drawings <em>to scale.</em>',
+    sub: 'Set 1:50 or calibrate, then measure lengths, runs, radii and angles.',
+    extra:
+      badge('measure', 300, 500, 168) +
+      card('d8-dims', { x: 22, y: 722, w: 240, h: 196 }, 2, 3200, 2000, 1.75, { x: 1430, y: 640 }),
+  },
+  {
+    file: '07-rulers',
+    theme: 'dark',
+    screen: 'd9-rulers',
+    eyebrow: 'Rulers & guides',
+    title: 'Rulers and guides, <em>like a design app.</em>',
+    sub: 'Rulers in mm, cm or inches. Drag out guides to line things up.',
+    extra: badge('ruler', 300, 500, 168),
+  },
+  {
+    file: '08-organize',
+    theme: 'light',
+    eyebrow: 'Organize pages',
+    title: 'Organize pages <em>with a drag.</em>',
+    sub: 'Reorder, rotate, duplicate and extract. Merge and split files too.',
+    body: `<div style="position:absolute;left:150px;top:350px;width:1620px;height:${Math.round((1620 * 560) / 1600)}px;border-radius:20px;overflow:hidden;z-index:2;
+      background:#fff url('${img('d5-organize')}') 0 0 / 1620px ${(1620 * 1000) / 1600}px no-repeat;
       box-shadow:0 0 0 1px rgba(255,255,255,.14), 0 0 0 8px rgba(106,75,240,.18), 0 60px 140px rgba(0,0,0,.6)"></div>`,
-    extra: badge('pages', 1680, 800, 168) },
-  { file: '09-convert', theme: 'dark', screen: 'd6-convert', eyebrow: 'Convert',
-    title: 'Convert PDF to <em>Word, Excel</em> and more.', sub: 'Word, Excel, PowerPoint, pictures, text and AutoCAD drawings.',
-    extra: badge('convert', 300, 500, 168) + card('d6-dialog', { x: 520, y: 387, w: 560, h: 265 }, 2, 3200, 2000, 1.0, { x: 1250, y: 680 }) }
+    extra: badge('pages', 1680, 800, 168),
+  },
+  {
+    file: '09-convert',
+    theme: 'dark',
+    screen: 'd6-convert',
+    eyebrow: 'Convert',
+    title: 'Convert PDF to <em>Word, Excel</em> and more.',
+    sub: 'Word, Excel, PowerPoint, pictures, text and AutoCAD drawings.',
+    extra:
+      badge('convert', 300, 500, 168) +
+      card('d6-dialog', { x: 520, y: 387, w: 560, h: 265 }, 2, 3200, 2000, 1.0, { x: 1250, y: 680 }),
+  },
 ];
 
 /* ---------------- Google Play: 1080 x 1920, a phone ---------------- */
 
 function phone(screen, x, y, w) {
-  const sh = w * 2402 / 1082, bez = 16, SB = 46;
+  const sh = (w * 2402) / 1082,
+    bez = 16,
+    SB = 46;
   return `
   <div style="position:absolute;left:${x}px;top:${y}px;width:${w + bez * 2}px;padding:${bez}px;border-radius:78px;z-index:2;
     background:linear-gradient(160deg,#2A2D35,#0B0C0F 60%);box-shadow:0 0 0 2px #3E424C inset, 0 0 0 1px rgba(255,255,255,.08), 0 60px 140px rgba(0,0,0,.5)">
@@ -195,22 +287,71 @@ function phoneSlide(o) {
 }
 
 const PHONE = [
-  { file: '01-read', theme: 'dark', screen: 'p1-read', eyebrow: 'Add Dots PDF', title: 'Your PDFs,<br><em>anywhere.</em>',
-    sub: 'Read, edit, sign and share on your phone.', extra: badge('read', 92, 1040, 168) },
-  { file: '02-comment', theme: 'light', screen: 'p2-comment', eyebrow: 'Review together', title: 'Comment<br><em>on the go.</em>',
+  {
+    file: '01-read',
+    theme: 'dark',
+    screen: 'p1-read',
+    eyebrow: 'Add Dots PDF',
+    title: 'Your PDFs,<br><em>anywhere.</em>',
+    sub: 'Read, edit, sign and share on your phone.',
+    extra: badge('read', 92, 1040, 168),
+  },
+  {
+    file: '02-comment',
+    theme: 'light',
+    screen: 'p2-comment',
+    eyebrow: 'Review together',
+    title: 'Comment<br><em>on the go.</em>',
     sub: 'Highlight, add notes and reply in a tap.',
-    extra: badge('comment', 92, 1040, 168) },
-  { file: '03-fill', theme: 'dark', screen: 'p3-sign', eyebrow: 'Fill & Sign', title: 'Fill forms<br><em>in seconds.</em>',
-    sub: 'Type into any form and tick the boxes.', extra: badge('edit', 92, 1040, 168) },
-  { file: '04-sign', theme: 'light', screen: 'p3-pad', eyebrow: 'Fill & Sign', title: 'Sign with<br><em>your own hand.</em>',
-    sub: 'Draw your signature once, place it anywhere.', extra: badge('sign', 92, 1040, 168) },
-  { file: '05-site-photos', theme: 'dark', screen: 'p6-pins', eyebrow: 'Site photos', title: 'Site photos,<br><em>pinned in place.</em>',
+    extra: badge('comment', 92, 1040, 168),
+  },
+  {
+    file: '03-fill',
+    theme: 'dark',
+    screen: 'p3-sign',
+    eyebrow: 'Fill & Sign',
+    title: 'Fill forms<br><em>in seconds.</em>',
+    sub: 'Type into any form and tick the boxes.',
+    extra: badge('edit', 92, 1040, 168),
+  },
+  {
+    file: '04-sign',
+    theme: 'light',
+    screen: 'p3-pad',
+    eyebrow: 'Fill & Sign',
+    title: 'Sign with<br><em>your own hand.</em>',
+    sub: 'Draw your signature once, place it anywhere.',
+    extra: badge('sign', 92, 1040, 168),
+  },
+  {
+    file: '05-site-photos',
+    theme: 'dark',
+    screen: 'p6-pins',
+    eyebrow: 'Site photos',
+    title: 'Site photos,<br><em>pinned in place.</em>',
     sub: 'Drop a pin, snap photos, add the BOQ item.',
-    extra: badge('pin', 92, 1040, 168) + card('p6-viewer', B.p6.viewer, 2.625, 1082, 2402, 480 / B.p6.viewer.w, { x: 520, y: 1290 }) },
-  { file: '06-organize', theme: 'light', screen: 'p4-organize', eyebrow: 'Organize pages', title: 'Organize pages<br><em>with a tap.</em>',
-    sub: 'Reorder, rotate, duplicate and extract.', extra: badge('pages', 92, 1040, 168) },
-  { file: '07-tools', theme: 'dark', screen: 'p0-home', eyebrow: 'All tools', title: 'Every PDF tool<br><em>in one place.</em>',
-    sub: 'Edit text, merge, split, organize, convert and more.', extra: badge('tools', 92, 1040, 168) }
+    extra:
+      badge('pin', 92, 1040, 168) +
+      card('p6-viewer', B.p6.viewer, 2.625, 1082, 2402, 480 / B.p6.viewer.w, { x: 520, y: 1290 }),
+  },
+  {
+    file: '06-organize',
+    theme: 'light',
+    screen: 'p4-organize',
+    eyebrow: 'Organize pages',
+    title: 'Organize pages<br><em>with a tap.</em>',
+    sub: 'Reorder, rotate, duplicate and extract.',
+    extra: badge('pages', 92, 1040, 168),
+  },
+  {
+    file: '07-tools',
+    theme: 'dark',
+    screen: 'p0-home',
+    eyebrow: 'All tools',
+    title: 'Every PDF tool<br><em>in one place.</em>',
+    sub: 'Edit text, merge, split, organize, convert and more.',
+    extra: badge('tools', 92, 1040, 168),
+  },
 ];
 
 /* ---------------- Google Play feature graphic: 1024 x 500 ---------------- */
@@ -226,7 +367,7 @@ function feature() {
       background:#fff url('${img('d1-read')}') 0 0 / 640px 400px no-repeat;box-shadow:0 0 0 1px rgba(255,255,255,.14), 0 40px 90px rgba(0,0,0,.6)"></div>
     <div style="position:absolute;left:478px;top:150px;width:170px;padding:8px;border-radius:30px;z-index:4;
       background:linear-gradient(160deg,#2A2D35,#0B0C0F 60%);box-shadow:0 0 0 1.5px #3E424C inset, 0 30px 70px rgba(0,0,0,.6)">
-      <div style="width:154px;height:${154 * 2402 / 1082}px;border-radius:23px;background:#fff url('${img('p1-read')}') 0 0 / 154px ${154 * 2402 / 1082}px no-repeat"></div>
+      <div style="width:154px;height:${(154 * 2402) / 1082}px;border-radius:23px;background:#fff url('${img('p1-read')}') 0 0 / 154px ${(154 * 2402) / 1082}px no-repeat"></div>
     </div>`;
   return page(1024, 500, 'dark', inner);
 }
@@ -246,6 +387,7 @@ async function render(htmlText, w, h, to) {
   console.log('wrote', to);
 }
 for (const s of DESK) await render(deskSlide(s), 1920, 1080, join(out, 'microsoft-store', s.file + '.png'));
-for (const s of PHONE) await render(phoneSlide(s), 1080, 1920, join(out, 'google-play', 'phone-' + s.file + '.png'));
+for (const s of PHONE)
+  await render(phoneSlide(s), 1080, 1920, join(out, 'google-play', 'phone-' + s.file + '.png'));
 await render(feature(), 1024, 500, join(out, 'google-play', 'feature-graphic.png'));
 await browser.close();
