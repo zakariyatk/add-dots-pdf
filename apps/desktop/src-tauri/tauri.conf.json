@@ -46,7 +46,7 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "publisher": "ADD DOTS",
+    "publisher": "Add Dots",
     "category": "Productivity",
     "shortDescription": "Read, edit and mark up PDFs",
     "longDescription": "Read, edit, mark up, pin site photos, organize and convert PDFs. Files are opened and edited on this computer; nothing is uploaded.",

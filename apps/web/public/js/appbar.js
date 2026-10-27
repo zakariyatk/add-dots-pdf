@@ -1,7 +1,7 @@
 /* Add Dots PDF — Top bar
    ---------------------
    The strip along the top of the window, as Acrobat has it: Menu, Home and
-   Create on the left; help, what is new and the other ADD DOTS apps on the
+   Create on the left; help, what is new and the other Add Dots apps on the
    right. In the Windows app it is the window's title bar as well: the
    window has no frame of its own (tauri.conf.json, decorations off), so the
    strip is where the window is dragged from, and it carries minimise,
@@ -59,7 +59,7 @@
   /* the Add Dots PDF logo: a page with AD and three dots */
   const LOGO = '<svg viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="20" fill="#000"/><path d="M33 18.5H54V31a7 7 0 0 0 7 7H74.5V75a7.5 7.5 0 0 1-7.5 7.5H33a7.5 7.5 0 0 1-7.5-7.5V26a7.5 7.5 0 0 1 7.5-7.5z" fill="#fff"/><path d="M57.8 19.2L74 35.4H62a4.2 4.2 0 0 1-4.2-4.2z" fill="#7357FF"/><path d="M36.3 58.8L41.7 52.2L43.9 58.8z" fill="#7357FF"/><path d="M45.8 61.4H33.6L42 47.4L51.1 63.8H58.8A9 9 0 0 0 58.8 45.8H49.9" fill="none" stroke="#000" stroke-width="4.6"/><g fill="#7357FF"><circle cx="40.7" cy="73" r="3.3"/><circle cx="49.9" cy="73" r="3.3"/><circle cx="59" cy="73" r="3.3"/></g></svg>';
 
-  /* the other ADD DOTS apps, as on www.adddots.com; `site` is the name the
+  /* the other Add Dots apps, as on www.adddots.com; `site` is the name the
      Windows app opens in the browser (src-tauri open_site) */
   /* the Option Builder mark: an "A" with rising candles and a violet trend
      arrow, as in that app's public/favicon.svg */
@@ -140,7 +140,7 @@
     '<span class="abgrow"></span>' +
     '<button type="button" class="abbtn abicon" id="abHelp" aria-haspopup="menu" aria-expanded="false" title="Help" aria-label="Help">' + ICON.help + '</button>' +
     '<button type="button" class="abbtn abicon" id="abNews" aria-haspopup="dialog" aria-expanded="false" title="What is new" aria-label="What is new">' + ICON.bell + '<i class="abdot" hidden></i></button>' +
-    '<button type="button" class="abbtn abicon" id="abApps" aria-haspopup="dialog" aria-expanded="false" title="Other ADD DOTS apps" aria-label="Other ADD DOTS apps">' + ICON.apps + '</button>';
+    '<button type="button" class="abbtn abicon" id="abApps" aria-haspopup="dialog" aria-expanded="false" title="Other Add Dots apps" aria-label="Other Add Dots apps">' + ICON.apps + '</button>';
   if (win) {
     bar.insertAdjacentHTML('beforeend',
       '<span class="abwin">' +
@@ -292,7 +292,7 @@
     menu(this, [
       { label: 'What is new', icon: ICON.news, act: function () { $b('abNews').click(); } },
       '-',
-      { label: 'About ADD DOTS', icon: ICON.link, act: function () { openLink('https://www.adddots.com/about.html', 'about'); } },
+      { label: 'About Add Dots', icon: ICON.link, act: function () { openLink('https://www.adddots.com/about.html', 'about'); } },
       { label: 'Privacy', icon: ICON.shield, act: function () { openLink('https://pdf.adddots.com/privacy.html', 'privacy'); } }
     ], { right: true });
   });
@@ -352,10 +352,10 @@
     if (notes) { set(NEWS, BUILD.id); bar.querySelector('.abdot').hidden = true; }
   });
 
-  /* ---------------- other ADD DOTS apps ---------------- */
+  /* ---------------- other Add Dots apps ---------------- */
 
   $b('abApps').addEventListener('click', function () {
-    const html = '<div class="abhead">Other ADD DOTS apps</div>' +
+    const html = '<div class="abhead">Other Add Dots apps</div>' +
       APPS.map(function (a, i) {
         return '<div class="abapprow">' +
           '<span class="abappic ablogo">' + a.logo + '</span>' +

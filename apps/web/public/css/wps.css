@@ -2,10 +2,10 @@
    WPS look
    The light interface dressed the way WPS Office's PDF editor is: a
    soft blue-grey desk, the ribbon a white card floating on it, the tab
-   in use in WPS red, actions in ADD DOTS violet, and a status bar along the
+   in use in WPS red, actions in Add Dots violet, and a status bar along the
    bottom with the page and the zoom (js/skin.js). The layout and every
    button stay where they are: this is colour, shape and spacing only.
-   Active tools and main buttons are in ADD DOTS violet (#6A4BF0 for fills): a solid tile with a
+   Active tools and main buttons are in Add Dots violet (#6A4BF0 for fills): a solid tile with a
    white icon for the tool in hand, a violet pill for the main action.
    --------------------------------------------------------------- */
 
@@ -16,7 +16,7 @@ body[data-ui="light"][data-skin="wps"] {
   --line: #E1E4EA;
   --text: #1F2329;
   --text-dim: #575E6A;
-  --marker: #7B5CFF;          /* ADD DOTS violet */
+  --marker: #7B5CFF;          /* Add Dots violet */
   --btn: #6A4BF0;
   --btn-hover: #5A3BE0;
   --marker-ink: #6141EA;
