@@ -2,7 +2,7 @@
 name = "adddots-pdf"
 version = "0.1.0"
 description = "Add Dots PDF reader and editor"
-authors = ["ADD DOTS"]
+authors = ["Add Dots"]
 edition = "2021"
 rust-version = "1.77"
 

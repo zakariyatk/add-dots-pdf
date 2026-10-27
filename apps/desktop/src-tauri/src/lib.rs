@@ -652,7 +652,7 @@ fn open_store() -> Result<(), String> {
     }
 }
 
-/// The ADD DOTS pages the top bar opens in the browser (js/appbar.js), by
+/// The Add Dots pages the top bar opens in the browser (js/appbar.js), by
 /// name: the page cannot hand it any other address to open.
 const SITES: &[(&str, &str)] = &[
     ("about", "https://www.adddots.com/about.html"),

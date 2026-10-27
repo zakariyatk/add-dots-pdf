@@ -1,4 +1,4 @@
-# ADD DOTS — PDF Editor
+# Add Dots PDF Editor
 
 A full PDF reader and editor that runs in the browser, plus a small PHP/MySQL
 backend that turns any open document into a review link you can send to someone.
@@ -40,7 +40,7 @@ api/
   tests/            unit and end-to-end suites
 ```
 
-`ADD DOTS — PDF Editor.html` is the original browser "Save page as" dump the
+`Add Dots PDF Editor.html` is the original browser "Save page as" dump the
 project started from. Everything real was extracted out of it and nothing loads
 from it now. About 1,800 of its 8,144 lines were CSS injected by browser
 extensions (a flight-price widget, an AliExpress importer, Grammarly).
@@ -49,7 +49,7 @@ extensions (a flight-price widget, an AliExpress importer, Grammarly).
 
 ## Deploying to Hostinger
 
-1. **Upload** everything except `ADD DOTS — PDF Editor.html`, its `_files`
+1. **Upload** everything except `Add Dots PDF Editor.html`, its `_files`
    folder, and `api/tests/` into `public_html` (or a subfolder such as
    `public_html/pdfreader`).
 

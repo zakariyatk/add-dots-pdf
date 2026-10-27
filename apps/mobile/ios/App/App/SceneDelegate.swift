@@ -43,7 +43,7 @@ class AppViewController: CAPBridgeViewController {
 /// What the web app cannot do by itself in a WKWebView; the Android plugin's
 /// twin (same name and methods, so js/mobile.js serves both).
 ///
-/// Opening: a PDF opened from Files, Mail and the like ("Open in ADD DOTS
+/// Opening: a PDF opened from Files, Mail and the like ("Open in Add Dots
 /// PDF") reaches the app as a file URL. The page asks for it once
 /// (launchFile), or hears of it (openFile) when the app was already open.
 /// Only the file iOS handed over is read.

@@ -1,6 +1,6 @@
 # Accounts (Stage I): Sign In / Sign Up with Supabase Auth
 
-One ADD DOTS account on the web, Windows, Android and iOS. An account is
+One Add Dots account on the web, Windows, Android and iOS. An account is
 free, with every tool. **Saving asks for one**: everyone can open and edit
 PDFs with every tool, and saving a file asks to sign in or create a free
 account first, as Acrobat online does. Documents still stay on the device.
@@ -158,17 +158,17 @@ and it can only ever reach the caller's own account.
 2. **Email codes instead of links** (needs step 4 first: without a custom
    SMTP sender Supabase shows the templates read-only). In the Supabase
    dashboard, Authentication > Emails > Templates:
-   - **Confirm signup**: subject `Your ADD DOTS confirmation code`, body
+   - **Confirm signup**: subject `Your Add Dots confirmation code`, body
      containing `{{ .Token }}`, for example:
 
      ```html
      <h2>Confirm your email</h2>
      <p>Enter this code in Add Dots PDF:</p>
      <p style="font-size:28px;letter-spacing:6px"><b>{{ .Token }}</b></p>
-     <p>If you did not create an ADD DOTS account, ignore this email.</p>
+     <p>If you did not create an Add Dots account, ignore this email.</p>
      ```
 
-   - **Reset password**: subject `Your ADD DOTS password reset code`, same
+   - **Reset password**: subject `Your Add Dots password reset code`, same
      shape, with `{{ .Token }}`.
    - Leave out `{{ .ConfirmationURL }}`: the app uses the code only.
 3. **Authentication > Sign In / Providers > Email**: Email enabled,

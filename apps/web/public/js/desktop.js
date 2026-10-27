@@ -91,7 +91,7 @@
   }
   /* an update: this app's page in the Microsoft Store (js/update.js) */
   api.openStore = function () { return T.core.invoke('open_store'); };
-  /* an ADD DOTS page, by name, in the browser (the top bar's links) */
+  /* an Add Dots page, by name, in the browser (the top bar's links) */
   api.openSite = function (name) { return T.core.invoke('open_site', { name: name }); };
   /* whether the Store has a newer version: true, false, or null when this
      is not the Store's install (the setup .exe) */
