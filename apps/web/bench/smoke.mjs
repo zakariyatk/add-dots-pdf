@@ -3247,6 +3247,8 @@ try {
     });
     await tctx.addInitScript(() => {
       window.ADDDOTS_NO_TABS = false;
+      /* the tabs are the Windows app's: here, standing in for it */
+      window.ADDDOTS_TABS = true;
     });
     const page = await tctx.newPage();
     const errors = [];
@@ -3540,6 +3542,8 @@ try {
     });
     await mctx.addInitScript(() => {
       window.ADDDOTS_NO_TABS = false;
+      /* the tabs are the Windows app's: here, standing in for it */
+      window.ADDDOTS_TABS = true;
     });
     const page = await mctx.newPage();
     const errors = [];
@@ -3619,6 +3623,8 @@ try {
     const dctx = await browser.newContext({ viewport: { width: 1300, height: 850 } });
     await dctx.addInitScript(([A, B]) => {
       window.ADDDOTS_NO_TABS = false;
+      /* the tabs are the Windows app's: here, standing in for it */
+      window.ADDDOTS_TABS = true;
       if (window.top !== window) return;
       /* pending: what the desktop side has been handed and no page has
          taken yet; launch_files takes it, each path once, as src-tauri does */
