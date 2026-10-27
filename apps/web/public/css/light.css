@@ -115,3 +115,7 @@ body[data-ui="light"] :is(.sigmodal, .docmodal) > * { box-shadow: var(--shadow-p
 .uimode .moon { display: none }
 body[data-ui="light"] .uimode .sun { display: none }
 body[data-ui="light"] .uimode .moon { display: inline }
+
+/* the top bar, as Acrobat's: a light grey, with the document tab in view
+   white, as the toolbar it runs into */
+body[data-ui="light"] .appbar { --tab-strip: #E6E8EC; --tab-on: var(--chrome) }

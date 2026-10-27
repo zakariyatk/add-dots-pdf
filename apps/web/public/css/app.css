@@ -258,7 +258,10 @@
                          background:none;border:0;flex:0 1 auto;min-width:0}
   .appbar .doctabs.inbar[hidden]{display:none}
   .appbar .doctabs.inbar .dtlist{flex:0 1 auto;gap:0;height:100%;align-items:flex-end}
-  .appbar .doctabs.inbar .dtab{top:1px;height:34px;flex:0 1 210px;min-width:90px;max-width:210px;padding:0 6px 0 12px;
+  /* with tabs in it, the bar has no line along its foot: the tab in view
+     runs straight into the toolbar, and the bar's colour sets it apart */
+  body.has-doctabs .appbar{border-bottom:0}
+  .appbar .doctabs.inbar .dtab{top:0;height:34px;flex:0 1 210px;min-width:90px;max-width:210px;padding:0 6px 0 12px;
                                border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--text-dim)}
   .appbar .doctabs.inbar .dtab::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:1px;background:var(--line)}
   .appbar .doctabs.inbar .dtab:first-child::before,.appbar .doctabs.inbar .dtab.on::before,
