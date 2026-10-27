@@ -242,12 +242,22 @@
   .doctabs .dtdot{width:7px;height:7px;border-radius:50%;background:#7B5CFF;flex:none;display:none}
   .doctabs .dtab.dirty .dtdot{display:block}
   .doctabs .dtx{width:20px;height:20px;border:none;background:none;color:inherit;border-radius:4px;cursor:pointer;
-                font-size:16px;line-height:1;padding:0;flex:none}
+                font-size:16px;line-height:1;padding:0;flex:none;display:inline-grid;place-items:center}
   .doctabs .dtx:hover{background:var(--chrome-2)}
   .doctabs .dtadd{height:26px;width:28px;border:none;background:none;color:var(--text-dim);font-size:18px;
                   cursor:pointer;border-radius:6px;margin:0 0 2px 4px;flex:none}
   .doctabs .dtadd:hover{background:var(--chrome);color:var(--text)}
   .doctabs .dtab.tearing{opacity:.55;outline:2px dashed #7B5CFF;outline-offset:-2px}
+  /* in the top bar, after Create, as Acrobat has them */
+  .appbar .doctabs.inbar{align-self:stretch;align-items:center;padding:0;margin-left:10px;min-height:0;
+                         background:none;border:0;flex:0 1 auto;min-width:0}
+  .appbar .doctabs.inbar[hidden]{display:none}
+  .appbar .doctabs.inbar .dtlist{flex:0 1 auto;gap:3px;height:100%;align-items:center}
+  .appbar .doctabs.inbar .dtab{top:0;height:30px;flex:0 1 200px;min-width:80px;max-width:200px;border-radius:6px;
+                               border:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--chrome-2)}
+  .appbar .doctabs.inbar .dtab:hover{background:var(--hover,rgba(255,255,255,.08))}
+  .appbar .doctabs.inbar .dtab.on{background:var(--stage);border-color:var(--marker,#7B5CFF);color:var(--text)}
+  .appbar .doctabs.inbar .dtadd{margin:0 0 0 4px;height:30px;width:30px}
   .dtmenu{position:fixed;z-index:200;min-width:180px;padding:5px;border-radius:8px;background:var(--chrome);
           border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.28);display:flex;flex-direction:column}
   .dtmenu[hidden]{display:none}

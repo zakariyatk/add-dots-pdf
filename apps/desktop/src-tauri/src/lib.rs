@@ -39,7 +39,9 @@ use tauri_plugin_dialog::DialogExt;
 
 #[derive(Default)]
 struct Opened {
-    /// given at start, not yet asked for by the page
+    /// handed over (at start, or by a later start) and not yet taken by a
+    /// page: a page still loading has nobody listening for `open-files`, so
+    /// they wait here rather than being lost
     pending: Mutex<Vec<String>>,
     /// every path the system handed over: the only ones read_file serves
     allowed: Mutex<HashSet<PathBuf>>,
@@ -85,7 +87,8 @@ fn remember(state: &Opened, paths: &[PathBuf]) -> Vec<String> {
         .collect()
 }
 
-/// The PDFs the app was started with, once: a reload does not open them again.
+/// The PDFs handed over and not yet opened, once: a reload does not open
+/// them again. The page asks at start and again on each `open-files`.
 #[tauri::command]
 fn launch_files(state: tauri::State<'_, Opened>) -> Vec<String> {
     std::mem::take(&mut *state.pending.lock().unwrap())
@@ -683,6 +686,10 @@ pub fn run() {
             let paths = pdf_args(&args, Path::new(&cwd));
             let state = app.state::<Opened>();
             let files = remember(&state, &paths);
+            // kept until a page takes them (`launch_files`): several PDFs
+            // opened together from Explorer each start the app, often while
+            // the window's page is still loading and not yet listening
+            state.pending.lock().unwrap().extend(files.iter().cloned());
             if let Some(w) = target_window(app) {
                 let _ = w.unminimize();
                 let _ = w.set_focus();

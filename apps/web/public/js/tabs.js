@@ -7,9 +7,12 @@
 
    Opening a file with one already open (Open, Ctrl+O, several files picked
    at once, a file dropped on the home screen) makes a new tab; dropping a
-   PDF onto an open page still adds its pages there. The bar shows once there
-   are two tabs. A tab says what it holds (name, unsaved changes) to the bar;
-   closing one with unsaved changes asks first.
+   PDF onto an open page still adds its pages there. In the Windows app the
+   tabs sit in the title bar from the first document on, as in Acrobat; they
+   are dragged along it to reorder them, and Ctrl+Tab / Ctrl+Shift+Tab move
+   between them. On the website they are a strip that shows once there are
+   two. A tab says what it holds (name, unsaved changes) to the bar; closing
+   one with unsaved changes asks first.
 
    In the Windows app a PDF opened from Explorer gets a tab too, and a tab
    can be moved to a window of its own, as in Acrobat: drag it down out of
@@ -50,6 +53,15 @@
       if (files.length && X.openFiles) X.openFiles(files, { merge: !!e.data.merge });
     });
 
+    /* the tab keys (Ctrl+Tab...) pressed in here are the bar's */
+    document.addEventListener('keydown', function (e) {
+      let k = null;
+      try { k = window.parent.ADDPDF.tabKeyOf(e); } catch (err) { return; }
+      if (!k) return;
+      e.preventDefault(); e.stopPropagation();
+      up({ t: 'adpdf-tab-key', k: k });
+    }, true);
+
     X.on('ready', function () {
       up({ t: 'adpdf-tab-ready' });
       let last = '';
@@ -77,8 +89,9 @@
 
     const bar = document.createElement('div');
     bar.className = 'doctabs'; bar.id = 'docTabs'; bar.hidden = true;
-    bar.setAttribute('role', 'tablist'); bar.setAttribute('aria-label', 'Open documents');
+    /* the list is the tablist: it holds tabs only, and + stays beside it */
     const list = document.createElement('div'); list.className = 'dtlist';
+    list.setAttribute('role', 'tablist'); list.setAttribute('aria-label', 'Open documents');
     const add = document.createElement('button');
     add.className = 'dtadd'; add.type = 'button'; add.title = 'Open a PDF in a new tab (Ctrl+O)';
     add.setAttribute('aria-label', 'Open a PDF in a new tab');
@@ -98,10 +111,27 @@
     }
     function dirtyOf(t) { return t.id === 0 ? !!(X.isDirty && X.isDirty()) : t.dirty; }
 
+    /* The Windows app only: what the website and the phone apps have stays
+       as it was (a strip of tabs from the second document on) */
+    const DESK = !!window.__TAURI__;
+
+    /* In the Windows app the tabs sit in the title bar (js/appbar.js), after
+       Create, as in Acrobat. Elsewhere they are a strip of their own. */
+    function place() {
+      const ab = DESK && document.getElementById('appBar');
+      const inAb = !!(ab && getComputedStyle(ab).display !== 'none');
+      if (inAb && bar.parentNode !== ab) ab.insertBefore(bar, ab.querySelector('.abgrow'));
+      else if (!inAb && bar.parentNode !== app) app.insertBefore(bar, app.firstChild);
+      bar.classList.toggle('inbar', inAb);
+      return inAb;
+    }
+
     function paint() {
-      bar.hidden = tabs.length < 2;
+      const inAb = place();
+      /* in the top bar a document shows its tab from the first one on */
+      bar.hidden = !(tabs.length > 1 || (inAb && X.hasDoc()));
       document.body.classList.toggle('has-doctabs', !bar.hidden);
-      document.documentElement.style.setProperty('--doctabs-h', bar.hidden ? '0px' : bar.offsetHeight + 'px');
+      document.documentElement.style.setProperty('--doctabs-h', bar.hidden || inAb ? '0px' : bar.offsetHeight + 'px');
       list.innerHTML = '';
       tabs.forEach(function (t) {
         const b = document.createElement('div');
@@ -116,7 +146,9 @@
         b.innerHTML = '<svg viewBox="0 0 24 24" class="dtico"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>' +
           '<span class="dtname"></span><i class="dtdot" aria-hidden="true"></i>' +
           (t.id === 0 && !X.hasDoc() ? '' :
-            '<button type="button" class="dtx" aria-label="Close ' + X.esc(name) + '" title="Close">&times;</button>');
+            /* not a button of its own: a tab holds nothing focusable. Delete
+               or Ctrl+W close the tab from the keyboard */
+            '<span class="dtx" aria-hidden="true" title="Close">&times;</span>');
         b.querySelector('.dtname').textContent = name;
         list.appendChild(b);
         t.el = b;
@@ -214,13 +246,28 @@
     document.addEventListener('pointerdown', function (e) { if (!menu.hidden && !menu.contains(e.target)) hideMenu(); }, true);
     document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !menu.hidden) hideMenu(); });
 
-    /* dragged well clear of the bar, a tab tears off into a window */
+    /* dragged along the bar, a tab changes places with the others; dragged
+       well clear of it, it tears off into a window */
     let tear = null;
     list.addEventListener('pointerdown', function (e) {
       const tab = e.target.closest('.dtab');
-      if (!tab || e.button !== 0 || e.target.closest('.dtx') || !canDetach(+tab.dataset.id)) return;
+      if (!tab || e.button !== 0 || e.target.closest('.dtx')) return;
       tear = { id: +tab.dataset.id, x: e.clientX, y: e.clientY, el: tab, on: false, pid: e.pointerId };
     });
+    function reorder(e) {
+      const over = Array.prototype.filter.call(list.children, function (b) {
+        const r = b.getBoundingClientRect();
+        return b !== tear.el && e.clientX >= r.left && e.clientX <= r.right;
+      })[0];
+      if (!over) return;
+      const from = tabs.indexOf(byId(tear.id)), to = tabs.indexOf(byId(+over.dataset.id));
+      if (from < 0 || to < 0) return;
+      tabs.splice(to, 0, tabs.splice(from, 1)[0]);
+      list.insertBefore(tear.el, to > from ? over.nextSibling : over);
+      /* moved, it lets go of the pointer; it takes it back */
+      try { tear.el.setPointerCapture(e.pointerId); } catch (err) { /* the drag still works inside the window */ }
+      tear.moved = true;
+    }
     function away(e) {
       const r = bar.getBoundingClientRect();
       return e.clientY > r.bottom + 50 || e.clientY < 0 || e.clientX < 0 || e.clientX > window.innerWidth;
@@ -231,13 +278,17 @@
         tear.on = true;
         try { tear.el.setPointerCapture(e.pointerId); } catch (err) { /* the drag still works inside the window */ }
       }
-      if (tear.on) tear.el.classList.toggle('tearing', away(e));
+      if (!tear.on) return;
+      const out = away(e) && canDetach(tear.id);
+      tear.el.classList.toggle('tearing', out);
+      if (!out && DESK) reorder(e);
     });
     document.addEventListener('pointerup', function (e) {
       if (!tear || e.pointerId !== tear.pid) return;
       const t = tear; tear = null;
       t.el.classList.remove('tearing');
-      if (t.on && away(e)) { suppressClick = true; detach(t.id); }
+      if (t.on && away(e) && canDetach(t.id)) { suppressClick = true; detach(t.id); }
+      else if (t.moved) suppressClick = true;
     });
     let suppressClick = false;
 
@@ -276,6 +327,7 @@
         return;
       }
       if (!t) return;
+      if (e.data.t === 'adpdf-tab-key') { if (t.id === active) tabKey(e.data.k); return; }
       if (e.data.t === 'adpdf-tab-ready') {
         t.ready = true;
         if (t.files && t.files.length) {
@@ -289,12 +341,43 @@
       }
     });
 
-    /* the app's own name and changes follow its document */
+    /* the app's own name and changes follow its document (and in the top
+       bar, its tab shows as soon as it has one) */
     let lastHost = '';
     setInterval(function () {
-      const k = label(tabs[0]) + '|' + dirtyOf(tabs[0]);
-      if (k !== lastHost) { lastHost = k; if (!bar.hidden) paint(); }
+      const host0 = byId(0);
+      const k = label(host0) + '|' + dirtyOf(host0) + '|' + X.hasDoc();
+      if (k !== lastHost) { lastHost = k; paint(); }
     }, 700);
+
+    /* the keys Acrobat has: Ctrl+Tab and Ctrl+Page Down to the next tab,
+       with Shift or Page Up to the one before; Ctrl+W and Ctrl+F4 close the
+       tab in view. The Windows app only, as is dragging tabs to reorder them. */
+    function tabKey(k) {
+      if (k === 'close') {
+        if (tabs.length > 1 || X.hasDoc()) close(active);
+        return;
+      }
+      if (tabs.length < 2) return;
+      const at = tabs.indexOf(byId(active));
+      const n = (at + (k === 'next' ? 1 : -1) + tabs.length) % tabs.length;
+      select(tabs[n].id);
+      if (tabs[n].el) tabs[n].el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    }
+    X.tabKeyOf = function (e) {
+      if (!DESK || !e.ctrlKey || e.altKey || e.metaKey) return null;
+      if (e.key === 'Tab') return e.shiftKey ? 'prev' : 'next';
+      if (e.key === 'PageDown' && !e.shiftKey) return 'next';
+      if (e.key === 'PageUp' && !e.shiftKey) return 'prev';
+      if (!e.shiftKey && (e.key === 'F4' || e.key === 'w' || e.key === 'W')) return 'close';
+      return null;
+    };
+    document.addEventListener('keydown', function (e) {
+      const k = X.tabKeyOf(e);
+      if (!k || (k !== 'close' && tabs.length < 2)) return;
+      e.preventDefault(); e.stopPropagation();
+      tabKey(k);
+    }, true);
 
     /* closing the window with unsaved work in another tab asks too */
     window.addEventListener('beforeunload', function (e) {
