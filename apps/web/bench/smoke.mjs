@@ -2079,6 +2079,8 @@ try {
       writeFileSync(SCAN, await d.save());
       await open(page, SCAN);
       await page.evaluate(() => window.ADDPDF.openOcr());
+      /* the invisible layer first: "Make text editable" off */
+      await page.evaluate(() => (document.getElementById('ocrEdit').checked = false));
       await page.click('#ocrGo');
       await page
         .waitForFunction(
@@ -2108,13 +2110,86 @@ try {
       }, bytes);
       check('and the saved PDF can be searched for it', /atrium/.test(saved), saved.slice(0, 120));
 
+      /* "Make text editable": each line a text box where the scan's words
+         were. The picture is 1240 px across a 595 pt page (0.48 pt a px):
+         the heading, 76 px Arial, is about 36 pt; the line under it, 48 px,
+         about 23 pt; both start 120 px (about 58 pt) in, in ink near #111
+         on white paper */
+      await page.evaluate(() => window.ADDPDF.openOcr());
+      await page.evaluate(() => {
+        document.getElementById('ocrNote').textContent = '';
+        document.getElementById('ocrEdit').checked = true;
+      });
+      await page.click('#ocrGo');
+      await page
+        .waitForFunction(
+          () => /read on|could not/.test(document.getElementById('ocrNote').textContent),
+          null,
+          { timeout: 120000 },
+        )
+        .catch(() => {});
+      await page.click('#ocrCancel');
+      const ed = await page.evaluate(() => {
+        const sh = window.ADDPDF.S.items[0].shapes;
+        const boxes = sh.filter((s) => s.t === 'text' && s.ocr);
+        const lum = (h) => {
+          const n = parseInt(String(h).slice(1), 16);
+          return 0.3 * (n >> 16) + 0.59 * ((n >> 8) & 255) + 0.11 * (n & 255);
+        };
+        const pick = (re) => {
+          const b = boxes.find((s) => re.test(s.text));
+          return (
+            b && { text: b.text, x: b.a[0], size: b.size, ink: lum(b.c), paper: lum(b.patch.c), r: b.r || 0 }
+          );
+        };
+        return {
+          boxes: boxes.length,
+          invisible: sh.filter((s) => s.t === 'ocr').length,
+          head: pick(/Inspection/),
+          body: pick(/atrium/),
+        };
+      });
+      const near = (v, want, tol) => v && Math.abs(v - want) <= tol;
+      check(
+        'OCR, "Make text editable": each line a text box where it was, in its size and the ink and paper colours',
+        ed.boxes >= 2 &&
+          ed.invisible === 0 &&
+          !!ed.head &&
+          !!ed.body &&
+          near(ed.head.size, 36.5, 6) &&
+          near(ed.body.size, 23, 4) &&
+          near(ed.head.x, 57.6, 6) &&
+          near(ed.body.x, 57.6, 6) &&
+          ed.head.ink < 90 &&
+          ed.head.paper > 235 &&
+          ed.head.r === 0,
+        ed,
+      );
+      const bytes2 = await page.evaluate(async () => {
+        const X = window.ADDPDF;
+        return Array.from(await X.buildPdf(X.S.items, new Map(), {}));
+      });
+      const saved2 = await page.evaluate(async (b) => {
+        const doc = await window.pdfjsLib.getDocument({ data: new Uint8Array(b) }).promise;
+        const tc = await (await doc.getPage(1)).getTextContent();
+        return tc.items.map((i) => i.str).join(' ');
+      }, bytes2);
+      check(
+        "and saved, it is the page's own text",
+        /atrium/.test(saved2) && /Inspection/.test(saved2),
+        saved2.slice(0, 120),
+      );
+
       /* the Windows app: Windows' own reader (ocr_page), stood in for here.
          It has English, takes pictures up to 1000 px, and finds one word at
          a tenth of the way across and down; then it fails, and Tesseract
          reads instead */
       const runOcr = async () => {
         await page.evaluate(() => window.ADDPDF.openOcr());
-        await page.evaluate(() => (document.getElementById('ocrNote').textContent = ''));
+        await page.evaluate(() => {
+          document.getElementById('ocrNote').textContent = '';
+          document.getElementById('ocrEdit').checked = false;
+        });
         await page.click('#ocrGo');
         await page
           .waitForFunction(
