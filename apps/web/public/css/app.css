@@ -3,14 +3,18 @@
     --paper:#FFFFFF; --text:#E4E4E4; --text-dim:#8D8D8D;
     --marker:#FFFFFF; --marker-ink:#FFFFFF; --danger:#E27C68;
     --mono: ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
-    --sans: Arial,Helvetica,sans-serif;
+    /* Segoe UI is Windows' own interface font, hinted for ClearType at small
+       sizes; elsewhere it is not installed and Arial is used as before */
+    --sans: "Segoe UI",Arial,Helvetica,sans-serif;
     --serif: "Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,serif;
     --rail:210px;
   }
   *{box-sizing:border-box}
   [hidden]{display:none!important}
   html,body{height:100%}
-  body{margin:0;font-family:var(--sans);background:var(--stage);color:var(--text);overflow:hidden;
+  /* line-height pinned to Arial's own, so Segoe UI's taller default does
+     not grow every box laid out on "normal" */
+  body{margin:0;font-family:var(--sans);line-height:1.15;background:var(--stage);color:var(--text);overflow:hidden;
        -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;overscroll-behavior:none}
   button{font-family:inherit;color:inherit;touch-action:manipulation}
   input,select,textarea{font-family:inherit}

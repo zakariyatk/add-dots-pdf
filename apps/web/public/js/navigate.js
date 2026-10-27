@@ -36,16 +36,24 @@
 
     function setOffset(x, y) {
       offX = x; offY = y;
-      stage.style.setProperty('--pan-x', x + 'px');
-      stage.style.setProperty('--pan-y', y + 'px');
+      /* shown on whole screen pixels: a page moved by a fraction of one is
+         resampled and its text goes soft (the drag itself keeps the exact
+         value, so nothing drifts) */
+      const d = window.devicePixelRatio || 1;
+      stage.style.setProperty('--pan-x', Math.round(x * d) / d + 'px');
+      stage.style.setProperty('--pan-y', Math.round(y * d) / d + 'px');
       const floated = (x !== 0 || y !== 0);
       stage.classList.toggle('floated', floated);
+      if (X.snapPages) X.snapPages();
     }
 
     function recentre() {
       stage.classList.add('pan-ease');
       setOffset(0, 0);
-      setTimeout(function () { stage.classList.remove('pan-ease'); }, 220);
+      setTimeout(function () {
+        stage.classList.remove('pan-ease');
+        if (X.snapPages) X.snapPages();       /* measured where it came to rest */
+      }, 220);
     }
 
     /* ---------------- the shared drag ---------------- */
