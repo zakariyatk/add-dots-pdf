@@ -2350,6 +2350,46 @@ try {
         undone[1] === 300,
       { nudged, undone },
     );
+
+    /* a dimension is part of the drawing: its reading, plate, bars and
+       arrowheads keep their size and place on the page at every zoom */
+    await page.evaluate(() => {
+      const X = window.ADDPDF;
+      const it = X.S.items[0];
+      it.shapes.push({ t: 'dim', id: 'zdim', a: [100, 500], b: [600, 500], c: '#E2483D', w: 0.5 });
+      X.S.sel = null;
+      X.drawShapes(it);
+    });
+    const dimAt = async (z) => {
+      await page.evaluate((z) => window.ADDPDF.zoomTo(z), z);
+      await page.waitForTimeout(800);
+      return page.evaluate(() => {
+        const it = window.ADDPDF.S.items[0];
+        const pr = it.inner.getBoundingClientRect();
+        const g = [...it.anno.querySelectorAll('text')].find((t) => /\d/.test(t.textContent));
+        const grp = g.closest('g');
+        const t = g.getBoundingClientRect(),
+          r = grp.getBoundingClientRect();
+        const f = (n) => +n.toFixed(4);
+        return {
+          textX: f((t.left - pr.left) / pr.width),
+          textY: f((t.top - pr.top) / pr.height),
+          textH: f(t.height / pr.height),
+          groupH: f(r.height / pr.height),
+        };
+      });
+    };
+    const zLow = await dimAt(0.5),
+      zHigh = await dimAt(3);
+    const same = (a, b) => Math.abs(a - b) <= 0.002;
+    check(
+      'a dimension keeps its size and place on the page when zooming (50% and 300%)',
+      same(zLow.textX, zHigh.textX) &&
+        same(zLow.textY, zHigh.textY) &&
+        same(zLow.textH, zHigh.textH) &&
+        same(zLow.groupH, zHigh.groupH),
+      { zLow, zHigh },
+    );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }

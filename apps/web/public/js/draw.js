@@ -446,8 +446,10 @@
         return e2;
       }
 
-      /* the extension bars that close each end, perpendicular to the run */
-      const ext = st === 'arrow' ? 6 + sw : (6 + s.w) * k;
+      /* the extension bars that close each end, perpendicular to the run:
+         in page points, as the PDF has them, so they keep to the drawing at
+         every zoom (painters/draw.ts) */
+      const ext = (st === 'arrow' ? 4 + s.w : 6 + s.w) * k;
       const nx = -uy * ext, ny = ux * ext;
       [a, b].forEach(function (end) {
         const t = document.createElementNS(SVGNS, 'line');
@@ -481,7 +483,12 @@
       } else {
         /* arrowheads pointing outward into the ends */
         [[b, a], [a, b]].forEach(function (pair) {
-          const h = X.arrowHead(pair[1][0], pair[1][1], pair[0][0], pair[0][1], sw * 1.1);
+          /* its size in points, as the PDF draws it (9 pt at least), then
+             zoomed: the helper's minimum is in the units it is given */
+          const tip = pair[0];
+          const h = X.arrowHead(pair[1][0], pair[1][1], tip[0], tip[1], s.w * 1.1).map(function (q) {
+            return [tip[0] + (q[0] - tip[0]) * k, tip[1] + (q[1] - tip[1]) * k];
+          });
           const p = document.createElementNS(SVGNS, 'polyline');
           p.setAttribute('points',
             h[0][0] + ',' + h[0][1] + ' ' + pair[0][0] + ',' + pair[0][1] + ' ' + h[1][0] + ',' + h[1][1]);
@@ -497,19 +504,26 @@
       let size;
 
       if (st === 'arrow') {
-        /* sitting on the line, on a pale plate */
-        size = Math.max(9, Math.min(20, 11 * S.scale));
+        /* as the PDF has it, part of the drawing at every zoom: its size on
+           paper, the baseline (line width + 2) pt over the line, on a pale
+           plate 2 pt wider and 1.5 pt taller each side (painters/draw.ts) */
+        size = dimTextPt(s) * k;
+        const t0 = ang * Math.PI / 180;
+        const up = [Math.sin(t0), -Math.cos(t0)];
+        const base = (s.w + 2) * k;
+        const px = mx + up[0] * (base + size * 0.5), py = my + up[1] * (base + size * 0.5);
+        const pw = textPx(text, size) + 4 * k, ph = size + 3 * k;
         const pad = document.createElementNS(SVGNS, 'rect');
-        const wGuess = text.length * size * 0.56 + 8;
-        pad.setAttribute('x', mx - wGuess / 2); pad.setAttribute('y', my - size * 0.78);
-        pad.setAttribute('width', wGuess); pad.setAttribute('height', size * 1.5);
-        pad.setAttribute('rx', 3);
-        pad.setAttribute('transform', 'rotate(' + ang + ' ' + mx + ' ' + my + ')');
-        pad.style.fill = 'rgba(255,255,255,.82)';
+        pad.setAttribute('x', px - pw / 2); pad.setAttribute('y', py - ph / 2);
+        pad.setAttribute('width', pw); pad.setAttribute('height', ph);
+        pad.setAttribute('transform', 'rotate(' + ang + ' ' + px + ' ' + py + ')');
+        pad.style.fill = 'rgba(255,255,255,.8)';
         g.appendChild(pad);
+        /* the middle of a capital is about 0.36 of a size over the baseline */
+        mx += up[0] * (base + size * 0.36); my += up[1] * (base + size * 0.36);
       } else {
         /* above the line and clear of it, at the size the PDF will print */
-        size = Math.max(7, dimTextPt(s) * k);
+        size = dimTextPt(s) * k;
         const t0 = ang * Math.PI / 180;
         const lift = (s.w + 2) * k + size * 0.5;
         mx += Math.sin(t0) * lift; my -= Math.cos(t0) * lift;
@@ -769,7 +783,7 @@
       if (s.t === 'dimd') endMark(g, farS, unitOf(aS, farS), s, idx, it);
 
       const text = dimLabel(s);
-      const size = Math.max(7, dimTextPt(s) * k);
+      const size = dimTextPt(s) * k;
       const tw = textPx(text, size);
       const lift = (s.w + 2) * k;
       if (G.outside) {
@@ -807,7 +821,7 @@
       });
       const size = dimTextPt(s);
       const L = P(angLabelPt(s, G, size));
-      g.appendChild(textEl(dimLabel(s), L[0], L[1], 'middle', Math.max(7, size * k), s, true));
+      g.appendChild(textEl(dimLabel(s), L[0], L[1], 'middle', size * k, s, true));
       return g;
     };
 
