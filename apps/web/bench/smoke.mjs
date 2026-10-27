@@ -3637,6 +3637,7 @@ try {
           invoke: async (cmd, args, opts) => {
             st.calls.push({ cmd, bytes: args instanceof Uint8Array, len: args && args.length });
             if (cmd === 'launch_files') return st.pending.splice(0);
+            if (cmd === 'combine_files') return (st.combine = st.combine || []).splice(0);
             if (cmd === 'read_file') return new Uint8Array(files[args.path]).buffer;
             /* b.pdf stands for a big file: read a part at a time (core.js RANGED) */
             if (cmd === 'open_plan') {
@@ -3779,6 +3780,54 @@ try {
         left.frames === 0 &&
         left.closed >= 1,
       { moved, left },
+    );
+
+    /* Explorer's "Combine files in Add Dots PDF" on b.pdf and a.pdf: two
+       starts of the app, a moment apart, gathered into one list (sorted by
+       name), b moved first, combined: one new tab with both, b's pages first */
+    await page.evaluate(async () => {
+      const st = window.__STUB;
+      st.combine = ['C:/docs/b.pdf'];
+      st.listeners['combine-files']({ payload: ['C:/docs/b.pdf'] });
+      await new Promise((r) => setTimeout(r, 300));
+      st.combine.push('C:/docs/a.pdf');
+      st.listeners['combine-files']({ payload: ['C:/docs/a.pdf'] });
+    });
+    await page.waitForSelector('#cmbModal:not([hidden])', { timeout: 10000 }).catch(() => {});
+    const listed = await page.evaluate(() =>
+      [...document.querySelectorAll('#cmbList .cmbname')].map((e) => e.textContent),
+    );
+    await page.click('#cmbList button[data-a="up"][data-i="1"]');
+    const reordered = await page.evaluate(() =>
+      [...document.querySelectorAll('#cmbList .cmbname')].map((e) => e.textContent),
+    );
+    const tabsBefore = await page.evaluate(() => window.ADDPDF.tabs.list().length);
+    await page.click('#cmbGo');
+    await page
+      .waitForFunction((n) => window.ADDPDF.tabs.list().length === n + 1, tabsBefore, { timeout: 20000 })
+      .catch(() => {});
+    const combinedFrame = page
+      .frames()
+      .filter((f) => /[?&]tab=/.test(f.url()))
+      .pop();
+    let combined = null;
+    if (combinedFrame) {
+      await combinedFrame
+        .waitForFunction(() => window.ADDPDF && window.ADDPDF.S.items.length === 8, null, { timeout: 20000 })
+        .catch(() => {});
+      combined = await combinedFrame.evaluate(() => ({
+        pages: window.ADDPDF.S.items.length,
+        firstFrom: window.ADDPDF.S.items[0].src && window.ADDPDF.S.items[0].src.name,
+      }));
+    }
+    check(
+      "Windows app: Explorer's Combine gathers the PDFs picked, in order, and joins them in a tab of their own",
+      listed.join() === 'a.pdf,b.pdf' &&
+        reordered.join() === 'b.pdf,a.pdf' &&
+        !!combined &&
+        combined.pages === 8 &&
+        /b\.pdf/.test(combined.firstFrom || ''),
+      { listed, reordered, tabsBefore, combined },
     );
     check('no errors on the page', errors.length === 0, errors);
     await dctx.close();

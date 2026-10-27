@@ -306,7 +306,7 @@
     if (!ver) {
       ver = T && T.core
         ? T.core.invoke('app_version').then(function (v) { return 'Version ' + v; }, function () { return 'Windows app'; })
-        : Promise.resolve('Web version');
+        : Promise.resolve('Web version · always the newest when the page loads');
     }
     return ver;
   }
@@ -326,15 +326,28 @@
       if (!isNaN(d)) when = d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
     }
     const html = '<div class="abhead">What is new' + (when ? '<small>' + esc(when) + '</small>' : '') + '</div>' +
-      '<div class="abver"><b id="abVer">Version …</b>' +
-      (BUILD && BUILD.id ? '<small>Build ' + esc(BUILD.id) + (when ? ' · ' + esc(when) : '') + '</small>' : '') + '</div>' +
-      (notes
-        ? '<ul class="abnews">' + notes.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>'
-        : '<p class="abnone">You have the latest version.</p>');
+      /* as a browser's About page has it: up to date, or a new update, and
+         the version under it (js/update.js asks the Store or the website) */
+      '<div class="abver" id="abVerBox" data-state="checking"><span class="abvico" aria-hidden="true"></span>' +
+      '<div class="abvtxt"><b id="abVerState">Checking for updates…</b><small id="abVer">Version …</small></div>' +
+      '<button type="button" class="btn primary" id="abVerGo" hidden>Update</button></div>' +
+      (notes ? '<ul class="abnews">' + notes.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>' : '');
     menu(this, null, { html: html, right: true, cls: 'abwide', focus: false });
     version().then(function (v) {
       const b = document.getElementById('abVer');
       if (b) b.textContent = v;
+    });
+    const check = X.checkForUpdate ? X.checkForUpdate() : Promise.resolve({ state: 'unknown' });
+    check.catch(function () { return { state: 'unknown' }; }).then(function (u) {
+      const box = document.getElementById('abVerBox');
+      if (!box) return;
+      box.dataset.state = u.state;
+      document.getElementById('abVerState').textContent =
+        u.state === 'update' ? 'New update available' :
+        u.state === 'latest' ? 'Add Dots PDF is up to date' : 'Could not check for updates';
+      const go = document.getElementById('abVerGo');
+      go.hidden = u.state !== 'update';
+      if (u.run) go.onclick = function () { closeMenu(); u.run(); };
     });
     if (notes) { set(NEWS, BUILD.id); bar.querySelector('.abdot').hidden = true; }
   });

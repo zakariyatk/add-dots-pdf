@@ -7,8 +7,10 @@
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap2="http://schemas.microsoft.com/appx/manifest/uap/windows10/2"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
-  IgnorableNamespaces="uap rescap">
+  IgnorableNamespaces="uap uap2 uap3 rescap">
 
   <Identity
     Name="ADDDOTS.ADDDOTSPDF"
@@ -41,15 +43,21 @@
         <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
       </uap:VisualElements>
       <Extensions>
-        <!-- opens PDFs from Explorer, as the setup .exe's install does -->
-        <uap:Extension Category="windows.fileTypeAssociation">
-          <uap:FileTypeAssociation Name="pdf">
+        <!-- opens PDFs from Explorer, as the setup .exe's install does; and
+             "Combine files in Add Dots PDF" on PDFs picked there, as
+             Acrobat has it: Explorer starts it once for each file picked,
+             and the app (one window, single instance) gathers them -->
+        <uap3:Extension Category="windows.fileTypeAssociation">
+          <uap3:FileTypeAssociation Name="pdf">
             <uap:DisplayName>PDF document</uap:DisplayName>
             <uap:SupportedFileTypes>
               <uap:FileType ContentType="application/pdf">.pdf</uap:FileType>
             </uap:SupportedFileTypes>
-          </uap:FileTypeAssociation>
-        </uap:Extension>
+            <uap2:SupportedVerbs>
+              <uap3:Verb Id="combine" Parameters="--combine &quot;%1&quot;">Combine files in Add Dots PDF...</uap3:Verb>
+            </uap2:SupportedVerbs>
+          </uap3:FileTypeAssociation>
+        </uap3:Extension>
       </Extensions>
     </Application>
   </Applications>
