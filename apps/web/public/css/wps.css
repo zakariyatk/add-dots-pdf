@@ -32,6 +32,9 @@ body[data-ui="light"][data-skin="wps"] .tabs .tab:hover { color: var(--wps-red) 
 body[data-ui="light"][data-skin="wps"] .tabs .tab.on { color: var(--wps-red); font-weight: 600 }
 body[data-ui="light"][data-skin="wps"] .tabs .tab.on::after { background: var(--wps-red); left: 16px; right: 16px; bottom: -6px; height: 2.5px }
 body[data-ui="light"][data-skin="wps"] .bar .btn:hover:not(:disabled) { background: rgba(0, 0, 0, .05) }
+/* the top bar is white, so the document tab in view takes the desk's grey, as the toolbar under it */
+body[data-ui="light"][data-skin="wps"] .appbar { --tab-strip: #FFFFFF; --tab-on: var(--wps-desk) }
+body[data-ui="light"][data-skin="wps"] .appbar .doctabs.inbar { background: none }
 body[data-ui="light"][data-skin="wps"] #btnHome { background: #FFFFFF; border-color: var(--line) }
 body[data-ui="light"][data-skin="wps"] .pager input { background: #FFFFFF; border-color: var(--line) }
 

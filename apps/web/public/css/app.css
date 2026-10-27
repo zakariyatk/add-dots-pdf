@@ -251,16 +251,23 @@
                   cursor:pointer;border-radius:6px;margin:0 0 2px 4px;flex:none}
   .doctabs .dtadd:hover{background:var(--chrome);color:var(--text)}
   .doctabs .dtab.tearing{opacity:.55;outline:2px dashed #7B5CFF;outline-offset:-2px}
-  /* in the top bar, after Create, as Acrobat has them */
-  .appbar .doctabs.inbar{align-self:stretch;align-items:center;padding:0;margin-left:10px;min-height:0;
+  /* in the top bar, after Create, as Acrobat has them: the tab in view is
+     the colour of the toolbar under it and runs into it; the others are
+     names on the bar, split by a hairline */
+  .appbar .doctabs.inbar{align-self:stretch;align-items:flex-end;padding:0;margin-left:10px;min-height:0;
                          background:none;border:0;flex:0 1 auto;min-width:0}
   .appbar .doctabs.inbar[hidden]{display:none}
-  .appbar .doctabs.inbar .dtlist{flex:0 1 auto;gap:3px;height:100%;align-items:center}
-  .appbar .doctabs.inbar .dtab{top:0;height:30px;flex:0 1 200px;min-width:80px;max-width:200px;border-radius:6px;
-                               border:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--chrome-2)}
-  .appbar .doctabs.inbar .dtab:hover{background:var(--hover,rgba(255,255,255,.08))}
-  .appbar .doctabs.inbar .dtab.on{background:var(--stage);border-color:var(--marker,#7B5CFF);color:var(--text)}
-  .appbar .doctabs.inbar .dtadd{margin:0 0 0 4px;height:30px;width:30px}
+  .appbar .doctabs.inbar .dtlist{flex:0 1 auto;gap:0;height:100%;align-items:flex-end}
+  .appbar .doctabs.inbar .dtab{top:1px;height:34px;flex:0 1 210px;min-width:90px;max-width:210px;padding:0 6px 0 12px;
+                               border:0;border-radius:8px 8px 0 0;background:transparent;color:var(--text-dim)}
+  .appbar .doctabs.inbar .dtab::before{content:"";position:absolute;left:0;top:9px;bottom:9px;width:1px;background:var(--line)}
+  .appbar .doctabs.inbar .dtab:first-child::before,.appbar .doctabs.inbar .dtab.on::before,
+  .appbar .doctabs.inbar .dtab.on + .dtab::before,.appbar .doctabs.inbar .dtab:hover::before,
+  .appbar .doctabs.inbar .dtab:hover + .dtab::before{display:none}
+  .appbar .doctabs.inbar .dtab:hover:not(.on){background:var(--hover,rgba(255,255,255,.06))}
+  .appbar .doctabs.inbar .dtab.on{background:var(--tab-on);color:var(--text);font-weight:600;z-index:1}
+  .appbar .doctabs.inbar .dtab .dtx:hover{background:rgba(127,127,127,.18)}
+  .appbar .doctabs.inbar .dtadd{margin:0 0 3px 4px;height:30px;width:30px;align-self:center}
   .dtmenu{position:fixed;z-index:200;min-width:180px;padding:5px;border-radius:8px;background:var(--chrome);
           border:1px solid var(--line);box-shadow:0 8px 24px rgba(0,0,0,.28);display:flex;flex-direction:column}
   .dtmenu[hidden]{display:none}
@@ -1137,7 +1144,9 @@
   :root{--appbar-h:0px}
   body.has-appbar{--appbar-h:40px}
   .appbar{position:fixed;top:0;left:0;right:0;z-index:300;height:var(--appbar-h);display:flex;align-items:center;gap:4px;
-          padding:0 0 0 8px;background:var(--chrome);border-bottom:1px solid var(--line);color:var(--text);
+          padding:0 0 0 8px;background:var(--tab-strip);border-bottom:1px solid var(--line);color:var(--text);
+          /* the strip, and a tab in it in view: the colour of the toolbar under it */
+          --tab-strip:var(--chrome-2);--tab-on:var(--chrome);
           font:13px/1 var(--sans);user-select:none;-webkit-user-select:none}
   body.has-appbar .app{margin-top:var(--appbar-h);height:calc(100dvh - var(--appbar-h))}
   /* what covers the whole window starts below the strip, so the strip (and

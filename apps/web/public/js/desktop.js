@@ -136,10 +136,13 @@
       });
     });
   }
-  api.newWindow = function (doc) {
+  /* at: a point on the screen for the window's top bar, where a tab dragged
+     out of the bar was let go of; else Windows places it */
+  api.newWindow = function (doc, at) {
     var key = Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    var pos = at && isFinite(at.x) && isFinite(at.y) ? { x: at.x, y: at.y } : { x: null, y: null };
     return handoffRun('readwrite', function (st) { st.put({ doc: doc, at: Date.now() }, key); })
-      .then(function () { return T.core.invoke('new_window', { handoff: key }); })
+      .then(function () { return T.core.invoke('new_window', { handoff: key, x: pos.x, y: pos.y }); })
       .catch(function (e) {
         handoffRun('readwrite', function (st) { st.delete(key); }).catch(function () {});
         throw e;
