@@ -32,6 +32,12 @@
 
   function base(p) { return String(p).split(/[\\/]/).pop() || 'document.pdf'; }
 
+  /* Several PDFs picked in Explorer and opened together reach the app one
+     by one (Windows starts it once per file; the first start takes the
+     others), often while the first is still loading. Until it has, the
+     others would replace it: they go to tabs of their own instead. */
+  var loading = null;
+
   function openPaths(paths) {
     if (!paths || !paths.length || !api) return;
     trace.received = trace.received.concat(paths);
@@ -55,13 +61,15 @@
       api.on('ready', function () {
         trace.opened = trace.opened.concat(files.map(function (f) { return f.name + ' (' + f.size + ' bytes)'; }));
         /* a document open: each in a tab of its own */
-        if (api.hasDoc() && api.tabs && api.tabs.available()) { api.tabs.openFiles(files); return; }
+        if ((api.hasDoc() || loading) && api.tabs && api.tabs.available()) { api.tabs.openFiles(files); return; }
         /* the picker asks before it replaces unsaved work; so does this */
         if (api.hasDoc() && !api.okToReplace()) {
           files.forEach(function (f) { if (f.adddotsRange != null) T.core.invoke('range_close', { id: f.adddotsRange }).catch(function () {}); });
           return;
         }
-        api.openFiles(files);
+        var mine = loading = Promise.resolve(api.openFiles(files)).catch(function () {}).then(function () {
+          if (loading === mine) loading = null;
+        });
       });
     }).catch(function (e) {
       fail('could not open', e);
@@ -156,14 +164,21 @@
       fail('handoff', e);
       if (api.toast) api.toast('The document could not be moved to this window');
     });
-  } else {
-    T.core.invoke('launch_files').then(function (paths) {
-      trace.launched = paths;
+  }
+  /* What has been handed over and not yet opened: the desktop side keeps
+     it until a page takes it, each path once. Asked at start, on each
+     `open-files`, and once more when this page is listening, for any that
+     came while it was still loading. */
+  function takePending(first) {
+    return T.core.invoke('launch_files').then(function (paths) {
+      if (first) trace.launched = paths;
       openPaths(paths);
     }, function (e) { fail('launch files', e); });
   }
+  if (!handoff) takePending(true);
   /* sent to this window only: a PDF handed over goes to the window used last */
   var me = T.webviewWindow && T.webviewWindow.getCurrentWebviewWindow ? T.webviewWindow.getCurrentWebviewWindow() : null;
-  if (me) me.listen('open-files', function (e) { openPaths(e.payload); });
-  else if (T.event) T.event.listen('open-files', function (e) { openPaths(e.payload); });
+  var onOpen = function () { takePending(false); };
+  var listening = me ? me.listen('open-files', onOpen) : T.event ? T.event.listen('open-files', onOpen) : null;
+  if (listening && listening.then) listening.then(onOpen, function (e) { fail('listen', e); });
 })();
