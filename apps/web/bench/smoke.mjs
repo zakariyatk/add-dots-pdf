@@ -2265,6 +2265,95 @@ try {
     await ctx.close();
   }
 
+  /* ---- the top bar's Create: New blank PDF; What is new; a mark nudged
+     by the arrow keys ---- */
+  {
+    const { ctx, page, errors } = await fresh(browser);
+    /* nothing open: Create, New blank PDF, A3 landscape, 2 pages, a colour */
+    await page.click('#abCreate');
+    await page.locator('.abpop .abitem', { hasText: 'New blank PDF' }).click();
+    await page.waitForSelector('#blankPop:not([hidden])', { timeout: 5000 }).catch(() => {});
+    const dlg = await page.evaluate(() => ({
+      title: document.getElementById('blankTitle').textContent,
+      whereHidden: document.getElementById('blankWhereBox').hidden,
+    }));
+    await page.selectOption('#blankSize', 'a3');
+    await page.selectOption('#blankOrient', 'l');
+    await page.fill('#blankQty', '2');
+    await page.$eval('#blankColors .swpick', (el) => {
+      el.value = '#fff4d6';
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    await page.click('#blankGo');
+    await page
+      .waitForFunction(() => window.ADDPDF.S.items.length === 2 && window.ADDPDF.S.items[0].rendered, null, {
+        timeout: 20000,
+      })
+      .catch(() => {});
+    const made = await page.evaluate(() => {
+      const it = window.ADDPDF.S.items[0];
+      const v = it.page ? it.page.view : [0, 0, 0, 0];
+      return {
+        name: window.ADDPDF.docName(),
+        pages: window.ADDPDF.S.items.length,
+        w: v[2] - v[0],
+        h: v[3] - v[1],
+      };
+    });
+    check(
+      'Create, New blank PDF: a document of the size, turn and number of pages chosen',
+      dlg.title === 'New Blank PDF' &&
+        dlg.whereHidden &&
+        made.pages === 2 &&
+        Math.abs(made.w - 1190.55) < 1 &&
+        Math.abs(made.h - 841.89) < 1,
+      { dlg, made },
+    );
+
+    /* What is new: the version in use, and this build */
+    await page.click('#abNews');
+    const news = await page.evaluate(() => {
+      const b = document.getElementById('abVer');
+      return {
+        ver: b && b.textContent,
+        build: (document.querySelector('.abver small') || {}).textContent || '',
+      };
+    });
+    await page.click('#abNews');
+    check('What is new shows the version in use and the build', /version/i.test(news.ver || ''), news);
+
+    /* a mark selected: 5 x Right and Shift+Down move it 5 pt and 10 pt; one undo takes the run back */
+    await page.evaluate(() => {
+      const X = window.ADDPDF;
+      const it = X.S.items[0];
+      X.snapshot();
+      it.shapes.push({ t: 'rect', a: [100, 300], b: [200, 400], c: '#E2483D', w: 1 });
+      X.S.sel = { it: it, i: it.shapes.length - 1 };
+      X.drawShapes(it);
+      document.getElementById('stage').focus();
+    });
+    for (let i = 0; i < 5; i++) await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('Shift+ArrowDown');
+    const nudged = await page.evaluate(() => {
+      const X = window.ADDPDF;
+      return { a: X.S.items[0].shapes.at(-1).a, page: X.S.current };
+    });
+    await page.waitForTimeout(900);
+    await page.keyboard.press('Control+z');
+    const undone = await page.evaluate(() => window.ADDPDF.S.items[0].shapes.at(-1).a);
+    check(
+      'a selected mark moves by the arrow keys (Shift: 10 pt), and one undo takes the run back',
+      nudged.a[0] === 105 &&
+        nudged.a[1] === 290 &&
+        nudged.page === 1 &&
+        undone[0] === 100 &&
+        undone[1] === 300,
+      { nudged, undone },
+    );
+    check('no errors on the page', errors.length === 0, errors);
+    await ctx.close();
+  }
+
   /* ---- Print: the document made into a PDF, shown in a frame by the
      browser's PDF viewer, and that frame printed: a website has no Print
      dialog of its own, only the browser's (CI runs Chrome, which has one;

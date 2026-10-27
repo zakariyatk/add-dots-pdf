@@ -23,7 +23,9 @@
 
   const T = window.__TAURI__;
   const win = T && T.window && T.window.getCurrentWindow ? T.window.getCurrentWindow() : null;
-  const BUILD = window.ADDDOTS_BUILD || null;
+  /* which build this is (js/build.js): read when asked, as build.js loads
+     after this file */
+  const build = function () { return window.ADDDOTS_BUILD || null; };
   const NEWS = 'adddots.news.seen';
 
   const ic = function (p) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>'; };
@@ -37,6 +39,7 @@
       '<circle cx="6" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="18" cy="12" r="1.6" fill="currentColor"/>' +
       '<circle cx="6" cy="18" r="1.6" fill="currentColor"/><circle cx="12" cy="18" r="1.6" fill="currentColor"/><circle cx="18" cy="18" r="1.6" fill="currentColor"/>'),
     open: ic('<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1"/><path d="M3 7v11a1 1 0 0 0 1 1h14.5a1 1 0 0 0 1-.8L21.5 11H7.2a1 1 0 0 0-1 .8L4 19"/>'),
+    blank: ic('<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/>'),
     combine: ic('<rect x="3" y="3" width="8" height="10" rx="1"/><rect x="13" y="11" width="8" height="10" rx="1"/><path d="M11 8h4v3"/><polyline points="13 9 15 11 17 9"/>'),
     save: ic('<path d="M5 3h11l4 4v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V5a2 2 0 0 1 1-2z"/><rect x="8" y="3" width="7" height="5"/><rect x="7" y="13" width="10" height="8"/>'),
     saveas: ic('<path d="M5 3h11l4 4v5"/><path d="M4 5v14a2 2 0 0 0 2 2h5"/><rect x="8" y="3" width="7" height="5"/><path d="M14 21l1-3 5-5 2 2-5 5z"/>'),
@@ -271,6 +274,10 @@
 
   $b('abCreate').addEventListener('click', function () {
     menu(this, [
+      { label: 'New blank PDF…', icon: ICON.blank, act: function () {
+        /* after this click, or the page's click-outside closes it at once */
+        if (X.openNewPdfDialog) setTimeout(function () { X.openNewPdfDialog($b('abCreate')); }, 0);
+      } },
       { label: 'Combine files', icon: ICON.combine, act: function () {
         const c = docWin().document.querySelector('#toolGrid .tcard[data-tool="merge"]');
         if (c) c.click();
@@ -292,20 +299,43 @@
 
   /* ---------------- What is new ---------------- */
 
-  const notes = BUILD && BUILD.notes && BUILD.notes.length ? BUILD.notes : null;
-  if (notes && get(NEWS) !== BUILD.id) bar.querySelector('.abdot').hidden = false;
+  /* the version in use: in the Windows app the Store's number (1.0.N) or
+     the setup's (src-tauri app_version); on the website, the build */
+  let ver = null;
+  function version() {
+    if (!ver) {
+      ver = T && T.core
+        ? T.core.invoke('app_version').then(function (v) { return 'Version ' + v; }, function () { return 'Windows app'; })
+        : Promise.resolve('Web version');
+    }
+    return ver;
+  }
+
+  const notesOf = function (B) { return B && B.notes && B.notes.length ? B.notes : null; };
+  /* the dot: notes this build has that have not been read */
+  X.on('ready', function () {
+    const B = build();
+    if (notesOf(B) && get(NEWS) !== B.id) bar.querySelector('.abdot').hidden = false;
+  });
 
   $b('abNews').addEventListener('click', function () {
+    const BUILD = build(), notes = notesOf(BUILD);
     let when = '';
     if (BUILD && BUILD.time) {
       const d = new Date(BUILD.time);
       if (!isNaN(d)) when = d.toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' });
     }
     const html = '<div class="abhead">What is new' + (when ? '<small>' + esc(when) + '</small>' : '') + '</div>' +
+      '<div class="abver"><b id="abVer">Version …</b>' +
+      (BUILD && BUILD.id ? '<small>Build ' + esc(BUILD.id) + (when ? ' · ' + esc(when) : '') + '</small>' : '') + '</div>' +
       (notes
         ? '<ul class="abnews">' + notes.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>'
         : '<p class="abnone">You have the latest version.</p>');
     menu(this, null, { html: html, right: true, cls: 'abwide', focus: false });
+    version().then(function (v) {
+      const b = document.getElementById('abVer');
+      if (b) b.textContent = v;
+    });
     if (notes) { set(NEWS, BUILD.id); bar.querySelector('.abdot').hidden = true; }
   });
 

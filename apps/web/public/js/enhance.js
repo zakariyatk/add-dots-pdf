@@ -24,7 +24,9 @@
     const SIZES = [
       ['a4', 'A4 (210x297 mm)', 210, 297], ['a3', 'A3 (297x420 mm)', 297, 420],
       ['a5', 'A5 (148x210 mm)', 148, 210], ['letter', 'Letter (216x279 mm)', 215.9, 279.4],
-      ['legal', 'Legal (216x356 mm)', 215.9, 355.6], ['tabloid', 'Tabloid (279x432 mm)', 279.4, 431.8]
+      ['legal', 'Legal (216x356 mm)', 215.9, 355.6], ['tabloid', 'Tabloid (279x432 mm)', 279.4, 431.8],
+      /* drawing sheets */
+      ['a2', 'A2 (420x594 mm)', 420, 594], ['a1', 'A1 (594x841 mm)', 594, 841], ['a0', 'A0 (841x1189 mm)', 841, 1189]
     ];
     const BLANK_COLORS = ['#FFFFFF', '#F5F5F0', '#FDF6E3', '#EAF2FF', '#111214'];
     const BLANK_MAX = 2000;
@@ -44,8 +46,20 @@
         });
         host.appendChild(b);
       });
+      /* any other colour */
+      const pick = document.createElement('input');
+      pick.type = 'color'; pick.className = 'swpick'; pick.value = '#FFFFFF';
+      pick.title = 'Another colour'; pick.setAttribute('aria-label', 'Another background colour');
+      pick.style.cssText = 'width:30px;height:26px;padding:0 2px;border:1px solid var(--line);border-radius:6px;background:none;cursor:pointer';
+      pick.addEventListener('input', function () {
+        host.querySelectorAll('.sw').forEach(function (x) { x.classList.remove('on'); });
+        pick.classList.add('on');
+      });
+      host.appendChild(pick);
     }
     function blankColor() {
+      const pick = $('blankColors').querySelector('.swpick.on');
+      if (pick) return pick.value.toUpperCase();
       const on = $('blankColors').querySelector('.sw.on');
       return on ? on.dataset.c : '#FFFFFF';
     }
@@ -58,11 +72,11 @@
       return (it.page.rotate + (it.rot || 0)) % 180 ? [h, w] : [w, h];
     }
 
-    /* the size list, its first entry the page on screen */
+    /* the size list, its first entry the page on screen (none for a new PDF) */
     function fillSizes() {
       const cur = currentPageSize();
       $('blankSize').innerHTML =
-        '<option value="default">Default (' + mm(cur[0]) + 'x' + mm(cur[1]) + ' mm)</option>' +
+        (blankNew ? '' : '<option value="default">Default (' + mm(cur[0]) + 'x' + mm(cur[1]) + ' mm)</option>') +
         SIZES.map(function (z) { return '<option value="' + z[0] + '">' + z[1] + '</option>'; }).join('') +
         '<option value="custom">Custom</option>';
     }
@@ -152,7 +166,49 @@
       return true;
     }
 
+    /* ---- New blank PDF (the top bar's Create): the same dialog, without
+       "Insert to"; Create opens the pages made as a document of their own
+       (a tab of its own when one is open) ---- */
+    let blankNew = false;
+    function blankMode(isNew) {
+      blankNew = isNew;
+      $('blankTitle').textContent = isNew ? 'New Blank PDF' : 'Insert Blank Page';
+      $('blankPop').setAttribute('aria-label', isNew ? 'New blank PDF' : 'Insert blank page');
+      $('blankWhereHead').hidden = $('blankWhereBox').hidden = isNew;
+      $('blankGo').textContent = isNew ? 'Create' : 'Confirm';
+    }
+    async function newBlankPdf() {
+      const wmm = parseFloat($('blankW').value), hmm = parseFloat($('blankH').value);
+      if (!(wmm >= 10 && hmm >= 10 && wmm <= 5000 && hmm <= 5000)) { $('blankNote').textContent = 'Width and height: 10 to 5000 mm.'; return false; }
+      const qty = Math.min(BLANK_MAX, Math.max(1, parseInt($('blankQty').value, 10) || 1));
+      const w = wmm * MM, h = hmm * MM;
+      const color = blankColor();
+      const fill = color.toUpperCase() === '#FFFFFF' ? null : X.hexRgb(color);
+      const d = await PDFLib.PDFDocument.create();
+      for (let i = 0; i < qty; i++) {
+        const page = d.addPage([w, h]);
+        if (fill) page.drawRectangle({ x: 0, y: 0, width: w, height: h, color: fill });
+      }
+      const file = new File([await d.save()], 'Untitled.pdf', { type: 'application/pdf' });
+      X.closePops();
+      if (X.hideHome && X.homeShown && X.homeShown() && S.items.length) X.hideHome();
+      await X.openFiles([file]);
+      return true;
+    }
+    X.openNewPdfDialog = function (anchor) {
+      blankMode(true);
+      paintBlankColors();
+      fillSizes();
+      $('blankSize').value = 'a4';
+      $('blankOrient').value = 'p';
+      applySize();
+      $('blankQty').value = '1';
+      $('blankNote').textContent = '';
+      X.openPop ? X.openPop('blankPop', anchor || $('btnOpen')) : ($('blankPop').hidden = false);
+    };
+
     X.openBlankPageDialog = function () {
+      blankMode(false);
       paintBlankColors();
       fillSizes();
       $('blankSize').value = 'default';
@@ -169,6 +225,7 @@
     $('blankCancel').addEventListener('click', function () { X.closePops(); });
     $('blankX').addEventListener('click', function () { X.closePops(); });
     $('blankGo').addEventListener('click', async function () {
+      if (blankNew) { await newBlankPdf(); return; }
       if (await addBlankPages()) X.closePops();
     });
     ['blankW', 'blankH', 'blankQty', 'blankPages'].forEach(function (id) {

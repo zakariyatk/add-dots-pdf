@@ -55,6 +55,13 @@ mod win {
         Ok(Some(list.Size().map_err(e)? > 0))
     }
 
+    /// The installed package's version (1.0.N, as the Store has it); none
+    /// for the setup .exe.
+    pub fn version() -> Option<String> {
+        let v = Package::Current().ok()?.Id().ok()?.Version().ok()?;
+        Some(format!("{}.{}.{}", v.Major, v.Minor, v.Build))
+    }
+
     /// Downloads and installs the Store's update. The request starts on the
     /// window's own thread (`on_main`), as the Store's dialog is owned by
     /// the window `hwnd`; this thread waits for it to finish.
@@ -111,5 +118,18 @@ pub fn available() -> Result<Option<bool>, String> {
     #[cfg(not(windows))]
     {
         Ok(None)
+    }
+}
+
+/// This install's version as the Store numbers it: `None` when this is not
+/// a Store install (or off Windows).
+pub fn version() -> Option<String> {
+    #[cfg(windows)]
+    {
+        win::version()
+    }
+    #[cfg(not(windows))]
+    {
+        None
     }
 }

@@ -2503,6 +2503,31 @@
     S.sel = { it: it, i: idx[idx.length - 1] };
     S.multi = idx.length > 1 ? { it: it, idx: idx, n: it.shapes.length } : null;
   }
+  /* the selected marks moved by an arrow key, `step` points on the page as
+     it is seen (turned with it); a run of presses is one undo */
+  let nudgedAt = 0;
+  function nudgeSelected(key, step) {
+    const it = S.sel.it, vp = it.vp;
+    const idx = selList().filter(function (i) { return it.shapes[i] && !NOT_SELECTABLE[it.shapes[i].t]; });
+    if (!idx.length || !vp) return;
+    const dx = key === 'ArrowLeft' ? -1 : key === 'ArrowRight' ? 1 : 0;
+    const dy = key === 'ArrowUp' ? -1 : key === 'ArrowDown' ? 1 : 0;
+    /* the screen's direction in page points, whatever the page's turn */
+    const o0 = vp.convertToPdfPoint(0, 0), o1 = vp.convertToPdfPoint(dx * vp.scale, dy * vp.scale);
+    /* exact steps: the conversion's last-digit noise would build up */
+    const r6 = function (n) { return Math.round(n * 1e6) / 1e6; };
+    const mx = r6((o1[0] - o0[0]) * step), my = r6((o1[1] - o0[1]) * step);
+    if (Date.now() - nudgedAt > 800) snapshot();
+    nudgedAt = Date.now();
+    idx.forEach(function (i) {
+      const s = it.shapes[i];
+      moveShape(s, JSON.parse(JSON.stringify(s)), mx, my);
+    });
+    drawShapes(it);
+    drawThumb(it);
+    updateMeta();
+    syncMarkPop();
+  }
   /** Move one mark by (mx, my) from its state o — every kind of point it has. */
   function moveShape(s, o, mx, my) {
     if (o.a) s.a = [o.a[0] + mx, o.a[1] + my];
@@ -2733,7 +2758,7 @@
     if (EXT.snapHide) EXT.snapHide();
     if (d.moved) { drawShapes(d.it); updateMeta(); }
     syncMarkPop();
-    if (!d.moved) toast('Mark selected · drag to move, corners to resize, ↻ to turn, <b>Delete</b> to remove');
+    if (!d.moved) toast('Mark selected · drag or the arrow keys to move, corners to resize, ↻ to turn, <b>Delete</b> to remove');
   }
   document.addEventListener('pointermove', dragMove);
   document.addEventListener('pointerup', dragEnd);
@@ -8858,6 +8883,14 @@
        not the Crop tool), so a held modifier here falls through untouched
        rather than hijacking it */
     if (mod) return;
+
+    /* a mark selected: the arrow keys move it, 1 pt a press (10 with
+       Shift), as Acrobat nudges an object; one undo takes back a run */
+    if (/^Arrow/.test(e.key) && S.sel && S.sel.it && S.tool === 'select' && !e.altKey) {
+      e.preventDefault();
+      nudgeSelected(e.key, e.shiftKey ? 10 : 1);
+      return;
+    }
 
     switch (e.key) {
       case 'ArrowRight': case 'PageDown': case 'j': e.preventDefault(); goTo(S.current + pageStep()); break;

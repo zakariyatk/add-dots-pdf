@@ -651,6 +651,14 @@ fn open_site(name: String) -> Result<(), String> {
     }
 }
 
+/// This app's version, for "What is new": the Store package's (1.0.N, a
+/// higher N each release) when it is one, else the setup .exe's, from
+/// tauri.conf.json.
+#[tauri::command]
+fn app_version(app: tauri::AppHandle) -> String {
+    store::version().unwrap_or_else(|| app.package_info().version.to_string())
+}
+
 /// Whether the Microsoft Store has a newer version of this app; null when
 /// this is not a Store install, such as the setup .exe (store.rs).
 #[tauri::command]
@@ -726,6 +734,7 @@ pub fn run() {
             open_store,
             open_site,
             store_update,
+            app_version,
             store_install,
             new_window,
             pdf_native_status,
