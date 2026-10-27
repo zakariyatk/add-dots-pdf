@@ -332,9 +332,17 @@ fn build_window(app: &tauri::AppHandle, config: &tauri::utils::config::WindowCon
 
 /// A tab moved to a window of its own: the window opens the document the
 /// page put away under `handoff` (js/tabs.js). The name is all it is given,
-/// and only a short one of letters and digits is taken.
+/// and only a short one of letters and digits is taken. A tab dragged out of
+/// the bar gives where it was let go of (`x`, `y`, on the screen): the new
+/// window opens there, under the pointer, as Acrobat's does.
 #[tauri::command]
-fn new_window(app: tauri::AppHandle, handoff: String, state: tauri::State<'_, Opened>) -> Result<(), String> {
+fn new_window(
+    app: tauri::AppHandle,
+    handoff: String,
+    x: Option<f64>,
+    y: Option<f64>,
+    state: tauri::State<'_, Opened>,
+) -> Result<(), String> {
     if handoff.is_empty() || handoff.len() > 40 || !handoff.chars().all(|c| c.is_ascii_alphanumeric()) {
         return Err("not a document to move".into());
     }
@@ -342,6 +350,14 @@ fn new_window(app: tauri::AppHandle, handoff: String, state: tauri::State<'_, Op
     let mut config = main_config(&app);
     config.label = format!("doc-{n}");
     config.url = tauri::WebviewUrl::App(format!("index.html?handoff={handoff}").into());
+    if let (Some(x), Some(y)) = (x, y) {
+        if x.is_finite() && y.is_finite() {
+            // the pointer over the new window's top bar, a little in from its left
+            config.center = false;
+            config.x = Some((x - 160.0).max(0.0));
+            config.y = Some((y - 16.0).max(0.0));
+        }
+    }
     build_window(&app, &config).map_err(|e| e.to_string())
 }
 

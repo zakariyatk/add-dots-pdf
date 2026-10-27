@@ -14,6 +14,12 @@
    two. A tab says what it holds (name, unsaved changes) to the bar; closing
    one with unsaved changes asks first.
 
+   As in Acrobat, Home is not a tab: the house button in the top bar shows
+   it, with no tab in view, and the app itself has a tab only while it holds
+   a document. Closing a tab closes that one document and no other, and the
+   tab beside it comes into view (the next one, else the one before); the
+   last one closed leaves Home.
+
    In the Windows app a PDF opened from Explorer gets a tab too, and a tab
    can be moved to a window of its own, as in Acrobat: drag it down out of
    the bar, or right-click it, "Move to new window". It goes with its
@@ -90,6 +96,8 @@
   X.on('ready', function () {
     const $ = X.$;
     let seq = 0, active = 0;
+    /* a tab being dragged: { id, x, y, el, on, pid, moved } */
+    let tear = null;
     /* tab 0 is the app itself; the others are frames */
     const tabs = [{ id: 0, frame: null, name: '', dirty: false, el: null }];
 
@@ -111,6 +119,12 @@
     document.body.appendChild(host);
 
     function byId(id) { return tabs.filter(function (t) { return t.id === id; })[0]; }
+    /* As in Acrobat, Home is not a tab: the app itself shows a tab only while
+       it holds a document, and the house button in the top bar goes Home */
+    function shown(t) { return t.id !== 0 || X.hasDoc(); }
+    function visible() { return tabs.filter(shown); }
+    /* on Home, no tab is the one in view */
+    function atHome() { return active === 0 && X.homeShown(); }
     function label(t) {
       if (t.id === 0) return X.hasDoc() ? X.docName() : 'Home';
       return t.name || 'Opening…';
@@ -135,34 +149,52 @@
     function paint() {
       const inAb = place();
       /* in the top bar a document shows its tab from the first one on */
-      bar.hidden = !(tabs.length > 1 || (inAb && X.hasDoc()));
+      const vis = visible();
+      bar.hidden = !(vis.length > 1 || (inAb && vis.length));
       document.body.classList.toggle('has-doctabs', !bar.hidden);
       document.documentElement.style.setProperty('--doctabs-h', bar.hidden || inAb ? '0px' : bar.offsetHeight + 'px');
-      list.innerHTML = '';
+      const home = atHome();
+      /* Each tab keeps its element: one made again under the pointer would
+         lose the click on its × or a drag under way. Only what changed is
+         changed, and the order only when a tab is not being dragged. */
       tabs.forEach(function (t) {
-        const b = document.createElement('div');
-        b.className = 'dtab' + (t.id === active ? ' on' : '') + (dirtyOf(t) ? ' dirty' : '');
-        b.setAttribute('role', 'tab');
-        b.setAttribute('aria-selected', t.id === active ? 'true' : 'false');
-        b.tabIndex = 0;
-        b.dataset.id = t.id;
-        const name = label(t);
-        b.title = name + (dirtyOf(t) ? ' — unsaved changes' : '') +
-          (X.newWindow ? '\nDrag it down out of the bar, or right-click it, to move it to a window of its own' : '');
-        b.innerHTML = '<svg viewBox="0 0 24 24" class="dtico"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>' +
-          '<span class="dtname"></span><i class="dtdot" aria-hidden="true"></i>' +
-          (t.id === 0 && !X.hasDoc() ? '' :
+        if (t.el && (!shown(t) || tabs.indexOf(t) < 0)) { t.el.remove(); t.el = null; }
+      });
+      Array.prototype.slice.call(list.children).forEach(function (b) {
+        if (!vis.some(function (t) { return t.el === b; })) b.remove();
+      });
+      vis.forEach(function (t, i) {
+        const on = t.id === active && !home;
+        let b = t.el;
+        if (!b) {
+          b = document.createElement('div');
+          b.setAttribute('role', 'tab');
+          b.tabIndex = 0;
+          b.dataset.id = t.id;
+          b.innerHTML = '<svg viewBox="0 0 24 24" class="dtico"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>' +
+            '<span class="dtname"></span><i class="dtdot" aria-hidden="true"></i>' +
             /* not a button of its own: a tab holds nothing focusable. Delete
                or Ctrl+W close the tab from the keyboard */
-            '<span class="dtx" aria-hidden="true" title="Close">&times;</span>');
-        b.querySelector('.dtname').textContent = name;
-        list.appendChild(b);
-        t.el = b;
+            '<span class="dtx" aria-hidden="true" title="Close">&times;</span>';
+          t.el = b;
+        }
+        const cls = 'dtab' + (on ? ' on' : '') + (dirtyOf(t) ? ' dirty' : '') + (b.classList.contains('tearing') ? ' tearing' : '');
+        if (b.className !== cls) b.className = cls;
+        b.setAttribute('aria-selected', on ? 'true' : 'false');
+        const name = label(t);
+        const tip = name + (dirtyOf(t) ? ' — unsaved changes' : '') +
+          (X.newWindow ? '\nDrag it down out of the bar, or right-click it, to move it to a window of its own' : '');
+        if (b.title !== tip) b.title = tip;
+        const nm = b.querySelector('.dtname');
+        if (nm.textContent !== name) nm.textContent = name;
+        if (list.children[i] !== b && !(tear && tear.on)) list.insertBefore(b, list.children[i] || null);
       });
     }
 
     function select(id) {
       const t = byId(id); if (!t) return;
+      /* the app's own tab, picked while Home covers it: its document */
+      if (id === 0 && X.hasDoc() && X.homeShown()) X.hideHome();
       active = id;
       tabs.forEach(function (x) { if (x.frame) x.frame.hidden = x.id !== id; });
       host.hidden = id === 0;
@@ -186,31 +218,44 @@
       return t;
     }
 
-    /* force: no question about unsaved work (it has gone to another window) */
+    /* Home, as the house button in the top bar has it: the app's own page,
+       with no tab in view */
+    function goHome() {
+      active = 0;
+      tabs.forEach(function (x) { if (x.frame) x.frame.hidden = true; });
+      host.hidden = true;
+      document.body.classList.remove('doctab-away');
+      if (!X.homeShown()) X.showHome();
+      paint();
+    }
+
+    /* Closes that tab and no other. The one in view goes to the tab beside
+       it, the next one or else the one before, as in Acrobat; with none
+       left, Home. force: no question about unsaved work (it has gone to
+       another window) */
     function close(id, force) {
-      const t = byId(id); if (!t) return;
+      const t = byId(id); if (!t || !shown(t)) return;
       if (!force && dirtyOf(t) && !confirm('Close "' + label(t) + '"? Its unsaved changes will be lost.')) return;
-      const at = tabs.indexOf(t);
+      const vis = visible(), at = vis.indexOf(t);
+      const next = vis[at + 1] || vis[at - 1] || null;
       if (id === 0) {
-        /* the app itself stays, as the Home tab: its document is put away */
-        if (X.hasDoc() && X.closeDocument) X.closeDocument();
-        if (active === 0 && tabs.length > 1) select(tabs[1].id); else paint();
-        return;
+        /* the app itself stays, out of the bar until it opens another document */
+        if (X.closeDocument) X.closeDocument();
+      } else {
+        tabs.splice(tabs.indexOf(t), 1);
+        if (t.frame) t.frame.remove();
       }
-      tabs.splice(at, 1);
-      if (t.frame) t.frame.remove();
-      if (active === id) {
-        const next = tabs[Math.min(at, tabs.length - 1)] || tabs[0];
-        select(next.id);
-      } else paint();
+      if (active !== id) { paint(); return; }
+      if (next) select(next.id); else goHome();
     }
 
     /* ---- a tab to a window of its own (the Windows app) ---- */
     function canDetach(id) {
       const t = byId(id);
-      return !!(X.newWindow && t && tabs.length > 1 && (id !== 0 || X.hasDoc()) && (id === 0 || t.ready));
+      return !!(X.newWindow && t && shown(t) && visible().length > 1 && (id === 0 || t.ready));
     }
-    function detach(id) {
+    /* at: where on the screen it was let go of, for the window to open there */
+    function detach(id, at) {
       if (!canDetach(id)) return;
       const t = byId(id);
       const W = id === 0 ? X : t.frame.contentWindow && t.frame.contentWindow.ADDPDF;
@@ -218,7 +263,7 @@
       let d;
       try { d = W.exportSession(); } catch (e) { X.toast('That document could not be moved'); return; }
       d.name = label(t);
-      X.newWindow(d).then(function () {
+      X.newWindow(d, at).then(function () {
         try { W.forgetSession(); } catch (e) { /* its record goes stale and is dropped */ }
         close(id, true);
       }, function (e) {
@@ -254,7 +299,7 @@
 
     /* dragged along the bar, a tab changes places with the others; dragged
        well clear of it, it tears off into a window */
-    let tear = null;
+    /* (declared with the tabs: paint() leaves the order alone while one is dragged) */
     list.addEventListener('pointerdown', function (e) {
       const tab = e.target.closest('.dtab');
       if (!tab || e.button !== 0 || e.target.closest('.dtx')) return;
@@ -293,7 +338,7 @@
       if (!tear || e.pointerId !== tear.pid) return;
       const t = tear; tear = null;
       t.el.classList.remove('tearing');
-      if (t.on && away(e) && canDetach(t.id)) { suppressClick = true; detach(t.id); }
+      if (t.on && away(e) && canDetach(t.id)) { suppressClick = true; detach(t.id, { x: e.screenX, y: e.screenY }); }
       else if (t.moved) suppressClick = true;
     });
     let suppressClick = false;
@@ -349,26 +394,37 @@
 
     /* the app's own name and changes follow its document (and in the top
        bar, its tab shows as soon as it has one) */
-    let lastHost = '';
+    let lastHost = '', hadDoc = X.hasDoc(), closedOnce = false;
     setInterval(function () {
       const host0 = byId(0);
-      const k = label(host0) + '|' + dirtyOf(host0) + '|' + X.hasDoc();
+      /* a document opened in the app itself after its first one was closed
+         (from Home, or from Explorer with Home behind another tab): its tab
+         joins the end of the bar, in view, as a new tab does. The first
+         document, still opening as others arrive, keeps the first place. */
+      if (hadDoc && !X.hasDoc()) closedOnce = true;
+      if (X.hasDoc() && !hadDoc && closedOnce && tabs.length > 1) {
+        tabs.push(tabs.splice(tabs.indexOf(host0), 1)[0]);
+        select(0);
+      }
+      hadDoc = X.hasDoc();
+      const k = label(host0) + '|' + dirtyOf(host0) + '|' + X.hasDoc() + '|' + X.homeShown();
       if (k !== lastHost) { lastHost = k; paint(); }
-    }, 700);
+    }, 300);
 
     /* the keys Acrobat has: Ctrl+Tab and Ctrl+Page Down to the next tab,
        with Shift or Page Up to the one before; Ctrl+W and Ctrl+F4 close the
        tab in view. The Windows app only, as is dragging tabs to reorder them. */
     function tabKey(k) {
       if (k === 'close') {
-        if (tabs.length > 1 || X.hasDoc()) close(active);
+        if (!atHome()) close(active);
         return;
       }
-      if (tabs.length < 2) return;
-      const at = tabs.indexOf(byId(active));
-      const n = (at + (k === 'next' ? 1 : -1) + tabs.length) % tabs.length;
-      select(tabs[n].id);
-      if (tabs[n].el) tabs[n].el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+      const vis = visible();
+      if (!vis.length || (vis.length < 2 && !atHome())) return;
+      const at = atHome() ? -1 : vis.indexOf(byId(active));
+      const n = (at + (k === 'next' ? 1 : at < 0 ? 0 : -1) + vis.length) % vis.length;
+      select(vis[n].id);
+      if (vis[n].el) vis[n].el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
     X.tabKeyOf = function (e) {
       if (!DESK || !e.ctrlKey || e.altKey || e.metaKey) return null;
@@ -380,7 +436,7 @@
     };
     document.addEventListener('keydown', function (e) {
       const k = X.tabKeyOf(e);
-      if (!k || (k !== 'close' && tabs.length < 2)) return;
+      if (!k || (k !== 'close' && visible().length < 2 && !atHome())) return;
       e.preventDefault(); e.stopPropagation();
       tabKey(k);
     }, true);
@@ -401,9 +457,11 @@
         const pdfs = (files || []).filter(function (f) { return /\.pdf$/i.test(f.name || '') || f.type === 'application/pdf'; });
         if (pdfs.length) newTab(pdfs, true);
       },
-      list: function () { return tabs.map(function (t) { return { id: t.id, name: label(t), dirty: dirtyOf(t), active: t.id === active }; }); },
+      list: function () { return visible().map(function (t) { return { id: t.id, name: label(t), dirty: dirtyOf(t), active: t.id === active && !atHome() }; }); },
       select: select,
       close: close,
+      /* the top bar's house button, with documents in tabs */
+      home: goHome,
       frame: function (id) { const t = byId(id); return t && t.frame; }
     };
     window.addEventListener('resize', function () { if (!bar.hidden) paint(); });

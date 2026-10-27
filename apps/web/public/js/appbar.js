@@ -261,6 +261,8 @@
   /* ---------------- Home ---------------- */
 
   $b('abHome').addEventListener('click', function () {
+    /* with documents in tabs, Home is the app's own, with no tab in view, as in Acrobat */
+    if (X.tabs && X.tabs.home && X.tabs.list().length) { X.tabs.home(); paintHome(); return; }
     const A = docWin().ADDPDF;
     if (A && A.homeShown && A.homeShown()) return;
     press('btnHome');
