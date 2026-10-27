@@ -165,6 +165,107 @@
       if (api.toast) api.toast('The document could not be moved to this window');
     });
   }
+  /* ---- Explorer's "Combine files in Add Dots PDF" ----
+     Explorer starts the app once for each PDF picked (src-tauri is_combine),
+     so they arrive one by one: they are gathered until none has come for a
+     moment, then listed in order, as Acrobat's Combine Files does, to be
+     moved up or down or left out, and combined into one document (a tab of
+     its own when one is open). The bytes are read whole: they are joined. */
+  var gathered = [], gatherTimer = null, cmb = null;
+  function byName(a, b) { return base(a).localeCompare(base(b), undefined, { numeric: true, sensitivity: 'base' }); }
+  function takeCombine() {
+    return T.core.invoke('combine_files').then(function (paths) {
+      if (!paths || !paths.length) return;
+      trace.received = trace.received.concat(paths);
+      paths.forEach(function (p) { if (gathered.indexOf(p) < 0) gathered.push(p); });
+      clearTimeout(gatherTimer);
+      gatherTimer = setTimeout(function () {
+        var list = gathered.sort(byName);
+        gathered = [];
+        api.on('ready', function () { showCombine(list); });
+      }, 900);
+    }, function (e) { fail('combine files', e); });
+  }
+
+  function combineDialog() {
+    if (cmb) return cmb;
+    var el = document.createElement('div');
+    el.className = 'docmodal'; el.id = 'cmbModal'; el.hidden = true;
+    el.innerHTML = '<div class="docbox cmbbox" role="dialog" aria-modal="true" aria-labelledby="cmbTitle">' +
+      '<header><b id="cmbTitle">Combine Files</b><span class="grow"></span>' +
+      '<button class="x" id="cmbClose" type="button" aria-label="Close">&times;</button></header>' +
+      '<div class="docbody"><p class="cmbnote">Joined into one PDF in this order. Move a file up or down, or leave it out.</p>' +
+      '<ol class="cmblist" id="cmbList"></ol></div>' +
+      '<footer><button class="btn" id="cmbSort" type="button">Sort by name</button>' +
+      '<span class="docnote" id="cmbNote"></span><span class="grow"></span>' +
+      '<button class="btn" id="cmbCancel" type="button">Cancel</button>' +
+      '<button class="btn primary" id="cmbGo" type="button">Combine</button></footer></div>';
+    document.body.appendChild(el);
+    cmb = { el: el, list: [], busy: false };
+    var $c = function (id) { return el.querySelector('#' + id); };
+    function close() { if (!cmb.busy) { el.hidden = true; cmb.list = []; } }
+    $c('cmbClose').addEventListener('click', close);
+    $c('cmbCancel').addEventListener('click', close);
+    el.addEventListener('mousedown', function (e) { if (e.target === el) close(); });
+    el.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopPropagation(); close(); } });
+    $c('cmbSort').addEventListener('click', function () { cmb.list.sort(byName); paintCombine(); });
+    $c('cmbList').addEventListener('click', function (e) {
+      var b = e.target.closest('button'); if (!b) return;
+      var i = +b.dataset.i, L = cmb.list;
+      if (b.dataset.a === 'up' && i > 0) L.splice(i - 1, 0, L.splice(i, 1)[0]);
+      else if (b.dataset.a === 'down' && i < L.length - 1) L.splice(i + 1, 0, L.splice(i, 1)[0]);
+      else if (b.dataset.a === 'out') L.splice(i, 1);
+      paintCombine();
+      var again = el.querySelector('#cmbList button[data-a="' + b.dataset.a + '"][data-i="' +
+        Math.max(0, Math.min(L.length - 1, b.dataset.a === 'up' ? i - 1 : b.dataset.a === 'down' ? i + 1 : i)) + '"]');
+      if (again) again.focus();
+    });
+    $c('cmbGo').addEventListener('click', combineNow);
+    return cmb;
+  }
+  function paintCombine() {
+    var el = cmb.el, L = cmb.list;
+    el.querySelector('#cmbList').innerHTML = L.map(function (p, i) {
+      return '<li><span class="cmbname" title="' + api.esc(p) + '">' + api.esc(base(p)) + '</span>' +
+        '<button type="button" class="btn" data-a="up" data-i="' + i + '" aria-label="Move up" title="Move up"' + (i ? '' : ' disabled') + '>&uarr;</button>' +
+        '<button type="button" class="btn" data-a="down" data-i="' + i + '" aria-label="Move down" title="Move down"' + (i < L.length - 1 ? '' : ' disabled') + '>&darr;</button>' +
+        '<button type="button" class="btn" data-a="out" data-i="' + i + '" aria-label="Leave out" title="Leave out">&times;</button></li>';
+    }).join('');
+    el.querySelector('#cmbNote').textContent = L.length + (L.length === 1 ? ' file' : ' files');
+    el.querySelector('#cmbGo').disabled = L.length < 2 || cmb.busy;
+  }
+  function showCombine(paths) {
+    var c = combineDialog();
+    /* more picked while it is open: added at the end */
+    paths.forEach(function (p) { if (c.list.indexOf(p) < 0) c.list.push(p); });
+    paintCombine();
+    c.el.hidden = false;
+    c.el.querySelector('#cmbGo').focus();
+  }
+  function combineNow() {
+    var L = cmb.list.slice();
+    if (L.length < 2 || cmb.busy) return;
+    cmb.busy = true; paintCombine();
+    cmb.el.querySelector('#cmbNote').textContent = 'Combining…';
+    Promise.all(L.map(function (p) {
+      return T.core.invoke('read_file', { path: p }).then(function (buf) {
+        var f = new File([buf], base(p), { type: 'application/pdf' });
+        f.adddotsPath = p;
+        return f;
+      });
+    })).then(function (files) {
+      cmb.busy = false; cmb.el.hidden = true; cmb.list = [];
+      trace.opened = trace.opened.concat(files.map(function (f) { return f.name + ' (' + f.size + ' bytes)'; }));
+      if (api.hasDoc() && api.tabs && api.tabs.available() && api.tabs.openMerged) api.tabs.openMerged(files);
+      else api.openFiles(files, { merge: true });
+    }, function (e) {
+      cmb.busy = false; paintCombine();
+      fail('combine', e);
+      cmb.el.querySelector('#cmbNote').textContent = 'Could not read ' + String((e && e.message) || e).slice(0, 80);
+    });
+  }
+  api.showCombine = showCombine;   /* for the tests */
+
   /* What has been handed over and not yet opened: the desktop side keeps
      it until a page takes it, each path once. Asked at start, on each
      `open-files`, and once more when this page is listening, for any that
@@ -175,10 +276,13 @@
       openPaths(paths);
     }, function (e) { fail('launch files', e); });
   }
-  if (!handoff) takePending(true);
+  if (!handoff) { takePending(true); takeCombine(); }
   /* sent to this window only: a PDF handed over goes to the window used last */
   var me = T.webviewWindow && T.webviewWindow.getCurrentWebviewWindow ? T.webviewWindow.getCurrentWebviewWindow() : null;
-  var onOpen = function () { takePending(false); };
-  var listening = me ? me.listen('open-files', onOpen) : T.event ? T.event.listen('open-files', onOpen) : null;
-  if (listening && listening.then) listening.then(onOpen, function (e) { fail('listen', e); });
+  var listen = function (name, fn) {
+    var l = me ? me.listen(name, fn) : T.event ? T.event.listen(name, fn) : null;
+    if (l && l.then) l.then(fn, function (e) { fail('listen ' + name, e); });
+  };
+  listen('open-files', function () { takePending(false); });
+  listen('combine-files', function () { takeCombine(); });
 })();

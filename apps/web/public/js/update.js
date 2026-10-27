@@ -77,20 +77,21 @@
 
   /* ---------------- website: the service worker has the update ---------------- */
 
+  /* the website: the new version, fetched already, taken by reloading */
+  let webReady = false;
+  function reloadIntoUpdate() {
+    if (X.isDirty && X.isDirty() &&
+        !window.confirm('Update now? Changes you have not saved will be lost. ' +
+                        'Choose Cancel, save your PDF, then click Update now again.')) {
+      return;
+    }
+    location.reload();
+  }
   /* js/pwa.js calls this when an update is ready but a document is open */
   X.updateReady = function () {
+    webReady = true;
     showBar('A new version of Add Dots PDF is ready', 'Update now to get the latest tools.', [
-      {
-        label: 'Update now', primary: true,
-        run: function () {
-          if (X.isDirty && X.isDirty() &&
-              !window.confirm('Update now? Changes you have not saved will be lost. ' +
-                              'Choose Cancel, save your PDF, then click Update now again.')) {
-            return;
-          }
-          location.reload();
-        }
-      },
+      { label: 'Update now', primary: true, run: reloadIntoUpdate },
       { label: 'Later' }
     ]);
   };
@@ -147,7 +148,7 @@
 
   function offerAppUpdate(v) {
     if (!v || !v.time || !BUILD || !BUILD.time) return;
-    if (v.time <= BUILD.time + 60000) return;                   /* this build, or older */
+    if (!newer(v)) return;                                      /* this build, or older */
     /* "Later" waits a day before asking about the same build again */
     const later = (get(LATER) || '').split('|');
     if (later[0] === v.id && Date.now() - (+later[1] || 0) < 86400000) return;
@@ -155,18 +156,21 @@
     if (IN_DESKTOP && X.openStore) {
       showBar('An update for Add Dots PDF is available',
         'The Microsoft Store installs it. What is new:' + notesHtml(v.notes),
-        [{ label: 'Update', primary: true, run: function () {
-          X.openStore().catch(function () {
-            X.toast('Open the Microsoft Store, then Library, to update Add Dots PDF');
-          });
-        } }, later1]);
+        [{ label: 'Update', primary: true, run: openStorePage }, later1]);
     } else {
       /* the phone apps, until they are in their stores: the website has it */
       showBar('A newer version of Add Dots PDF is available',
         'It is on the website now. What is new:' + notesHtml(v.notes),
-        [{ label: 'Open website', primary: true, run: function () { window.open(site(), '_blank'); } }, later1]);
+        [{ label: 'Open website', primary: true, run: openSite }, later1]);
     }
   }
+  function newer(v) { return !!(v && v.time && BUILD && BUILD.time && v.time > BUILD.time + 60000); }
+  function openStorePage() {
+    X.openStore().catch(function () {
+      X.toast('Open the Microsoft Store, then Library, to update Add Dots PDF');
+    });
+  }
+  function openSite() { window.open(site(), '_blank'); }
 
   /* the Store's install: the Store has a newer version */
   function offerStoreUpdate() {
@@ -174,23 +178,45 @@
     if (later[0] === 'store' && Date.now() - (+later[1] || 0) < 86400000) return;
     showBar('An update for Add Dots PDF is available',
       'The Microsoft Store has a new version. The app closes to install it, then starts again.',
-      [{ label: 'Update', primary: true, run: function () {
-        if (!window.confirm('Add Dots PDF closes to install the update. ' +
-                            'Save your PDFs first. Install the update now?')) return;
-        X.storeInstall().then(function (r) {
-          if (r === 'failed') {
-            X.toast('The Microsoft Store could not install the update; opening its page');
-            X.openStore().catch(function () {});
-          } else if (r === 'nothing') {
-            X.toast('Add Dots PDF is up to date');
-          }
-        }, function () {
-          X.openStore().catch(function () {
-            X.toast('Open the Microsoft Store, then Library, to update Add Dots PDF');
-          });
-        });
-      } }, { label: 'Later', run: function () { set(LATER, 'store|' + Date.now()); } }]);
+      [{ label: 'Update', primary: true, run: installFromStore },
+       { label: 'Later', run: function () { set(LATER, 'store|' + Date.now()); } }]);
   }
+  function installFromStore() {
+    if (!window.confirm('Add Dots PDF closes to install the update. ' +
+                        'Save your PDFs first. Install the update now?')) return;
+    X.storeInstall().then(function (r) {
+      if (r === 'failed') {
+        X.toast('The Microsoft Store could not install the update; opening its page');
+        X.openStore().catch(function () {});
+      } else if (r === 'nothing') {
+        X.toast('Add Dots PDF is up to date');
+      }
+    }, openStorePage);
+  }
+
+  /* Asked by What is new (js/appbar.js), as a browser's About page asks:
+     resolves to { state: 'latest' } or { state: 'update', run } (run takes
+     the update the way the bar would), or { state: 'unknown' } when no one
+     could say (offline, development). */
+  X.checkForUpdate = function () {
+    if (IN_DESKTOP || IN_PHONE) {
+      const store = IN_DESKTOP && X.storeUpdate
+        ? X.storeUpdate().catch(function () { return false; })
+        : Promise.resolve(null);
+      return store.then(function (has) {
+        if (has === true) return { state: 'update', run: installFromStore };
+        if (has === false) return { state: 'latest' };
+        if (!BUILD) return { state: 'unknown' };
+        return fetchLatest().then(function (v) {
+          if (!v) return { state: 'unknown' };
+          if (!newer(v)) return { state: 'latest' };
+          return { state: 'update', run: IN_DESKTOP && X.openStore ? openStorePage : openSite };
+        });
+      });
+    }
+    /* the website: always the newest once reloaded; one may be waiting */
+    return Promise.resolve(webReady ? { state: 'update', run: reloadIntoUpdate } : { state: 'latest' });
+  };
 
   function checkApp() {
     if (!(IN_DESKTOP || IN_PHONE) || !BUILD || IN_FRAME) return;

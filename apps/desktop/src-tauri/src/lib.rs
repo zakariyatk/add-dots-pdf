@@ -43,6 +43,9 @@ struct Opened {
     /// page: a page still loading has nobody listening for `open-files`, so
     /// they wait here rather than being lost
     pending: Mutex<Vec<String>>,
+    /// handed over by Explorer's "Combine files in Add Dots PDF" (--combine)
+    /// and not yet taken: made into one document, not opened one by one
+    combine: Mutex<Vec<String>>,
     /// every path the system handed over: the only ones read_file serves
     allowed: Mutex<HashSet<PathBuf>>,
     /// the window used last: where a PDF handed over later opens
@@ -85,6 +88,18 @@ fn remember(state: &Opened, paths: &[PathBuf]) -> Vec<String> {
             p.to_string_lossy().into_owned()
         })
         .collect()
+}
+
+/// Whether a start is Explorer's "Combine files in Add Dots PDF" (once for
+/// each file picked, as Windows runs a verb: installer.nsh, AppxManifest.xml).
+fn is_combine(args: &[String]) -> bool {
+    args.iter().skip(1).any(|a| a == "--combine")
+}
+
+/// The PDFs handed over to be combined and not yet taken, once.
+#[tauri::command]
+fn combine_files(state: tauri::State<'_, Opened>) -> Vec<String> {
+    std::mem::take(&mut *state.combine.lock().unwrap())
 }
 
 /// The PDFs handed over and not yet opened, once: a reload does not open
@@ -694,15 +709,18 @@ pub fn run() {
             let paths = pdf_args(&args, Path::new(&cwd));
             let state = app.state::<Opened>();
             let files = remember(&state, &paths);
-            // kept until a page takes them (`launch_files`): several PDFs
-            // opened together from Explorer each start the app, often while
-            // the window's page is still loading and not yet listening
-            state.pending.lock().unwrap().extend(files.iter().cloned());
+            // kept until a page takes them (`launch_files`, `combine_files`):
+            // several PDFs opened or combined together from Explorer each
+            // start the app, often while the page is still loading
+            let combine = is_combine(&args);
+            let queue = if combine { &state.combine } else { &state.pending };
+            queue.lock().unwrap().extend(files.iter().cloned());
             if let Some(w) = target_window(app) {
                 let _ = w.unminimize();
                 let _ = w.set_focus();
                 if !files.is_empty() {
-                    let _ = app.emit_to(w.label(), "open-files", files);
+                    let event = if combine { "combine-files" } else { "open-files" };
+                    let _ = app.emit_to(w.label(), event, files);
                 }
             }
         }))
@@ -720,12 +738,17 @@ pub fn run() {
             let paths = pdf_args(&args, &cwd);
             let state = app.state::<Opened>();
             let files = remember(&state, &paths);
-            *state.pending.lock().unwrap() = files;
+            if is_combine(&args) {
+                *state.combine.lock().unwrap() = files;
+            } else {
+                *state.pending.lock().unwrap() = files;
+            }
             build_window(app.handle(), &main_config(app.handle()))?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             launch_files,
+            combine_files,
             read_file,
             open_plan,
             read_range,
@@ -812,6 +835,17 @@ mod tests {
             &cwd,
         );
         assert_eq!(got, vec![cwd.join("plan.PDF"), abs]);
+    }
+
+    #[test]
+    fn explorers_combine_is_told_from_an_open() {
+        assert!(is_combine(&args(&["adddots-pdf", "--combine", "a.pdf"])));
+        assert!(!is_combine(&args(&["adddots-pdf", "a.pdf"])));
+        // the program's own name is not an argument
+        assert!(!is_combine(&args(&["--combine"])));
+        // and the file still comes through
+        let cwd = std::env::temp_dir();
+        assert_eq!(pdf_args(&args(&["adddots-pdf", "--combine", "a.pdf"]), &cwd), vec![cwd.join("a.pdf")]);
     }
 
     #[test]

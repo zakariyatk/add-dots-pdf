@@ -154,6 +154,16 @@ const open = async (page, path) => {
     if (b && document.getElementById('rail').hidden) b.click();
   });
 };
+/* a document tab's frame, once the browser has it: the tab list has the tab
+   as soon as its frame is made, a moment before the frame is known here */
+const tabFrame = async (page, last = false) => {
+  for (let i = 0; i < 40; i++) {
+    const fr = page.frames().filter((f) => /[?&]tab=/.test(f.url()));
+    if (fr.length) return last ? fr[fr.length - 1] : fr[0];
+    await page.waitForTimeout(250);
+  }
+  return null;
+};
 const allLoaded = (page) =>
   page.waitForFunction(() => window.ADDPDF.S.items.every((i) => i.page && !i.estimated), null, {
     timeout: 120000,
@@ -627,19 +637,29 @@ try {
       page.click('#saveGo'),
     ]);
     await dl.delete();
-    await page.waitForTimeout(500);
-    const left = await page.evaluate(
-      () =>
-        new Promise((res) => {
-          const r = indexedDB.open('adddots-pdf');
-          r.onsuccess = () => {
-            const tx = r.result.transaction(['recovery', 'recoverySrc'], 'readonly');
-            const a = tx.objectStore('recovery').count(),
-              b = tx.objectStore('recoverySrc').count();
-            tx.oncomplete = () => res({ records: a.result, files: b.result });
-          };
-        }),
-    );
+    /* the copy is let go of in the background after the save: wait for it
+       (a fixed half second was too little on a slower computer) */
+    const counted = () =>
+      page.evaluate(
+        () =>
+          new Promise((res) => {
+            const r = indexedDB.open('adddots-pdf');
+            r.onsuccess = () => {
+              const tx = r.result.transaction(['recovery', 'recoverySrc'], 'readonly');
+              const a = tx.objectStore('recovery').count(),
+                b = tx.objectStore('recoverySrc').count();
+              tx.oncomplete = () => {
+                r.result.close();
+                res({ records: a.result, files: b.result });
+              };
+            };
+          }),
+      );
+    let left = await counted();
+    for (let i = 0; i < 40 && (left.records || left.files); i++) {
+      await page.waitForTimeout(250);
+      left = await counted();
+    }
     check('once saved, no unsaved work is kept', left.records === 0 && left.files === 0, left);
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
@@ -3258,7 +3278,7 @@ try {
     await page
       .waitForFunction(() => window.ADDPDF.tabs.list().length === 2, null, { timeout: 20000 })
       .catch(() => {});
-    const frame = page.frames().filter((f) => /[?&]tab=/.test(f.url()))[0];
+    const frame = await tabFrame(page);
     let inTab = 0;
     if (frame) {
       await frame
@@ -3578,7 +3598,7 @@ try {
     await page
       .waitForFunction(() => window.ADDPDF.tabs.list().length === 2, null, { timeout: 20000 })
       .catch(() => {});
-    const frame = page.frames().filter((f) => /[?&]tab=/.test(f.url()))[0];
+    const frame = await tabFrame(page);
     let inTab = 0;
     if (frame) {
       await frame
@@ -3637,6 +3657,7 @@ try {
           invoke: async (cmd, args, opts) => {
             st.calls.push({ cmd, bytes: args instanceof Uint8Array, len: args && args.length });
             if (cmd === 'launch_files') return st.pending.splice(0);
+            if (cmd === 'combine_files') return (st.combine = st.combine || []).splice(0);
             if (cmd === 'read_file') return new Uint8Array(files[args.path]).buffer;
             /* b.pdf stands for a big file: read a part at a time (core.js RANGED) */
             if (cmd === 'open_plan') {
@@ -3779,6 +3800,62 @@ try {
         left.frames === 0 &&
         left.closed >= 1,
       { moved, left },
+    );
+
+    /* Explorer's "Combine files in Add Dots PDF" on b.pdf and a.pdf: two
+       starts of the app, a moment apart, gathered into one list (sorted by
+       name), b moved first, combined: one new tab with both, b's pages first */
+    await page.evaluate(async () => {
+      const st = window.__STUB;
+      st.combine = ['C:/docs/b.pdf'];
+      st.listeners['combine-files']({ payload: ['C:/docs/b.pdf'] });
+      await new Promise((r) => setTimeout(r, 300));
+      st.combine.push('C:/docs/a.pdf');
+      st.listeners['combine-files']({ payload: ['C:/docs/a.pdf'] });
+    });
+    await page.waitForSelector('#cmbModal:not([hidden])', { timeout: 10000 }).catch(() => {});
+    const listed = await page.evaluate(() =>
+      [...document.querySelectorAll('#cmbList .cmbname')].map((e) => e.textContent),
+    );
+    await page.click('#cmbList button[data-a="up"][data-i="1"]');
+    const reordered = await page.evaluate(() =>
+      [...document.querySelectorAll('#cmbList .cmbname')].map((e) => e.textContent),
+    );
+    const tabsBefore = await page.evaluate(() => window.ADDPDF.tabs.list().length);
+    await page.click('#cmbGo');
+    await page
+      .waitForFunction((n) => window.ADDPDF.tabs.list().length === n + 1, tabsBefore, { timeout: 20000 })
+      .catch(() => {});
+    const combinedFrame = await tabFrame(page, true);
+    let combined = null;
+    if (combinedFrame) {
+      await combinedFrame
+        .waitForFunction(() => window.ADDPDF && window.ADDPDF.S.items.length === 8, null, { timeout: 20000 })
+        .catch(() => {});
+      combined = await combinedFrame.evaluate(() => ({
+        pages: window.ADDPDF.S.items.length,
+        firstFrom: window.ADDPDF.S.items[0].src && window.ADDPDF.S.items[0].src.name,
+      }));
+    }
+    check(
+      "Windows app: Explorer's Combine gathers the PDFs picked, in order, and joins them in a tab of their own",
+      listed.join() === 'a.pdf,b.pdf' &&
+        reordered.join() === 'b.pdf,a.pdf' &&
+        !!combined &&
+        combined.pages === 8 &&
+        /b\.pdf/.test(combined.firstFrom || ''),
+      {
+        listed,
+        reordered,
+        tabsBefore,
+        combined,
+        after: await page.evaluate(() => ({
+          tabs: window.ADDPDF.tabs.list(),
+          note: document.getElementById('cmbNote').textContent,
+          modal: !document.getElementById('cmbModal').hidden,
+          trace: window.ADDDOTS_DESKTOP,
+        })),
+      },
     );
     check('no errors on the page', errors.length === 0, errors);
     await dctx.close();

@@ -347,6 +347,16 @@ body[data-tool="select"] .anno .redact-mk { cursor: move }
 }
 .docbox .x:hover { color: var(--text) }
 .docbody { padding: 12px 14px; overflow: auto; display: flex; flex-direction: column; gap: 9px }
+/* Combine Files, from Explorer (js/desktop.js): the files in the order joined */
+.cmbbox .cmbnote { margin: 0; font-size: 13px; color: var(--text-dim) }
+.cmbbox .cmblist { margin: 0; padding: 0; list-style: none; counter-reset: cmb; display: flex; flex-direction: column; gap: 4px }
+.cmbbox .cmblist li {
+  counter-increment: cmb; display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--stage); font-size: 13px
+}
+.cmbbox .cmblist li::before { content: counter(cmb); width: 22px; flex: none; color: var(--text-dim); font-variant-numeric: tabular-nums }
+.cmbbox .cmbname { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+.cmbbox .cmblist .btn { width: 30px; height: 28px; min-width: 30px; padding: 0; justify-content: center; flex: none }
 .drow { display: flex; align-items: center; gap: 10px; font-size: 13px }
 .drow > span:first-child { width: 96px; flex: none; color: var(--text-dim) }
 .drow input:not([type="checkbox"]):not([type="range"]):not([type="color"]),

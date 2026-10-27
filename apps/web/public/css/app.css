@@ -1192,9 +1192,18 @@
   .abpop .abnews{margin:0;padding:0 0 4px 18px;max-height:50vh;overflow:auto}
   .abpop .abnews li{margin:0 0 8px;line-height:1.4}
   .abpop .abnone{margin:0 0 6px;color:var(--text-dim)}
-  .abpop .abver{display:flex;flex-direction:column;gap:2px;margin:0 0 10px;padding:8px 10px;border-radius:8px;background:var(--chrome-2)}
+  /* up to date (a tick), a new update (an arrow and Update), or checking */
+  .abpop .abver{display:flex;align-items:center;gap:10px;margin:0 0 10px;padding:10px 12px;border-radius:8px;background:var(--chrome-2)}
+  .abpop .abvtxt{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
   .abpop .abver b{font-size:13px}
   .abpop .abver small{font-size:11.5px;color:var(--text-dim)}
+  .abpop .abver .btn{flex:none;height:30px}
+  .abpop .abvico{width:22px;height:22px;flex:none;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;color:#fff;box-sizing:border-box}
+  .abpop .abver[data-state="latest"] .abvico{background:#1F9D55}
+  .abpop .abver[data-state="latest"] .abvico::before{content:"\2713"}
+  .abpop .abver[data-state="update"] .abvico{background:var(--marker,#7B5CFF)}
+  .abpop .abver[data-state="update"] .abvico::before{content:"\2193"}
+  .abpop .abver[data-state="checking"] .abvico,.abpop .abver[data-state="unknown"] .abvico{border:2px solid var(--line)}
   .abpop .abapprow{display:flex;align-items:center;gap:12px;padding:9px 0}
   .abpop .abappic{flex:none;width:32px;height:32px}
   .abpop .abappn{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}

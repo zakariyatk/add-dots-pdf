@@ -107,6 +107,11 @@ jobs:
           $app = Get-ChildItem $dir -Filter *.exe | Where-Object Name -notlike 'uninstall*' | Select-Object -First 1
           if (-not $app) { Get-ChildItem $dir; throw "no app in $dir" }
           "ok  installed for this user: $($app.FullName)"
+          # "Combine files in Add Dots PDF..." on PDFs in Explorer (installer.nsh)
+          $verb = 'HKCU:\Software\Classes\SystemFileAssociations\.pdf\shell\AddDotsCombine'
+          $cmd = (Get-ItemProperty "$verb\command" -ErrorAction SilentlyContinue).'(default)'
+          if (-not $cmd -or $cmd -notlike "*$($app.Name)*--combine*%1*") { throw "no Combine verb in Explorer: '$cmd'" }
+          "ok  Explorer's Combine verb: $cmd"
           "INSTALLED_APP=$($app.FullName)" >> $env:GITHUB_ENV
           "INSTALLED_DIR=$dir" >> $env:GITHUB_ENV
       # Windows' own text reader (src-tauri/src/ocr.rs) needs the English OCR
@@ -145,6 +150,7 @@ jobs:
           # the silent uninstaller hands off to a copy of itself: give it a moment
           for ($i = 0; $i -lt 30 -and (Test-Path $env:INSTALLED_APP); $i++) { Start-Sleep 1 }
           if (Test-Path $env:INSTALLED_APP) { throw 'the app is still there after uninstalling' }
+          if (Test-Path 'HKCU:\Software\Classes\SystemFileAssociations\.pdf\shell\AddDotsCombine') { throw 'the Combine verb is still in Explorer after uninstalling' }
           'ok  uninstalled'
       # the Microsoft Store package (apps/desktop/msix): the same app, as an
       # MSIX with the identity Partner Center gave it. Its version climbs
