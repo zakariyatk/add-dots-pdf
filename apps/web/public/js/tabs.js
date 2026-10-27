@@ -7,12 +7,12 @@
 
    Opening a file with one already open (Open, Ctrl+O, several files picked
    at once, a file dropped on the home screen) makes a new tab; dropping a
-   PDF onto an open page still adds its pages there. As in Acrobat the tabs
-   sit in the top bar (the title bar in the Windows app), from the first
-   document on; without the top bar they are a strip that shows once there
-   are two. Tabs are dragged along the bar to reorder them, and Ctrl+Tab /
-   Ctrl+Shift+Tab move between them. A tab says what it holds (name, unsaved
-   changes) to the bar; closing one with unsaved changes asks first.
+   PDF onto an open page still adds its pages there. In the Windows app the
+   tabs sit in the title bar from the first document on, as in Acrobat; they
+   are dragged along it to reorder them, and Ctrl+Tab / Ctrl+Shift+Tab move
+   between them. On the website they are a strip that shows once there are
+   two. A tab says what it holds (name, unsaved changes) to the bar; closing
+   one with unsaved changes asks first.
 
    In the Windows app a PDF opened from Explorer gets a tab too, and a tab
    can be moved to a window of its own, as in Acrobat: drag it down out of
@@ -89,8 +89,9 @@
 
     const bar = document.createElement('div');
     bar.className = 'doctabs'; bar.id = 'docTabs'; bar.hidden = true;
-    bar.setAttribute('role', 'tablist'); bar.setAttribute('aria-label', 'Open documents');
+    /* the list is the tablist: it holds tabs only, and + stays beside it */
     const list = document.createElement('div'); list.className = 'dtlist';
+    list.setAttribute('role', 'tablist'); list.setAttribute('aria-label', 'Open documents');
     const add = document.createElement('button');
     add.className = 'dtadd'; add.type = 'button'; add.title = 'Open a PDF in a new tab (Ctrl+O)';
     add.setAttribute('aria-label', 'Open a PDF in a new tab');
@@ -110,11 +111,14 @@
     }
     function dirtyOf(t) { return t.id === 0 ? !!(X.isDirty && X.isDirty()) : t.dirty; }
 
-    /* With the top bar in view (js/appbar.js), the tabs sit in it, after
-       Create, as in Acrobat: in the Windows app that is the title bar. Where
-       it is not shown (a narrow browser window) they are a strip of their own. */
+    /* The Windows app only: what the website and the phone apps have stays
+       as it was (a strip of tabs from the second document on) */
+    const DESK = !!window.__TAURI__;
+
+    /* In the Windows app the tabs sit in the title bar (js/appbar.js), after
+       Create, as in Acrobat. Elsewhere they are a strip of their own. */
     function place() {
-      const ab = document.getElementById('appBar');
+      const ab = DESK && document.getElementById('appBar');
       const inAb = !!(ab && getComputedStyle(ab).display !== 'none');
       if (inAb && bar.parentNode !== ab) ab.insertBefore(bar, ab.querySelector('.abgrow'));
       else if (!inAb && bar.parentNode !== app) app.insertBefore(bar, app.firstChild);
@@ -142,7 +146,9 @@
         b.innerHTML = '<svg viewBox="0 0 24 24" class="dtico"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>' +
           '<span class="dtname"></span><i class="dtdot" aria-hidden="true"></i>' +
           (t.id === 0 && !X.hasDoc() ? '' :
-            '<button type="button" class="dtx" aria-label="Close ' + X.esc(name) + '" title="Close">&times;</button>');
+            /* not a button of its own: a tab holds nothing focusable. Delete
+               or Ctrl+W close the tab from the keyboard */
+            '<span class="dtx" aria-hidden="true" title="Close">&times;</span>');
         b.querySelector('.dtname').textContent = name;
         list.appendChild(b);
         t.el = b;
@@ -275,7 +281,7 @@
       if (!tear.on) return;
       const out = away(e) && canDetach(tear.id);
       tear.el.classList.toggle('tearing', out);
-      if (!out) reorder(e);
+      if (!out && DESK) reorder(e);
     });
     document.addEventListener('pointerup', function (e) {
       if (!tear || e.pointerId !== tear.pid) return;
@@ -345,9 +351,8 @@
     }, 700);
 
     /* the keys Acrobat has: Ctrl+Tab and Ctrl+Page Down to the next tab,
-       with Shift or Page Up to the one before; in the Windows app Ctrl+W
-       and Ctrl+F4 close the tab in view (a browser keeps those for its own) */
-    const DESK = !!window.__TAURI__;
+       with Shift or Page Up to the one before; Ctrl+W and Ctrl+F4 close the
+       tab in view. The Windows app only, as is dragging tabs to reorder them. */
     function tabKey(k) {
       if (k === 'close') {
         if (tabs.length > 1 || X.hasDoc()) close(active);
@@ -360,11 +365,11 @@
       if (tabs[n].el) tabs[n].el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     }
     X.tabKeyOf = function (e) {
-      if (!e.ctrlKey || e.altKey || e.metaKey) return null;
+      if (!DESK || !e.ctrlKey || e.altKey || e.metaKey) return null;
       if (e.key === 'Tab') return e.shiftKey ? 'prev' : 'next';
       if (e.key === 'PageDown' && !e.shiftKey) return 'next';
       if (e.key === 'PageUp' && !e.shiftKey) return 'prev';
-      if (DESK && !e.shiftKey && (e.key === 'F4' || e.key === 'w' || e.key === 'W')) return 'close';
+      if (!e.shiftKey && (e.key === 'F4' || e.key === 'w' || e.key === 'W')) return 'close';
       return null;
     };
     document.addEventListener('keydown', function (e) {

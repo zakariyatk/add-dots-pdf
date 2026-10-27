@@ -3416,13 +3416,19 @@ try {
     await dctx.addInitScript(([A, B]) => {
       window.ADDDOTS_NO_TABS = false;
       if (window.top !== window) return;
-      const st = (window.__STUB = { calls: [], listeners: {} });
+      /* pending: what the desktop side has been handed and no page has
+         taken yet; launch_files takes it, each path once, as src-tauri does */
+      const st = (window.__STUB = {
+        calls: [],
+        listeners: {},
+        pending: /handoff=/.test(location.search) ? [] : ['C:/docs/a.pdf'],
+      });
       const files = { 'C:/docs/a.pdf': A, 'C:/docs/b.pdf': B };
       window.__TAURI__ = {
         core: {
           invoke: async (cmd, args, opts) => {
             st.calls.push({ cmd, bytes: args instanceof Uint8Array, len: args && args.length });
-            if (cmd === 'launch_files') return /handoff=/.test(location.search) ? [] : ['C:/docs/a.pdf'];
+            if (cmd === 'launch_files') return st.pending.splice(0);
             if (cmd === 'read_file') return new Uint8Array(files[args.path]).buffer;
             /* b.pdf stands for a big file: read a part at a time (core.js RANGED) */
             if (cmd === 'open_plan') {
@@ -3458,7 +3464,11 @@ try {
     await page
       .waitForFunction(() => window.ADDPDF && window.ADDPDF.S.items.length === 3, null, { timeout: 20000 })
       .catch(() => {});
-    await page.evaluate(() => window.__STUB.listeners['open-files']({ payload: ['C:/docs/b.pdf'] }));
+    await page.evaluate(() => {
+      /* a second start of the app hands b.pdf over, as src-tauri does: kept, then announced */
+      window.__STUB.pending.push('C:/docs/b.pdf');
+      window.__STUB.listeners['open-files']({ payload: ['C:/docs/b.pdf'] });
+    });
     const frameOf = () => page.frames().filter((f) => /[?&]tab=/.test(f.url()))[0];
     await page
       .waitForFunction(() => document.querySelector('.dtframe'), null, { timeout: 10000 })

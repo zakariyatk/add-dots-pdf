@@ -8695,8 +8695,8 @@
     const r = recentRecs[i]; if (!r) return;
     if (!r.blob) { toast('That file was too large to keep here — select it again'); pickNew(); return; }
     const file = new File([r.blob], r.name, { type: 'application/pdf' });
-    /* with a document open, in a tab of its own, as a file picked is */
-    if (inNewTab()) { EXT.tabs.openFiles([file]); return; }
+    /* in the Windows app, with a document open: in a tab of its own, as a file picked is */
+    if (window.__TAURI__ && inNewTab()) { EXT.tabs.openFiles([file]); return; }
     if (!okToReplace()) return;
     await openFile(file);
   }
