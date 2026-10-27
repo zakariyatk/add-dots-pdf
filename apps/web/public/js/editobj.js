@@ -61,7 +61,6 @@
       b.dataset.label = o.label;
       b.innerHTML = '<svg viewBox="0 0 24 24">' + o.icon + PEN + '</svg>';
       b.addEventListener('click', function () {
-        if (X.winOnly && X.winOnly('editobj')) return;
         if (!S.items.length) { X.toast('Open a PDF first'); return; }
         mode = o.m;
         sticky = false;

@@ -94,7 +94,6 @@
     });
 
     function open() {
-      if (X.winOnly && X.winOnly('ocr')) return;
       if (!S.items.length) { X.toast('Open a PDF first'); return; }
       $('ocrPages').value = String(S.current || 1);
       $('ocrOf').textContent = '/' + S.items.length;

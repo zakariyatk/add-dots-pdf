@@ -19,8 +19,11 @@
    the bar, or right-click it, "Move to new window". It goes with its
    unsaved work, still editable (js/desktop.js carries it over).
 
-   Tests that open file after file in one page set window.ADDDOTS_NO_TABS.
-   The phone app has none: one document at a time on a phone. */
+   The Windows app only. On the website the browser's own tabs do this (a
+   PDF in each), and another file opened replaces the one open, asking
+   first when it has unsaved changes; the phone app keeps one document at
+   a time too. Tests of the tabs in a browser set window.ADDDOTS_TABS; tests
+   that open file after file in one page set window.ADDDOTS_NO_TABS. */
 (function () {
   'use strict';
 
@@ -31,7 +34,10 @@
   const inTab = !!tabParam && window.parent !== window;
   /* the phone app keeps one document at a time */
   const IN_PHONE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
-  const off = function () { return !!window.ADDDOTS_NO_TABS || IN_PHONE; };
+  /* the Windows app (its window's, or the one this frame is in) */
+  let desk = !!window.__TAURI__;
+  try { if (!desk && window.parent !== window) desk = !!window.parent.__TAURI__; } catch (e) { /* not the app's */ }
+  const off = function () { return !!window.ADDDOTS_NO_TABS || IN_PHONE || !(desk || window.__TAURI__ || window.ADDDOTS_TABS); };
 
   /* ================= inside a tab ================= */
 

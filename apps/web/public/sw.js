@@ -65,7 +65,6 @@ const SHELL = [
   'js/toolbar.js',
   'js/toolpanel.js',
   'js/appbar.js',
-  'js/winonly.js',
   'js/perf.js',
   'js/pwa.js',
   'js/build.js',

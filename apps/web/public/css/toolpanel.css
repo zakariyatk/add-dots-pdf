@@ -110,18 +110,29 @@ body.props-in-ribbon.acro #ribbon #panTool .markpop {
   flex-wrap: wrap; align-items: center; gap: 8px; min-height: 0; padding: 2px 4px;
   background: none; border: none; box-shadow: none; overflow: visible
 }
+/* the help in full, as wide as the controls above it */
 body.acro #ribbon #panTool #modeBar .hint {
   flex: 0 0 100%; order: 90; max-width: none; min-width: 0; font-size: 12px; line-height: 1.4;
-  -webkit-line-clamp: 4
+  display: block; -webkit-line-clamp: unset; overflow: visible; white-space: normal; text-overflow: clip
 }
 body.acro #ribbon #panTool #modeBar .grow { display: none }
 body.acro #ribbon #panTool .btn { flex: none; width: auto; height: 32px; min-height: 32px; padding: 0 8px }
 body.acro #ribbon #panTool #grpToolNow .btn { flex: 1 1 100%; justify-content: flex-start; height: 34px }
 body.acro #ribbon #panTool select,
 body.acro #ribbon #panTool input:not([type="range"]) { max-width: 100% }
-body.acro #ribbon #panTool #txctl,
+/* every row of controls (the text tool's, Dimension's Scale and Units, the
+   others') wraps inside the panel, edge to edge with the help below it */
+body.acro #ribbon #panTool .txctl,
 body.acro #ribbon #panTool .swatches,
-body.acro #ribbon #panTool .widths { flex-wrap: wrap; row-gap: 6px; max-width: 100% }
+body.acro #ribbon #panTool .widths { flex-wrap: wrap; row-gap: 6px; column-gap: 6px; max-width: 100% }
+body.acro #ribbon #panTool .txctl:not([hidden]) { display: flex; align-items: center; flex: 0 0 100%; min-width: 0 }
+body.acro #ribbon #panTool .txctl select { flex: 1 1 64px; min-width: 0 }
+body.acro #ribbon #panTool .txctl .anno-lbl { flex: none }
+/* Colour and Line width share their row, end to end */
+body.acro #ribbon #panTool .swatches:not([style*="none"]),
+body.acro #ribbon #panTool .widths:not([style*="none"]) { flex: 1 1 0; min-width: 0 }
+body.acro #ribbon #panTool .swatches > button,
+body.acro #ribbon #panTool .widths > button { flex: 1 1 auto; justify-content: space-between }
 body.acro #ribbon #panTool #mpExt,
 body.acro #ribbon #panTool #mpExt > div,
 body.acro #ribbon #panTool #mpExt .row { flex-wrap: wrap }

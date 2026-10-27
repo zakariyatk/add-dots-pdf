@@ -444,7 +444,7 @@
 </div>
 
 <div class="pop blankdlg" id="blankPop" role="dialog" aria-label="Insert blank page" hidden="">
-  <header class="bdhead"><b>Insert Blank Page</b><span class="grow"></span>
+  <header class="bdhead"><b id="blankTitle">Insert Blank Page</b><span class="grow"></span>
     <button class="x" id="blankX" type="button" aria-label="Close">&times;</button></header>
   <h4>Blank page settings</h4>
   <div class="bdgrid">
@@ -461,8 +461,8 @@
     <label>Background</label>
     <div class="row" id="blankColors" style="gap:6px"></div>
   </div>
-  <h4>Insert to</h4>
-  <div class="bdwhere">
+  <h4 id="blankWhereHead">Insert to</h4>
+  <div class="bdwhere" id="blankWhereBox">
     <label class="rad"><input type="radio" name="blankWhere" value="start"> At start</label>
     <label class="rad"><input type="radio" name="blankWhere" value="end"> At end</label>
     <div class="bdpages">
@@ -1116,7 +1116,6 @@
 <script src="js/appbar.js"></script>
 <script src="js/build.js"></script>
 <script src="js/update.js"></script>
-<script src="js/winonly.js"></script>
 <script src="js/perf.js"></script>
 <script src="js/pwa.js"></script>
 <script src="js/desktop.js"></script>

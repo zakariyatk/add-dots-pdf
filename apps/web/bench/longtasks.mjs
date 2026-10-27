@@ -21,7 +21,6 @@ const only = process.argv[2] || '';
 async function open(file) {
   const ctx = await browser.newContext({ viewport: { width: 1400, height: 900 }, acceptDownloads: true });
   await ctx.addInitScript(() => {
-    window.ADDDOTS_ALL_TOOLS = true;
     window.__long = [];
     new PerformanceObserver((l) => l.getEntries().forEach((e) => window.__long.push(e.duration))).observe({
       type: 'longtask',

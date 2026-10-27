@@ -492,7 +492,11 @@
       path.setAttribute('stroke-width', Math.max(1, dim * 0.09)); path.setAttribute('stroke-linecap', 'round');
       g.appendChild(path);
     }
-    function linkFontSize(box) { return Math.max(8, Math.min(16, box.h * 0.55)); }
+    /* in page points, as the PDF has it (painters/insert.ts), so the label
+       keeps to the page at every zoom */
+    function linkFontSize(box) { return Math.max(8, Math.min(16, box.h / S.scale * 0.55)) * S.scale; }
+    /* a table's text: from its rows' height in points, as the PDF has it */
+    function tableFontSize(box, rows) { return Math.max(6.5, Math.min(10.5, box.h / S.scale / rows * 0.34)) * S.scale; }
     function linkLabel(s) { return s.label || s.url || 'Link'; }
     function linkUnderline(g, box, s) {
       const fs = linkFontSize(box);
@@ -669,7 +673,7 @@
       }
       rowY.forEach(function (y) { line(box.x, y, box.x + box.w, y); });
       colX.forEach(function (x) { line(x, box.y, x, box.y + box.h); });
-      const fs = Math.max(8, Math.min(13, box.h / rows * 0.42));
+      const fs = tableFontSize(box, rows);
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const txt = (s.cells[r] && s.cells[r][c]) || '';
@@ -813,7 +817,7 @@
       wrap.className = 'tabled';
       wrap.style.left = box.x + 'px'; wrap.style.top = box.y + 'px';
       wrap.style.width = box.w + 'px';
-      const fs = Math.max(8, Math.min(13, box.h / s.rows * 0.42));
+      const fs = tableFontSize(box, s.rows);
 
       let tEl = null;
       function build(rows, cols, data, colW, rowH) {
