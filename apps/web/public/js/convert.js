@@ -195,7 +195,6 @@
     };
 
     function openPanel(kind) {
-      if (X.winOnly && X.winOnly('convert')) return;
       if (!S.items.length) { X.toast('Open a PDF first'); return; }
       if (busy) return;
       if (!dlg.hidden && openKind === kind) { close(); return; }

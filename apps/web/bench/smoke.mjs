@@ -201,8 +201,6 @@ const browser = await chromium.launch({ channel: process.env.BENCH_CHANNEL || un
       window.ADDDOTS_CONFIG = Object.assign({ requireSignIn: false }, window.ADDDOTS_CONFIG || {});
       /* file after file in one page: each replaces the last, no tabs */
       window.ADDDOTS_NO_TABS = true;
-      /* the Windows app's tools too (js/winonly.js), to test them here */
-      window.ADDDOTS_ALL_TOOLS = true;
     });
     return c;
   };
@@ -4054,12 +4052,10 @@ try {
     await tctx.close();
   }
 
-  /* ---- on the website, the Windows app's tools say where they are ---- */
+  /* ---- on the website (and the phone app), every tool is there: Edit
+     Object, Convert and OCR open as in the Windows app, with no badge ---- */
   {
     const wctx = await browser.newContext({ viewport: { width: 1300, height: 900 } });
-    await wctx.addInitScript(() => {
-      window.ADDDOTS_ALL_TOOLS = false;
-    });
     const errors = [];
     const page = await wctx.newPage();
     page.on('pageerror', (e) => errors.push(e.message));
@@ -4069,24 +4065,33 @@ try {
       .waitForFunction(() => window.ADDPDF.S.items.length > 0, null, { timeout: 20000 })
       .catch(() => {});
     const seen = await page.evaluate(() => {
-      const out = {};
-      out.badges = ['tEditObj', 'btnToWord', 'btnOcr'].map((id) => {
+      const X = window.ADDPDF;
+      const out = { tauri: !!window.__TAURI__ };
+      out.badges = ['tEditObj', 'tEditText', 'tEditShape', 'btnToWord', 'btnToCad', 'btnOcr'].filter((id) => {
         const b = document.getElementById(id);
-        return !!b && b.classList.contains('winonly');
+        return !b || /winonly|Windows app/.test(b.className + ' ' + b.title);
       });
       document.getElementById('btnToWord').click();
-      const card = document.getElementById('winOnly');
-      out.card = !!card && !card.hidden && /Convert/.test(card.textContent);
-      out.store = !!card && /apps\.microsoft\.com/.test(card.querySelector('#woGet').href);
-      card.querySelector('#woClose').click();
-      window.ADDPDF.setTool('editobj');
+      out.convert = !document.getElementById('cvModal').hidden;
+      document.getElementById('cvModal').hidden = true;
+      X.closePops();
+      X.openOcr();
+      out.ocr = !document.getElementById('ocrPop').hidden;
+      X.closePops();
+      document.getElementById('tEditObj').click();
+      out.storeCard = !!document.getElementById('winOnly');
       return out;
     });
     await page.waitForTimeout(100);
     const tool = await page.evaluate(() => window.ADDPDF.S.tool);
     check(
-      'website: Edit Object, Convert and OCR point to the Windows app',
-      seen.badges.every(Boolean) && seen.card && seen.store && tool === 'select',
+      'website: Edit Object, Convert and OCR open here, with no Windows badge or Store card',
+      !seen.tauri &&
+        seen.badges.length === 0 &&
+        seen.convert &&
+        seen.ocr &&
+        !seen.storeCard &&
+        tool === 'editobj',
       { seen, tool },
     );
     check('no errors on the page', errors.length === 0, errors);
