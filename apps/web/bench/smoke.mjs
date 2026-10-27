@@ -154,6 +154,16 @@ const open = async (page, path) => {
     if (b && document.getElementById('rail').hidden) b.click();
   });
 };
+/* a document tab's frame, once the browser has it: the tab list has the tab
+   as soon as its frame is made, a moment before the frame is known here */
+const tabFrame = async (page, last = false) => {
+  for (let i = 0; i < 40; i++) {
+    const fr = page.frames().filter((f) => /[?&]tab=/.test(f.url()));
+    if (fr.length) return last ? fr[fr.length - 1] : fr[0];
+    await page.waitForTimeout(250);
+  }
+  return null;
+};
 const allLoaded = (page) =>
   page.waitForFunction(() => window.ADDPDF.S.items.every((i) => i.page && !i.estimated), null, {
     timeout: 120000,
@@ -627,19 +637,29 @@ try {
       page.click('#saveGo'),
     ]);
     await dl.delete();
-    await page.waitForTimeout(500);
-    const left = await page.evaluate(
-      () =>
-        new Promise((res) => {
-          const r = indexedDB.open('adddots-pdf');
-          r.onsuccess = () => {
-            const tx = r.result.transaction(['recovery', 'recoverySrc'], 'readonly');
-            const a = tx.objectStore('recovery').count(),
-              b = tx.objectStore('recoverySrc').count();
-            tx.oncomplete = () => res({ records: a.result, files: b.result });
-          };
-        }),
-    );
+    /* the copy is let go of in the background after the save: wait for it
+       (a fixed half second was too little on a slower computer) */
+    const counted = () =>
+      page.evaluate(
+        () =>
+          new Promise((res) => {
+            const r = indexedDB.open('adddots-pdf');
+            r.onsuccess = () => {
+              const tx = r.result.transaction(['recovery', 'recoverySrc'], 'readonly');
+              const a = tx.objectStore('recovery').count(),
+                b = tx.objectStore('recoverySrc').count();
+              tx.oncomplete = () => {
+                r.result.close();
+                res({ records: a.result, files: b.result });
+              };
+            };
+          }),
+      );
+    let left = await counted();
+    for (let i = 0; i < 40 && (left.records || left.files); i++) {
+      await page.waitForTimeout(250);
+      left = await counted();
+    }
     check('once saved, no unsaved work is kept', left.records === 0 && left.files === 0, left);
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
@@ -3258,7 +3278,7 @@ try {
     await page
       .waitForFunction(() => window.ADDPDF.tabs.list().length === 2, null, { timeout: 20000 })
       .catch(() => {});
-    const frame = page.frames().filter((f) => /[?&]tab=/.test(f.url()))[0];
+    const frame = await tabFrame(page);
     let inTab = 0;
     if (frame) {
       await frame
@@ -3578,7 +3598,7 @@ try {
     await page
       .waitForFunction(() => window.ADDPDF.tabs.list().length === 2, null, { timeout: 20000 })
       .catch(() => {});
-    const frame = page.frames().filter((f) => /[?&]tab=/.test(f.url()))[0];
+    const frame = await tabFrame(page);
     let inTab = 0;
     if (frame) {
       await frame
@@ -3806,10 +3826,7 @@ try {
     await page
       .waitForFunction((n) => window.ADDPDF.tabs.list().length === n + 1, tabsBefore, { timeout: 20000 })
       .catch(() => {});
-    const combinedFrame = page
-      .frames()
-      .filter((f) => /[?&]tab=/.test(f.url()))
-      .pop();
+    const combinedFrame = await tabFrame(page, true);
     let combined = null;
     if (combinedFrame) {
       await combinedFrame
@@ -3827,7 +3844,18 @@ try {
         !!combined &&
         combined.pages === 8 &&
         /b\.pdf/.test(combined.firstFrom || ''),
-      { listed, reordered, tabsBefore, combined },
+      {
+        listed,
+        reordered,
+        tabsBefore,
+        combined,
+        after: await page.evaluate(() => ({
+          tabs: window.ADDPDF.tabs.list(),
+          note: document.getElementById('cmbNote').textContent,
+          modal: !document.getElementById('cmbModal').hidden,
+          trace: window.ADDDOTS_DESKTOP,
+        })),
+      },
     );
     check('no errors on the page', errors.length === 0, errors);
     await dctx.close();
