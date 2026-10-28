@@ -475,6 +475,33 @@
     /* on a phone it docks above the tool bar instead of floating over the page */
     .markpop{left:8px!important;right:8px!important;top:auto!important;
              bottom:calc(64px + env(safe-area-inset-bottom))!important;justify-content:flex-start}
+    /* and lays out as a form: two even columns, each setting's name on the
+       left and its box on the right, so every row meets both edges. The
+       name of the mark heads it, with Delete across from it. */
+    .markpop{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px;padding:10px 12px;
+             max-width:none;white-space:normal}
+    .markpop .mdiv{display:none}
+    .markpop .mtitle{grid-row:1;grid-column:1;align-self:center}
+    .markpop .del{grid-row:1;grid-column:2;justify-self:end;width:32px;height:32px}
+    .markpop .cbtn{height:34px;padding:0 10px;justify-content:flex-start}
+    .markpop .cbtn span{flex:1;text-align:left}
+    #mpFillBtn[hidden] + #mpStrokeBtn{grid-column:1 / -1}
+    /* the name, then a box of one width in every row: a number keeps its
+       unit inside the same width, so all the boxes end on one line */
+    .markpop .mfield{display:grid;grid-template-columns:minmax(0,1fr) 96px;align-items:center;
+                     gap:6px;min-width:0;font-size:12px}
+    .markpop .mfield > span:first-child{overflow:hidden;text-overflow:ellipsis}
+    .markpop .mfield .unit{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;
+                           gap:0;width:96px;height:32px;padding:0 10px 0 0;box-sizing:border-box;
+                           background:var(--chrome-2);border:1px solid var(--line);border-radius:6px}
+    .markpop .mfield .unit input{width:100%;height:30px;font-size:12px;background:transparent;border:0}
+    .markpop .mfield .unit:focus-within{border-color:var(--accent,#7B5CFF)}
+    .markpop .mfield select,.markpop select{width:96px;max-width:none;min-width:0;height:32px;font-size:12px}
+    .markpop{max-height:none;overflow:visible}
+    .markpop .txctl,.markpop .mpext{grid-column:1 / -1;flex-wrap:wrap}
+    /* the text row: the font takes what the bold, italic and size leave */
+    .markpop .txctl{display:flex;flex-wrap:nowrap;gap:8px;width:100%}
+    .markpop .txctl select{flex:1 1 auto;width:auto}
   }
   .anno .tx{stroke:none;white-space:pre}
   .anno .patch{stroke:none}
