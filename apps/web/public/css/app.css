@@ -419,7 +419,9 @@
   .anno .sh{fill:none;stroke-linecap:round;stroke-linejoin:round}
   .anno .halo{fill:none;stroke:#F2C14E;stroke-width:1;opacity:.9;stroke-dasharray:4 4}
   .anno .hnd{pointer-events:none}
-  .anno .kn{fill:#FFFFFF;stroke:#101010;stroke-width:1.4;pointer-events:all;cursor:nwse-resize}
+  .anno .kn{fill:#FFFFFF;stroke:#101010;stroke-width:1.4;pointer-events:all;cursor:nwse-resize;touch-action:none}
+  .anno .knpad{fill:transparent;stroke:none;pointer-events:all;touch-action:none}
+  body[data-tool="select"] .anno .picked *{touch-action:none}
   .anno .kn:hover{fill:#F2C14E}
   .anno .kn.turn{fill:#F2C14E;cursor:grab}
   .anno .kn.turn:active{cursor:grabbing}
