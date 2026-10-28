@@ -28,7 +28,7 @@ import { hexToRgb01 } from './style';
     it was lifted with; null otherwise. */
 export function markPageFont(s: TextMark): PageFont | null {
   const pf = s.pf;
-  if (!pf || pf.f !== s.f || pf.b !== !!s.b || pf.i !== !!s.i) return null;
+  if (!pf || (s.runs && s.runs.length) || pf.f !== s.f || pf.b !== !!s.b || pf.i !== !!s.i) return null;
   return pf;
 }
 

@@ -67,6 +67,17 @@ export interface PageFont {
   w: Record<number, number>;
 }
 
+/** One stretch of a text mark's text, `n` characters (UTF-16 units) on from
+    where the last run ended. A field left out is the mark's own. */
+export interface StyleRun {
+  n: number;
+  c?: string;
+  b?: boolean;
+  i?: boolean;
+  u?: boolean;
+  k?: boolean;
+}
+
 /** A text mark has one point, its baseline anchor `a`. Careful: here `b` means
     bold, not a second point. */
 export interface TextMark extends MarkBase {
@@ -82,6 +93,10 @@ export interface TextMark extends MarkBase {
   align?: Align;
   bg?: string | null;
   bgOp?: number;
+  /** Styles of stretches of the text, as Word keeps them: each run covers the
+      next `n` characters (newlines count). None means the mark's own style
+      throughout. */
+  runs?: StyleRun[] | null;
   /** A block painted under replaced text, in PDF points. */
   patch?: (Crop & { c: string }) | null;
   /** Lifted from the page by Edit Object: the page's own font, and the

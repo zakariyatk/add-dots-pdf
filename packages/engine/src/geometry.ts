@@ -2,7 +2,7 @@
    all happen in PDF space and the screen, the JPGs and the PDF agree.
    Moved from core.js unchanged. */
 
-import type { AnyMark, Mark, Pt, TextMark } from './model';
+import type { AnyMark, Mark, Pt, StyleRun, TextMark } from './model';
 
 /** Measures one line of a text mark in points, or null when fonts aren't ready. */
 export type MeasureText = (s: TextMark, line: string) => number | null;
@@ -67,11 +67,61 @@ export function textRect(s: TextMark, measure: MeasureText): Rect {
   if (s.patch) return { x: s.patch.x, y: s.patch.y, w: s.patch.w, h: s.patch.h };
   const lines = String(s.text).split('\n');
   let wid = 0;
-  lines.forEach((l) => {
-    wid = Math.max(wid, measure(s, l) || l.length * s.size * 0.5);
+  lines.forEach((l, li) => {
+    wid = Math.max(wid, lineWidth(s, li, measure) || l.length * s.size * 0.5);
   });
   const hgt = s.size * 1.2 * lines.length;
   return { x: s.a[0], y: s.a[1] - hgt + s.size, w: Math.max(wid, s.size), h: hgt };
+}
+
+/** Line `li` of a text mark in pieces of one style each: the mark with a
+    run's colour, bold, italic, underline and strike laid over it. Drawn one
+    after another along the baseline. */
+export function lineSpans(s: TextMark, li: number): { text: string; s: TextMark }[] {
+  const lines = String(s.text).split('\n');
+  const line = lines[li] ?? '';
+  if (!line) return [];
+  if (!s.runs || !s.runs.length) return [{ text: line, s }];
+  let start = 0;
+  for (let j = 0; j < li; j++) start += lines[j]!.length + 1;
+  const end = start + line.length;
+  const out: { text: string; s: TextMark; r: StyleRun | null }[] = [];
+  const push = (a: number, b: number, r: StyleRun | null) => {
+    const last = out[out.length - 1];
+    if (last && sameStyle(last.r, r)) {
+      last.text += line.slice(a - start, b - start);
+      return;
+    }
+    const m: TextMark = r
+      ? { ...s, runs: null, c: r.c ?? s.c, b: r.b ?? s.b, i: r.i ?? s.i, u: r.u ?? s.u, k: r.k ?? s.k }
+      : { ...s, runs: null };
+    out.push({ text: line.slice(a - start, b - start), s: m, r });
+  };
+  let at = 0;
+  for (const r of s.runs) {
+    const a = Math.max(at, start),
+      b = Math.min(at + r.n, end);
+    if (b > a) push(a, b, r);
+    at += r.n;
+    if (at >= end) break;
+  }
+  if (at < end) push(Math.max(at, start), end, null);
+  return out.map((x) => ({ text: x.text, s: x.s }));
+}
+const sameStyle = (p: StyleRun | null, q: StyleRun | null) =>
+  !!p && !!q && p.c === q.c && !!p.b === !!q.b && !!p.i === !!q.i && !!p.u === !!q.u && !!p.k === !!q.k;
+
+/** The width of line `li`, its pieces measured each in its own style; null
+    while fonts are not ready. */
+export function lineWidth(s: TextMark, li: number, measure: MeasureText): number | null {
+  if (!s.runs || !s.runs.length) return measure(s, String(s.text).split('\n')[li] ?? '');
+  let w = 0;
+  for (const p of lineSpans(s, li)) {
+    const pw = measure(p.s, p.text);
+    if (pw == null) return null;
+    w += pw;
+  }
+  return w;
 }
 
 /** Baseline origin of line `li` of a text mark, turned with the rest.

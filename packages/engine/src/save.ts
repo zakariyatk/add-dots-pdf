@@ -35,7 +35,16 @@ import {
   type PDFPage,
 } from 'pdf-lib';
 import { embedTextFont, fontIdx, isFileFont, type FontFileSource } from './fonts';
-import { arrowHead, boxOf, lineOrigin, rotPt, textRect, type MeasureText } from './geometry';
+import {
+  arrowHead,
+  boxOf,
+  lineOrigin,
+  lineSpans,
+  lineWidth,
+  rotPt,
+  textRect,
+  type MeasureText,
+} from './geometry';
 import { isText, type AnyMark, type Mark, type PageItem, type Source, type TextMark } from './model';
 import { dashOf, hexToRgb01, shCap, shJoin, shOp } from './style';
 import { drawLine, embedFallbacks, needsUnicode, textIn, textWidth, type UnicodeFontSource } from './text';
@@ -274,8 +283,12 @@ async function compose(
           embedded[want] = await out.embedFont(StandardFonts[want as keyof typeof StandardFonts]);
         continue;
       }
-      const key = s.f + fontIdx(s.b, s.i);
-      if (!embedded[key]) embedded[key] = await embedTextFont(out, s.f, fontIdx(s.b, s.i), hooks.fonts);
+      /* the mark's own style, and each bold or italic its runs add */
+      const styles = [s, ...(s.runs || []).map((r) => ({ b: r.b ?? s.b, i: r.i ?? s.i }))];
+      for (const st of styles) {
+        const key = s.f + fontIdx(st.b, st.i);
+        if (!embedded[key]) embedded[key] = await embedTextFont(out, s.f, fontIdx(st.b, st.i), hooks.fonts);
+      }
     }
   }
   const fontFor = (s: TextMark) => embedded[s.f + fontIdx(s.b, s.i)] || null;
@@ -369,7 +382,7 @@ async function compose(
       let gsName: PDFName | null = null;
       txt.split('\n').forEach((line, li) => {
         if (!line) return;
-        const lineW = measureS(s, line) || 0;
+        const lineW = lineWidth(s, li, measureS) || 0;
         const lo = lineOrigin(s, li, lineW, measureS);
         const enc = pf ? encodePageFont(pf, line) : null;
         if (pf && enc) {
@@ -388,44 +401,59 @@ async function compose(
             endText(),
             popGraphicsState(),
           );
-        } else
-          drawLine(
-            p,
-            line,
-            { font: f, fallback: extra.fallback },
-            {
-              x: lo[0],
-              y: lo[1],
-              rotate: degrees(s.r || 0),
-              size: s.size,
-              color: hexRgb(s.c),
-              opacity: shOp(s),
-            },
-          );
-        /* standard PDF fonts carry no underline/strike glyphs, so draw the line
-           ourselves, pivoted about the same baseline point as the text so it
-           turns with it */
-        if (s.u || s.k) {
-          const w = lineW;
-          const th = Math.max(0.5, s.size * 0.06);
-          /* offset above the baseline: negative dips below it (underline),
-             positive rises through the glyphs (strikethrough) */
-          [s.u ? -s.size * 0.08 : null, s.k ? s.size * 0.3 : null].forEach((off) => {
-            if (off == null) return;
-            const corner = [lo[0], lo[1] + off];
-            const o0 = s.r ? rotPt(corner, lo, s.r) : corner;
-            p.drawRectangle({
-              x: o0[0],
-              y: o0[1],
-              width: w,
-              height: th,
-              rotate: degrees(s.r || 0),
-              color: hexRgb(s.c),
-              opacity: shOp(s),
-              borderWidth: 0,
-            });
-          });
+        } else {
+          /* a piece at a time, each in its own style, along the baseline */
+          const t = ((s.r || 0) * Math.PI) / 180;
+          let dx = 0;
+          for (const sp of lineSpans(s, li)) {
+            const ps = sp.s;
+            const pw = measureS(ps, sp.text) || 0;
+            const po = [lo[0] + dx * Math.cos(t), lo[1] + dx * Math.sin(t)];
+            const pfont = fontFor(ps);
+            if (pfont)
+              drawLine(
+                p,
+                sp.text,
+                { font: pfont, fallback: extra.fallback },
+                {
+                  x: po[0],
+                  y: po[1],
+                  rotate: degrees(s.r || 0),
+                  size: s.size,
+                  color: hexRgb(ps.c),
+                  opacity: shOp(s),
+                },
+              );
+            decorate(p, ps, po, pw);
+            dx += pw;
+          }
+          return;
         }
+        decorate(p, s, lo, lineW);
+      });
+    }
+    /* standard PDF fonts carry no underline/strike glyphs, so draw the line
+       ourselves, pivoted about the same baseline point as the text so it
+       turns with it */
+    function decorate(p: PDFPage, s: TextMark, lo: number[], w: number) {
+      if (!s.u && !s.k) return;
+      const th = Math.max(0.5, s.size * 0.06);
+      /* offset above the baseline: negative dips below it (underline),
+         positive rises through the glyphs (strikethrough) */
+      [s.u ? -s.size * 0.08 : null, s.k ? s.size * 0.3 : null].forEach((off) => {
+        if (off == null) return;
+        const corner = [lo[0]!, lo[1]! + off];
+        const o0 = s.r ? rotPt(corner, lo, s.r) : corner;
+        p.drawRectangle({
+          x: o0[0]!,
+          y: o0[1]!,
+          width: w,
+          height: th,
+          rotate: degrees(s.r || 0),
+          color: hexRgb(s.c),
+          opacity: shOp(s),
+          borderWidth: 0,
+        });
       });
     }
 

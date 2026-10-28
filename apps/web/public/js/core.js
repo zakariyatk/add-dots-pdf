@@ -2510,23 +2510,31 @@
     const lines = art ? [] : String(s.text).split('\n');
     lines.forEach(function (line, li) {
       if (!line) return;
-      const w = textWidth(s, line);
+      const w = E.lineWidth(s, li, textWidth);
       const lo = lineOrigin(s, li, w);
       const pt = vp.convertToViewportPoint(lo[0], lo[1]);
-      const t = document.createElementNS(SVGNS, 'text');
-      t.setAttribute('class', 'tx');
-      t.setAttribute('x', pt[0]); t.setAttribute('y', pt[1]);
-      t.setAttribute('fill', s.c);
-      t.style.fillOpacity = shOp(s);
-      t.setAttribute('font-size', s.size * S.scale);
-      t.setAttribute('font-family', CSS_FONT[s.f]);
-      if (s.b) t.setAttribute('font-weight', 'bold');
-      if (s.i) t.setAttribute('font-style', 'italic');
-      if (s.u || s.k) t.style.textDecoration = textDecoLine(s);
-      if (ang) t.setAttribute('transform', 'rotate(' + ang + ',' + pt[0] + ',' + pt[1] + ')');
-      if (w) { t.setAttribute('textLength', w * S.scale); t.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
-      t.textContent = line;
-      g.appendChild(clicker(t));
+      /* a piece at a time: part of the text can be bold, coloured or
+         underlined on its own, as a selection in Word is */
+      let dx = 0;
+      E.lineSpans(s, li).forEach(function (sp) {
+        const ps = sp.s;
+        const pw = textWidth(ps, sp.text);
+        const t = document.createElementNS(SVGNS, 'text');
+        t.setAttribute('class', 'tx');
+        t.setAttribute('x', pt[0] + dx * S.scale); t.setAttribute('y', pt[1]);
+        t.setAttribute('fill', ps.c);
+        t.style.fillOpacity = shOp(s);
+        t.setAttribute('font-size', s.size * S.scale);
+        t.setAttribute('font-family', CSS_FONT[s.f]);
+        if (ps.b) t.setAttribute('font-weight', 'bold');
+        if (ps.i) t.setAttribute('font-style', 'italic');
+        if (ps.u || ps.k) t.style.textDecoration = textDecoLine(ps);
+        if (ang) t.setAttribute('transform', 'rotate(' + ang + ',' + pt[0] + ',' + pt[1] + ')');
+        if (pw) { t.setAttribute('textLength', pw * S.scale); t.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
+        t.textContent = sp.text;
+        g.appendChild(clicker(t));
+        dx += pw || sp.text.length * s.size * 0.5;
+      });
     });
 
     if (selected) {
@@ -6015,10 +6023,13 @@
   function closeEditor(commit) {
     const ed = S.editing;
     if (!ed) return;
-    const val = ed.box.querySelector('textarea').value;
+    const got = edRead(ed.el, ed.item);
+    const val = got.text;
     S.editing = null;
+    document.removeEventListener('selectionchange', ed.onSel);
     document.body.classList.remove('editing');
     ed.box.remove();
+    syncTextButtons();
     /* for Edit Object: Esc on a line just lifted off the page puts it back */
     EXT.emit('textEditClosed', { it: ed.it, idx: ed.idx, commit: !!commit,
       changed: ed.idx < 0 || !ed.it.shapes[ed.idx] || ed.it.shapes[ed.idx].text !== val });
@@ -6036,7 +6047,7 @@
     /* every style field lives on ed.item already (liveStyle keeps it in sync
        as the toolbar is used) — carry all of it over rather than hand-picking
        fields here, which is exactly how underline/strike went missing before */
-    const next = Object.assign({}, ed.item, { text: val });
+    const next = Object.assign({}, ed.item, { text: val, runs: edRuns(got.styles, ed.item) });
     if (ed.idx >= 0) ed.it.shapes[ed.idx] = next; else ed.it.shapes.push(next);
     drawShapes(ed.it);
     drawThumb(ed.it);
@@ -6100,51 +6111,320 @@
     wrapEl.className = 'texted';
     wrapEl.style.left = box.left + 'px';
     wrapEl.style.top = box.top + 'px';
-    /* room past the text's own width, or the box wraps it (padding, the caret) */
-    wrapEl.style.width = Math.max(isMobile() ? 150 : 90, box.width + (idx >= 0 ? editPx(item) * 1.5 + 16 : 0)) + 'px';
 
-    const ta = document.createElement('textarea');
-    ta.value = item.text;
-    ta.rows = 1;
+    /* one line until Enter, as in Word or Acrobat: the box grows to the
+       right with the text instead of wrapping it */
+    const ta = document.createElement('div');
+    ta.className = 'txed';
+    ta.contentEditable = 'true';
+    ta.spellcheck = true;
+    ta.setAttribute('role', 'textbox');
+    ta.setAttribute('aria-multiline', 'true');
     ta.style.fontFamily = CSS_FONT[item.f];
     ta.style.fontSize = editPx(item) + 'px';
-    ta.style.fontWeight = item.b ? '700' : '400';
-    ta.style.fontStyle = item.i ? 'italic' : 'normal';
-    ta.style.textDecoration = textDecoLine(item);
     ta.style.textAlign = item.align || 'left';
     ta.style.color = item.c;
     ta.style.background = item.bg ? cssRgba(item.bg, item.bgOp == null ? 1 : item.bgOp)
-                          : item.patch ? item.patch.c : 'rgba(255,255,255,.94)';
-    ta.style.height = Math.max(box.height, editPx(item) * 1.35) + 'px';
+                          : item.patch ? item.patch.c : 'transparent';
+    ta.style.minWidth = Math.max(isMobile() ? 150 : 90, box.width) + 'px';
+    ta.style.minHeight = Math.max(box.height, editPx(item) * 1.35) + 'px';
+    edRender(ta, String(item.text), edStyles(item));
 
     /* no Apply or Cancel: as in Acrobat and Foxit, a click anywhere else,
        another tool, or Ctrl+Enter keeps the text; Esc takes it back */
     wrapEl.appendChild(ta);
     it.inner.appendChild(wrapEl);
     document.body.classList.add('editing');
-    S.editing = { it: it, item: item, idx: idx, box: wrapEl, at: Date.now() };
+    const ed = S.editing = { it: it, item: item, idx: idx, box: wrapEl, el: ta, at: Date.now(),
+                             sel: [0, 0], pending: null };
 
     /* hide the live item while its editor is open */
     if (idx >= 0) {
       const keep = it.shapes[idx];
-      it.shapes[idx] = Object.assign({}, keep, { text: '' });
+      it.shapes[idx] = Object.assign({}, keep, { text: '', runs: null });
       drawShapes(it);
       it.shapes[idx] = keep;
     }
 
-    function grow() { ta.style.height = 'auto'; ta.style.height = (ta.scrollHeight + 2) + 'px'; }
-    ta.addEventListener('input', grow);
+    let before = null;
+    ta.addEventListener('beforeinput', function (e) {
+      const s0 = edLiveSel(ed);
+      before = { len: edRead(ta, ed.item).text.length, at: Math.min(s0[0], s0[1]) };
+      /* pasted or dropped text comes in plain, in the style where it lands */
+      if ((e.inputType === 'insertFromPaste' || e.inputType === 'insertFromDrop') && e.dataTransfer) {
+        e.preventDefault();
+        document.execCommand('insertText', false, e.dataTransfer.getData('text/plain').replace(/\r\n?/g, '\n'));
+      } else if (e.inputType === 'insertParagraph') {
+        e.preventDefault();
+        document.execCommand('insertLineBreak');
+      }
+    });
+    ta.addEventListener('input', function (e) {
+      if (e.isComposing) return;
+      const got = edRead(ta, ed.item);
+      const pend = ed.pending;
+      ed.pending = null;
+      /* Bold (and the rest) pressed with nothing selected: the letters typed
+         next take it, as in Word */
+      if (pend && before && pend.at === before.at && got.text.length > before.len) {
+        for (let k = before.at; k < before.at + got.text.length - before.len; k++) {
+          got.styles[k] = Object.assign({}, got.styles[k], pend.st);
+        }
+        got.dirty = true;
+      }
+      if (got.dirty) {
+        const caret = edGetSel(ta);
+        edRender(ta, got.text, got.styles);
+        edSetSel(ta, caret[0], caret[1]);
+      }
+    });
+    ed.onSel = function () {
+      if (S.editing !== ed) return;
+      const s = window.getSelection();
+      if (!s.rangeCount || !ta.contains(s.anchorNode)) return;
+      ed.sel = edGetSel(ta);
+      if (ed.pending && ed.pending.at !== Math.min(ed.sel[0], ed.sel[1])) ed.pending = null;
+      syncTextButtons();
+    };
+    document.addEventListener('selectionchange', ed.onSel);
     ta.addEventListener('keydown', function (e) {
       e.stopPropagation();
       /* Enter drops to the next line, like a normal text editor — it does not
          close the box. A click outside, another tool or Ctrl+Enter keeps it;
          Escape takes it back. */
-      if ((e.key === 'Enter' || e.key === 'Return') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); closeEditor(true); }
-      if (e.key === 'Escape') { e.preventDefault(); closeEditor(false); }
+      if ((e.key === 'Enter' || e.key === 'Return') && (e.metaKey || e.ctrlKey)) { e.preventDefault(); closeEditor(true); return; }
+      if (e.key === 'Escape') { e.preventDefault(); closeEditor(false); return; }
+      /* Ctrl+B, I, U as in Word, on the selection */
+      const k = (e.ctrlKey || e.metaKey) && !e.altKey ? e.key.toLowerCase() : '';
+      const prop = { b: 'b', i: 'i', u: 'u' }[k];
+      if (prop) { e.preventDefault(); toggleTextStyle(prop); }
     });
     ta.focus();
-    if (caretEnd) ta.setSelectionRange(ta.value.length, ta.value.length); else ta.select();
-    grow();
+    const n = String(item.text).length;
+    if (caretEnd) edSetSel(ta, n, n); else edSetSel(ta, 0, n);
+    ed.sel = edGetSel(ta);
+    syncTextButtons();
+  }
+
+  /* ---- the text box's own editor ----
+     Word-style: bold, italic, underline, strikethrough and colour can go on
+     the selected words only. The editor holds one span a stretch of one style,
+     its whole style in data-r, and a <br> a line break; it is read back into
+     the mark's text and its style runs (engine: StyleRun) when it closes. */
+  const RUN_KEYS = ['c', 'b', 'i', 'u', 'k'];
+  function baseStyle(item) {
+    return { c: String(item.c).toUpperCase(), b: !!item.b, i: !!item.i, u: !!item.u, k: !!item.k };
+  }
+  /* the style of each character of a mark's text */
+  function edStyles(item) {
+    const text = String(item.text), base = baseStyle(item), out = [];
+    let at = 0;
+    (item.runs || []).forEach(function (r) {
+      const st = { c: r.c ? String(r.c).toUpperCase() : base.c, b: r.b != null ? !!r.b : base.b,
+                   i: r.i != null ? !!r.i : base.i, u: r.u != null ? !!r.u : base.u,
+                   k: r.k != null ? !!r.k : base.k };
+      for (let j = 0; j < r.n && at < text.length; j++) out[at++] = st;
+    });
+    while (at < text.length) out[at++] = base;
+    return out;
+  }
+  function sameSt(p, q) {
+    return RUN_KEYS.every(function (k) { return p[k] === q[k]; });
+  }
+  /* runs for the mark, only what differs from its own style; null if nothing */
+  function edRuns(styles, item) {
+    const base = baseStyle(item), runs = [];
+    let any = false;
+    styles.forEach(function (st) {
+      const r = { n: 1 };
+      RUN_KEYS.forEach(function (k) { if (st[k] !== base[k]) { r[k] = st[k]; any = true; } });
+      const last = runs[runs.length - 1];
+      if (last && RUN_KEYS.every(function (k) { return last[k] === r[k]; })) last.n++;
+      else runs.push(r);
+    });
+    return any ? runs : null;
+  }
+  function edRender(el, text, styles) {
+    el.textContent = '';
+    let span = null, cur = null;
+    for (let k = 0; k < text.length; k++) {
+      const ch = text[k];
+      if (ch === '\n') { el.appendChild(document.createElement('br')); span = null; continue; }
+      const st = styles[k];
+      if (!span || !sameSt(cur, st)) {
+        span = document.createElement('span');
+        span.dataset.r = JSON.stringify(st);
+        span.style.color = st.c;
+        span.style.fontWeight = st.b ? '700' : '400';
+        span.style.fontStyle = st.i ? 'italic' : 'normal';
+        span.style.textDecoration = textDecoLine(st);
+        el.appendChild(span);
+        cur = st;
+      }
+      span.appendChild(document.createTextNode(ch));
+    }
+    /* a line break at the very end needs one more to show its empty line */
+    if (text.endsWith('\n')) el.appendChild(document.createElement('br'));
+    el.normalize();
+  }
+  /* the text and each character's style back out of the editor; dirty when
+     the browser left something other than our spans and breaks (typing into
+     an empty box, a deleted span), so it is drawn again */
+  function edRead(el, item) {
+    const base = baseStyle(item);
+    let text = '', dirty = false;
+    const styles = [];
+    (function walk(p, st) {
+      p.childNodes.forEach(function (c, k) {
+        if (c.nodeType === 3) {
+          const s = c.data.replace(/ /g, ' ');
+          if (p === el || p.nodeName !== 'SPAN') dirty = true;
+          for (let j = 0; j < s.length; j++) { text += s[j]; styles.push(st); }
+        } else if (c.nodeName === 'BR') {
+          if (p !== el) dirty = true;
+          /* the extra break that shows an empty last line */
+          if (!(p === el && k === p.childNodes.length - 1 && text.endsWith('\n'))) { text += '\n'; styles.push(st); }
+        } else if (c.nodeType === 1) {
+          let cs = st;
+          if (c.nodeName === 'SPAN' && c.dataset.r && p === el) {
+            try { cs = JSON.parse(c.dataset.r); } catch (e) { dirty = true; }
+          } else {
+            dirty = true;
+            if ((c.nodeName === 'DIV' || c.nodeName === 'P') && text && !text.endsWith('\n')) { text += '\n'; styles.push(st); }
+          }
+          walk(c, cs);
+        }
+      });
+    })(el, base);
+    return { text: text, styles: styles, dirty: dirty };
+  }
+  /* the selection as character offsets, and back */
+  function edPos(el, node, off) {
+    let n = 0, done = false;
+    (function walk(p) {
+      for (let k = 0; k < p.childNodes.length && !done; k++) {
+        if (p === node && k === off) { done = true; return; }
+        const c = p.childNodes[k];
+        if (c === node && c.nodeType === 3) { n += off; done = true; return; }
+        if (c.nodeType === 3) n += c.data.length;
+        else if (c.nodeName === 'BR') n += 1;
+        else walk(c);
+      }
+      if (p === node) done = true;
+    })(el);
+    return n;
+  }
+  function edPoint(el, n) {
+    let found = null;
+    (function walk(p) {
+      for (let k = 0; k < p.childNodes.length && !found; k++) {
+        const c = p.childNodes[k];
+        if (c.nodeType === 3) {
+          if (n <= c.data.length) { found = [c, n]; return; }
+          n -= c.data.length;
+        } else if (c.nodeName === 'BR') {
+          if (n === 0) { found = [p, k]; return; }
+          n -= 1;
+        } else walk(c);
+      }
+    })(el);
+    return found || [el, el.childNodes.length];
+  }
+  function edGetSel(el) {
+    const s = window.getSelection();
+    if (!s.rangeCount || !el.contains(s.anchorNode)) return [0, 0];
+    return [edPos(el, s.anchorNode, s.anchorOffset), edPos(el, s.focusNode, s.focusOffset)];
+  }
+  /* the selection now when it is in the box; the last one seen when a
+     button or the colour palette has taken it away */
+  function edLiveSel(ed) {
+    const s = window.getSelection();
+    if (s.rangeCount && ed.el.contains(s.anchorNode)) ed.sel = edGetSel(ed.el);
+    return ed.sel;
+  }
+  function edSetSel(el, a, b) {
+    const pa = edPoint(el, a), pb = edPoint(el, b);
+    try { window.getSelection().setBaseAndExtent(pa[0], pa[1], pb[0], pb[1]); } catch (e) {}
+  }
+
+  /* B, I, U, S and colour while a box is open. With part of the text
+     selected they go on that part only; with all of it, or an empty box, on
+     the whole box (and the style the next box starts with); with just the
+     caret in the text, on the letters typed next. */
+  function editTarget() {
+    const ed = S.editing;
+    if (!ed || !ed.el) return null;
+    const got = edRead(ed.el, ed.item);
+    const sel = edLiveSel(ed);
+    const a = Math.min(sel[0], sel[1]), b = Math.max(sel[0], sel[1]);
+    const whole = !got.text.length || (a === 0 && b >= got.text.length);
+    return { ed: ed, got: got, a: a, b: b, whole: whole, caret: !whole && a === b };
+  }
+  function restyle(tg, prop, val) {
+    const ed = tg.ed;
+    if (tg.whole) ed.item[prop] = val;
+    const from = tg.whole ? 0 : tg.a, to = tg.whole ? tg.got.text.length : tg.b;
+    for (let k = from; k < to; k++) {
+      const st = Object.assign({}, tg.got.styles[k]);
+      st[prop] = val;
+      tg.got.styles[k] = st;
+    }
+    edRender(ed.el, tg.got.text, tg.got.styles);
+    ed.el.focus();
+    edSetSel(ed.el, ed.sel[0], ed.sel[1]);
+  }
+  const STYLE_STATE = { b: 'bold', i: 'ital', u: 'underline', k: 'strike' };
+  const STYLE_BTN = { b: 'txBold', i: 'txItal', u: 'txUnd', k: 'txStrike' };
+  function toggleTextStyle(prop) {
+    const tg = editTarget();
+    if (!tg || tg.whole) {
+      S[STYLE_STATE[prop]] = !S[STYLE_STATE[prop]];
+      $(STYLE_BTN[prop]).classList.toggle('on', S[STYLE_STATE[prop]]);
+      if (tg) restyle(tg, prop, S[STYLE_STATE[prop]]);
+      return;
+    }
+    if (tg.caret) {
+      /* for the letters typed next */
+      const ed = tg.ed;
+      const here = (ed.pending && ed.pending.st) || {};
+      const now = prop in here ? here[prop] : !!(tg.got.styles[tg.a - 1] || baseStyle(ed.item))[prop];
+      here[prop] = !now;
+      ed.pending = { at: tg.a, st: here };
+      $(STYLE_BTN[prop]).classList.toggle('on', !now);
+      ed.el.focus();
+      edSetSel(ed.el, tg.a, tg.a);
+      return;
+    }
+    const all = tg.got.styles.slice(tg.a, tg.b).every(function (st) { return st[prop]; });
+    restyle(tg, prop, !all);
+    syncTextButtons();
+  }
+  function colorText(c) {
+    const tg = editTarget();
+    if (!tg) return;
+    c = String(c).toUpperCase();
+    if (tg.caret) {
+      const ed = tg.ed;
+      ed.pending = { at: tg.a, st: Object.assign((ed.pending && ed.pending.st) || {}, { c: c }) };
+      ed.el.focus();
+      edSetSel(ed.el, tg.a, tg.a);
+      return;
+    }
+    if (tg.whole) tg.ed.el.style.color = c;
+    restyle(tg, 'c', c);
+  }
+  /* the B, I, U, S buttons show the style where the caret or selection is */
+  function syncTextButtons() {
+    const tg = editTarget();
+    Object.keys(STYLE_BTN).forEach(function (prop) {
+      let on = S[STYLE_STATE[prop]];
+      if (tg && tg.got.text.length) {
+        const sts = tg.a === tg.b ? [tg.got.styles[Math.max(0, tg.a - 1)]] : tg.got.styles.slice(tg.a, tg.b);
+        on = sts.every(function (st) { return st && st[prop]; });
+        if (tg.ed.pending && prop in tg.ed.pending.st) on = tg.ed.pending.st[prop];
+      }
+      $(STYLE_BTN[prop]).classList.toggle('on', !!on);
+    });
   }
 
   /* ---------------- crop ---------------- */
@@ -7497,10 +7777,7 @@
       x.classList.toggle('on', x.dataset.c.toUpperCase() === String(c).toUpperCase());
     });
     $('swMoreChip').style.background = c;
-    if (S.editing) {
-      S.editing.item.c = c;
-      S.editing.box.querySelector('textarea').style.color = c;
-    }
+    if (S.editing) colorText(c);
   }
   /* one dropdown for the colour: the chip shows it, the palette chooses it */
   (function () {
@@ -7592,16 +7869,16 @@
   $('tPin').addEventListener('click', function () { toggleTool('pin'); });
   $('txFont').addEventListener('change', function () { S.font = $('txFont').value; liveStyle(); });
   $('txBold').addEventListener('click', function () {
-    S.bold = !S.bold; $('txBold').classList.toggle('on', S.bold); liveStyle();
+    toggleTextStyle('b');
   });
   $('txItal').addEventListener('click', function () {
-    S.ital = !S.ital; $('txItal').classList.toggle('on', S.ital); liveStyle();
+    toggleTextStyle('i');
   });
   $('txUnd').addEventListener('click', function () {
-    S.underline = !S.underline; $('txUnd').classList.toggle('on', S.underline); liveStyle();
+    toggleTextStyle('u');
   });
   $('txStrike').addEventListener('click', function () {
-    S.strike = !S.strike; $('txStrike').classList.toggle('on', S.strike); liveStyle();
+    toggleTextStyle('k');
   });
   $('txSize').addEventListener('change', function () {
     const v = parseFloat($('txSize').value);
@@ -7657,21 +7934,17 @@
   function liveStyle() {
     const ed = S.editing;
     if (!ed) return;
-    ed.item.f = S.font; ed.item.b = S.bold; ed.item.i = S.ital;
-    ed.item.u = S.underline; ed.item.k = S.strike;
+    ed.item.f = S.font;
     ed.item.align = S.align; ed.item.bg = S.bg; ed.item.bgOp = S.bgOp;
     const v = parseFloat($('txSize').value);
     if (v > 0 && v < 400) ed.item.size = v;
-    const ta = ed.box.querySelector('textarea');
+    const ta = ed.el;
     ta.style.fontFamily = CSS_FONT[ed.item.f];
-    ta.style.fontWeight = ed.item.b ? '700' : '400';
-    ta.style.fontStyle = ed.item.i ? 'italic' : 'normal';
-    ta.style.textDecoration = textDecoLine(ed.item);
     ta.style.textAlign = ed.item.align || 'left';
     if (ed.item.bg) {
       ta.style.background = cssRgba(ed.item.bg, ed.item.bgOp == null ? 1 : ed.item.bgOp);
     } else if (!ed.item.patch) {
-      ta.style.background = 'rgba(255,255,255,.94)';
+      ta.style.background = 'transparent';
     }
     ta.style.fontSize = editPx(ed.item) + 'px';
   }

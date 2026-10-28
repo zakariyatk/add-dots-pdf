@@ -479,11 +479,13 @@
   body[data-tool="select"] .anno .tx,body[data-tool="select"] .anno .patch{pointer-events:all;cursor:move}
   body.editing .capture{pointer-events:none}
 
-  .texted{position:absolute;z-index:6;display:flex;flex-direction:column;gap:5px}
-  .texted textarea{
-    width:100%;min-height:22px;resize:none;overflow:hidden;border:1px solid #777;
-    border-radius:3px;padding:1px 3px;margin:0;line-height:1.2;
-    box-shadow:0 0 0 3px rgba(0,0,0,.14);outline:none;
+  .texted{position:absolute;z-index:6;display:flex;flex-direction:column;gap:5px;width:max-content}
+  /* one line until Enter: the box grows with the text, no wrapping, and
+     only a thin frame round it, no shadow */
+  .texted .txed{
+    display:inline-block;white-space:pre;min-height:22px;overflow:visible;
+    border:1px solid rgba(115,87,255,.7);border-radius:2px;padding:1px 3px;margin:0;
+    line-height:1.2;outline:none;cursor:text;caret-color:currentColor;
   }
 
   .txctl{display:flex;align-items:center;gap:6px}

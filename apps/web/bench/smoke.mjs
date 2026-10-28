@@ -1880,7 +1880,52 @@ try {
         }, tx)),
       tool: await page.evaluate(() => window.ADDPDF.S.tool),
     });
-    await page.keyboard.press('Escape');
+    /* as in Word: Bold on a selected word makes that word bold, not the box;
+       and the box keeps to one line, with no shadow, until Enter */
+    if (opened) {
+      await page.keyboard.press('End');
+      await page.keyboard.press('ArrowLeft', { delay: 10 });
+      for (let k = 0; k < 2; k++) await page.keyboard.press('ArrowLeft');
+      for (let k = 0; k < 5; k++) await page.keyboard.press('Shift+ArrowLeft');
+      await page.keyboard.press('Control+b');
+      await page.keyboard.press('End');
+      await page.keyboard.type(' and this goes on a good long way past the box without wrapping');
+      const look = await page.evaluate(() => {
+        const el = document.querySelector('.texted .txed');
+        const cs = getComputedStyle(el);
+        return {
+          shadow: cs.boxShadow,
+          ws: cs.whiteSpace,
+          h: el.offsetHeight,
+          lh: parseFloat(cs.fontSize) * 1.2,
+        };
+      });
+      await page.keyboard.press('Control+Enter');
+      await page.waitForFunction(() => !window.ADDPDF.S.editing);
+      const got = await page.evaluate(() => {
+        for (const it of window.ADDPDF.S.items) {
+          const s = it.shapes.find((m) => m.t === 'text' && /^Double click me and/.test(m.text));
+          if (s)
+            return {
+              runs: s.runs,
+              bold: [...it.anno.querySelectorAll('text.tx')].map(
+                (e) => e.textContent + ':' + (e.getAttribute('font-weight') || ''),
+              ),
+            };
+        }
+        return null;
+      });
+      check(
+        'Bold on a selection bolds only those words; the box stays one line, with no shadow',
+        !!got &&
+          JSON.stringify(got.runs) === JSON.stringify([{ n: 7 }, { n: 5, b: true }, { n: 66 }]) &&
+          got.bold.includes('click:bold') &&
+          look.shadow === 'none' &&
+          look.ws === 'pre' &&
+          look.h < look.lh * 2,
+        { got, look },
+      );
+    } else await page.keyboard.press('Escape');
 
     /* Space held: dragging moves the view and draws nothing */
     await page.evaluate(() => window.ADDPDF.setTool('rect'));
@@ -4053,10 +4098,10 @@ try {
       await page.mouse.move(px, py);
       await page.waitForSelector('.anno .eohl', { timeout: 5000 }).catch(() => {});
       await page.mouse.click(px, py);
-      await page.waitForSelector('.texted textarea', { timeout: 10000 }).catch(() => {});
+      await page.waitForSelector('.texted .txed', { timeout: 10000 }).catch(() => {});
       return page.evaluate(() => {
-        const ta = document.querySelector('.texted textarea');
-        return ta ? ta.value : null;
+        const ta = document.querySelector('.texted .txed');
+        return ta ? ta.innerText.replace(/\n$/, '') : null;
       });
     };
     const first = await pick(120, 704);
