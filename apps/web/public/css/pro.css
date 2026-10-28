@@ -563,6 +563,15 @@ body.panning, body.panning * { cursor: grabbing !important }
 body[data-tool="pan"] .textLayer { pointer-events: none; user-select: none }
 body[data-tool="pan"] .stage { scroll-behavior: auto }
 
+/* Drag zoom: the box being dragged round the part to enlarge */
+body[data-tool="zoombox"] .capture { cursor: zoom-in }
+body[data-tool="zoombox"] .textLayer { pointer-events: none; user-select: none }
+body[data-tool="zoombox"] .stage { scroll-behavior: auto }
+.zoombox {
+  position: fixed; z-index: 60; pointer-events: none;
+  border: 1.5px dashed #7357FF; background: rgba(115, 87, 255, .12); border-radius: 2px;
+}
+
 /* The free float. Panning past the end of the scroller lands here, which is
    what lets the page be dragged anywhere on screen instead of stopping at the
    edge of its own content. A transform does not move offsetTop, so core's

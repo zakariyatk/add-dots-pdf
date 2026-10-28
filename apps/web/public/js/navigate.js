@@ -1,5 +1,5 @@
-/* Add Dots PDF — Pan
-   ------------------
+/* Add Dots PDF — Pan (and Drag zoom, further down)
+   ------------------------------------------------
    The hand tool. It lives on the View tab beside the zoom controls, because
    panning is a way of looking at the document rather than a way of marking it.
    It declares itself `bare`, so it gets none of the editing chrome — no mode
@@ -260,6 +260,111 @@
       e.preventDefault();
       applyPanDelta(e.deltaX, e.deltaY);
     }, { passive: false });
+
+    /* ---------------- Drag zoom ---------------- */
+
+    /* Acrobat's marquee zoom, beside Zoom in: drag a box round the part you
+       want and it fills the window, centred. A click without a drag zooms in
+       a step on that spot, and Alt with a click zooms out. Bare, as Pan is. */
+    const zb = document.createElement('button');
+    zb.className = 'btn';
+    zb.id = 'tZoomBox';
+    zb.title = 'Drag zoom — drag to select an area to enlarge. Click to zoom in there, Alt+click to zoom out.';
+    zb.setAttribute('aria-label', 'Drag zoom');
+    zb.dataset.label = 'Drag zoom';
+    zb.innerHTML =
+      '<svg viewBox="0 0 24 24">' +
+      /* a dashed box with a magnifier on its corner */
+      '<path d="M9 3H3v6M3 13v2M13 3h2" stroke-dasharray="2 2.2"/>' +
+      '<circle cx="14.5" cy="14.5" r="5"/><line x1="18.2" y1="18.2" x2="21.5" y2="21.5"/>' +
+      '<line x1="12.3" y1="14.5" x2="16.7" y2="14.5"/><line x1="14.5" y1="12.3" x2="14.5" y2="16.7"/>' +
+      '</svg>';
+    $('grpZoom').insertBefore(zb, $('btnFitW'));
+    zb.addEventListener('click', function () { X.toggleTool('zoombox'); });
+    X.toolBtn.zoombox = 'tZoomBox';
+
+    /* the box being dragged, drawn over everything in window coordinates */
+    const box = document.createElement('div');
+    box.className = 'zoombox';
+    box.hidden = true;
+    document.body.appendChild(box);
+    let drag = null;
+
+    function paintBox(e) {
+      const l = Math.min(drag.x, e.clientX), t = Math.min(drag.y, e.clientY);
+      box.style.left = l + 'px'; box.style.top = t + 'px';
+      box.style.width = Math.abs(e.clientX - drag.x) + 'px';
+      box.style.height = Math.abs(e.clientY - drag.y) + 'px';
+    }
+    function dropBox() { drag = null; box.hidden = true; }
+
+    /* Zoom by k so window point (cx, cy) ends in the middle of the stage. The
+       zoom holds one point still: the one that k carries onto the middle,
+       p = (m - k·c) / (1 - k). Once it has settled, the spot is measured on
+       its page and any slip (the gaps between pages do not scale) scrolled
+       out. */
+    function zoomOnto(cx, cy, k) {
+      const r = stage.getBoundingClientRect();
+      const mx = r.left + r.width / 2, my = r.top + r.height / 2;
+      const target = Math.max(X.ZOOM_MIN, Math.min(X.ZOOM_MAX, S.scale * k));
+      k = target / S.scale;
+      if (Math.abs(k - 1) < 0.01) {
+        X.toast(k >= 1 ? 'This is as far as it zooms in' : 'This is as far as it zooms out');
+        return;
+      }
+      const it = S.items.find(function (i) {
+        const b = i.box && i.box.getBoundingClientRect();
+        return b && cx >= b.left && cx <= b.right && cy >= b.top && cy <= b.bottom;
+      });
+      const b0 = it && it.box.getBoundingClientRect();
+      const u = b0 && (cx - b0.left) / b0.width, v = b0 && (cy - b0.top) / b0.height;
+      if (offX || offY) setOffset(0, 0);
+      X.zoomTo(target, (mx - k * cx) / (1 - k), (my - k * cy) / (1 - k));
+      if (!it) return;
+      const t0 = performance.now();
+      (function settle() {
+        if (Math.abs(S.scale - target) > 0.0005 && performance.now() - t0 < 1500) {
+          requestAnimationFrame(settle);
+          return;
+        }
+        const b = it.box.getBoundingClientRect();
+        stage.scrollLeft += b.left + u * b.width - mx;
+        stage.scrollTop += b.top + v * b.height - my;
+      })();
+    }
+
+    X.tools.zoombox = {
+      bare: true,
+      down: function (it, at, e) {
+        drag = { x: e.clientX, y: e.clientY, moved: false };
+        try { it.capture.setPointerCapture(e.pointerId); } catch (err) {}
+      },
+      move: function (it, at, e) {
+        if (!drag) return;
+        if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+        drag.moved = true;
+        box.hidden = false;
+        paintBox(e);
+      },
+      cancel: dropBox,
+      up: function (it, at, e) {
+        if (!drag) return;
+        const d = drag;
+        dropBox();
+        if (!d.moved) { zoomOnto(e.clientX, e.clientY, e.altKey ? 1 / 1.5 : 1.5); return; }
+        const w = Math.abs(e.clientX - d.x), h = Math.abs(e.clientY - d.y);
+        if (w < 12 && h < 12) return;
+        /* the box fills the window, less a margin, and keeps its proportions */
+        const r = stage.getBoundingClientRect();
+        zoomOnto((d.x + e.clientX) / 2, (d.y + e.clientY) / 2,
+          0.94 * Math.min(r.width / Math.max(w, 1), r.height / Math.max(h, 1)));
+      }
+    };
+    /* Escape lets go of a box mid-drag; the tool itself stays */
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && drag) { e.stopPropagation(); dropBox(); }
+    }, true);
+    window.addEventListener('pointercancel', dropBox);
 
     /* ---------------- putting it back ---------------- */
 

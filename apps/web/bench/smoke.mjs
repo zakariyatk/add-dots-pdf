@@ -1900,6 +1900,27 @@ try {
     });
     await page.keyboard.press('Escape');
 
+    /* Drag zoom: a box dragged round a spot zooms it to fill the window, centred */
+    await page.evaluate(() => window.ADDPDF.setTool('zoombox'));
+    const z0 = await page.evaluate(() => window.ADDPDF.S.scale);
+    await page.mouse.move(660, 420);
+    await page.mouse.down();
+    await page.mouse.move(780, 500, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(1500);
+    const zb = await page.evaluate(() => ({ scale: window.ADDPDF.S.scale, tool: window.ADDPDF.S.tool }));
+    /* about 8.7 times for a 120 × 80 box, or as far as zoom goes (6) */
+    check(
+      'Drag zoom: a dragged box zooms in on it, with no mark drawn',
+      zb.scale > Math.min(z0 * 2.5, 5.9) && (await marks()) === m0,
+      { z0, ...zb },
+    );
+    await page.evaluate(() => {
+      window.ADDPDF.setTool('select');
+      document.getElementById('btnFitW').click();
+    });
+    await page.waitForTimeout(600);
+
     /* more than 50 blank pages at once: every one of them */
     const n0 = await page.evaluate(() => window.ADDPDF.S.items.length);
     await page.evaluate(() => window.ADDPDF.openBlankPageDialog());
