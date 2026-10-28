@@ -74,12 +74,21 @@ jobs:
       - name: Upload key
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "::error::ANDROID_KEYSTORE_BASE64 is not set (see the top of play.yml)"
-            exit 1
-          fi
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          fail() { echo "::error::$1"; exit 1; }
+          [ -n "$KEYSTORE_BASE64" ] || fail "ANDROID_KEYSTORE_BASE64 is not set (see the top of play.yml)"
+          [ -n "$STORE_PW" ] || fail "ANDROID_KEYSTORE_PASSWORD is not set"
+          [ -n "$ALIAS" ] || fail "ANDROID_KEY_ALIAS is not set"
+          # pasted into the secret box, the value can pick up line breaks and spaces
+          printf '%s' "$KEYSTORE_BASE64" | tr -d ' \t\r\n' | base64 -d > "$RUNNER_TEMP/upload.jks" 2>/dev/null ||
+            fail "ANDROID_KEYSTORE_BASE64 is not valid base64: paste the whole of upload.jks.base64.txt and nothing else"
+          keytool -list -keystore "$RUNNER_TEMP/upload.jks" -storepass "$STORE_PW" > /dev/null 2>&1 ||
+            fail "the upload key does not open: check ANDROID_KEYSTORE_BASE64 and ANDROID_KEYSTORE_PASSWORD"
+          keytool -list -keystore "$RUNNER_TEMP/upload.jks" -storepass "$STORE_PW" -alias "$ALIAS" > /dev/null 2>&1 ||
+            fail "the upload key has no alias '$ALIAS': ANDROID_KEY_ALIAS should be upload"
+          echo "upload key read"
           echo "ANDROID_KEYSTORE=$RUNNER_TEMP/upload.jks" >> "$GITHUB_ENV"
       - run: npm ci
       # the engine bundle first, then the web app it loads
