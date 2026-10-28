@@ -1256,7 +1256,11 @@
     it.inner.style.height = Math.floor(h) + 'px';
     /* the old bitmap is stretched to the new size and stays up until the
        sharp one replaces it, so the page never goes blank */
-    if (it.canvas) {
+    /* (a bitmap already within a pixel of the size keeps the exact size
+       paintItem gave it) */
+    if (it.canvas && (!it.canvas.style.width ||
+        Math.abs(parseFloat(it.canvas.style.width) - Math.floor(w)) >= 1 ||
+        Math.abs(parseFloat(it.canvas.style.height) - Math.floor(h)) >= 1)) {
       it.canvas.style.width = Math.floor(w) + 'px';
       it.canvas.style.height = Math.floor(h) + 'px';
     }
@@ -1314,7 +1318,12 @@
 
   function densityChanged() {
     const next = dprNow();
-    if (next !== DPR) { DPR = next; relayout(); }
+    if (next !== DPR) {
+      DPR = next;
+      /* the thumbnails were drawn for the old density too */
+      TLIVE.forEach(function (it) { it.thumbDone = false; });
+      relayout();
+    }
   }
   (function watchDpr() {
     if (!window.matchMedia) return;
@@ -1596,6 +1605,7 @@
       renderItem(it);
       if (TR.on) translatePage(it);
     });
+    snapSoon();
   }
 
   /* ---- the render queue ----
@@ -1700,16 +1710,17 @@
     const rs = DPR * k;
     /* Painted off screen and swapped in whole: the stretched old picture stays
        up until then, so zooming never flashes white. */
-    const fw = Math.max(1, Math.floor(v.width * rs)), fh = Math.max(1, Math.floor(v.height * rs));
+    const fw = gridPx(Math.floor(v.width), rs), fh = gridPx(Math.floor(v.height), rs);
     /* Zooming on past the cap would draw the same bitmap again: the whole
        page at the most pixels allowed. Keep it, stretched to the new size;
        the detail layer makes the part on screen sharp. */
     if (k < 1 && it.canvas && it.canvas.width === fw && it.canvas.height === fh &&
         it.baseRot === v.rotation && it.canvas.isConnected) {
-      it.canvas.style.width = Math.floor(v.width) + 'px';
-      it.canvas.style.height = Math.floor(v.height) + 'px';
+      it.canvas.style.width = fw / rs + 'px';
+      it.canvas.style.height = fh / rs + 'px';
       it.rendered = true;
       LIVE.add(it);
+      snapSoon();
       buildTextLayer(it, v).then(function () { markAndReveal(it); });
       detailSoon(0);
       return;
@@ -1757,13 +1768,16 @@
     }
     it.task = null;
     const old = it.canvas;
-    fresh.style.width = Math.floor(v.width) + 'px';
-    fresh.style.height = Math.floor(v.height) + 'px';
+    /* exactly the bitmap's own pixels (see gridPx); the page's box, which
+       clips, stays on whole CSS pixels */
+    fresh.style.width = fw / rs + 'px';
+    fresh.style.height = fh / rs + 'px';
     if (old && old.parentNode) {
       old.parentNode.replaceChild(fresh, old);
       old.width = old.height = 0;                  /* hand the old bitmap back now */
     }
     it.canvas = fresh;
+    snapBitmap(fresh);
     it.baseRot = v.rotation;
     it.rendered = true;
     LIVE.add(it);
@@ -1790,6 +1804,67 @@
   const DETAIL_MARGIN = 0.25;         /* of the screen, each side */
   const BASE_PX_UNDER_DETAIL = 4e6;   /* a page's own bitmap, once a detail covers it */
   let detailTimer = 0;
+  /* ---------------- bitmaps on the screen's pixel grid ----------------
+     At 125% or 150% Windows scaling one CSS pixel is 1.25 or 1.5 screen
+     pixels, so a page laid out on whole CSS pixels still starts between two
+     screen pixels, and so does every page after a hand-pan by an odd amount.
+     The browser then resamples the bitmap on its way to the screen and every
+     line of text comes out soft. Each page bitmap (and its detail layer) is
+     moved by the fraction of a screen pixel that puts it back on the grid:
+     less than one screen pixel, so the marks, the text layer and the pointer
+     maths, which all go by the page and not the bitmap, are untouched. */
+
+  /* A bitmap is copied 1:1 only if its CSS size is exact in the browser's
+     layout units (1/64 of a CSS pixel). 1674 pixels at 125% is 1339.2 CSS
+     pixels, which is not, and the browser scales the page by a hair and
+     filters every line. So a bitmap's side is a whole number of steps: 5
+     pixels (4 CSS pixels) at 125%, 3 at 150%, 1 at 100% and 200%. Rounded
+     up; the page's box (overflow hidden) trims the sliver past its edge. */
+  function gridPx(len, r) {
+    let q = 1;
+    for (let n = 1; n <= 16; n++) {
+      const u = n * 64 / r;
+      if (Math.abs(u - Math.round(u)) < 1e-6) { q = n; break; }
+    }
+    return Math.max(q, Math.ceil(Math.round(len * r) / q) * q);
+  }
+  const SNAP = new WeakMap();
+  function snapBitmap(c) {
+    if (!c || !c.isConnected) return;
+    const r = c.getBoundingClientRect();
+    if (!r.width) return;
+    const d = window.devicePixelRatio || 1;
+    const was = SNAP.get(c) || [0, 0];
+    /* measured from the scroller, not the window: the stage scrolls on its own
+       compositor layer, which is put on whole screen pixels however its box
+       falls (196.25 down under a 157px header at 125%), so it is the bitmap's
+       place inside the stage that has to be whole... */
+    const o = stage.getBoundingClientRect();
+    let x = r.left - was[0] - o.left, y = r.top - was[1] - o.top;
+    /* ...and while the pages float (navigate.js moves them with a transform)
+       the scroll position is put on whole pixels too, so then it is the
+       bitmap's place in the scrolled content */
+    if (stage.classList.contains('floated')) { x += stage.scrollLeft; y += stage.scrollTop; }
+    const dx = (Math.round(x * d) - x * d) / d, dy = (Math.round(y * d) - y * d) / d;
+    if (Math.abs(dx - was[0]) < 1e-3 && Math.abs(dy - was[1]) < 1e-3) return;
+    SNAP.set(c, [dx, dy]);
+    c.style.transform = Math.abs(dx) < 1e-3 && Math.abs(dy) < 1e-3 ? ''
+      : 'translate(' + dx.toFixed(4) + 'px,' + dy.toFixed(4) + 'px)';
+  }
+  /* every position is read in the same frame, after layout has settled;
+     a bitmap already on the grid is not written to at all */
+  let snapRaf = 0;
+  function snapSoon() {
+    if (snapRaf) return;
+    snapRaf = requestAnimationFrame(function () {
+      snapRaf = 0;
+      LIVE.forEach(function (it) { snapBitmap(it.canvas); snapBitmap(it.detail); });
+    });
+  }
+  EXT.snapPages = snapSoon;
+  /* the page column re-centres when a side panel opens or closes */
+  if (window.ResizeObserver) new ResizeObserver(snapSoon).observe(stage);
+
   function detailSoon(delay) {
     clearTimeout(detailTimer);
     detailTimer = setTimeout(updateDetails, delay == null ? 160 : delay);
@@ -1847,7 +1922,7 @@
   }
   function drawDetail(it, v, key, p) {
     if (it.detailTask) { try { it.detailTask.cancel(); } catch (e) {} }
-    const pw = Math.max(1, Math.round(p.w * DPR)), ph = Math.max(1, Math.round(p.h * DPR));
+    const pw = gridPx(p.w, DPR), ph = gridPx(p.h, DPR);
     const task = RW.render(it, v, pw, ph, [DPR, 0, 0, DPR, -p.x * DPR, -p.y * DPR], false, null, true);
     it.detailTask = task;
     DETAILED.add(it);
@@ -1866,7 +1941,7 @@
       c.getContext('2d', { alpha: false }).drawImage(bitmap, 0, 0);
       bitmap.close();
       c.style.left = p.x + 'px'; c.style.top = p.y + 'px';
-      c.style.width = p.w + 'px'; c.style.height = p.h + 'px';
+      c.style.width = pw / DPR + 'px'; c.style.height = ph / DPR + 'px';
       if (c.parentNode !== it.inner) it.inner.insertBefore(c, it.tl);
       it.detailKey = key;
       it.detailRect = { x: p.x, y: p.y, w: p.w, h: p.h };
@@ -2184,7 +2259,11 @@
     /* drawn at a fraction of its size and stretched to fit: a thumbnail
        only has to say which page it is, and a smaller bitmap draws in a
        fraction of the time */
-    const vr = it.page.getViewport({ scale: sc * THUMB_RES, rotation: rot });
+    /* ...but on a screen of 1.25x or more that read as blurry. Drawn at the
+       screen's density instead (2x at most); low-memory mode keeps the small
+       one. */
+    const tk = MEM.tight() ? THUMB_RES : Math.min(DPR, 2);
+    const vr = it.page.getViewport({ scale: sc * tk, rotation: rot });
     /* the marks first, as a picture: the page drawn from the screen's
        bitmap then goes in with them at once, without a blank frame */
     if (S.thumbMarks && it.shapes && it.shapes.length) await textArtReady(it, vr);
@@ -2194,10 +2273,10 @@
     const addMarks = function () {
       if (marksImg) ctx.drawImage(marksImg, 0, 0, it.thumbCanvas.width, it.thumbCanvas.height);
     };
-    it.thumbCanvas.width = Math.max(1, Math.floor(vr.width));
-    it.thumbCanvas.height = Math.max(1, Math.floor(vr.height));
-    it.thumbCanvas.style.width = Math.floor(v.width) + 'px';
-    it.thumbCanvas.style.height = Math.floor(v.height) + 'px';
+    it.thumbCanvas.width = Math.max(1, Math.round(Math.floor(v.width) * tk));
+    it.thumbCanvas.height = Math.max(1, Math.round(Math.floor(v.height) * tk));
+    it.thumbCanvas.style.width = it.thumbCanvas.width / tk + 'px';
+    it.thumbCanvas.style.height = it.thumbCanvas.height / tk + 'px';
     it.thumbCanvas.style.left = (c ? -c.left : 0) + 'px';
     it.thumbCanvas.style.top = (c ? -c.top : 0) + 'px';
     it.thumbShell.style.height = Math.floor(c ? c.height : v.height) + 'px';
