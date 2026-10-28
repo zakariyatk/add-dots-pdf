@@ -2709,6 +2709,15 @@
     const s = it.shapes[idx];
     if (!s || s.t === 'pin') return;             /* pins have their own tool */
     e.preventDefault(); e.stopPropagation();
+    /* A finger would otherwise start the page scrolling, and the browser then
+       cancels the drag — the resize springs back. The touch lands on this very
+       element even once the redraw below has replaced it, so hold it there.
+       A second finger still pinches. */
+    if (e.pointerType === 'touch' && e.target) {
+      e.target.addEventListener('touchstart', function (te) {
+        if (te.touches.length === 1) te.preventDefault();
+      }, { passive: false, once: true });
+    }
     const at = annoPt(it, e), c = rotCenter(s);
     /* grabbing a member of a group moves the whole group */
     const list = selList();
@@ -3185,7 +3194,17 @@
     /* As Acrobat draws them: a round grip at each corner, a pill on each
        side lying along it, and the turn grip a blue disc with the turn
        arrow in it. */
+    /* a fingertip is far wider than a grip: give it an unseen pad to land on */
+    function fingerPad(v, mode, extra) {
+      if (!COARSE) return;
+      const pad = document.createElementNS(SVGNS, 'circle');
+      pad.setAttribute('cx', v[0]); pad.setAttribute('cy', v[1]); pad.setAttribute('r', 22);
+      pad.setAttribute('class', 'knpad');
+      pad.addEventListener('pointerdown', function (e) { beginDrag(it, idx, e, mode, extra); });
+      g.appendChild(pad);
+    }
     function knob(v, mode, extra, turn) {
+      fingerPad(v, mode, extra);
       const el = document.createElementNS(SVGNS, 'circle');
       el.setAttribute('cx', v[0]); el.setAttribute('cy', v[1]); el.setAttribute('r', turn ? 9 : 5);
       el.setAttribute('class', 'kn' + (turn ? ' turn' : ''));
@@ -3207,6 +3226,7 @@
     function sideGrip(p0, p1, mode, side) {
       const mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2;
       const ang = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]) * 180 / Math.PI;
+      fingerPad([mx, my], mode, side);
       const el = document.createElementNS(SVGNS, 'rect');
       el.setAttribute('x', mx - 7); el.setAttribute('y', my - 3.5);
       el.setAttribute('width', 14); el.setAttribute('height', 7); el.setAttribute('rx', 3.5);
