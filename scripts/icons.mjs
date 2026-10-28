@@ -4,8 +4,8 @@
      node scripts/icons.mjs
 
    Writes the website's icons and tab icon, the Windows app's (.ico, .png,
-   .icns and the Store's tiles), and the Android and iOS apps' icons and
-   splash screens. The logo is drawn here (LOGO below); change it here and
+   .icns, the Store's tiles and the .pdf file icon), and the Android and iOS
+   apps' icons and splash screens. The logo is drawn here (LOGO below); change it here and
    run this again. Chromium draws each size (playwright-core, as the e2e
    tests use it); the PNGs are written here, without an alpha channel where
    the old ones had none (Apple turns down an app icon with one). */
@@ -21,13 +21,41 @@ const require = createRequire(join(root, 'apps/web/package.json'));
 const { chromium } = require('playwright-core');
 
 /* the logo on a 100-unit square, without its black square */
-const LOGO =
-  '<path d="M33 18.5H54V31a7 7 0 0 0 7 7H74.5V75a7.5 7.5 0 0 1-7.5 7.5H33a7.5 7.5 0 0 1-7.5-7.5V26a7.5 7.5 0 0 1 7.5-7.5z" fill="#fff"/>' +
-  '<path d="M57.8 19.2L74 35.4H62a4.2 4.2 0 0 1-4.2-4.2z" fill="#7357FF"/>' +
+const PAGE =
+  'M33 18.5H54V31a7 7 0 0 0 7 7H74.5V75a7.5 7.5 0 0 1-7.5 7.5H33a7.5 7.5 0 0 1-7.5-7.5V26a7.5 7.5 0 0 1 7.5-7.5z';
+const FOLD = 'M57.8 19.2L74 35.4H62a4.2 4.2 0 0 1-4.2-4.2z';
+const AD =
   '<path d="M36.3 58.8L41.7 52.2L43.9 58.8z" fill="#7357FF"/>' +
-  '<path d="M45.8 61.4H33.6L42 47.4L51.1 63.8H58.8A9 9 0 0 0 58.8 45.8H49.9" fill="none" stroke="#000" stroke-width="4.6"/>' +
+  '<path d="M45.8 61.4H33.6L42 47.4L51.1 63.8H58.8A9 9 0 0 0 58.8 45.8H49.9" fill="none" stroke="#000" stroke-width="4.6"/>';
+const LOGO =
+  `<path d="${PAGE}" fill="#fff"/><path d="${FOLD}" fill="#7357FF"/>${AD}` +
   '<g fill="#7357FF"><circle cx="40.7" cy="73" r="3.3"/><circle cx="49.9" cy="73" r="3.3"/><circle cx="59" cy="73" r="3.3"/></g>';
 const BLACK = '#000';
+
+/* The icon Windows shows on .pdf files the app opens: the page alone, outlined
+   in black (page and fold stroked thick, which fills the gap between them too),
+   AD raised, and a purple band with PDF drawn in lines (no font to depend on).
+   Below 32 px the letters and AD only blur: there the page, fold and band. */
+const outlined = (w) =>
+  `<g fill="${BLACK}" stroke="${BLACK}" stroke-width="${w}" stroke-linejoin="round"><path d="${PAGE}"/><path d="${FOLD}"/></g>` +
+  `<path d="${PAGE}" fill="#fff"/><path d="${FOLD}" fill="#7357FF"/>`;
+const PDF_LETTERS =
+  '<path d="M27.7 73.5V65.8H30.8A2.05 2.05 0 0 1 30.8 69.9H27.7' +
+  'M36.85 65.8V72.2H39.15A3.2 3.2 0 0 0 39.15 65.8Z' +
+  'M51.65 65.8H46.35V73.5M46.35 69.6H50.65" fill="none" stroke="#fff" stroke-width="2.6"/>';
+const fileIcon = (body) =>
+  `<svg xmlns="http://www.w3.org/2000/svg" viewBox="12 12 76 76" width="100" height="100">${body}</svg>`;
+const pdfFile = fileIcon(
+  outlined(6.4) +
+    `<g transform="translate(0 -7)">${AD}</g>` +
+    `<rect x="15.5" y="61" width="47" height="16" rx="3.5" fill="#7357FF" stroke="${BLACK}" stroke-width="2.4"/>` +
+    PDF_LETTERS,
+);
+const pdfFileSmall = fileIcon(
+  outlined(8) +
+    `<rect x="16" y="60" width="46" height="14" rx="3" fill="#7357FF" stroke="${BLACK}" stroke-width="3"/>`,
+);
+const pdfFileAt = (n) => (n < 32 ? pdfFileSmall : pdfFile);
 
 /* the page alone, scaled about the middle (s = 1: as on the icon) */
 const page = (s) => `<g transform="translate(50 50.5) scale(${s}) translate(-50 -50.5)">${LOGO}</g>`;
@@ -82,6 +110,15 @@ const jobs = [
     n,
     n,
     rounded,
+    true,
+  ]),
+  /* the Store package's .pdf icon (msix/AppxManifest.xml) */
+  [D + 'msix/Assets/PdfFile.png', 44, 44, pdfFile, true],
+  ...[16, 24, 32, 48, 256].map((n) => [
+    D + `msix/Assets/PdfFile.targetsize-${n}_altform-unplated.png`,
+    n,
+    n,
+    pdfFileAt(n),
     true,
   ]),
   [D + 'msix/Assets/Square150x150Logo.png', 150, 150, tile(150, 150), true],
@@ -242,6 +279,10 @@ for (const [file, w, h, text, alpha] of jobs) {
 const icoSizes = [16, 24, 32, 48, 64, 128, 256];
 const icoFile = ico(await Promise.all(icoSizes.map(async (n) => [n, await pngOf(n, n, rounded, true)])));
 writeFileSync(join(root, D + 'src-tauri/icons/icon.ico'), icoFile);
+/* the setup .exe's .pdf icon (src-tauri/installer.nsh), with Explorer's in-between sizes */
+const pdfSizes = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];
+const pdfIco = ico(await Promise.all(pdfSizes.map(async (n) => [n, await pngOf(n, n, pdfFileAt(n), true)])));
+writeFileSync(join(root, D + 'src-tauri/icons/pdf-file.ico'), pdfIco);
 const icnsTypes = [
   ['ic11', 32],
   ['ic12', 64],

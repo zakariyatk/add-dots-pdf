@@ -3,7 +3,8 @@
   "bundle": {
     "resources": {
       "pdfium/pdfium.dll": "pdfium.dll",
-      "pdfium/LICENSE": "pdfium-LICENSE.txt"
+      "pdfium/LICENSE": "pdfium-LICENSE.txt",
+      "icons/pdf-file.ico": "pdf-file.ico"
     }
   }
 }

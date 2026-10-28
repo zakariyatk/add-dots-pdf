@@ -11,6 +11,10 @@
   WriteRegStr HKCU "${ADDDOTS_COMBINE_KEY}" "MUIVerb" "Combine files in Add Dots PDF..."
   WriteRegStr HKCU "${ADDDOTS_COMBINE_KEY}" "Icon" "$INSTDIR\${MAINBINARYNAME}.exe,0"
   WriteRegStr HKCU "${ADDDOTS_COMBINE_KEY}\command" "" '"$INSTDIR\${MAINBINARYNAME}.exe" --combine "%1"'
+  ; PDFs the app opens show the PDF file icon (icons/pdf-file.ico, a bundle
+  ; resource) rather than the app's: the "PDF document" class Tauri has just
+  ; written for bundle.fileAssociations, and removes on uninstall
+  WriteRegStr SHCTX "Software\Classes\PDF document\DefaultIcon" "" "$INSTDIR\pdf-file.ico"
   ; Explorer reads it again
   System::Call 'shell32::SHChangeNotify(i 0x08000000, i 0, p 0, p 0)'
 !macroend
