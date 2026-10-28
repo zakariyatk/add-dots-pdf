@@ -1893,7 +1893,12 @@ try {
       const look = await page.evaluate(() => {
         const el = document.querySelector('.texted .txed');
         const cs = getComputedStyle(el);
+        /* any redraw leaves the placed copy out from under the open box,
+           or the see-through box reads doubled */
+        window.ADDPDF.S.items.forEach((it) => window.ADDPDF.drawShapes(it));
         return {
+          under: [...document.querySelectorAll('.anno text.tx')].filter((e) => /^Double/.test(e.textContent))
+            .length,
           shadow: cs.boxShadow,
           ws: cs.whiteSpace,
           h: el.offsetHeight,
@@ -1916,13 +1921,14 @@ try {
         return null;
       });
       check(
-        'Bold on a selection bolds only those words; the box stays one line, with no shadow',
+        'Bold on a selection bolds only those words; the box stays one line, no shadow, not doubled',
         !!got &&
           JSON.stringify(got.runs) === JSON.stringify([{ n: 7 }, { n: 5, b: true }, { n: 66 }]) &&
           got.bold.includes('click:bold') &&
           look.shadow === 'none' &&
           look.ws === 'pre' &&
-          look.h < look.lh * 2,
+          look.h < look.lh * 2 &&
+          look.under === 0,
         { got, look },
       );
     } else await page.keyboard.press('Escape');

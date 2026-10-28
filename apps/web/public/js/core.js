@@ -2505,9 +2505,12 @@
 
     /* a module may draw the text itself (Edit Object: in the page's own
        font, as pdf.js draws it); the text below until it has */
-    const art = EXT.textArt ? EXT.textArt(it, s, vp) : null;
+    /* not the text open in the editor: the editor shows it, and the box is
+       see-through, so a second copy under it would read doubled */
+    const open = S.editing && S.editing.it === it && S.editing.idx === idx && idx >= 0;
+    const art = !open && EXT.textArt ? EXT.textArt(it, s, vp) : null;
     if (art) g.appendChild(clicker(art));
-    const lines = art ? [] : String(s.text).split('\n');
+    const lines = art || open ? [] : String(s.text).split('\n');
     lines.forEach(function (line, li) {
       if (!line) return;
       const w = E.lineWidth(s, li, textWidth);
