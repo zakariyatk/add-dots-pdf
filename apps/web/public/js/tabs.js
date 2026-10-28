@@ -171,7 +171,7 @@
           b.setAttribute('role', 'tab');
           b.tabIndex = 0;
           b.dataset.id = t.id;
-          b.innerHTML = '<svg viewBox="0 0 24 24" class="dtico"><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/></svg>' +
+          b.innerHTML = '<i class="dtico" aria-hidden="true"></i>' +
             '<span class="dtname"></span><i class="dtdot" aria-hidden="true"></i>' +
             /* not a button of its own: a tab holds nothing focusable. Delete
                or Ctrl+W close the tab from the keyboard */

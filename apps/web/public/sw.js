@@ -87,6 +87,8 @@ const SHELL = [
   'js/vendor/fontkit.umd.min.js',
   'assets/fonts/DejaVuSans.ttf',
   'assets/icons/icon.svg',
+  'assets/icons/pdf-file.svg',
+  'assets/icons/pdf-file-small.svg',
   'assets/icons/icon-192.png',
   'assets/icons/icon-512.png',
   'assets/icons/apple-touch-icon-180.png'

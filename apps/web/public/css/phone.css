@@ -105,9 +105,8 @@ body[data-phone][data-ui="dark"]{
     padding:10px 4px 10px 20px;text-align:left}
   .ph-x{width:44px;height:44px;margin-right:8px;flex:none;border:0;border-radius:22px;background:none;
     color:var(--text-dim)!important;display:grid;place-items:center}
-  .ph-doc{width:42px;height:52px;flex:none;border:1px solid var(--line);border-radius:6px;background:#fff;
-    display:grid;place-items:end center;padding-bottom:6px;box-sizing:border-box}
-  .ph-doc i{font:800 8px/1 var(--sans);font-style:normal;color:#fff;background:var(--btn);padding:2px 4px;border-radius:3px}
+  /* the Add Dots PDF file icon (assets/icons/pdf-file.svg) */
+  .ph-doc{width:52px;height:52px;flex:none;margin:0 -5px;background:url(../assets/icons/pdf-file.svg) center/contain no-repeat}
 
   .ph-cards{display:flex;gap:14px;overflow-x:auto;padding:4px 20px;scrollbar-width:none}
   .ph-cards::-webkit-scrollbar{display:none}

@@ -304,6 +304,10 @@ writeFileSync(
     '  <!-- The Add Dots PDF logo. Drawn by scripts/icons.mjs, with every PNG in the apps. -->\n' +
     `  <rect width="100" height="100" rx="20" fill="${BLACK}"/>\n  ${page(1)}\n</svg>\n`,
 );
+/* the PDF file icon inside the app too: Home, Recent files, the document
+   tabs and the phone app's lists (css/app.css, css/phone.css) */
+writeFileSync(join(root, W + 'pdf-file.svg'), pdfFile + '\n');
+writeFileSync(join(root, W + 'pdf-file-small.svg'), pdfFileSmall + '\n');
 const tabIco = ico(await Promise.all([16, 32, 48].map(async (n) => [n, await pngOf(n, n, rounded, true)])));
 const html = join(root, 'apps/web/index.html');
 const before = readFileSync(html, 'utf8');

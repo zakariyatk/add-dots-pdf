@@ -296,7 +296,7 @@
     if (!r.blob) bits.push('select again to open');
     return '<div class="ph-file">' +
       '<button type="button" class="ph-filego" data-recent="' + i + '">' +
-        '<span class="ph-doc" aria-hidden="true"><i>PDF</i></span>' +
+        '<span class="ph-doc" aria-hidden="true"></span>' +
         '<span class="ph-txt"><b>' + esc(r.name) + '</b><small>' + esc(whenLabel(r.time) + ' · ' + bits.join(' · ')) + '</small></span>' +
       '</button>' +
       '<button type="button" class="ph-x" data-forget="' + i + '" aria-label="Remove ' + esc(r.name) + ' from the list">' + ic('close', 18) + '</button>' +
@@ -610,7 +610,7 @@
       'Choose two or more PDFs. They are joined into one, in the order shown.';
     $('mgList').innerHTML = mgFiles.map(function (f, i) {
       return '<div class="ph-mrow"><span class="ph-num">' + (i + 1) + '</span>' +
-        '<span class="ph-doc" aria-hidden="true"><i>PDF</i></span>' +
+        '<span class="ph-doc" aria-hidden="true"></span>' +
         '<span class="ph-txt"><b>' + esc(f.name) + '</b><small>' + esc(sizeLabel(f.size)) + '</small></span>' +
         '<button type="button" class="ph-icon" data-mv="' + i + ',-1" aria-label="Move ' + esc(f.name) + ' up"' + (i ? '' : ' disabled') + '>' + ic('up', 20) + '</button>' +
         '<button type="button" class="ph-icon" data-mv="' + i + ',1" aria-label="Move ' + esc(f.name) + ' down"' + (i < pages - 1 ? '' : ' disabled') + '>' + ic('down', 20) + '</button>' +
