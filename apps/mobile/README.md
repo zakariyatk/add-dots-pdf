@@ -65,8 +65,23 @@ test also checks `mobile.js` in Chrome with the native side faked.
 
 The APK is a debug build, not from the Play Store: on the phone, allow
 "Install unknown apps" for the app you open it with (Files, Chrome), then open
-the APK. A Play Store release needs a signed release build (an upload key) and
-a Google Play developer account.
+the APK. Play Store releases go through the Google Play workflow below.
+
+## Releasing to Google Play
+
+`.github/workflows/play.yml`, run by hand (Actions -> Google Play -> Run
+workflow), builds a signed Android App Bundle and uploads it to a Play track
+(internal testing by default). The upload key and its passwords come from
+repository secrets, listed at the top of the workflow; release builds made
+without them are unsigned, and debug builds do not use them at all.
+
+- The very first bundle of the app is uploaded by hand in Play Console: run
+  the workflow with "Upload" off and take `app-release.aab` from the run's
+  `play-aab` artifact. Every later run uploads on its own.
+- versionCode is 100 + the run number, so each upload is higher than the
+  last; the version name is 1.0.<run number> unless one is given.
+- Play App Signing keeps the key the app is signed with for users; ours is
+  only the upload key, which Google can reset if it is ever lost.
 
 ## iOS
 
