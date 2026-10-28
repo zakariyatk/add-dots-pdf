@@ -3316,6 +3316,21 @@ try {
         !(await page.evaluate(() => document.getElementById('docTabs').hidden)),
       { tabs, inTab },
     );
+    /* light or dark, switched in the second tab, changes the bar and the first too */
+    const uiOf = async () => ({
+      app: await page.evaluate(() => document.body.dataset.ui),
+      tab: frame && (await frame.evaluate(() => document.body.dataset.ui)),
+    });
+    const ui0 = await uiOf();
+    if (frame) await frame.evaluate(() => document.getElementById('btnUi').click());
+    await page.waitForTimeout(300);
+    const ui1 = await uiOf();
+    check(
+      'light or dark switched in a second tab changes every tab',
+      ui1.tab !== ui0.tab && ui1.app === ui1.tab,
+      { ui0, ui1 },
+    );
+    if (frame) await frame.evaluate(() => document.getElementById('btnUi').click());
     await page.click('.dtab[data-id="0"]');
     check(
       'clicking a tab shows its document',

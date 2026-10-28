@@ -8546,6 +8546,14 @@
     });
   });
   setUi(document.body.dataset.ui);
+  /* One setting for every window of the app: each document tab is a frame of
+     its own (tabs.js), and a tab moved out is a window of its own, so a switch
+     made in any of them reaches the rest through the setting they share.
+     The window that made it gets no event, and the others write back the
+     same value, which fires none. */
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'adpdf-ui' && e.newValue && e.newValue !== document.body.dataset.ui) setUi(e.newValue);
+  });
 
   $('btnTheme').addEventListener('click', function () {
     S.theme = THEMES[(THEMES.indexOf(S.theme) + 1) % THEMES.length];
