@@ -10,6 +10,41 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which apps a pull request touches. The Windows, Android and iOS builds take
+  # minutes each, so on a pull request each runs only when its own folder
+  # changed; the web checks and the smoke test (which also runs every page
+  # under the Windows app's security policy) always run. A push to main builds
+  # every app, so nothing reaches a release unbuilt. A change to this file or
+  # to the dependencies builds every app too.
+  changes:
+    name: Which apps changed
+    runs-on: ubuntu-latest
+    outputs:
+      desktop: ${{ steps.diff.outputs.desktop }}
+      android: ${{ steps.diff.outputs.android }}
+      ios: ${{ steps.diff.outputs.ios }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          if [ "${{ github.event_name }}" != pull_request ]; then
+            printf 'desktop=true\nandroid=true\nios=true\n' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          files=$(git diff --name-only "$BASE"...HEAD)
+          echo "$files"
+          all='^(\.github/workflows/ci\.yml|package\.json|package-lock\.json)$'
+          has() { echo "$files" | grep -Eq "$1|$all" && echo true || echo false; }
+          {
+            echo "desktop=$(has '^apps/desktop/')"
+            echo "android=$(has '^apps/mobile/(android/|[^/]+$)')"
+            echo "ios=$(has '^apps/mobile/(ios/|[^/]+$)')"
+          } | tee -a "$GITHUB_OUTPUT"
+
   web:
     name: Lint, type-check, test, build
     runs-on: ubuntu-latest
@@ -62,6 +97,8 @@ jobs:
 
   desktop:
     name: Windows app (Tauri)
+    needs: changes
+    if: needs.changes.outputs.desktop == 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -211,6 +248,8 @@ jobs:
 
   android:
     name: Android app (Capacitor)
+    needs: changes
+    if: needs.changes.outputs.android == 'true'
     runs-on: ubuntu-latest
     # an emulator that stops answering fails the run instead of holding it for hours
     timeout-minutes: 30
@@ -277,6 +316,8 @@ jobs:
 
   ios:
     name: iOS app (Capacitor)
+    needs: changes
+    if: needs.changes.outputs.ios == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
