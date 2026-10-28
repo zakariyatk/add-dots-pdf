@@ -3331,6 +3331,19 @@ try {
       { ui0, ui1 },
     );
     if (frame) await frame.evaluate(() => document.getElementById('btnUi').click());
+    /* and the reading theme (Paper, Sepia, Night) the same way */
+    if (frame) await frame.evaluate(() => document.getElementById('btnTheme').click());
+    await page.waitForTimeout(300);
+    const rt = {
+      app: await page.evaluate(() => document.body.dataset.theme),
+      tab: frame && (await frame.evaluate(() => document.body.dataset.theme)),
+    };
+    check(
+      'the reading theme switched in a second tab changes every tab',
+      rt.tab === 'sepia' && rt.app === 'sepia',
+      rt,
+    );
+    if (frame) await frame.evaluate(() => [0, 1].forEach(() => document.getElementById('btnTheme').click()));
     await page.click('.dtab[data-id="0"]');
     check(
       'clicking a tab shows its document',

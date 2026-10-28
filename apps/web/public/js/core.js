@@ -8555,11 +8555,20 @@
     if (e.key === 'adpdf-ui' && e.newValue && e.newValue !== document.body.dataset.ui) setUi(e.newValue);
   });
 
-  $('btnTheme').addEventListener('click', function () {
-    S.theme = THEMES[(THEMES.indexOf(S.theme) + 1) % THEMES.length];
+  /* The reading theme (Paper, Sepia, Night) the same way: remembered, and
+     changed in every tab and window at once. */
+  function setTheme(t) {
+    S.theme = THEMES.indexOf(t) >= 0 ? t : 'paper';
     document.body.dataset.theme = S.theme;
+    try { localStorage.setItem('adpdf-reading', S.theme); } catch (e) { /* private window */ }
     $('themeLbl').textContent = THEME_LABEL[S.theme];
     $('btnTheme').dataset.label = 'Reading theme · ' + THEME_LABEL[S.theme];
+  }
+  $('btnTheme').addEventListener('click', function () {
+    setTheme(THEMES[(THEMES.indexOf(S.theme) + 1) % THEMES.length]);
+  });
+  window.addEventListener('storage', function (e) {
+    if (e.key === 'adpdf-reading' && e.newValue && e.newValue !== S.theme) setTheme(e.newValue);
   });
   $('btnPrev').addEventListener('click', function () { goTo(S.current - pageStep()); });
   $('btnNext').addEventListener('click', function () { goTo(S.current + pageStep()); });
@@ -9085,10 +9094,11 @@
     if (isDirty()) { e.preventDefault(); e.returnValue = ''; }
   });
 
-  document.body.dataset.theme = 'paper';
+  let readingTheme = 'paper';
+  try { readingTheme = localStorage.getItem('adpdf-reading') || 'paper'; } catch (e) { /* private window */ }
+  setTheme(readingTheme);
   document.body.dataset.tool = 'select';
   document.body.classList.add('no-doc');
-  $('btnTheme').dataset.label = 'Reading theme · Paper';
   applyLayout();
   renderRecent();
 
