@@ -7280,13 +7280,22 @@
 
   /* text a module draws itself (Edit Object: retyped in the page's own
      font) drawn at this size first, so a page kept as a picture has it and
-     not the closest font; after 5 s, the closest font rather than a wait */
+     not the closest font; a mark retyped meanwhile is drawn too, as it is
+     what the picture will show; after 5 s, the closest font rather than a
+     wait */
   function textArtReady(it, vp) {
     if (!EXT.textArtReady) return Promise.resolve();
-    const all = Promise.all(it.shapes.filter(function (sh) { return sh.t === 'text'; }).map(function (sh) {
-      return EXT.textArtReady(it, sh, vp).catch(function () {});
-    }));
-    return Promise.race([all, new Promise(function (res) { setTimeout(res, 5000); })]);
+    const texts = function () { return it.shapes.filter(function (sh) { return sh.t === 'text'; }); };
+    const asNow = function () {
+      return JSON.stringify(texts().map(function (sh) { return [sh.text, sh.size, sh.c, sh.a, sh.r]; }));
+    };
+    const all = function () {
+      const was = asNow();
+      return Promise.all(texts().map(function (sh) {
+        return EXT.textArtReady(it, sh, vp).catch(function () {});
+      })).then(function () { return asNow() === was ? null : all(); });
+    };
+    return Promise.race([all(), new Promise(function (res) { setTimeout(res, 5000); })]);
   }
 
   function svgImage(svg) {

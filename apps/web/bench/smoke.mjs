@@ -4182,6 +4182,30 @@ try {
       !!thumb && thumb.pageFont && exported.length > 0 && exported.every((k) => k.pageFont) && !!jpg,
       { thumb, exported },
     );
+    /* drawn at many sizes at once, each started as the one before may be
+       closing: every one arrives (they once refused each other, and the line
+       stayed in the closest font, on the screen or its thumbnail, for good) */
+    const artLost = await page.evaluate(async () => {
+      const X = window.ADDPDF,
+        it = X.S.items[0],
+        s = it.shapes[0],
+        vps = [],
+        draws = [];
+      for (let i = 0; i < 12; i++) {
+        vps.push(it.page.getViewport({ scale: 0.31 + i * 0.07 }));
+        draws.push(X.textArtReady(it, s, vps[i]));
+        await new Promise((r) => setTimeout(r, 4 + (i % 4) * 5));
+      }
+      await Promise.all(draws);
+      return vps.filter((vp) => !X.textArt(it, s, vp)).length;
+    });
+    check(
+      'Edit Object: the retyped line drawn at many sizes at once is in its own font at all of them',
+      artLost === 0,
+      {
+        artLost,
+      },
+    );
     const second = await pick(120, 674);
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
