@@ -782,6 +782,11 @@
       <button class="btn primary" id="pmCropOk">Crop</button>
       <button class="btn" id="pmCropNo">Cancel</button>
     </div>
+    <div id="pmmarkbar" role="toolbar" aria-label="Selected mark" hidden="">
+      <button class="btn" id="pmEdit" title="Retype the size or note" aria-label="Retype"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16zM13 7l4 4"></path></svg></button>
+      <button class="btn" id="pmDup" title="Duplicate (Ctrl+D)" aria-label="Duplicate"><svg viewBox="0 0 24 24"><path d="M8 8h12v12H8zM4 16V4h12"></path></svg></button>
+      <button class="btn" id="pmDel" title="Remove (Delete)" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"></path></svg></button>
+    </div>
     <div id="pmhint">Drag across what you are measuring, then type the size</div>
   </div>
 
@@ -794,9 +799,6 @@
     <div class="row" id="pmacts">
       <button class="btn" id="pmUndo" title="Undo (Ctrl+Z)" disabled>Undo</button>
       <button class="btn" id="pmRedo" title="Redo (Ctrl+Y)" disabled>Redo</button>
-      <button class="btn" id="pmEdit" title="Retype the selected size or note" disabled>Edit</button>
-      <button class="btn" id="pmDup" title="Duplicate the selected mark (Ctrl+D)" disabled>Copy</button>
-      <button class="btn" id="pmDel" title="Remove the selected mark (Delete)" disabled>Delete</button>
       <button class="btn" id="pmClear" title="Remove every mark">Clear</button>
       <div id="pmzoom">
         <button class="btn" id="pmOut" title="Zoom out" aria-label="Zoom out">−</button>

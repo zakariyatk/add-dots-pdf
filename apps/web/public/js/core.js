@@ -4110,7 +4110,7 @@
     const label = m.v || '';
     if (!label) return null;
     const base = Math.max(W, H), lw = pmLw(m, base);
-    const fs = Math.max(base * 0.011, lw * 4.6);
+    const fs = Math.max(base * 0.022, lw * 4.6);
     ctx.font = '700 ' + fs.toFixed(1) + 'px ' + CSS_FONT.helv;
     const tw = ctx.measureText(label).width;
     const pad = fs * 0.42, bw = tw + pad * 2, bh = fs + pad * 1.1;
@@ -4204,13 +4204,13 @@
 
   /* Which mark is under the pointer. Outlines and labels are tried first, so a
      mark drawn inside a box can still be picked; the inside of a box or circle
-     counts only when nothing else is hit. Generous, because a fingertip is not
-     precise. */
-  function pmHit(p) {
+     counts only when nothing else is hit, and not at all with outline set, so
+     a tool can draw inside a box. Generous, because a fingertip is not precise. */
+  function pmHit(p, outline) {
     const sp = pmSpace(), W = sp.W, H = sp.H, tol = 14 * sp.s;
     const ctx = $('pmcv').getContext('2d');
     const px = p[0] * W, py = p[1] * H;
-    for (let pass = 0; pass < 2; pass++) {
+    for (let pass = 0; pass < (outline ? 1 : 2); pass++) {
       for (let i = PM.marks.length - 1; i >= 0; i--) {
         const m = PM.marks[i];
         const ax = m.a[0] * W, ay = m.a[1] * H;
@@ -4275,7 +4275,6 @@
 
   /* Grips for the picked-up mark, drawn over the marks themselves. */
   function pmHandles(ctx, W, H) {
-    if (PM.tool !== 'select' || PM.sel < 0) return;
     const m = PM.marks[PM.sel];
     if (!m) return;
     const sp = pmSpace(), k = sp.s;
@@ -4365,6 +4364,23 @@
     pmPaint(ctx, list, cv.width, cv.height);
     pmHandles(ctx, cv.width, cv.height);
     pmCropPaint(ctx, cv.width, cv.height);
+    pmPlaceBar();
+  }
+
+  /* The selected mark's own actions sit just clear of it, out of the way
+     while it is being drawn, typed on or dragged. */
+  function pmPlaceBar() {
+    const bar = $('pmmarkbar'), m = PM.marks[PM.sel];
+    bar.hidden = !m || !!(PM.pending || PM.draw || PM.crop || pvGesture || (PM.grab && PM.grab.pushed));
+    if (bar.hidden) return;
+    const r = $('pmcv').getBoundingClientRect(), st = $('pmstage').getBoundingClientRect();
+    const bb = pmBounds(m), bw = bar.offsetWidth, bh = bar.offsetHeight;
+    const gap = PM_LINE[m.t] ? 46 : 14;           /* clear of a line's turn grip */
+    let y = r.top - st.top + bb[1] * r.height - bh - gap;
+    if (y < 6) y = r.top - st.top + bb[3] * r.height + gap;
+    const x = r.left - st.left + (bb[0] + bb[2]) / 2 * r.width - bw / 2;
+    bar.style.left = Math.max(6, Math.min(st.width - bw - 6, x)) + 'px';
+    bar.style.top = Math.max(6, Math.min(st.height - bh - 6, y)) + 'px';
   }
 
   /* burn the marks into a fresh JPEG at the photo's own resolution */
@@ -4422,11 +4438,10 @@
   /* Picking a mark up shows its colour and size, and changing either while it
      is picked up changes the mark. */
   function pmSyncSel() {
-    const m = PM.tool === 'select' ? PM.marks[PM.sel] : null;
-    $('pmEdit').disabled = !(m && (m.t === 'dim' || m.t === 'text'));
-    $('pmDel').disabled = !m;
-    $('pmDup').disabled = !m;
+    const m = PM.marks[PM.sel];
+    $('pmEdit').hidden = !(m && (m.t === 'dim' || m.t === 'text'));
     if (m) {
+      PM.color = m.c;
       $('pmSize').value = +(m.w || 3).toFixed(1);
       Array.prototype.forEach.call($('pmswatch').children, function (x) {
         x.classList.toggle('on', x.dataset.c.toLowerCase() === String(m.c).toLowerCase());
@@ -4560,6 +4575,7 @@
     $('pmwrap').style.transform =
       'translate(' + PV.tx.toFixed(2) + 'px,' + PV.ty.toFixed(2) + 'px) scale(' + PV.k.toFixed(4) + ')';
     $('pmLvl').textContent = Math.round(PV.k * 100) + '%';
+    if (PM.img) pmPlaceBar();
   }
   function pvReset() {
     PV.k = 1; PV.tx = 0; PV.ty = 0;
@@ -4637,14 +4653,15 @@
     ellipse: 'Drag to ring something · Shift makes a circle',
     pen: 'Draw freehand',
     select: 'Tap a mark to pick it up · drag to move, drag a grip to stretch or turn · '
-          + 'double-tap to retype · colour and size change it',
+          + 'double-tap to retype · colour and size change it · tap off the photo to let go',
     text: 'Tap where the note belongs, then type it',
     pan: 'Drag to move the photo · two fingers zoom at any time',
     crop: 'Drag a box around the part of the photo to keep'
   };
   function pmSetTool(t) {
     if (PM.pending) commitVal(true);
-    pmCropCancel();
+    /* taking another tool finishes the work in hand: a crop drawn is a crop made */
+    if (PM.crop && !PM.crop.live) pmApplyCrop(); else pmCropCancel();
     PM.tool = t;
     Object.keys(PM_TOOLS).forEach(function (id) { $(id).classList.toggle('on', PM_TOOLS[id] === t); });
     document.body.classList.toggle('pmpan', t === 'pan');
@@ -4654,7 +4671,7 @@
     hint.classList.remove('gone');
     clearTimeout(pmSetTool.fade);
     pmSetTool.fade = setTimeout(function () { hint.classList.add('gone'); }, 3500);
-    if (t !== 'select') PM.sel = -1;   /* a mark stays picked up only in Select */
+    if (t !== 'select') PM.sel = -1;   /* another tool lets go of the mark */
     PM.grab = null;
     pmSyncSel();
     pmRender();
@@ -4672,7 +4689,7 @@
         PM.color = c;
         Array.prototype.forEach.call($('pmswatch').children, function (x) { x.classList.remove('on'); });
         b.classList.add('on');
-        const m = PM.tool === 'select' ? PM.marks[PM.sel] : null;
+        const m = PM.marks[PM.sel];
         if (m && m.c !== c) { pmPush(); m.c = c; pmRender(); }
       });
       $('pmswatch').appendChild(b);
@@ -4681,7 +4698,7 @@
       $(id).addEventListener('click', function () { pmSetTool(PM_TOOLS[id]); });
     });
     $('pmSize').addEventListener('change', function () {
-      const m = PM.tool === 'select' ? PM.marks[PM.sel] : null;
+      const m = PM.marks[PM.sel];
       const w = Math.max(0.5, Math.min(40, parseFloat(this.value) || 3));
       this.value = w;
       if (m && m.w !== w) { pmPush(); m.w = w; pmRender(); }
@@ -4766,7 +4783,13 @@
       }
       if (pvBlock) return;                       /* fingers left over from a pinch */
       e.preventDefault();
-      if (PM.pending) { commitVal(true); return; }
+      /* a size is finished by the next touch, which can start the next mark;
+         that same touch on a note only finishes it, or every tap would open another */
+      const typed = PM.pending;
+      if (typed) {
+        commitVal(true);
+        if (typed.t === 'text') return;
+      }
 
       if (PM.tool === 'pan') {
         pvPan = { x: e.clientX, y: e.clientY, tx: PV.tx, ty: PV.ty };
@@ -4781,13 +4804,15 @@
         return;
       }
 
-      if (PM.tool === 'select') {
+      /* a grip on the mark already picked up wins over picking another; with a
+         drawing tool the finished mark stays ready to adjust, and anywhere
+         else on the photo starts the next one */
+      const grip = pmGrip(p);
+      if (PM.tool === 'select' || grip || (PM.sel >= 0 && pmHit(p, true) === PM.sel)) {
         /* a second tap on the same mark retypes it — dblclick is unreliable on touch */
         const now = Date.now(), again = now - lastTap < 350;
         lastTap = now;
-        /* a grip on the mark already picked up wins over picking another */
-        const grip = pmGrip(p);
-        const hit = grip ? PM.sel : pmHit(p);
+        const hit = grip ? PM.sel : pmHit(p, PM.tool !== 'select');
         if (again && hit >= 0 && hit === PM.sel && !grip) {
           PM.grab = null;
           pmEditSel();
@@ -4801,6 +4826,7 @@
         return;
       }
 
+      if (!typed) { PM.sel = -1; pmSyncSel(); }
       const w = Math.max(0.5, parseFloat($('pmSize').value) || 3);
       if (PM.tool === 'text') {
         PM.draw = null;
@@ -4828,7 +4854,7 @@
         pmRender();
         return;
       }
-      if (PM.grab && PM.tool === 'select' && PM.grab.orig) {
+      if (PM.grab && PM.grab.orig) {
         e.preventDefault();
         const g = PM.grab, o = g.orig, p = pmPt(e), sp = pmSpace();
         if (!g.pushed) {
@@ -4913,10 +4939,11 @@
         const dx = (d.b[0] - d.a[0]) * sp.W, dy = (d.b[1] - d.a[1]) * sp.H;
         if (Math.hypot(dx, dy) < 8 * sp.s) { pmRender(); return; }
       }
-      if (d.t === 'dim') { askVal(d); return; }
+      if (d.t === 'dim') { PM.sel = -1; askVal(d); return; }
       pmPush();
       PM.marks.push(d);
-      pmSyncBtns();
+      PM.sel = PM.marks.length - 1;       /* finished, and ready to adjust */
+      pmSyncSel();
       pmRender();
     }
     cv.addEventListener('pointerup', lift);
@@ -4927,10 +4954,17 @@
       if (PM.crop && PM.crop.live) pmCropCancel();
       PM.draw = null; PM.grab = null; pmRender();
     });
+    /* the dark space round the photo finishes the work in hand and lets go of the mark */
+    $('pmstage').addEventListener('pointerdown', function (e) {
+      if (e.target !== this) return;
+      if (PM.pending) commitVal(true);
+      if (PM.crop && !PM.crop.live) pmApplyCrop();
+      PM.sel = -1; PM.grab = null;
+      pmSyncSel(); pmRender();
+    });
     cv.addEventListener('dblclick', function (e) {
-      if (PM.tool !== 'select') return;
       const hit = pmHit(pmPt(e));
-      if (hit < 0) return;
+      if (hit < 0 || (PM.tool !== 'select' && hit !== PM.sel)) return;
       e.preventDefault();
       PM.sel = hit; pmSyncSel();
       if (!PM.pending) pmEditSel();
@@ -5001,14 +5035,15 @@
 
     if (keep) {
       if (m.t === 'text') {
-        if (raw) { pmPush(); m.v = raw; PM.marks.push(m); }
+        if (raw) { pmPush(); m.v = raw; PM.marks.push(m); PM.sel = PM.marks.length - 1; }
       } else {
         pmPush();
         m.v = withUnit(raw);
         PM.marks.push(m);
+        PM.sel = PM.marks.length - 1;
       }
     }
-    pmSyncBtns();
+    pmSyncSel();
     pmRender();
   }
 
@@ -5049,15 +5084,16 @@
     pvPointers.clear(); pvGesture = null; pvPan = null; pvBlock = false;
     document.body.classList.remove('pmpan', 'pmsel');
     $('pmval').hidden = true;
+    $('pmmarkbar').hidden = true;
     $('pmimg').removeAttribute('src');
     pm.hidden = true;
     return true;
   }
-  function savePm() {
+  async function savePm() {
     const ph = PM.ph;
     if (!ph || !PM.img) { closePm(true); return; }
     if (PM.pending) commitVal(true);
-    pmCropCancel();
+    if (PM.crop && !PM.crop.live) await pmApplyCrop(); else pmCropCancel();
     const n = PM.marks.length;
     const changedPhoto = PM.src !== (ph.orig || ph.src);
     if (!n) {
@@ -5082,7 +5118,7 @@
     if (mod && key === 'd') { e.preventDefault(); pmDupSel(); return; }
     if (mod && key === 's') { e.preventDefault(); savePm(); return; }
     if (e.key === 'Enter' && PM.crop && !PM.crop.live) { e.preventDefault(); pmApplyCrop(); return; }
-    const sel = PM.tool === 'select' && PM.sel >= 0 && !PM.pending;
+    const sel = PM.sel >= 0 && !PM.pending;
     if (sel && (e.key === 'Delete' || e.key === 'Backspace')) { e.preventDefault(); pmDeleteSel(); return; }
     if (sel && e.key.indexOf('Arrow') === 0) {
       e.preventDefault();

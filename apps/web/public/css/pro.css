@@ -872,14 +872,12 @@ body.rdrag { user-select: none; -webkit-user-select: none }
    --------------------------------------------------------------- */
 
 body.pmsel #pmcv { cursor: default }
-#pmEdit:disabled, #pmDel:disabled { opacity: .38; cursor: default }
-#pmDel:not(:disabled):hover { color: var(--danger); border-color: var(--danger) }
 
 @media (pointer: coarse) {
   /* the grips are drawn on the canvas, so the targets that matter here are
      the buttons underneath it */
   #pmtools .btn { min-height: 44px }
-  #pmEdit, #pmDel, #pmDup, #pmUndo, #pmRedo, #pmClear { min-height: 44px; min-width: 60px }
+  #pmUndo, #pmRedo, #pmClear { min-height: 44px; min-width: 60px }
 }
 
 /* ---------- install app ----------
