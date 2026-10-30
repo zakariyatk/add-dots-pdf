@@ -220,11 +220,10 @@ body[data-phone][data-ui="dark"]{
   body[data-phone] .dock .btn.on svg{background:var(--ph-pill)}
   body[data-phone] .dock .btn.on::after{font-weight:700}
 
-  /* the tool's options above the page: round swatches, a pill Done */
+  /* the tool's options above the page: round swatches */
   body[data-phone] .modebar{background:var(--chrome);border-bottom:1px solid var(--line);gap:8px;padding:10px 12px}
   body[data-phone] .modebar .sw{width:32px;height:32px;border-radius:50%!important}
-  body[data-phone] .modebar #modeDone{height:44px;border-radius:22px;padding:0 18px;font-weight:700;margin-left:auto}
-  /* every option is the same 44px pill as Done: colour, width, stamp; the colour
+  /* every option is the same 44px pill: colour, width, stamp; the colour
      dot and the select say what they are, so the words and small caps labels go;
      16px so iOS does not zoom in on a select */
   body[data-phone] .modebar .anno-lbl{display:none}
