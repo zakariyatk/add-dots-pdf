@@ -78,7 +78,8 @@
     slides: 'M3 5h18v11H3zM12 16v4M8 20h8',
     txt: 'M6 3h8l4 4v14H6zM14 3v4h4M9 12h6M9 15h6M9 18h4',
     cad: 'M4 20L12 4l8 16zM8 13h8',
-    sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4'
+    sun: 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8zM12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4',
+    snap: 'M6 6h12v12H6zM4 4h4v4H4zM16 16h4v4h-4z'
   };
   function ic(name, size) {
     const s = size || 22;
@@ -492,6 +493,7 @@
     { name: 'Reading theme', ico: 'sun', need: 'btnTheme', run: function () { click('btnTheme'); } },
     { name: 'Read mode', ico: 'read', need: 'btnReadMode', run: function () { click('btnReadMode'); } },
     { name: 'Rulers & guides', ico: 'ruler', need: 'btnRulers', run: function () { click('btnRulers'); } },
+    { name: 'Snap on or off', ico: 'snap', need: 'snapOn', run: function () { click('snapOn'); } },
     { rule: true },
     { name: 'Add pages', ico: 'add', need: 'btnAdd', run: function () { click('btnAdd'); } },
     { name: 'Combine files', ico: 'merge', need: 'addMerge', run: function () { click('addMerge'); } },

@@ -1110,7 +1110,10 @@
           padding-top:env(safe-area-inset-top);box-shadow:12px 0 34px rgba(0,0,0,.45)}
     .rail-tabs .btn{height:38px;font-size:13px}
     #railClose{display:inline-flex;flex:0 0 40px;border-color:var(--line)}
-    .modebar #modeDone{position:sticky;right:0;box-shadow:-14px 0 14px var(--chrome-2)}
+    /* no Done: work is finished as it is put down. A shape has no bar at all;
+       its colour and width are on the selected mark's panel (core endToolOn) */
+    #modeDone{display:none}
+    body:is([data-tool="rect"],[data-tool="line"],[data-tool="arrow"]) .modebar{display:none}
     .search-in{height:40px;font-size:16px}
     .thumb .tools{opacity:1}
     .thumb .tools button{width:28px;height:28px}

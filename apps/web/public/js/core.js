@@ -2894,6 +2894,11 @@
     /* a change made with a group selected goes to every member */
     const it = S.sel.it;
     selList().forEach(function (i) { const m = it.shapes[i]; if (m) fn(m); });
+    /* a phone has no tool bar to choose these on: the next shape takes them from this one */
+    if (isMobile() && (s.t === 'rect' || s.t === 'line' || s.t === 'arrow')) {
+      if (!s.nos) pickToolColor(s.c);
+      S.width = s.w;
+    }
     drawShapes(it); updateMeta(); syncMarkPop();
   }
 
@@ -3454,9 +3459,22 @@
       it.shapes.push({ t: g.t, a: g.a, b: g.b, c: g.c, w: g.w });
       drawShapes(it);
       updateMeta();
+      if (isMobile()) endToolOn(it);
     }
     it.capture.addEventListener('pointerup', finish);
     it.capture.addEventListener('pointercancel', function () { dropGhost(); pendingPin = null; });
+  }
+
+  /* On a phone a shape is finished when the finger lifts: no bar and no Done.
+     The tool is put down and the new mark stays selected, so its grips and its
+     settings are there at once. */
+  function endToolOn(it) {
+    setTool('select');
+    S.sel = { it: it, i: it.shapes.length - 1 }; S.multi = null;
+    marqueeDone = true;                            /* swallow the click that follows, if one does */
+    setTimeout(function () { marqueeDone = false; }, 400);
+    drawShapes(it);
+    syncMarkPop();
   }
 
   stage.addEventListener('click', function (e) {
@@ -6056,6 +6074,8 @@
     /* for Edit Object: Esc on a line just lifted off the page puts it back */
     EXT.emit('textEditClosed', { it: ed.it, idx: ed.idx, commit: !!commit,
       changed: ed.idx < 0 || !ed.it.shapes[ed.idx] || ed.it.shapes[ed.idx].text !== val });
+    /* on a phone, leaving the text ends the tool too: there is no Done */
+    if (isMobile() && S.tool === 'text') setTool('select');
 
     if (!commit) { drawShapes(ed.it); return; }
     if (!(GF && GF.is(ed.item.f)) && !WINANSI_OK.test(val)) {
@@ -7843,6 +7863,7 @@
       btn.innerHTML = '<i style="height:' + linePx(S.width) + 'px"></i><span>' + S.width + ' pt</span><b>▾</b>';
     }
     paint();
+    EXT.on('tool', paint);
     btn.addEventListener('click', function (e) {
       e.stopPropagation();
       if (!menu.hidden) { menu.hidden = true; return; }
