@@ -273,6 +273,57 @@ try {
   const toast = await page.evaluate(() => document.getElementById('toast').textContent);
   check('Save writes a PDF with every page', pages === 5, { savedName, pages, toast });
 
+  /* the back key, pressed on the device: it closes what is on top, then the
+     document goes to the home screen, then the app steps aside and comes
+     back with the document still open */
+  step = 'back key';
+  const backState = () =>
+    page.evaluate(() => ({
+      viewer: !document.getElementById('lb').hidden,
+      home: window.ADDPDF.homeShown(),
+      pages: window.ADDPDF.S.items.length,
+    }));
+  const pressBack = async () => {
+    await sh('input keyevent KEYCODE_BACK');
+    await sleep(1000);
+  };
+  await page.evaluate(() => {
+    const X = window.ADDPDF,
+      it = X.S.items[0];
+    const c = document.createElement('canvas');
+    c.width = 40;
+    c.height = 30;
+    X.S.locs.backKey = {
+      id: 'backKey',
+      n: '1',
+      ref: 'Back key',
+      desc: '',
+      boq: '',
+      note: '',
+      photos: [{ src: c.toDataURL('image/png'), cap: '' }],
+    };
+    it.shapes.push({ t: 'pin', a: [100, 100], id: 'backKey' });
+    X.setTool('select');
+    X.drawShapes(it);
+    document.querySelector('.anno .pin').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  });
+  await sleep(500);
+  const opened = await backState();
+  check('a pin opens its photos', opened.viewer, opened);
+  await pressBack();
+  const closed = await backState();
+  check('back closes the photo viewer, not the document', !closed.viewer && !closed.home, closed);
+  await pressBack();
+  const home = await backState();
+  check('back from the document goes home', home.home, home);
+  await pressBack();
+  const resumed = await sh('dumpsys activity activities | grep -E "ResumedActivity|topResumedActivity"');
+  check('back from home leaves the app', !resumed.includes(PKG), resumed.split('\n')[0]);
+  await sh('monkey -p ' + PKG + ' -c android.intent.category.LAUNCHER 1');
+  await sleep(2500);
+  const again = await backState();
+  check('coming back, the document is still open', again.pages === 5, again);
+
   const errors = await page.evaluate(() => (window.ADDPDF_HEALTH ? window.ADDPDF_HEALTH.session() : []));
   check('no errors in the app', errors.length === 0, errors.slice(0, 5));
 } catch (e) {

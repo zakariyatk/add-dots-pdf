@@ -670,6 +670,41 @@
   }
   if (window.matchMedia('(max-width:760px)').matches) orgBar();
 
+  /* ---------------- Android's back key ---------------- */
+  /* MainActivity asks this on every press: true when it was used here, false
+     when there is nothing left to go back from and the app steps aside.
+     A screen on top goes the way Escape takes it, so a photo being marked up
+     lets go of its mark before it closes. On the home screen Escape returns
+     to the document, which would never let anyone out, so home is the end. */
+  const ON_TOP = '[role="dialog"]:not([hidden]), .sigmodal:not([hidden]), .docmodal:not([hidden]), ' +
+    '.orgview:not([hidden]), .cthread:not([hidden]), .sheet.show, .pop:not([hidden]), .bk:not([hidden])';
+  function pressEscape() {
+    document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  }
+  /* really on screen: a dialog's box is often inside a hidden parent */
+  function onTop() {
+    return Array.prototype.some.call(document.querySelectorAll(ON_TOP), function (el) {
+      return el.getClientRects().length > 0;
+    });
+  }
+  function back() {
+    if (!sheet.hidden) { sheetClose(); return true; }
+    if (!mg.hidden) { closeMerge(); return true; }
+    if (onTop()) { pressEscape(); return true; }
+    if (X.homeShown()) {
+      if ((ph.dataset.view || 'home') === 'home') return false;
+      go('home');
+      return true;
+    }
+    if (X.S.tool !== 'select' || X.S.editing || (X.isMobile() && !document.querySelector('.rail').hidden)) {
+      pressEscape();
+      return true;
+    }
+    X.showHome();
+    return true;
+  }
+  X.back = back;
+
   /* last: it reaches the sheet and the page counter */
   new MutationObserver(homeOpened).observe(panel, { attributes: true, attributeFilter: ['hidden'] });
   homeOpened();

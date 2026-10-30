@@ -698,18 +698,24 @@
 
 <div id="lb" role="dialog" aria-modal="true" aria-label="Location photos" hidden="">
   <div id="lbtop">
-    <span id="lbtitle"></span>
-    <span id="lbmeta"></span>
-    <span id="lbnote"></span>
-    <button id="lbclose" title="Close (Esc)" aria-label="Close">×</button>
+    <button id="lbclose" title="Close (Esc)" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M19 12H5M11 6l-6 6 6 6"></path></svg></button>
+    <span id="lbnum"></span>
+    <div id="lbhead">
+      <span id="lbtitle"></span>
+      <span id="lbmeta"></span>
+    </div>
+    <span id="lbcount"></span>
   </div>
   <div id="lbmain">
     <button class="nav" id="lbprev" aria-label="Previous photo">‹</button>
     <img id="lbimg" alt="">
     <button class="nav" id="lbnext" aria-label="Next photo">›</button>
   </div>
-  <div id="lbcap"></div>
-  <div id="lbstrip"></div>
+  <div id="lbfoot">
+    <div id="lbnote"></div>
+    <div id="lbcap"></div>
+    <div id="lbstrip"></div>
+  </div>
 </div>
 
 <div id="pm" role="dialog" aria-modal="true" aria-label="Mark up photo" hidden="">

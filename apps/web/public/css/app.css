@@ -596,24 +596,42 @@
             letter-spacing:0;text-transform:none;color:var(--text);cursor:pointer}
   .pop .chk input{width:16px;height:16px;margin:0;flex:none}
 
-  #lb{position:fixed;inset:0;z-index:40;background:rgba(5,5,5,.96);display:flex;flex-direction:column}
+  #lb{position:fixed;inset:0;z-index:40;background:#000;display:flex;flex-direction:column;font-family:var(--sans)}
   #lb[hidden]{display:none}
-  #lbtop{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 60px 10px 16px;position:relative}
-  #lbtitle{font-weight:650;color:#fff}
-  #lbmeta{font-family:var(--mono);font-size:11px;color:var(--text-dim)}
-  #lbnote{font-size:12px;color:var(--marker-ink)}
-  #lbclose{position:absolute;right:12px;top:8px;width:36px;height:36px;border-radius:8px;cursor:pointer;
-           background:none;border:1px solid var(--line);font-size:20px;color:#fff}
-  #lbmain{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:0 8px}
-  #lbimg{max-width:100%;max-height:100%;object-fit:contain;border-radius:3px}
-  #lbcap{text-align:center;font-size:12px;color:var(--text-dim);padding:6px 16px 0;min-height:18px}
+  #lbtop{display:flex;align-items:center;gap:10px;flex:none;padding:calc(6px + env(safe-area-inset-top)) 16px 6px 6px}
+  #lbclose{flex:none;width:44px;height:44px;display:grid;place-items:center;padding:0;border:0;border-radius:22px;
+           background:none;color:#fff;cursor:pointer}
+  #lbclose:hover,#lbclose:active{background:rgba(255,255,255,.14)}
+  #lbclose svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+  #lbnum{flex:none;box-sizing:border-box;min-width:28px;height:28px;padding:0 7px;border-radius:14px;background:#E03616;
+         color:#fff;font-size:13px;font-weight:700;display:grid;place-items:center}
+  #lbhead{flex:1;min-width:0}
+  #lbtitle,#lbmeta,#lbcap{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #lbtitle{font-size:15px;line-height:20px;font-weight:600;color:#fff}
+  #lbmeta{font-size:12.5px;line-height:17px;color:#A8A8A8}
+  #lbcount{flex:none;font-size:13px;font-weight:600;color:#fff;font-variant-numeric:tabular-nums}
+  /* touch-action off: the fingers here swipe and zoom the photo, not the page */
+  #lbmain{flex:1;min-height:0;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+          padding:0 8px;touch-action:none;-webkit-user-select:none;user-select:none}
+  #lbimg{max-width:100%;max-height:100%;object-fit:contain;-webkit-touch-callout:none}
+  #lbfoot{flex:none;display:flex;flex-direction:column;gap:2px;padding:10px 16px calc(12px + env(safe-area-inset-bottom))}
+  #lbnote{font-size:14px;line-height:20px;color:#fff;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+  #lbcap{font-size:12px;line-height:17px;color:#A8A8A8}
+  #lbnote:empty,#lbcap:empty,#lbstrip:empty,#lbmeta:empty{display:none}
   #lb .nav{position:absolute;top:50%;transform:translateY(-50%);width:44px;height:60px;border:none;border-radius:8px;
            background:rgba(255,255,255,.1);color:#fff;font-size:24px;cursor:pointer}
   #lb .nav:hover{background:rgba(255,255,255,.2)}
   #lbprev{left:10px} #lbnext{right:10px}
-  #lbstrip{display:flex;gap:6px;padding:10px 16px calc(12px + env(safe-area-inset-bottom));overflow-x:auto;justify-content:center}
-  #lbstrip img{height:56px;border-radius:4px;cursor:pointer;opacity:.5;border:2px solid transparent}
-  #lbstrip img.on{opacity:1;border-color:#E03616}
+  #lbstrip{display:flex;gap:6px;margin-top:8px;overflow-x:auto;justify-content:safe center;scrollbar-width:none}
+  #lbstrip img{flex:none;box-sizing:border-box;width:56px;height:56px;object-fit:cover;border-radius:8px;cursor:pointer;
+               opacity:.55;border:2px solid transparent}
+  #lbstrip img.on{opacity:1;border-color:#fff}
+  /* a finger swipes between photos, so the photo keeps the full width */
+  @media (max-width:760px), (pointer:coarse){
+    #lb .nav{display:none}
+    #lbmain{padding:0}
+    #lbclose{width:48px;height:48px;border-radius:24px}
+  }
 
   #vidPlay{position:fixed;inset:0;z-index:40;background:rgba(5,5,5,.96);display:flex;align-items:center;justify-content:center}
   #vidPlay[hidden]{display:none}
