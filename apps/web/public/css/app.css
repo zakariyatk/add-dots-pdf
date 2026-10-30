@@ -700,6 +700,12 @@
      does not blow it up with the picture */
   #pmval{position:absolute;z-index:3;width:104px;height:30px;text-align:center;font-family:var(--mono);
          font-size:13px;background:#fff;color:#111;border:2px solid #E03616;border-radius:6px;padding:0 4px}
+  #pmmarkbar{position:absolute;z-index:3;display:flex;gap:2px;padding:3px;border-radius:10px;background:var(--chrome);
+             border:1px solid var(--line);box-shadow:0 6px 18px rgba(0,0,0,.45)}
+  #pmmarkbar[hidden],#pmmarkbar .btn[hidden]{display:none}
+  #pmmarkbar .btn{width:34px;height:34px;min-width:0;min-height:0;padding:0;border:0;background:none;color:var(--text)}
+  #pmmarkbar svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+  #pmmarkbar #pmDel:hover{color:var(--danger)}
   #pmzoom{display:flex;align-items:center;gap:4px}
   #pmzoom .btn{height:26px;min-width:26px;padding:0 7px;border-color:var(--line);font-size:12px}
   #pmzoom .lvl{font-family:var(--mono);font-size:11px;color:var(--text-dim);min-width:40px;text-align:center}
@@ -737,6 +743,7 @@
     #pm .unit{font-size:13px}
     #pm .unit input{height:44px;width:68px;font-size:16px}
     #pmval{height:42px;width:124px;font-size:16px}
+    #pmmarkbar .btn{width:44px;height:44px}
     #pmhint{font-size:12px;bottom:8px;line-height:1.35}
     /* two tidy rows, nothing hidden behind anything else. Pinch covers zooming,
        so the phone keeps Fit and drops the plus and minus. */
