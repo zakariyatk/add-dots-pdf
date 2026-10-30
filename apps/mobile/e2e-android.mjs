@@ -288,11 +288,20 @@ try {
     await sleep(1000);
   };
   await page.evaluate(() => {
-    const X = window.ADDPDF, it = X.S.items[0];
+    const X = window.ADDPDF,
+      it = X.S.items[0];
     const c = document.createElement('canvas');
-    c.width = 40; c.height = 30;
-    X.S.locs.backKey = { id: 'backKey', n: '1', ref: 'Back key', desc: '', boq: '', note: '',
-                         photos: [{ src: c.toDataURL('image/png'), cap: '' }] };
+    c.width = 40;
+    c.height = 30;
+    X.S.locs.backKey = {
+      id: 'backKey',
+      n: '1',
+      ref: 'Back key',
+      desc: '',
+      boq: '',
+      note: '',
+      photos: [{ src: c.toDataURL('image/png'), cap: '' }],
+    };
     it.shapes.push({ t: 'pin', a: [100, 100], id: 'backKey' });
     X.setTool('select');
     X.drawShapes(it);
