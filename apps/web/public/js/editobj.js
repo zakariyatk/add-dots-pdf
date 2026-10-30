@@ -134,6 +134,15 @@
     }
     const drawing = new Map();               /* key -> the drawing of it, while it is drawn */
     const onScreen = new Set();              /* keys the screen asked for: drawn again when ready */
+    /* a pdf.js worker of its own, kept. On the app's shared port, closing one
+       of these little PDFs refuses every document opened in that moment ("the
+       worker is being destroyed"): the same text at another size (screen and
+       thumbnail are drawn together), or a file being opened. */
+    let artWorker = null;
+    function artPdf(bytes) {
+      artWorker = artWorker || new X.pdfjsLib.PDFWorker({ name: 'textart' });
+      return X.pdfjsLib.getDocument({ data: bytes, worker: artWorker, isEvalSupported: false }).promise;
+    }
     function drawArt(key, it, s, vp) {
       if (!drawing.has(key)) {
         drawing.set(key, paintArt(key, it, s, vp).finally(function () {
@@ -149,7 +158,7 @@
         const doc = await docOf(it.src);
         const got = await E.pageFontSample(doc, it.num - 1, s);
         if (!got) { arts.set(key, 'none'); return; }
-        const pdf = await X.pdfjsLib.getDocument({ data: got.bytes, isEvalSupported: false }).promise;
+        const pdf = await artPdf(got.bytes);
         try {
           const page = await pdf.getPage(1);
           const dpr = Math.min(3, window.devicePixelRatio || 1);
