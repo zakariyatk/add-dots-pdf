@@ -5437,10 +5437,10 @@
     if (!L || !L.photos.length) { toast('No photos on this pin yet'); return; }
     lbId = id;
     const p = findPin(id);
-    $('lbtitle').textContent = L.n + '. ' + (L.ref || 'Location') + (L.desc ? ' — ' + L.desc : '');
-    $('lbmeta').textContent = [L.boq ? 'BOQ ' + L.boq : '', p ? 'page ' + p.page : '',
-                               L.photos.length + (L.photos.length === 1 ? ' photo' : ' photos')]
-                               .filter(Boolean).join('  ·  ');
+    $('lbnum').textContent = L.n;
+    $('lbtitle').textContent = L.ref || 'Location ' + L.n;
+    $('lbmeta').textContent = [L.desc, L.boq ? 'BOQ ' + L.boq : '', p ? 'Page ' + p.page : '']
+                               .filter(Boolean).join(' · ');
     $('lbnote').textContent = L.note || '';
     const many = L.photos.length > 1;
     $('lbstrip').innerHTML = many ? L.photos.map(function (ph, i) {
@@ -5453,21 +5453,134 @@
   function showLb(k) {
     const L = S.locs[lbId]; if (!L || !L.photos.length) { closeLb(); return; }
     lbK = (k + L.photos.length) % L.photos.length;
+    lbZ = 1; lbX = 0; lbY = 0; lbPaint();
     $('lbimg').src = L.photos[lbK].src;
-    $('lbcap').textContent = (L.photos[lbK].cap || '') + (L.photos.length > 1 ? '   ' + (lbK + 1) + ' / ' + L.photos.length : '');
-    Array.prototype.forEach.call($('lbstrip').children, function (c, i) { c.classList.toggle('on', i === lbK); });
+    $('lbimg').alt = L.photos[lbK].cap || $('lbtitle').textContent;
+    $('lbcap').textContent = L.photos[lbK].cap || '';
+    $('lbcount').textContent = L.photos.length > 1 ? (lbK + 1) + ' / ' + L.photos.length : '';
+    Array.prototype.forEach.call($('lbstrip').children, function (c, i) {
+      c.classList.toggle('on', i === lbK);
+      if (i === lbK) c.scrollIntoView({ block: 'nearest', inline: 'center' });
+    });
   }
   function closeLb() {
     const lb = $('lb');
     if (!lb || lb.hidden) return false;
-    lb.hidden = true; $('lbimg').removeAttribute('src'); lbId = null;
+    lb.hidden = true; $('lbimg').removeAttribute('src'); lbId = null; lbPts.clear();
     return true;
   }
   $('lbprev').addEventListener('click', function () { showLb(lbK - 1); });
   $('lbnext').addEventListener('click', function () { showLb(lbK + 1); });
   $('lbclose').addEventListener('click', closeLb);
   $('lbstrip').addEventListener('click', function (e) { if (e.target.dataset.k) showLb(+e.target.dataset.k); });
-  $('lb').addEventListener('click', function (e) { if (e.target.id === 'lb' || e.target.id === 'lbmain') closeLb(); });
+  /* a click beside the photo closes it; a finger there is only a slip */
+  $('lb').addEventListener('click', function (e) {
+    if (!lbTouch && (e.target.id === 'lb' || e.target.id === 'lbmain')) closeLb();
+  });
+
+  /* fingers on the photo: swipe to the next one, pinch or double-tap to zoom,
+     drag to look around once zoomed. lbX/lbY are from the middle of the stage. */
+  const LB_MAX_ZOOM = 5;
+  let lbZ = 1, lbX = 0, lbY = 0, lbTouch = false, lbGest = null, lbLastTap = 0;
+  const lbPts = new Map();
+  function lbPaint(ease) {
+    const im = $('lbimg');
+    im.style.transition = ease ? 'transform .18s ease-out' : 'none';
+    im.style.transform = 'translate(' + lbX + 'px,' + lbY + 'px) scale(' + lbZ + ')';
+  }
+  /* the stage's middle, so a point can be held under the fingers */
+  function lbCentre(x, y) {
+    const r = $('lbmain').getBoundingClientRect();
+    return { x: x - r.left - r.width / 2, y: y - r.top - r.height / 2 };
+  }
+  function lbClamp() {
+    const m = $('lbmain'), im = $('lbimg');
+    const mx = Math.max(0, (im.offsetWidth * lbZ - m.clientWidth) / 2);
+    const my = Math.max(0, (im.offsetHeight * lbZ - m.clientHeight) / 2);
+    lbX = Math.max(-mx, Math.min(mx, lbX));
+    lbY = Math.max(-my, Math.min(my, lbY));
+  }
+  function lbZoomAt(z, c) {
+    const k = z / lbZ;
+    lbX = c.x - (c.x - lbX) * k; lbY = c.y - (c.y - lbY) * k; lbZ = z;
+    lbClamp();
+  }
+  function lbTwoFingers() {
+    const p = Array.from(lbPts.values());
+    return { d: Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y) || 1,
+             c: lbCentre((p[0].x + p[1].x) / 2, (p[0].y + p[1].y) / 2) };
+  }
+  function lbOneFinger(e, moved) {
+    lbGest = { x0: e.clientX, y0: e.clientY, x: lbX, y: lbY, t: Date.now(), moved: moved };
+  }
+  /* slide the photo off, then bring the next one in from the other side */
+  function lbSlide(dir) {
+    const w = $('lbmain').clientWidth;
+    lbX = -dir * w; lbPaint(true);
+    setTimeout(function () {
+      if (lbId === null) return;
+      showLb(lbK + dir);
+      lbX = dir * w; lbPaint();
+      void $('lbimg').offsetWidth;
+      lbX = 0; lbPaint(true);
+    }, 170);
+  }
+  $('lbmain').addEventListener('pointerdown', function (e) {
+    lbTouch = e.pointerType === 'touch';
+    if (!lbTouch) return;
+    try { this.setPointerCapture(e.pointerId); } catch (err) { /* the move still arrives */ }
+    lbPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (lbPts.size === 1) lbOneFinger(e, false);
+    else if (lbPts.size === 2) { const t = lbTwoFingers(); lbGest = { pinch: true, d: t.d, z: lbZ, c: t.c }; }
+  });
+  $('lbmain').addEventListener('pointermove', function (e) {
+    if (!lbPts.has(e.pointerId) || !lbGest) return;
+    lbPts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (lbGest.pinch) {
+      if (lbPts.size < 2) return;
+      const t = lbTwoFingers();
+      lbX += t.c.x - lbGest.c.x; lbY += t.c.y - lbGest.c.y; lbGest.c = t.c;
+      lbZoomAt(Math.max(1, Math.min(LB_MAX_ZOOM, lbGest.z * t.d / lbGest.d)), t.c);
+      lbPaint();
+      return;
+    }
+    const dx = e.clientX - lbGest.x0, dy = e.clientY - lbGest.y0;
+    if (!lbGest.moved && Math.hypot(dx, dy) < 8) return;
+    lbGest.moved = true;
+    if (lbZ > 1) { lbX = lbGest.x + dx; lbY = lbGest.y + dy; lbClamp(); }
+    else lbX = S.locs[lbId].photos.length > 1 ? dx : dx * 0.25;   /* one photo: a little give */
+    lbPaint();
+  });
+  function lbLift(e) {
+    if (!lbPts.delete(e.pointerId) || !lbGest) return;
+    const g = lbGest;
+    if (lbPts.size) {
+      /* one finger of a pinch stays down: it carries on as a drag */
+      if (g.pinch && lbPts.size === 1) {
+        const f = lbPts.values().next().value;
+        lbOneFinger({ clientX: f.x, clientY: f.y }, true);
+      }
+      return;
+    }
+    lbGest = null;
+    if (e.type === 'pointercancel') { if (lbZ === 1) { lbX = 0; lbPaint(true); } return; }
+    if (g.pinch) return;
+    if (!g.moved) {
+      const now = Date.now(), twice = now - lbLastTap < 300;
+      lbLastTap = twice ? 0 : now;
+      if (!twice) return;
+      if (lbZ > 1) { lbZ = 1; lbX = 0; lbY = 0; } else lbZoomAt(2.5, lbCentre(e.clientX, e.clientY));
+      lbPaint(true);
+      return;
+    }
+    if (lbZ > 1) return;
+    const dx = e.clientX - g.x0, n = S.locs[lbId].photos.length;
+    const fast = Math.abs(dx) / Math.max(1, Date.now() - g.t) > 0.5;
+    if (n > 1 && (Math.abs(dx) > $('lbmain').clientWidth * 0.22 || (fast && Math.abs(dx) > 24))) lbSlide(dx < 0 ? 1 : -1);
+    else { lbX = 0; lbPaint(true); }
+  }
+  $('lbmain').addEventListener('pointerup', lbLift);
+  $('lbmain').addEventListener('pointercancel', lbLift);
   document.addEventListener('keydown', function (e) {
     if ($('lb').hidden) return;
     if (e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); closeLb(); }
