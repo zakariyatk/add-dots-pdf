@@ -591,8 +591,8 @@
   <input id="saveName" value="document.pdf">
   <label class="chk" id="savePhotosRow" hidden=""><input type="checkbox" id="savePhotos" checked="">
     Add linked photo pages for the pins</label>
-  <label class="chk" id="saveFlatRow" title="Off: highlights, notes, ink, boxes, lines, text boxes and stamps are saved as PDF comments, which Acrobat and other readers can edit. On: they are painted into the page for good."><input type="checkbox" id="saveFlat">
-    Flatten markups into the page</label>
+  <label class="chk" id="saveFlatRow" title="On: text, drawings and measurements are painted into the page, so they stay fixed in every PDF reader, in the order you stacked them. Off: highlights, notes, ink, boxes, lines, text boxes and stamps are saved as PDF comments, which other readers can move and edit, and they always sit above the page."><input type="checkbox" id="saveFlat" checked="">
+    Fix marks into the page</label>
   <!-- the site-photo extras, once the drawing has pins; a saved project opens
        again with Open, like any file -->
   <div class="savepins" id="savePinsRow" hidden="">
@@ -843,6 +843,12 @@
 
   <span class="mdiv"></span>
   <label class="mfield"><span>Angle</span><span class="unit"><input id="mpAngle" inputmode="decimal" aria-label="Angle in degrees"><em>°</em></span></label>
+  <button class="btn mpstack" id="mpFront" title="Bring to front" aria-label="Bring to front">
+    <svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2" fill="currentColor" fill-opacity=".25"></rect><path d="M4 14V5a1 1 0 0 1 1-1h9"></path></svg>
+  </button>
+  <button class="btn mpstack" id="mpBack" title="Send to back" aria-label="Send to back">
+    <svg viewBox="0 0 24 24"><rect x="4" y="4" width="12" height="12" rx="2" fill="currentColor" fill-opacity=".25"></rect><path d="M20 10v9a1 1 0 0 1-1 1h-9"></path></svg>
+  </button>
   <button class="btn del" id="mpDel" title="Delete this mark (Del)" aria-label="Delete this mark">
     <svg viewBox="0 0 24 24"><polyline points="4 7 20 7"></polyline><path d="M9 7V5h6v2"></path><path d="M6 7l1 13h10l1-13"></path></svg>
   </button>
@@ -1099,6 +1105,7 @@
 <script src="js/ocr.js"></script>
 <script src="js/editobj.js"></script>
 <script src="js/pagemenu.js"></script>
+<script src="js/colordlg.js"></script>
 <script src="js/tabs.js"></script>
 <script src="js/skin.js"></script>
 <script src="js/books.js"></script>

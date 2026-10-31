@@ -332,10 +332,12 @@ async function compose(
       commitAnnot(out, page, scratch, s, annotRect(s, measureT));
     };
 
-    /* text patches and text first, so marks sit on top */
+    /* in the order they stack on screen: the last is the one on top, so
+       Bring to front and Send to back hold in the saved file. Pins go last. */
     it.shapes.forEach((s) => {
-      if (!isText(s)) return;
-      onto(s, (p) => paintText(p, s));
+      if (s.t === 'pin') return;
+      if (isText(s)) onto(s, (p) => paintText(p, s));
+      else onto(s, (p) => paintMark(p, s));
     });
     function paintText(p: PDFPage, s: TextMark) {
       /* text lifted by Edit Object and retyped within the characters the
@@ -459,10 +461,6 @@ async function compose(
       });
     }
 
-    it.shapes.forEach((any) => {
-      if (any.t === 'text' || any.t === 'pin') return;
-      onto(any, (p) => paintMark(p, any));
-    });
     function paintMark(p: PDFPage, any: AnyMark) {
       const painter = painters[any.t];
       if (painter) {

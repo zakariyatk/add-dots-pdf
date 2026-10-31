@@ -2995,6 +2995,8 @@
       });
     });
     $('mpDel').addEventListener('click', function () { deleteSelected(); });
+    $('mpFront').addEventListener('click', function () { stackSelected('front'); });
+    $('mpBack').addEventListener('click', function () { stackSelected('back'); });
   }
 
   /* ---------------- the colour palette ----------------
@@ -3072,7 +3074,20 @@
     pick.addEventListener('click', function (e) { e.stopPropagation(); });
     ok.addEventListener('click', function (e) { e.stopPropagation(); useHex(hex.value || pick.value); });
     const lab = document.createElement('span'); lab.className = 'plab'; lab.textContent = 'Custom';
-    row.appendChild(lab); row.appendChild(pick); row.appendChild(hex); row.appendChild(ok);
+    /* or a colour already on the page: the eyedropper (js/colordlg.js) */
+    const eye = document.createElement('button');
+    eye.type = 'button'; eye.className = 'peye'; eye.title = 'Pick a colour from the page';
+    eye.setAttribute('aria-label', 'Pick a colour from the page');
+    eye.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l5 5M4 20l1.5-4.5 9-9 3 3-9 9z"/></svg>';
+    eye.addEventListener('click', function (e) {
+      e.stopPropagation();
+      host.style.visibility = 'hidden';
+      window.ADDPDF.pickColour(function (c) {
+        host.style.visibility = '';
+        if (c) useHex(c);
+      });
+    });
+    row.appendChild(lab); row.appendChild(pick); row.appendChild(eye); row.appendChild(hex); row.appendChild(ok);
     host.appendChild(row);
   }
 
@@ -3728,20 +3743,27 @@
     toast(made.length > 1 ? made.length + ' marks duplicated' : 'Mark duplicated');
     return true;
   }
-  /* The selected marks drawn over every other mark on their page: the
-     last drawn is the one on top. */
-  function frontSelected() {
+  /* The selected marks restacked on their page: the last drawn is the one
+     on top, on screen and in the saved file. `where` is 'front' or 'back'
+     (over or under every other mark), or 'up' or 'down' (one place). */
+  function stackSelected(where) {
     if (!S.sel) return false;
-    snapshot();
     const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
     const moved = list.map(function (i) { return it.shapes[i]; });
-    for (let k = list.length - 1; k >= 0; k--) it.shapes.splice(list[k], 1);
-    moved.forEach(function (m) { it.shapes.push(m); });
-    const n = it.shapes.length;
-    setGroup(it, moved.map(function (_, k) { return n - moved.length + k; }));
-    drawShapes(it);
+    const rest = it.shapes.filter(function (_, i) { return list.indexOf(i) < 0; });
+    /* how many of the other marks stay under the selection */
+    const below = list[0];
+    const at = where === 'front' ? rest.length : where === 'back' ? 0 :
+      where === 'up' ? Math.min(rest.length, below + 1) : Math.max(0, below - 1);
+    const next = rest.slice(0, at).concat(moved, rest.slice(at));
+    if (next.every(function (m, i) { return m === it.shapes[i]; })) return false;
+    snapshot();
+    it.shapes = next;
+    setGroup(it, moved.map(function (_, k) { return at + k; }));
+    drawShapes(it); drawThumb(it);
     return true;
   }
+  function frontSelected() { return stackSelected('front'); }
 
   /* ---------------- photo pins (site photo locations) ---------------- */
   /* A pin is a shape {t:'pin', a:[x,y], id} so it moves, rotates, undoes and is
@@ -4757,6 +4779,17 @@
       });
       $('pmswatch').appendChild(b);
     });
+    /* any other colour, from the Edit colours dialog */
+    const more = document.createElement('input');
+    more.type = 'color'; more.title = 'More colours'; more.value = PM.color.toLowerCase();
+    more.addEventListener('change', function () {
+      const c = more.value.toUpperCase();
+      PM.color = c;
+      Array.prototype.forEach.call($('pmswatch').children, function (x) { x.classList.remove('on'); });
+      const m = PM.marks[PM.sel];
+      if (m && m.c !== c) { pmPush(); m.c = c; pmRender(); }
+    });
+    $('pmswatch').appendChild(more);
     Object.keys(PM_TOOLS).forEach(function (id) {
       $(id).addEventListener('click', function () { pmSetTool(PM_TOOLS[id]); });
     });
@@ -7089,6 +7122,11 @@
       'keeps failing, the original file may be damaged.';
   }
 
+  /* Marks are painted into the page, fixed in every reader, unless the Save
+     dialog's box is turned off: then the markups that can be go as PDF
+     comments, which a reader can move and edit. */
+  function keepComments() { return !$('saveFlat').checked; }
+
   async function saveAs(name) {
     const btn = $('saveGo');
     btn.disabled = true; btn.textContent = 'Building…';
@@ -7096,10 +7134,8 @@
       const photos = !$('savePhotosRow').hidden && $('savePhotos').checked;
       if (photos) toast('Building the PDF with photo pages…');
       /* onto the original where it can be: a few kilobytes appended, and
-         what a rebuild drops (bookmarks, links) kept; markups as PDF
-         comments, editable in a reader, unless flattened */
-      const annots = !$('saveFlat').checked;
-      const done = await download(await buildPdf(S.items, null, { photos: photos, append: true, annots: annots }, 'blob'), name);
+         what a rebuild drops (bookmarks, links) kept */
+      const done = await download(await buildPdf(S.items, null, { photos: photos, append: true, annots: keepComments() }, 'blob'), name);
       /* the Save dialog cancelled: still unsaved, and the popover stays */
       if (done === false) return;
       closePops();
@@ -7141,7 +7177,7 @@
     $('btnSave').disabled = true; $('btnSave').textContent = 'Saving…';
     try {
       const photos = livePins().length > 0;
-      const blob = await buildPdf(S.items, null, { photos: photos, append: true, annots: true }, 'blob');
+      const blob = await buildPdf(S.items, null, { photos: photos, append: true, annots: keepComments() }, 'blob');
       let saved = name;
       if (handle) {
         const w = await handle.createWritable();
@@ -7173,7 +7209,7 @@
     const name = /\.pdf$/i.test($('saveName').value.trim()) ? $('saveName').value.trim() : S.baseName + '-edited.pdf';
     toast('Preparing to share…');
     try {
-      const blob = await buildPdf(S.items, null, { photos: livePins().length > 0, append: true, annots: true }, 'blob');
+      const blob = await buildPdf(S.items, null, { photos: livePins().length > 0, append: true, annots: keepComments() }, 'blob');
       await EXT.shareFile(blob, name);
     } catch (e) {
       toast(esc(saveError(e, 'The document could not be prepared for sharing')));
@@ -9986,6 +10022,7 @@
     /* the system's print dialog, and a PDF printed with it (js/print.js) */
     printSystem: printSystem, printFrame: printFrame,
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
+    stackSelected: stackSelected,
     ZOOM_MIN: ZOOM_MIN, ZOOM_MAX: ZOOM_MAX,
     /* the document put away (its tab closed): back to the home screen */
     closeDocument: function () { hardReset(); updateMeta(); showHome(); },

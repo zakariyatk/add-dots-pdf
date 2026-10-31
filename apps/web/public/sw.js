@@ -58,6 +58,7 @@ const SHELL = [
   'js/ocr.js',
   'js/editobj.js',
   'js/pagemenu.js',
+  'js/colordlg.js',
   'js/tabs.js',
   'js/skin.js',
   'js/books.js',
