@@ -10,7 +10,7 @@
    - the view: Zoom in here, Fit page, Print…
 
    On a mark (with Select) the menu is the mark's: Edit text (a text mark),
-   Duplicate, Bring to front, Delete. The right-click selects the mark first
+   Duplicate, the four stacking moves, Delete. The right-click selects the mark first
    (core beginDrag). Each item does what its button, tool or shortcut does,
    and shows that shortcut. Text being typed keeps the browser's own menu
    (spelling, paste); so do phones and tablets, where a long press selects
@@ -40,7 +40,8 @@
       prn: '<path d="M6 9V3h12v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M6 14h12v7H6z"/>',
       edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
       dup: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/>',
-      front: '<rect x="8" y="8" width="12" height="12" rx="2" fill="currentColor" fill-opacity=".25"/><path d="M4 14V5a1 1 0 0 1 1-1h9"/>'
+      front: '<rect x="8" y="8" width="12" height="12" rx="2" fill="currentColor" fill-opacity=".25"/><path d="M4 14V5a1 1 0 0 1 1-1h9"/>',
+      back: '<rect x="4" y="4" width="12" height="12" rx="2" fill="currentColor" fill-opacity=".25"/><path d="M20 10v9a1 1 0 0 1-1 1h-9"/>'
     };
 
     const menu = document.createElement('div');
@@ -68,7 +69,10 @@
         return '<div class="hd">' + (many ? c.many + ' marks' : 'Mark') + '</div>' +
           (!many && s && s.t === 'text' ? item('mkedit', 'edit', 'Edit text') : '') +
           item('mkdup', 'dup', 'Duplicate') +
-          item('mkfront', 'front', 'Bring to front') +
+          '<hr>' + item('mkfront', 'front', 'Bring to front') +
+          item('mkup', 'front', 'Bring forward') +
+          item('mkdown', 'back', 'Send backward') +
+          item('mkback', 'back', 'Send to back') +
           '<hr>' + item('mkdel', 'del', 'Delete', 'Del', { danger: true });
       }
       const words = !!(X.selectedText && X.selectedText());
@@ -215,7 +219,10 @@
         case 'print': X.print(); break;
         case 'mkedit': X.editText(it, S.sel.i); break;
         case 'mkdup': X.duplicateSelected(); break;
-        case 'mkfront': X.frontSelected(); break;
+        case 'mkfront': X.stackSelected('front'); break;
+        case 'mkup': X.stackSelected('up'); break;
+        case 'mkdown': X.stackSelected('down'); break;
+        case 'mkback': X.stackSelected('back'); break;
         case 'mkdel': X.deleteSelected(); break;
       }
     }

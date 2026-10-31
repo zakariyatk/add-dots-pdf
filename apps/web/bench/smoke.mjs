@@ -1050,6 +1050,10 @@ try {
     await page.evaluate(() =>
       window.ADDPDF.S.items[1].shapes.push({ t: 'rect', a: [60, 60], b: [260, 160], c: '#E2483D', w: 3 }),
     );
+    /* marks are fixed into the page unless the Save dialog's box is off */
+    await page.evaluate(() => {
+      document.getElementById('saveFlat').checked = false;
+    });
     const save = async () => {
       await page.click('#btnSaveAs');
       const [dl] = await Promise.all([
@@ -4289,7 +4293,10 @@ try {
     await page.keyboard.press('Escape');
     await page.waitForTimeout(500);
     const marks = await page.evaluate(() => window.ADDPDF.S.items[0].shapes.map((s) => s.text));
-    await page.evaluate(() => document.getElementById('btnSaveAs').click());
+    await page.evaluate(() => {
+      document.getElementById('saveFlat').checked = false;
+      document.getElementById('btnSaveAs').click();
+    });
     await page.waitForTimeout(400);
     const [dl] = await Promise.all([
       page.waitForEvent('download', { timeout: 30000 }),

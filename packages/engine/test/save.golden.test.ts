@@ -21,6 +21,9 @@ let pages: PageDigest[];
 beforeAll(async () => {
   measure = await createTextMeasurer();
   const items = (await makeFixture(PDFLib)) as PageItem[];
+  /* v1 painted a page's text before its other marks; marks now go in their
+     stacking order (stack.test.ts), so the fixture is put in v1's order */
+  for (const it of items) it.shapes.sort((a, b) => +(b.t === 'text') - +(a.t === 'text'));
   pages = await digest(PDFLib, await buildPdf(items, null, {}, { measure }));
 });
 
