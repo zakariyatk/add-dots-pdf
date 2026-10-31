@@ -156,6 +156,17 @@ body.acro .qrail .qgrip {
   cursor: grab; touch-action: none
 }
 body.acro .qrail .qgrip::before { content: ""; width: 26px; height: 4px; border-radius: 2px; background: var(--line) }
+/* moved from its place: the arrow beside the grip takes it back */
+body.acro .qrail .qtop { display: flex; align-items: center; justify-content: center; height: 16px }
+body.acro .qrail .qhome {
+  display: none; width: 18px; height: 16px; padding: 0; border: 0; border-radius: 4px; background: none;
+  color: var(--btn, var(--marker)); cursor: pointer; align-items: center; justify-content: center
+}
+body.acro .qrail .qhome svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.200; stroke-linecap: round; stroke-linejoin: round }
+body.acro .qrail .qhome:hover { background: var(--chrome-2) }
+body.acro .qrail.moved .qhome { display: flex }
+body.acro .qrail.moved .qgrip { width: 22px }
+body.acro .qrail.moved .qgrip::before { width: 18px }
 body.acro .qrail.dragging, body.acro .qrail.dragging .qgrip { cursor: grabbing }
 body.acro .qrail .btn {
   width: 40px; height: 40px; min-width: 40px; padding: 0; justify-content: center; border-radius: 8px

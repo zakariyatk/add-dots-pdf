@@ -131,8 +131,7 @@
     }
     [
       ['tSelect', 'Select (V)'], ['tPan', 'Pan (H)'], ['tNote', 'Comment'], ['tHighlight', 'Highlight text'],
-      ['tInk', 'Draw'], ['tText', 'Add or edit text'], ['tDim', 'Measure'], ['btnRulers', 'Rulers (Ctrl+R)'],
-      ['btnSign', 'Sign']
+      ['tInk', 'Draw'], ['tText', 'Add or edit text'], ['tDim', 'Measure'], ['btnRulers', 'Rulers (Ctrl+R)']
     ].forEach(function (q) {
       const src = $(q[0]);
       if (!src) return;
@@ -162,12 +161,55 @@
       rail.appendChild(b);
     });
 
+    /* The last button is the last tool used that the bar does not already
+       hold, kept on this device. It starts as Sign. */
+    const QLAST = 'adddots.qrail.last';
+    const last = document.createElement('button');
+    last.className = 'btn'; last.type = 'button'; last.id = 'qLast';
+    let lastId = 'btnSign';
+    function lastSrc(id) {
+      const src = $(id);
+      if (!src) return null;
+      const label = src.dataset.label || src.title || id;
+      last.title = label; last.setAttribute('aria-label', label);
+      const svg = src.querySelector('svg');
+      last.innerHTML = svg ? svg.outerHTML : '';
+      const tool = toolOf(id);
+      if (tool) last.dataset.toolBtn = tool; else delete last.dataset.toolBtn;
+      last.classList.toggle('on', !!tool && X.S.tool === tool);
+      lastId = id;
+      return src;
+    }
+    function lastUsed(id) {
+      if (id === lastId || !lastSrc(id)) return;
+      try { localStorage.setItem(QLAST, id); } catch (e) { /* this time only */ }
+    }
+    last.addEventListener('click', function () { const src = $(lastId); if (src) src.click(); });
+    rail.appendChild(last);
+    lastSrc('btnSign');
+    try { const kept = localStorage.getItem(QLAST); if (kept) lastSrc(kept); } catch (e) { /* the first */ }
+    new MutationObserver(function () {
+      const t = X.S.tool;
+      if (!t || t === 'select' || rail.querySelector('[data-tool-btn="' + t + '"]:not(#qLast)')) return;
+      const id = TOOL_ID[t] || (X.toolBtn || {})[t];
+      if (id) lastUsed(id);
+    }).observe(document.body, { attributes: true, attributeFilter: ['data-tool'] });
+    if ($('btnSign')) $('btnSign').addEventListener('click', function () { lastUsed('btnSign'); });
+
     /* Floating, as Acrobat's: dragged by its grip anywhere over the page
        area, and kept where it was put (on this device) */
     const grip = document.createElement('span');
     grip.className = 'qgrip'; grip.title = 'Drag to move the tools';
     grip.setAttribute('aria-hidden', 'true');
-    rail.insertBefore(grip, rail.firstChild);
+    const qtop = document.createElement('div');
+    qtop.className = 'qtop';
+    qtop.appendChild(grip);
+    const qhome = document.createElement('button');
+    qhome.className = 'qhome'; qhome.type = 'button'; qhome.id = 'qHome';
+    qhome.title = 'Put the tools back in their place'; qhome.setAttribute('aria-label', qhome.title);
+    qhome.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 14L4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-2"/></svg>';
+    qtop.appendChild(qhome);
+    rail.insertBefore(qtop, rail.firstChild);
     const QPOS = 'adddots.qrail.pos';
     function keepIn(x, y) {
       const m = main.getBoundingClientRect();
@@ -182,6 +224,7 @@
     function placeRail() {
       let pos = null;
       try { pos = JSON.parse(localStorage.getItem(QPOS) || 'null'); } catch (e) { pos = null; }
+      rail.classList.toggle('moved', !!pos && on);
       if (!on) { rail.style.left = ''; rail.style.top = ''; return; }
       if (pos && rail.offsetWidth) { putRail(pos[0], pos[1]); return; }
       /* its own place: just inside the page area, beside the panel */
@@ -206,16 +249,20 @@
         grip.removeEventListener('pointercancel', up);
         try { localStorage.setItem(QPOS, JSON.stringify([parseFloat(rail.style.left), parseFloat(rail.style.top)])); }
         catch (err) { /* not kept */ }
+        placeRail();
       }
       grip.addEventListener('pointermove', move);
       grip.addEventListener('pointerup', up);
       grip.addEventListener('pointercancel', up);
     });
-    /* a double click on the grip puts it back beside the panel */
-    grip.addEventListener('dblclick', function () {
+    /* the arrow, or a double click on the grip, puts it back beside the panel */
+    function railHome() {
       try { localStorage.removeItem(QPOS); } catch (e) { /* nothing kept */ }
+      rail.style.top = '';
       placeRail();
-    });
+    }
+    grip.addEventListener('dblclick', railHome);
+    qhome.addEventListener('click', railHome);
     window.addEventListener('resize', function () { if (on) placeRail(); });
 
     /* ---------------- the options of the tool in hand ----------------

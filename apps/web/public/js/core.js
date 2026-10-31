@@ -1055,7 +1055,8 @@
     const before = at.box.offsetTop, top = stage.scrollTop;
     return function () {
       const moved = at.box.offsetTop - before;
-      if (moved) stage.scrollTop = top + moved;
+      /* at once: a glide here would be read back half way by the next hold */
+      if (moved) stage.scrollTo({ top: top + moved, behavior: 'instant' });
     };
   }
   function flushResizes() {
@@ -3774,6 +3775,15 @@
     return String(m + 1);
   }
   function pinRadius() { return Math.max(9, PIN_R * S.scale); }
+  /* The pin stands with its tip on the spot; the number sits in its head,
+     PIN_LIFT radii above. */
+  const PIN_LIFT = 1.8;
+  function pinPath(x, y, r) {
+    const h = r * PIN_LIFT, t = Math.sqrt(h * h - r * r);
+    const dx = t * r / h, dy = t * t / h;
+    return 'M' + x + ' ' + y + 'L' + (x - dx) + ' ' + (y - dy) +
+      'A' + r + ' ' + r + ' 0 1 1 ' + (x + dx) + ' ' + (y - dy) + 'Z';
+  }
 
   function pinEl(it, s, vp, idx) {
     const L = S.locs[s.id] || { n: '?', ref: '', photos: [] };
@@ -3782,22 +3792,25 @@
     const selected = idx >= 0 && S.sel && S.sel.it === it && S.sel.i === idx;
     const g = document.createElementNS(SVGNS, 'g');
     g.setAttribute('class', 'pin');
-    if (selected || (idx >= 0 && pinSel === s.id)) {
-      const ring = document.createElementNS(SVGNS, 'circle');
-      ring.setAttribute('cx', p[0]); ring.setAttribute('cy', p[1]); ring.setAttribute('r', r + 6);
-      ring.setAttribute('fill', 'rgba(123,92,255,.22)');
-      ring.setAttribute('stroke', '#7B5CFF'); ring.setAttribute('stroke-width', 2);
-      g.appendChild(ring);
+    const lit = selected || (idx >= 0 && pinSel === s.id);
+    if (lit) {
+      const spot = document.createElementNS(SVGNS, 'ellipse');
+      spot.setAttribute('cx', p[0]); spot.setAttribute('cy', p[1]);
+      spot.setAttribute('rx', r * 0.8); spot.setAttribute('ry', r * 0.3);
+      spot.setAttribute('fill', 'rgba(123,92,255,.35)');
+      g.appendChild(spot);
     }
-    const c = document.createElementNS(SVGNS, 'circle');
-    c.setAttribute('cx', p[0]); c.setAttribute('cy', p[1]); c.setAttribute('r', r);
+    const c = document.createElementNS(SVGNS, 'path');
+    c.setAttribute('d', pinPath(p[0], p[1], r));
     c.setAttribute('fill', PIN_COLOR);
-    c.setAttribute('stroke', '#FFFFFF'); c.setAttribute('stroke-width', Math.max(1.5, r * 0.18));
+    c.setAttribute('stroke', lit ? '#7B5CFF' : '#FFFFFF');
+    c.setAttribute('stroke-width', Math.max(1.5, r * (lit ? 0.26 : 0.18)));
+    c.setAttribute('stroke-linejoin', 'round');
     g.appendChild(c);
     const label = String(L.n == null ? '' : L.n);
     const t = document.createElementNS(SVGNS, 'text');
     const fs = r * (label.length <= 2 ? 1.05 : 2.1 / label.length);
-    t.setAttribute('x', p[0]); t.setAttribute('y', p[1] + fs * 0.36);
+    t.setAttribute('x', p[0]); t.setAttribute('y', p[1] - r * PIN_LIFT + fs * 0.36);
     t.setAttribute('text-anchor', 'middle');
     t.setAttribute('font-size', fs);
     t.setAttribute('font-weight', '700');
@@ -3843,12 +3856,14 @@
 
   /* pin tool: press on a pin to drag it, tap it to edit, tap blank paper to add one */
   function pinAt(it, at) {
-    const r = pinRadius() + 4;
+    const r = pinRadius();
     for (let i = it.shapes.length - 1; i >= 0; i--) {
       const s = it.shapes[i];
       if (s.t !== 'pin') continue;
       const q = it.vp.convertToViewportPoint(s.a[0], s.a[1]);
-      if (Math.hypot(q[0] - at[0], q[1] - at[1]) <= r) return i;
+      /* its head, or the stem down to the tip */
+      if (Math.hypot(q[0] - at[0], q[1] - r * PIN_LIFT - at[1]) <= r + 4 ||
+          (Math.abs(q[0] - at[0]) <= r * 0.5 && at[1] <= q[1] + 4 && at[1] >= q[1] - r * PIN_LIFT)) return i;
     }
     return -1;
   }
@@ -3872,15 +3887,16 @@
   function pinDrag(it, e, hit) {
     const cap = it.capture, s0 = it.shapes[hit];
     const x0 = e.clientX, y0 = e.clientY;
+    const q0 = it.vp.convertToViewportPoint(s0.a[0], s0.a[1]);
     let moved = false, dead = false;
     try { cap.setPointerCapture(e.pointerId); } catch (err) { /* mouse works without it */ }
     function move(ev) {
       if (dead || capBlock) return;
       if (!moved && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 4) return;
       if (!moved) { moved = true; snapshot(); }
-      const rc = cap.getBoundingClientRect();
-      const vx = Math.max(0, Math.min(it.vp.width, ev.clientX - rc.left + it.off.left));
-      const vy = Math.max(0, Math.min(it.vp.height, ev.clientY - rc.top + it.off.top));
+      /* the pin moves by what the pointer moved: it was held by its head */
+      const vx = Math.max(0, Math.min(it.vp.width, q0[0] + ev.clientX - x0));
+      const vy = Math.max(0, Math.min(it.vp.height, q0[1] + ev.clientY - y0));
       it.shapes[hit] = Object.assign({}, s0, { a: it.vp.convertToPdfPoint(vx, vy) });
       drawShapes(it);
     }
@@ -3919,14 +3935,15 @@
   }
 
   /* sidebar list + editor */
+  const PIN_CAM = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8h4l2-3h4l2 3h4v11H4z"/><circle cx="12" cy="13" r="3.500"/></svg>';
+  const PIN_BIN = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/></svg>';
   function renderPins() {
     const list = $('pinList');
     if (!list) return;
     const pins = livePins();
     const np = pins.reduce(function (a, p) { return a + p.L.photos.length; }, 0);
-    $('pinCount').textContent = pins.length
-      ? pins.length + (pins.length === 1 ? ' location' : ' locations') + ' · ' + np + (np === 1 ? ' photo' : ' photos')
-      : '';
+    $('pinCount').textContent = pins.length ? pins.length : '';
+    $('pinCount').title = np + (np === 1 ? ' photo' : ' photos');
     if (!viewerBusy) $('pinExpGo').disabled = !pins.length;
     if (!pins.length) {
       list.innerHTML = '<div class="pinempty">No pins yet. Choose <b>+ Add pin</b> (or press <b>M</b>) ' +
@@ -3939,7 +3956,9 @@
           '<span class="num">' + esc(p.L.n) + '</span>' +
           '<span class="txt"><span class="ref">' + esc(p.L.ref || '(no reference)') + '</span>' +
           '<span class="sub">' + esc(sub) + '</span></span>' +
-          '<span class="cnt">' + p.L.photos.length + '</span></button>';
+          '<span class="cnt">' + PIN_CAM + p.L.photos.length + '</span>' +
+          (p.s.id === pinSel ? '<span class="rm" data-a="del" title="Delete pin" aria-label="Delete pin">' + PIN_BIN + '</span>' : '') +
+          '</button>';
       }).join('');
     }
     fillPinEditor();
@@ -3948,7 +3967,6 @@
   function fillPinEditor() {
     const ed = $('pinEd');
     const p = pinSel ? findPin(pinSel) : null;
-    $('pe_del').disabled = !p;
     if (!p) { ed.hidden = true; return; }
     ed.hidden = false;
     const L = p.L, same = pinEdFor === L.id;
@@ -3960,7 +3978,7 @@
       });
     const g = $('pe_ph');
     if (!L.photos.length) {
-      g.innerHTML = '<div class="pinempty" style="grid-column:1/-1;padding:2px">No photos yet.</div>';
+      g.innerHTML = '';
     } else {
       g.innerHTML = L.photos.map(function (ph, k) {
         return '<figure data-k="' + k + '"><img src="' + esc(ph.src) + '" alt="' + esc(ph.cap || '') + '" title="' +
@@ -3976,8 +3994,15 @@
   $('pinList').addEventListener('click', function (e) {
     const b = e.target.closest('.loc'); if (!b) return;
     const p = findPin(b.dataset.id); if (!p) return;
+    if (e.target.closest('[data-a="del"]')) { askDeletePin(p); return; }
     selectPin(p.it, p.idx);
     goTo(p.page);
+    /* and the pin itself in the middle of the view */
+    setTimeout(function () {
+      const q = p.it.vp.convertToViewportPoint(p.s.a[0], p.s.a[1]);
+      stage.scrollTop = p.it.box.offsetTop + p.it.wrap.offsetTop + q[1] - p.it.off.top - stage.clientHeight / 2;
+      stage.scrollLeft = Math.max(0, p.it.box.offsetLeft + q[0] - p.it.off.left - stage.clientWidth / 2);
+    }, 40);
   });
 
   [['pe_n', 'n'], ['pe_ref', 'ref'], ['pe_desc', 'desc'], ['pe_boq', 'boq'], ['pe_note', 'note']]
@@ -4682,9 +4707,9 @@
     pvApply();
   }
 
-  const PM_TOOLS = { pmSelect: 'select', pmPan: 'pan', pmDim: 'dim', pmArrow: 'arrow', pmLine: 'line',
+  const PM_TOOLS = { pmPan: 'pan', pmDim: 'dim', pmArrow: 'arrow', pmLine: 'line',
                      pmRect: 'rect', pmEllipse: 'ellipse', pmPen: 'pen', pmText: 'text', pmCrop: 'crop' };
-  const PM_KEYS = { v: 'select', h: 'pan', d: 'dim', a: 'arrow', l: 'line', b: 'rect',
+  const PM_KEYS = { h: 'pan', d: 'dim', a: 'arrow', l: 'line', b: 'rect',
                     e: 'ellipse', p: 'pen', t: 'text', c: 'crop' };
   const PM_HINT = {
     dim: 'Drag across what you are measuring, then type the size · Shift keeps it straight',
@@ -4693,8 +4718,6 @@
     rect: 'Drag to box something in · Shift makes a square',
     ellipse: 'Drag to ring something · Shift makes a circle',
     pen: 'Draw freehand',
-    select: 'Tap a mark to pick it up · drag to move, drag a grip to stretch or turn · '
-          + 'double-tap to retype · colour and size change it · tap off the photo to let go',
     text: 'Tap where the note belongs, then type it',
     pan: 'Drag to move the photo · two fingers zoom at any time',
     crop: 'Drag a box around the part of the photo to keep'
@@ -4706,13 +4729,12 @@
     PM.tool = t;
     Object.keys(PM_TOOLS).forEach(function (id) { $(id).classList.toggle('on', PM_TOOLS[id] === t); });
     document.body.classList.toggle('pmpan', t === 'pan');
-    document.body.classList.toggle('pmsel', t === 'select');
     const hint = $('pmhint');
     hint.textContent = PM_HINT[t];
     hint.classList.remove('gone');
     clearTimeout(pmSetTool.fade);
     pmSetTool.fade = setTimeout(function () { hint.classList.add('gone'); }, 3500);
-    if (t !== 'select') PM.sel = -1;   /* another tool lets go of the mark */
+    PM.sel = -1;                       /* another tool lets go of the mark */
     PM.grab = null;
     pmSyncSel();
     pmRender();
@@ -4845,15 +4867,15 @@
         return;
       }
 
-      /* a grip on the mark already picked up wins over picking another; with a
-         drawing tool the finished mark stays ready to adjust, and anywhere
-         else on the photo starts the next one */
+      /* As on a PDF page, whatever the tool: a mark is picked up by clicking
+         it, a grip on the one in hand winning over the rest. Anywhere else
+         on the photo lets go of it, and a drag there starts the next mark. */
       const grip = pmGrip(p);
-      if (PM.tool === 'select' || grip || (PM.sel >= 0 && pmHit(p, true) === PM.sel)) {
+      if (grip || pmHit(p, true) >= 0) {
         /* a second tap on the same mark retypes it — dblclick is unreliable on touch */
         const now = Date.now(), again = now - lastTap < 350;
         lastTap = now;
-        const hit = grip ? PM.sel : pmHit(p, PM.tool !== 'select');
+        const hit = grip ? PM.sel : pmHit(p, true);
         if (again && hit >= 0 && hit === PM.sel && !grip) {
           PM.grab = null;
           pmEditSel();
@@ -4867,10 +4889,12 @@
         return;
       }
 
+      const held = PM.sel >= 0;
       if (!typed) { PM.sel = -1; pmSyncSel(); }
       const w = Math.max(0.5, parseFloat($('pmSize').value) || 3);
       if (PM.tool === 'text') {
         PM.draw = null;
+        if (held) { pmRender(); return; }   /* a click away only lets go */
         askVal({ t: 'text', a: p, b: p, c: PM.color, w: w, v: '' });
         return;
       }
@@ -5005,7 +5029,7 @@
     });
     cv.addEventListener('dblclick', function (e) {
       const hit = pmHit(pmPt(e));
-      if (hit < 0 || (PM.tool !== 'select' && hit !== PM.sel)) return;
+      if (hit < 0) return;
       e.preventDefault();
       PM.sel = hit; pmSyncSel();
       if (!PM.pending) pmEditSel();
@@ -5123,7 +5147,7 @@
     PM.undo = []; PM.redo = []; PM.dirty = false;
     pmCropCancel();
     pvPointers.clear(); pvGesture = null; pvPan = null; pvBlock = false;
-    document.body.classList.remove('pmpan', 'pmsel');
+    document.body.classList.remove('pmpan');
     $('pmval').hidden = true;
     $('pmmarkbar').hidden = true;
     $('pmimg').removeAttribute('src');
@@ -5427,37 +5451,26 @@
   }, true);
   window.addEventListener('pagehide', camStop);
 
-  /* Done puts the details away; picking or dropping a pin brings them back.
-     A pin left with no reference and no photos carries nothing worth keeping,
-     so it is removed instead of sitting on the page as an empty dot. */
+  /* What is typed is kept as it is typed. Clicking off the pin or taking
+     another tool puts the details away; picking or dropping a pin brings them
+     back. The pin stays, filled in or not: Delete is the way to remove one. */
   function closePinEditor() {
-    const empty = pinSel ? findPin(pinSel) : null;
-    const dropId = (empty && !empty.L.ref && !(empty.L.photos && empty.L.photos.length)) ? pinSel : null;
+    if (!pinSel) return;
     pinSel = null;
     pinEdFor = null;
     const sel = S.sel && S.sel.it && S.sel.it.shapes ? S.sel.it.shapes[S.sel.i] : null;
     if (sel && sel.t === 'pin') S.sel = null;
     $('pinEd').hidden = true;
-    if (dropId) deletePin(dropId);
     redrawAll(); renderPins();
   }
-  $('pe_done').addEventListener('click', closePinEditor);
-  $('pe_go').addEventListener('click', function () {
-    const p = pinSel ? findPin(pinSel) : null; if (!p) return;
-    goTo(p.page);
-    if (isMobile()) setRail(false);
-    setTimeout(function () {
-      const q = p.it.vp.convertToViewportPoint(p.s.a[0], p.s.a[1]);
-      stage.scrollTop = p.it.box.offsetTop + p.it.wrap.offsetTop + q[1] - p.it.off.top - stage.clientHeight / 2;
-      stage.scrollLeft = Math.max(0, p.it.box.offsetLeft + q[0] - p.it.off.left - stage.clientWidth / 2);
-    }, 40);
-  });
-  $('pe_del').addEventListener('click', function () {
-    const p = pinSel ? findPin(pinSel) : null; if (!p) return;
+  stage.addEventListener('pointerdown', function (e) {
+    if (S.tool !== 'pin' && !(e.target.closest && e.target.closest('.pin'))) closePinEditor();
+  }, true);
+  function askDeletePin(p) {
     if (p.L.photos.length && !confirm('Delete pin ' + p.L.n + (p.L.ref ? ' (' + p.L.ref + ')' : '') +
         ' and its ' + p.L.photos.length + ' photo(s)?')) return;
-    deletePin(pinSel);
-  });
+    deletePin(p.s.id);
+  }
   $('pinAddMode').addEventListener('click', function () {
     setTool('pin');
     if (isMobile()) setRail(false);
@@ -7644,8 +7657,40 @@
   /* a jump holds its page in view while pages load (see jumpHold); the
      reader scrolling, touching, clicking or typing in the pages lets go */
   ['wheel', 'touchstart', 'pointerdown', 'keydown'].forEach(function (type) {
-    stage.addEventListener(type, function () { jumpHold = null; }, { passive: true });
+    /* on the way down: the middle button's pan stops the event at the stage */
+    stage.addEventListener(type, function () { jumpHold = null; }, { passive: true, capture: true });
   });
+
+  /* Dragging across words, the browser scrolls as soon as the pointer nears
+     the edge of the stage. Zoomed in, nearly everything under the mouse is a
+     word, so a click that slipped a pixel near the edge ran away down the
+     document. The view now stays put while the pointer is on it; dragged past
+     the edge, it scrolls as before, to select on from there. */
+  let selHold = null, selX = 0, selY = 0;
+  stage.addEventListener('pointerdown', function (e) {
+    if (e.pointerType !== 'mouse' || e.button !== 0 || !e.target.closest || !e.target.closest('.textLayer')) return;
+    selHold = { top: stage.scrollTop, left: stage.scrollLeft };
+    selX = e.clientX; selY = e.clientY;
+  }, { passive: true });
+  document.addEventListener('pointermove', function (e) {
+    if (!selHold) return;
+    if (!e.buttons) { selHold = null; return; }     /* let go outside the window */
+    selX = e.clientX; selY = e.clientY;
+  }, { passive: true });
+  function selLetGo() { selHold = null; }
+  document.addEventListener('pointerup', selLetGo);
+  document.addEventListener('pointercancel', selLetGo);
+  window.addEventListener('blur', selLetGo);
+  stage.addEventListener('wheel', selLetGo, { passive: true });
+  stage.addEventListener('scroll', function () {
+    if (!selHold) return;
+    const r = stage.getBoundingClientRect();
+    if (selX <= r.left || selX >= r.right || selY <= r.top || selY >= r.bottom) {
+      selHold.top = stage.scrollTop; selHold.left = stage.scrollLeft;
+    } else if (stage.scrollTop !== selHold.top || stage.scrollLeft !== selHold.left) {
+      stage.scrollTo({ top: selHold.top, left: selHold.left, behavior: 'instant' });
+    }
+  }, { passive: true });
 
   function goTo(n) {
     n = Math.max(1, Math.min(S.items.length, n));
@@ -7963,6 +8008,7 @@
 
   function setTool(t) {
     if (S.editing) closeEditor(true);
+    closePinEditor();
     S.tool = t;
     S.sel = null;
     document.body.dataset.tool = t;
@@ -9094,6 +9140,12 @@
   });
   /* ---------------- ribbon tabs ---------------- */
   const RIBBON = [['ribView', 'panView'], ['ribEdit', 'panEdit'], ['ribPage', 'panPage']];
+  /* the tab a button lives on, brought forward: its popup opens beside it */
+  function showBtn(el) {
+    const pan = el && el.closest ? el.closest('.rpan') : null;
+    const pair = pan && RIBBON.filter(function (r) { return r[1] === pan.id; })[0];
+    if (pair && ribOn !== pair[0]) setRibbon(pair[0]);
+  }
   EXT.addRibbonTab = function (tabId, panId) {
     if (RIBBON.some(function (r) { return r[0] === tabId; })) return;
     RIBBON.push([tabId, panId]);
@@ -9870,7 +9922,7 @@
     /* type in text mark idx of page it, the caret at its end */
     editText: function (it, idx) { openEditor(it, null, idx, true); }, saveError: saveError, selectedText: selectedText,
     insertBlank: insertBlank, ensurePage: ensurePage, ensureAllPages: ensureAllPages, renderIdle: renderIdle,
-    drawPageInto: drawPageInto, pagePreview: pagePreview,
+    drawPageInto: drawPageInto, pagePreview: pagePreview, showBtn: showBtn,
     thumbsPause: thumbsPause, thumbsResume: thumbsResume,
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */
     renderWorker: function () { return RW.lazy && RW.state === 'off' && NR.state !== 'off' ? 'idle' : RW.state; },

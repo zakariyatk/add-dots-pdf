@@ -89,6 +89,8 @@ export interface PinOut {
   s: AnyMark;
   L: unknown;
   outPage: PDFPage;
+  /** How the pin was turned, to stand upright on its page. */
+  rotation?: number;
   pageNo: number;
 }
 
@@ -538,8 +540,9 @@ async function compose(
       it.shapes.forEach((s) => {
         const L = s.t === 'pin' ? locs[s.id as string] : undefined;
         if (!L) return;
-        pins.draw(p, s, L, (turned + 360) % 360, pinFontB, extra.fallback);
-        pinsOut.push({ s, L, outPage: p, pageNo: i + 1 });
+        const rotation = (turned + 360) % 360;
+        pins.draw(p, s, L, rotation, pinFontB, extra.fallback);
+        pinsOut.push({ s, L, outPage: p, pageNo: i + 1, rotation });
       });
     }
     if (it.rot) {

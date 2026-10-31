@@ -10,9 +10,28 @@ import type { AnyMark } from './model';
 import { hexRgb, type PinOut, type SaveHooks } from './save';
 import { drawLine, fitLine, needsUnicode, oneLine, textIn, textWidth, type Face } from './text';
 
-/** Pin radius in PDF points, and its colour. */
+/** Pin head radius in PDF points, its colour, and how many radii the head
+    stands above the tip. */
 export const PIN_R = 8;
 export const PIN_COLOR = '#E03616';
+export const PIN_LIFT = 1.8;
+
+/** The pin as a path with its tip at the origin and its head above, y down. */
+function pinPath(): string {
+  const r = PIN_R,
+    h = r * PIN_LIFT,
+    t = Math.sqrt(h * h - r * r);
+  const dx = (t * r) / h,
+    dy = (t * t) / h;
+  return `M0 0L${-dx} ${-dy}A${r} ${r} 0 1 1 ${dx} ${-dy}Z`;
+}
+
+/** The head's centre, seen upright on a page turned by `rotation`. */
+function pinHead(a: readonly number[], rotation: number): [number, number] {
+  const rad = (rotation * Math.PI) / 180,
+    h = PIN_R * PIN_LIFT;
+  return [a[0]! - h * Math.sin(rad), a[1]! + h * Math.cos(rad)];
+}
 
 export interface PinPhoto {
   /** data: URL, PNG or JPEG. */
@@ -53,7 +72,7 @@ function addLink(doc: PDFDocument, page: PDFPage, rect: number[], destPage: PDFP
   page.node.addAnnot(doc.context.register(annot));
 }
 
-/** The numbered disc, kept upright however the page is turned. */
+/** The numbered pin, its tip on the spot, kept upright however the page is turned. */
 export function drawPin(
   p: PDFPage,
   s: AnyMark,
@@ -64,10 +83,15 @@ export function drawPin(
 ): void {
   const red = hexRgb(PIN_COLOR),
     white = rgb(1, 1, 1);
-  const cx = s.a[0],
-    cy = s.a[1];
-  p.drawCircle({ x: cx, y: cy, size: PIN_R + 1.4, color: white });
-  p.drawCircle({ x: cx, y: cy, size: PIN_R, color: red });
+  p.drawSvgPath(pinPath(), {
+    x: s.a[0],
+    y: s.a[1],
+    rotate: degrees(rotation),
+    color: red,
+    borderColor: white,
+    borderWidth: 1.4,
+  });
+  const [cx, cy] = pinHead(s.a, rotation);
   const label = oneLine(L.n);
   if (!label || !fontB) return;
   const face: Face = { font: fontB, fallback };
@@ -289,8 +313,9 @@ export async function addPhotoPages(
   /* each pin on the drawing jumps to its first photo page */
   pinsOut.forEach((q) => {
     const e = locs.find((x) => x.L.id === (q.L as PinLocation).id)!;
+    const [hx, hy] = pinHead(q.s.a, q.rotation ?? 0);
     const r = PIN_R + 2;
-    addLink(out, q.outPage, [q.s.a[0] - r, q.s.a[1] - r, q.s.a[0] + r, q.s.a[1] + r], e.pages[0]!.page);
+    addLink(out, q.outPage, [hx - r, hy - r, hx + r, hy + r], e.pages[0]!.page);
   });
   return total + idxPages.length;
 }

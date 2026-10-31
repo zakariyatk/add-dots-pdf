@@ -138,6 +138,10 @@
     '<button type="button" class="abbtn abicon abhome" id="abHome" title="Home (H)" aria-label="Home">' + ICON.home + '</button>' +
     '<button type="button" class="abbtn abcreate" id="abCreate" aria-haspopup="menu" aria-expanded="false" title="Create">' + ICON.plus + '<span>Create</span></button>' +
     '<span class="abgrow"></span>' +
+    '<label class="abfind" title="Find text, tools, or help">' +
+      '<input id="abFind" type="text" placeholder="Find text, tools, or help" aria-label="Find text, tools, or help" autocomplete="off" spellcheck="false">' +
+      ic('<circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/>') +
+    '</label>' +
     '<button type="button" class="abbtn abicon" id="abHelp" aria-haspopup="menu" aria-expanded="false" title="Help" aria-label="Help">' + ICON.help + '</button>' +
     '<button type="button" class="abbtn abicon" id="abNews" aria-haspopup="dialog" aria-expanded="false" title="What is new" aria-label="What is new">' + ICON.bell + '<i class="abdot" hidden></i></button>' +
     '<button type="button" class="abbtn abicon" id="abApps" aria-haspopup="dialog" aria-expanded="false" title="Other Add Dots apps" aria-label="Other Add Dots apps">' + ICON.apps + '</button>';
@@ -186,6 +190,7 @@
       pop.setAttribute('role', 'menu');
       items.forEach(function (it) {
         if (it === '-') { pop.appendChild(el('div', 'absep')); return; }
+        if (it.group) { pop.appendChild(el('div', 'abgroup', esc(it.group))); return; }
         const b = el('button', 'abitem',
           (it.icon || '<span class="abnoic"></span>') + '<span class="ablbl">' + esc(it.label) + '</span>' +
           (it.key ? '<kbd>' + esc(it.key) + '</kbd>' : ''));
@@ -290,13 +295,76 @@
 
   /* ---------------- Help ---------------- */
 
-  $b('abHelp').addEventListener('click', function () {
-    menu(this, [
+  function helpItems() {
+    return [
       { label: 'What is new', icon: ICON.news, act: function () { $b('abNews').click(); } },
       '-',
       { label: 'About Add Dots', icon: ICON.link, act: function () { openLink('https://www.adddots.com/about.html', 'about'); } },
       { label: 'Privacy', icon: ICON.shield, act: function () { openLink('https://pdf.adddots.com/privacy.html', 'privacy'); } }
-    ], { right: true });
+    ];
+  }
+  $b('abHelp').addEventListener('click', function () { menu(this, helpItems(), { right: true }); });
+
+  /* ---------------- Find text, tools, or help ---------------- */
+
+  const findBox = $b('abFind');
+
+  /* every button of the panels, by what it says, once each */
+  function toolsLike(q) {
+    const d = docWin().document, seen = {}, out = [];
+    Array.prototype.forEach.call(d.querySelectorAll('.rpan button[id]'), function (b) {
+      const lbl = b.querySelector('.lbl');
+      const label = (b.dataset.label || (lbl && lbl.textContent) || b.getAttribute('aria-label') || '').trim();
+      if (!label || seen[label] || b.disabled || b.hidden) return;
+      if ((label + ' ' + (b.title || '')).toLowerCase().indexOf(q) < 0) return;
+      seen[label] = 1;
+      const svg = b.querySelector('svg');
+      out.push({ label: label, icon: svg ? svg.outerHTML : null, act: function () {
+        const A = docWin().ADDPDF;
+        if (A && A.showBtn) A.showBtn(b);
+        b.click();
+      } });
+    });
+    return out.slice(0, 6);
+  }
+
+  /* the Find panel, opened on these words */
+  function findInDoc(q) {
+    const w = docWin(), A = w.ADDPDF;
+    if (!A || !hasDoc()) { if (X.toast) X.toast('Open a PDF first'); return; }
+    A.setRail(true);
+    press('tabFind');
+    const box = docBtn('findIn');
+    box.value = q;
+    box.dispatchEvent(new w.Event('input', { bubbles: true }));
+    box.focus();
+  }
+
+  function paintFind() {
+    const raw = findBox.value.trim(), q = raw.toLowerCase();
+    closeMenu();
+    if (!q) return;
+    const tools = toolsLike(q);
+    const help = helpItems().filter(function (it) { return it !== '-' && it.label.toLowerCase().indexOf(q) >= 0; });
+    const items = [{ group: 'In this document' },
+      { label: 'Find “' + raw + '”', icon: ic('<circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/>'),
+        act: function () { findBox.value = ''; findInDoc(raw); } }];
+    if (tools.length) items.push({ group: 'Tools' });
+    tools.forEach(function (t) { items.push(t); });
+    if (help.length) items.push({ group: 'Help' });
+    help.forEach(function (h) { items.push(h); });
+    menu(findBox, items, { cls: 'abfindpop', focus: false });
+  }
+  findBox.addEventListener('input', paintFind);
+  findBox.addEventListener('focus', paintFind);
+  findBox.addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const raw = findBox.value.trim();
+      if (raw) { closeMenu(); findBox.value = ''; findInDoc(raw); }
+    } else if (e.key === 'Escape') {
+      findBox.value = ''; closeMenu(); findBox.blur();
+    }
   });
 
   /* ---------------- What is new ---------------- */
