@@ -356,11 +356,18 @@
       if (!org.hidden) { closeOrganize(); return; }   /* the button toggles */
       org.hidden = false;
       document.body.classList.add('organizing');
+      /* the grid covers the rail: the pages asked for here come first */
+      X.thumbsPause();
       paintOrganize();
     }
     function closeOrganize() {
+      if (org.hidden) return;
       org.hidden = true;
       document.body.classList.remove('organizing');
+      stopArt();
+      artGen++;
+      art.clear();
+      X.thumbsResume();
     }
     $('orgDone').addEventListener('click', closeOrganize);
 
@@ -368,9 +375,79 @@
       return S.items.map(function (it, i) { return it.pick ? i : -1; }).filter(function (i) { return i >= 0; });
     }
 
+    /* ---- the grid's pictures ----
+       Each cell asks for its page when it comes near the view, and shows it
+       when it lands, whatever the rail has or has not drawn. Kept while the
+       grid is open so a reorder does not draw again; past ART_MAX, those
+       leaving the view give theirs back. */
+    const ART_W = 176, ART_H = 238, ART_MAX = 120, ART_RUNS = 2;
+    const art = new Map();      /* item -> { key, canvas } */
+    const artWant = new Set();  /* items near the view, not drawn yet */
+    const artBusy = new Set();
+    let shells = new Map();     /* item -> its cell's shell, this paint */
+    let artGen = 0, artSeen = null;
+
+    function artKey(it) { return it.rot + '|' + JSON.stringify(it.crop || null); }
+
+    function showArt(it) {
+      const shell = shells.get(it), a = art.get(it);
+      if (!shell || !a || a.key !== artKey(it)) return false;
+      shell.classList.remove('pending');
+      shell.appendChild(a.canvas);
+      return true;
+    }
+
+    function pumpArt() {
+      artWant.forEach(function (it) {
+        if (artBusy.size >= ART_RUNS || artBusy.has(it)) return;
+        artWant.delete(it);
+        if (showArt(it)) return;     /* landed while the grid was repainting */
+        artBusy.add(it);
+        const gen = artGen, key = artKey(it);
+        X.pagePreview(it, ART_W, ART_H).then(function (canvas) {
+          if (gen !== artGen) return;
+          art.set(it, { key: key, canvas: canvas });
+          showArt(it);
+        }).catch(function () {
+          /* stays pending: the next paint asks again */
+        }).then(function () {
+          artBusy.delete(it);
+          pumpArt();
+        });
+      });
+    }
+
+    function stopArt() {
+      artWant.clear();
+      if (artSeen) { artSeen.disconnect(); artSeen = null; }
+    }
+
+    function watchArt(grid) {
+      artSeen = new IntersectionObserver(function (seen) {
+        seen.forEach(function (e) {
+          const it = S.items[+e.target.dataset.i], shell = e.target.firstChild;
+          if (!it) return;
+          if (e.isIntersecting) {
+            if (shell.classList.contains('pending')) artWant.add(it);
+          } else {
+            artWant.delete(it);
+            if (art.size > ART_MAX && art.has(it)) {
+              art.delete(it);
+              shell.textContent = '';
+              shell.classList.add('pending');
+            }
+          }
+        });
+        pumpArt();
+      }, { root: grid, rootMargin: '400px 0px' });
+      Array.prototype.forEach.call(grid.children, function (c) { artSeen.observe(c); });
+    }
+
     function paintOrganize() {
       const grid = $('orgGrid');
+      stopArt();
       grid.innerHTML = '';
+      shells = new Map();
       S.items.forEach(function (it, i) {
         const cell = document.createElement('figure');
         cell.className = 'orgcell' + (it.pick ? ' picked' : '');
@@ -378,15 +455,8 @@
         cell.dataset.i = i;
         const shell = document.createElement('div');
         shell.className = 'orgshell';
-        /* reuse the thumbnail core already painted rather than rendering twice
-           (one far from view has given its bitmap back, and shows as pending) */
-        if (it.thumbDone && it.thumbCanvas && it.thumbCanvas.width > 1) {
-          const img = document.createElement('img');
-          try { img.src = it.thumbCanvas.toDataURL('image/png'); } catch (e) {}
-          shell.appendChild(img);
-        } else {
-          shell.classList.add('pending');
-        }
+        shells.set(it, shell);
+        if (!showArt(it)) shell.classList.add('pending');
         cell.appendChild(shell);
         const cap = document.createElement('figcaption');
         cap.textContent = i + 1;
@@ -420,6 +490,7 @@
       });
       wireGridDrop(grid);
       syncOrg();
+      watchArt(grid);
     }
 
     function wireGridDrop(grid) {
@@ -485,7 +556,7 @@
       X.relayout().then(function () {
         X.drawVisibleThumbs();
         X.updateMeta();
-        setTimeout(repaint, 400);
+        repaint();
       });
       X.toast(sel.length + ' page' + (sel.length === 1 ? '' : 's') + ' rotated');
     }
