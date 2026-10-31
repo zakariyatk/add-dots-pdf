@@ -1338,6 +1338,70 @@ try {
     await page.waitForSelector(last, { timeout: 30000 }).catch(() => {});
     check('and the last ones too', (await page.$(last)) !== null);
     await page.evaluate(() => window.ADDPDF.organize.close());
+
+    /* the quick bar's last button follows the last tool used, and goes home */
+    await page.evaluate(() => window.ADDPDF.setTool('crop'));
+    await page
+      .waitForFunction(() => document.getElementById('qLast').dataset.toolBtn === 'crop', null, {
+        timeout: 2000,
+      })
+      .catch(() => {});
+    check(
+      'the last quick button is the last tool used',
+      (await page.$eval('#qLast', (b) => b.dataset.toolBtn)) === 'crop',
+    );
+    await page.evaluate(() => window.ADDPDF.setTool('select'));
+    /* the box in the strip finds tools */
+    await page.fill('#abFind', 'rotate');
+    check(
+      'the find box lists tools',
+      await page.$$eval('.abfindpop .ablbl', (l) => l.some((e) => /rotate/i.test(e.textContent))),
+    );
+    await page.fill('#abFind', '');
+
+    /* a press on the words near the edge does not run away down the document */
+    await page.evaluate(() => window.ADDPDF.goTo(2));
+    await page.waitForTimeout(900);
+    const sb = await (await page.$('#stage')).boundingBox();
+    const topAt = () => page.evaluate(() => document.getElementById('stage').scrollTop);
+    await page.mouse.move(sb.x + sb.width / 2, sb.y + sb.height - 120);
+    const onWords = await page.evaluate(
+      ([x, y]) => !!document.elementFromPoint(x, y).closest('.textLayer'),
+      [sb.x + sb.width / 2, sb.y + sb.height - 120],
+    );
+    const top0 = await topAt();
+    await page.mouse.down();
+    await page.mouse.move(sb.x + sb.width / 2 + 4, sb.y + sb.height - 3, { steps: 3 });
+    await page.waitForTimeout(700);
+    const top1 = await topAt();
+    await page.mouse.up();
+    check('a slipped click near the edge leaves the view alone', onWords && top1 === top0, {
+      onWords,
+      top0,
+      top1,
+    });
+
+    /* a pan begun as a zoom settles stays on its page */
+    await page.evaluate(() => window.ADDPDF.goTo(40));
+    await page.waitForTimeout(1500);
+    await page.evaluate(() => window.ADDPDF.setTool('pan'));
+    const cx = sb.x + sb.width / 2;
+    await page.mouse.move(cx, sb.y + 400);
+    await page.keyboard.down('Control');
+    await page.mouse.wheel(0, -120);
+    await page.waitForTimeout(30);
+    await page.mouse.wheel(0, -120);
+    await page.keyboard.up('Control');
+    await page.waitForTimeout(40);
+    await page.mouse.down();
+    for (let i = 1; i <= 12; i++) {
+      await page.mouse.move(cx, sb.y + 400 - i * 10);
+      await page.waitForTimeout(70);
+    }
+    await page.mouse.up();
+    const panned = await page.evaluate(() => window.ADDPDF.S.current);
+    await page.evaluate(() => window.ADDPDF.setTool('select'));
+    check('a pan straight after a zoom stays on its page', Math.abs(panned - 40) <= 1, { panned });
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
   }

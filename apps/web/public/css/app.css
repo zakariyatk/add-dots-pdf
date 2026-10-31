@@ -541,44 +541,51 @@
   body[data-tool="pin"] .capture{cursor:copy}
   .anno .pin{pointer-events:all;cursor:pointer}
   body[data-tool="pin"] .anno .pin{cursor:move}
-  .rail-body .pinbar{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
-  .rail-body .pinbar .row{display:flex;flex-wrap:wrap;gap:4px;align-items:center;justify-content:space-between}
-  .rail-body .pinbar .btn{height:28px;font-size:11.5px;padding:0 8px;border-color:var(--line);flex:1 1 0;min-width:0}
-  .rail-body .pinbar .row .btn:only-child{flex:1 1 100%}
+  .rail-body .pinbar{display:flex;gap:6px;align-items:center;margin-bottom:10px}
+  .rail-body .pinbar .pinhead{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--text);white-space:nowrap}
+  .rail-body .pinbar .btn{height:28px;font-size:11.5px;padding:0 10px;flex:none}
+  .rail-body .pinbar .pinicon{width:28px;padding:0;justify-content:center;border-color:transparent;background:none}
+  .rail-body .pinbar .pinicon svg{width:17px;height:17px}
   .savepins{margin-top:10px}
   .savepins .row{display:flex;gap:6px;margin-top:4px}
   .savepins .btn{border-color:var(--line)}
-  .pincount{font-family:var(--mono);font-size:11px;color:var(--text-dim);padding:2px 2px 8px}
+  .pincount{font-size:12px;font-weight:400;color:var(--text-dim);margin-left:2px}
   .loc{display:flex;gap:8px;align-items:center;width:100%;text-align:left;padding:7px;margin-bottom:4px;
        border-radius:7px;cursor:pointer;background:var(--chrome-2);border:1px solid transparent;font-size:12px}
   .loc:hover{border-color:var(--line)}
-  .loc.on{border-color:#E03616}
-  .loc .num{flex:none;min-width:22px;height:22px;padding:0 4px;border-radius:11px;background:#E03616;color:#fff;
-            font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center}
+  .loc.on{border-color:var(--btn,var(--marker));background:none}
+  .loc .num{flex:none;width:24px;height:31px;padding-bottom:9px;color:#fff;font-size:10.5px;font-weight:700;
+            display:flex;align-items:center;justify-content:center;
+            background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 31'%3E%3Cpath d='M12 30L3.400 18.100A10.500 10.500 0 1 1 20.600 18.100Z' fill='%23E03616' stroke='%23fff' stroke-width='1.500' stroke-linejoin='round'/%3E%3C/svg%3E") center/contain no-repeat}
   .loc .txt{flex:1;min-width:0}
   .loc .ref{font-weight:600;color:var(--text);display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .loc .sub{color:var(--text-dim);font-size:11px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .loc .cnt{flex:none;font-family:var(--mono);font-size:10.5px;color:var(--text-dim)}
+  .loc .cnt{flex:none;display:flex;align-items:center;gap:3px;font-size:11px;color:var(--text-dim)}
+  .loc .cnt svg,.loc .rm svg,.pined .acts .btn svg{flex:none;width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;
+            stroke-linecap:round;stroke-linejoin:round}
+  .loc .rm{flex:none;display:flex;padding:3px;border-radius:5px;color:var(--text-dim)}
+  .loc .rm:hover{color:var(--danger);background:var(--chrome-2)}
   .pinempty{font-size:12px;color:var(--text-dim);line-height:1.55;padding:6px 2px}
-  .pined{margin-top:12px;border-top:1px solid var(--line);padding-top:10px}
+  .pined{margin-top:10px}
   .pined h3{margin:0 0 8px;font-family:var(--mono);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
             color:var(--text-dim);font-weight:600}
-  .pined .f{display:flex;gap:6px;margin-bottom:6px}
+  .pined .f{display:flex;gap:8px;margin-bottom:8px}
+  .pined label input{margin-top:4px}
   .pined label{flex:1;min-width:0;font-size:10.5px;color:var(--text-dim)}
   .pined label.w{flex:0 0 58px}
   .pined input{display:block;width:100%;margin-top:2px;height:28px;padding:0 7px;background:var(--chrome-2);
                border:1px solid var(--line);border-radius:6px;color:var(--text);font-size:12.5px}
   .pined .ph{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:8px 0}
+  .pined .ph:empty{display:none}
   .pined figure{margin:0;border-radius:6px;overflow:hidden;background:#0D0D0D;border:1px solid var(--line)}
   .pined figure img{display:block;width:100%;height:64px;object-fit:cover;cursor:zoom-in}
   .pined .ops{display:flex}
   .pined .ops span{flex:1;text-align:center;font-size:11px;color:var(--text-dim);cursor:pointer;padding:2px 0}
   .pined .ops span:hover{background:var(--chrome);color:var(--text)}
   .pined .ops .del:hover{color:var(--danger)}
-  .pined .acts{display:flex;flex-direction:column;gap:6px}
-  .pined .acts .row{display:flex;flex-wrap:wrap;gap:4px}
-  .pined .acts .btn{height:28px;font-size:11.5px;padding:0 8px;border-color:var(--line);flex:1 1 0;min-width:0}
-  .pined .acts .btn.primary{border-color:transparent}
+  .pined .acts{display:flex;gap:4px;padding:6px;border:1px dashed var(--line);border-radius:8px;margin-top:4px}
+  .pined .acts .btn{height:32px;font-size:12px;padding:0 6px;gap:5px;border-color:transparent;background:none;
+                    flex:1 1 0;min-width:0;justify-content:center}
   .pined .acts .del:hover{color:var(--danger);border-color:var(--danger)}
   /* Site photos are mostly pinned and marked on a phone: fields and photo
      buttons at thumb size, and 16px text so iOS does not zoom on focus. */
@@ -1220,6 +1227,17 @@
   /* the strip shows the logo; the toolbar's would be a second one under it */
   body.has-appbar .bar .brand,html.in-doctab .bar .brand{display:none}
   .appbar .abgrow{flex:1;align-self:stretch}
+  /* Find text, tools, or help (js/appbar.js) */
+  .appbar .abfind{flex:0 1 250px;min-width:44px;height:30px;display:flex;align-items:center;gap:6px;margin-right:6px;
+                  padding:0 9px;border:1px solid transparent;border-radius:7px}
+  .appbar .abfind:hover,.appbar .abfind:focus-within{border-color:var(--line)}
+  .appbar .abfind input{flex:1;min-width:0;border:0;outline:0;background:none;color:inherit;font:13px var(--sans);padding:0}
+  .appbar .abfind input::placeholder{color:inherit;opacity:1}
+  .appbar .abfind input:placeholder-shown{text-align:right}
+  .appbar .abfind input:focus::placeholder{opacity:.55}
+  .appbar .abfind svg{flex:none;width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+  .abpop.abfindpop{width:340px}
+  .abpop .abgroup{padding:7px 10px 3px;font-size:11.5px;color:var(--text-dim)}
   .appbar .ablogo{flex:none;width:24px;height:24px;margin:0 6px 0 2px;display:block}
   .appbar .ablogo svg,.abpop .ablogo svg{width:100%;height:100%;display:block}
   /* black on the dark strip: a hairline keeps its edge */

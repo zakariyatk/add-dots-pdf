@@ -871,7 +871,6 @@ body.rdrag { user-select: none; -webkit-user-select: none }
    Select tool in the photo measurer
    --------------------------------------------------------------- */
 
-body.pmsel #pmcv { cursor: default }
 
 @media (pointer: coarse) {
   /* the grips are drawn on the canvas, so the targets that matter here are

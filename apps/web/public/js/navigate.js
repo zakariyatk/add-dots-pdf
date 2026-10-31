@@ -67,7 +67,9 @@
       grab = {
         x: clientX, y: clientY,
         vx: stage.scrollLeft - offX,
-        vy: stage.scrollTop  - offY
+        vy: stage.scrollTop  - offY,
+        sx: stage.scrollLeft,
+        sy: stage.scrollTop
       };
       document.body.classList.add('panning');
     }
@@ -91,7 +93,15 @@
 
     function moveGrab(clientX, clientY) {
       if (!grab) return;
+      /* The pages can move under a drag: a zoom gives the pages away from the
+         screen their new size as it settles, and scrolls to keep the place.
+         That counts as the drag's own starting point, or the next move
+         writes the old position back and lands the reader pages away. */
+      grab.vx += stage.scrollLeft - grab.sx;
+      grab.vy += stage.scrollTop - grab.sy;
       applyPanWant(grab.vx - (clientX - grab.x), grab.vy - (clientY - grab.y));
+      grab.sx = stage.scrollLeft;
+      grab.sy = stage.scrollTop;
     }
 
     /* A trackpad's two-finger pan never touches beginGrab/moveGrab — it comes
