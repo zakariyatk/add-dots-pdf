@@ -2248,6 +2248,7 @@
   async function paintThumb(it) {
     if (it.thumbDone) return;
     it.thumbDone = true;
+    TLIVE.delete(it);      /* its bitmap is about to be cleared: see pagePreview */
     await ensurePage(it);
     const rot = it.page.rotate + it.rot;
     const v1 = it.page.getViewport({ scale: 1, rotation: rot });
@@ -2311,6 +2312,46 @@
       } finally { if (TQ.task === task) { TQ.task = null; TQ.it = null; } }
       break;
     }
+  }
+
+  /* A page as a small canvas of its own, cropped, for a view that shows pages
+     apart from the rail (the Organize grid). The rail may not be drawing this
+     page: it may be closed, or the page far along it. A bitmap already drawn,
+     the rail's or the page's, is copied, which costs pdf.js nothing; the rest
+     are rendered. boxW, boxH: the space it has to fit. */
+  async function pagePreview(it, boxW, boxH) {
+    await ensurePage(it);
+    const rot = it.page.rotate + it.rot;
+    const v1 = it.page.getViewport({ scale: 1, rotation: rot });
+    const c1 = cropRectIn(v1, it.crop);
+    const k = MEM.tight() ? THUMB_RES : Math.min(DPR, 2);
+    const sc = k * Math.min(boxW / (c1 ? c1.width : v1.width), boxH / (c1 ? c1.height : v1.height));
+    const v = it.page.getViewport({ scale: sc, rotation: rot });
+    const c = cropRectIn(v, it.crop);
+    const full = document.createElement('canvas');
+    full.width = Math.max(1, Math.floor(v.width));
+    full.height = Math.max(1, Math.floor(v.height));
+    const ctx = full.getContext('2d');
+    ctx.imageSmoothingQuality = 'high';
+    if (it.thumbDone && TLIVE.has(it) && it.thumbCanvas.width > 1) {
+      ctx.drawImage(it.thumbCanvas, 0, 0, full.width, full.height);
+    } else {
+      if (it.rendered && !it.task && it.canvas && it.canvas.width > 1 && it.vp && it.vp.rotation === v.rotation) {
+        ctx.drawImage(it.canvas, 0, 0, full.width, full.height);
+      } else {
+        await drawPageInto(it, v, ctx);
+      }
+      if (S.thumbMarks && it.shapes && it.shapes.length) {
+        await textArtReady(it, v);
+        ctx.drawImage(await svgImage(annoSvg(it, v, false)), 0, 0, full.width, full.height);
+      }
+    }
+    if (!c) return full;
+    const out = document.createElement('canvas');
+    out.width = Math.max(1, Math.round(c.width));
+    out.height = Math.max(1, Math.round(c.height));
+    out.getContext('2d').drawImage(full, -c.left, -c.top);
+    return out;
   }
 
   /* ---------------- shapes ---------------- */
@@ -9829,7 +9870,8 @@
     /* type in text mark idx of page it, the caret at its end */
     editText: function (it, idx) { openEditor(it, null, idx, true); }, saveError: saveError, selectedText: selectedText,
     insertBlank: insertBlank, ensurePage: ensurePage, ensureAllPages: ensureAllPages, renderIdle: renderIdle,
-    drawPageInto: drawPageInto,
+    drawPageInto: drawPageInto, pagePreview: pagePreview,
+    thumbsPause: thumbsPause, thumbsResume: thumbsResume,
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */
     renderWorker: function () { return RW.lazy && RW.state === 'off' && NR.state !== 'off' ? 'idle' : RW.state; },
     /* the screen density pages are drawn at (dprNow): for the tests */

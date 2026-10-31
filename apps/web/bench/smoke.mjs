@@ -1322,6 +1322,21 @@ try {
     await page.waitForTimeout(500);
     const cells = await page.evaluate(() => document.getElementById('orgGrid').children.length);
     check('the organizer opens with every page', cells === 300, { cells });
+    /* its pictures arrive by themselves, not only those the rail had drawn */
+    const drawn = () => page.evaluate(() => document.querySelectorAll('#orgGrid canvas').length);
+    await page
+      .waitForFunction(() => document.querySelectorAll('#orgGrid canvas').length >= 20, null, {
+        timeout: 30000,
+      })
+      .catch(() => {});
+    check('the organizer draws its pages', (await drawn()) >= 20, { drawn: await drawn() });
+    /* and far along, where the rail has drawn nothing */
+    await page.evaluate(() => {
+      document.getElementById('orgGrid').scrollTop = 1e6;
+    });
+    const last = '#orgGrid figure:last-child canvas';
+    await page.waitForSelector(last, { timeout: 30000 }).catch(() => {});
+    check('and the last ones too', (await page.$(last)) !== null);
     await page.evaluate(() => window.ADDPDF.organize.close());
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
