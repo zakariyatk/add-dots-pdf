@@ -90,6 +90,24 @@ jobs:
           if (-not ($env:TENANT -and $env:CLIENT -and $env:SECRET -and $env:SELLER)) {
             throw 'the PARTNER_CENTER_* secrets are not set (see the top of .github/workflows/store.yml)'
           }
+          # Check the Entra app can sign in before msstore, which only says
+          # "Failed to auth". Prints Microsoft's error code, never the secrets.
+          $guid = '^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$'
+          if ($env:TENANT.Trim() -notmatch $guid) { throw 'PARTNER_CENTER_TENANT_ID is not a GUID: use the Directory (tenant) ID' }
+          if ($env:CLIENT.Trim() -notmatch $guid) { throw 'PARTNER_CENTER_CLIENT_ID is not a GUID: use the Application (client) ID' }
+          if ($env:SELLER.Trim() -notmatch '^\d+$') { throw 'PARTNER_CENTER_SELLER_ID is not a number' }
+          if ($env:SECRET -ne $env:SECRET.Trim()) { throw 'PARTNER_CENTER_CLIENT_SECRET has spaces or a line break at the start or end' }
+          try {
+            Invoke-RestMethod -Method Post "https://login.microsoftonline.com/$($env:TENANT.Trim())/oauth2/token" -Body @{
+              grant_type = 'client_credentials'; client_id = $env:CLIENT.Trim()
+              client_secret = $env:SECRET; resource = 'https://manage.devcenter.microsoft.com'
+            } | Out-Null
+            'Entra sign-in: OK'
+          } catch {
+            $err = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
+            if ($err) { throw "Entra sign-in failed: $($err.error) - $(($err.error_description -split "`r?`n")[0])" }
+            throw "Entra sign-in failed: $($_.Exception.Message)"
+          }
           $msix = @(Get-ChildItem msix -Filter *.msix)
           if ($msix.Count -ne 1) { throw "expected one .msix in the artifact, found $($msix.Count)" }
           "package: $($msix[0].Name)"
