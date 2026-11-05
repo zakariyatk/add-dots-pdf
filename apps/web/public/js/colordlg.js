@@ -13,6 +13,11 @@
   const X = window.ADDPDF;
   if (!X) { console.error('[colordlg] core bridge missing'); return; }
 
+  /* WebView2 (the Windows app) defines window.EyeDropper but its .open()
+     never resolves there — it needs the full browser's screen compositor,
+     which an embedded WebView2 control doesn't get. Read off the page instead. */
+  const DESKTOP = !!window.__TAURI__;
+
   const CUSTOM_KEY = 'adpdf.customColors';
   const BASIC = [
     '#F08080', '#EE3024', '#7A4341', '#8C4136', '#390303', '#99FBFB', '#6EFCFC', '#3385EE', '#0026F5', '#00159B', '#1A4178', '#000C7B',
@@ -103,7 +108,7 @@
 
   /** A colour from the screen: done(hex), or done(null) if cancelled. */
   function pickColour(done) {
-    if (!window.EyeDropper) { pickFromPage(done); return; }
+    if (DESKTOP || !window.EyeDropper) { pickFromPage(done); return; }
     new window.EyeDropper().open().then(function (r) { done(cleanHex(r.sRGBHex)); }, function () { done(null); });
   }
 
