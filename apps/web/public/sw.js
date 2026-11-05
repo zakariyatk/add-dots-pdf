@@ -60,6 +60,7 @@ const SHELL = [
   'js/pagemenu.js',
   'js/colordlg.js',
   'js/tabs.js',
+  'js/winlayout.js',
   'js/skin.js',
   'js/books.js',
   'js/toolprops.js',
