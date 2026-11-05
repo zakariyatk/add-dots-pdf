@@ -27,6 +27,7 @@
      after this file */
   const build = function () { return window.ADDDOTS_BUILD || null; };
   const NEWS = 'adddots.news.seen';
+  const AOT = 'adddots.alwaysOnTop';
 
   const ic = function (p) { return '<svg viewBox="0 0 24 24" aria-hidden="true">' + p + '</svg>'; };
   const ICON = {
@@ -45,6 +46,7 @@
     saveas: ic('<path d="M5 3h11l4 4v5"/><path d="M4 5v14a2 2 0 0 0 2 2h5"/><rect x="8" y="3" width="7" height="5"/><path d="M14 21l1-3 5-5 2 2-5 5z"/>'),
     print: ic('<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><rect x="7" y="14" width="10" height="7"/>'),
     ui: ic('<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/>'),
+    pin: ic('<path d="M9 4h6v5.5l3 3V15H4v-2.5l3-3z"/><line x1="12" y1="15" x2="12" y2="21"/>'),
     close: ic('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
     link: ic('<path d="M14 4h6v6"/><line x1="20" y1="4" x2="11" y2="13"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
     news: ic('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>'),
@@ -82,6 +84,16 @@
   function esc(s) { return X.esc ? X.esc(s) : String(s).replace(/[&<>"]/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); }
   function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
   function set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* not kept */ } }
+
+  /* ---------------- always on top (Windows app) ----------------
+     A window's own choice, kept in storage so a window opened later
+     (Move to new window) starts the way the last one was left. */
+  let alwaysOnTop = get(AOT) === '1';
+  function toggleAlwaysOnTop() {
+    alwaysOnTop = !alwaysOnTop;
+    set(AOT, alwaysOnTop ? '1' : '0');
+    win.setAlwaysOnTop(alwaysOnTop).catch(function () { if (X.toast) X.toast('Could not change Always on top'); });
+  }
 
   /* ---------------- the document in view ---------------- */
 
@@ -259,7 +271,10 @@
       '-',
       { label: isDark() ? 'Light interface' : 'Dark interface', icon: ICON.ui, act: toggleUi }
     ];
-    if (win) items.push('-', { label: 'Exit', icon: ICON.close, act: function () { win.close(); } });
+    if (win) {
+      items.push({ label: alwaysOnTop ? 'Stop always on top' : 'Always on top', icon: ICON.pin, act: toggleAlwaysOnTop });
+      items.push('-', { label: 'Exit', icon: ICON.close, act: function () { win.close(); } });
+    }
     menu(this, items);
   });
 
@@ -452,6 +467,7 @@
     $b('abMin').addEventListener('click', function () { win.minimize(); });
     $b('abMax').addEventListener('click', function () { win.toggleMaximize(); });
     $b('abClose').addEventListener('click', function () { win.close(); });
+    if (alwaysOnTop) win.setAlwaysOnTop(true).catch(function () {});
     const paintMax = function () {
       win.isMaximized().then(function (m) {
         const b = $b('abMax');

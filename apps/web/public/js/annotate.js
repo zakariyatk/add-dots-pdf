@@ -13,6 +13,10 @@
   const X = window.ADDPDF;
   if (!X) { console.error('[annotate] core bridge missing'); return; }
 
+  /* window.EyeDropper exists in the Windows app's WebView2 but its .open()
+     never resolves there (see js/colordlg.js), so this app treats it as absent. */
+  const HAS_EYEDROPPER = !!window.EyeDropper && !window.__TAURI__;
+
   X.on('ready', function () {
     const S = X.S, $ = X.$, SVGNS = X.SVGNS, PDFLib = X.PDFLib;
 
@@ -189,7 +193,7 @@
         '<div class="pdiv"></div>' +
         '<label class="item hlmore"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="8.5" cy="10" r="1.3"/><circle cx="12" cy="7.5" r="1.3"/><circle cx="15.5" cy="10" r="1.3"/><path d="M12 21a2.5 2.5 0 0 1 0-5h1.5a2.5 2.5 0 0 0 2.5-2.5"/></svg>' +
         '<span>More colours…</span><input type="color" value="' + String(markupColor[kind]).toLowerCase() + '"></label>' +
-        (window.EyeDropper ? '<button type="button" class="item hleye"><svg viewBox="0 0 24 24"><path d="M14.5 4.5l5 5M4 20l1.5-4.5 9-9 3 3-9 9z"/></svg><span>Eyedropper</span></button>' : '');
+        (HAS_EYEDROPPER ? '<button type="button" class="item hleye"><svg viewBox="0 0 24 24"><path d="M14.5 4.5l5 5M4 20l1.5-4.5 9-9 3 3-9 9z"/></svg><span>Eyedropper</span></button>' : '');
     }
     function buildDropdown(kind, toolId, label) {
       const tool = $(toolId); if (!tool) return;
