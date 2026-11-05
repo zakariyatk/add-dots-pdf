@@ -133,6 +133,14 @@
         <button class="btn" id="btnTheme" title="Reading theme (T)" data-label="Reading theme · Paper"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"></path></svg><span class="lbl" id="themeLbl">Paper</span></button>
         <span class="tsep" aria-hidden="true"></span><button class="btn" id="btnOpen" title="Open another PDF (O)" data-label="Open"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path></svg><span class="lbl">Open</span></button>
       </div>
+      <span class="sep"></span>
+      <!-- the Windows app only: js/winlayout.js shows it (several documents, tiled) -->
+      <div class="grp" id="grpWindows" hidden="">
+        <button class="btn" id="btnWinLayout" aria-haspopup="dialog" title="Arrange open documents in panes" data-label="Windows">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="1.2"></rect><rect x="13" y="3" width="8" height="8" rx="1.2"></rect><rect x="3" y="13" width="8" height="8" rx="1.2"></rect><rect x="13" y="13" width="8" height="8" rx="1.2"></rect></svg>
+          <span class="lbl" id="winLbl">Windows</span>
+        </button>
+      </div>
     </div>
 
     <div class="rpan" id="panEdit" role="tabpanel" aria-labelledby="ribEdit" hidden="">
@@ -407,6 +415,12 @@
   <nav class="dock" id="dock" aria-label="Tools"></nav>
 </div>
 
+<!-- Several open documents tiled at once (js/winlayout.js, Windows app only).
+     Each pane holds nothing of its own: it is where the app itself (tab 0) or
+     a tab's frame is sized and positioned to, so every pane keeps the full
+     toolbar and tools of the document it shows, as a tab does on its own. -->
+<div class="wingrid" id="winGrid" hidden=""></div>
+
 <div class="scrim" id="scrim"></div>
 
 <div class="sheet" id="moreSheet" role="dialog" aria-label="More options" aria-modal="true" hidden="">
@@ -572,6 +586,29 @@
     <button class="btn primary" id="jpgGo" style="flex:1">Save JPGs</button>
     <button class="btn" id="jpgCancel">Cancel</button>
   </div>
+</div>
+
+<div class="pop" id="winPop" role="dialog" aria-label="Window layout" hidden="">
+  <button type="button" class="item winopt" data-layout="1">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="18" rx="1.5"></rect></svg>
+    <span>1 View<small>One PDF, full width</small></span>
+  </button>
+  <button type="button" class="item winopt" data-layout="2v">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="8" height="18" rx="1.2"></rect><rect x="13" y="3" width="8" height="18" rx="1.2"></rect></svg>
+    <span>2 Vertical<small>Two PDFs, left and right</small></span>
+  </button>
+  <button type="button" class="item winopt" data-layout="2h">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="18" height="8" rx="1.2"></rect><rect x="3" y="13" width="18" height="8" rx="1.2"></rect></svg>
+    <span>2 Horizontal<small>Two PDFs, top and bottom</small></span>
+  </button>
+  <button type="button" class="item winopt" data-layout="3">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="8" height="18" rx="1.2"></rect><rect x="13" y="3" width="8" height="8" rx="1.2"></rect><rect x="13" y="13" width="8" height="8" rx="1.2"></rect></svg>
+    <span>3 Views<small>Three PDFs at once</small></span>
+  </button>
+  <button type="button" class="item winopt" data-layout="4">
+    <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="3" width="8" height="8" rx="1.2"></rect><rect x="13" y="3" width="8" height="8" rx="1.2"></rect><rect x="3" y="13" width="8" height="8" rx="1.2"></rect><rect x="13" y="13" width="8" height="8" rx="1.2"></rect></svg>
+    <span>4 Views<small>Four PDFs at once</small></span>
+  </button>
 </div>
 
 <div class="pop" id="expPop" role="dialog" aria-label="Export report" hidden="">
@@ -1107,6 +1144,7 @@
 <script src="js/pagemenu.js"></script>
 <script src="js/colordlg.js"></script>
 <script src="js/tabs.js"></script>
+<script src="js/winlayout.js"></script>
 <script src="js/skin.js"></script>
 <script src="js/books.js"></script>
 <script src="js/toolprops.js"></script>
