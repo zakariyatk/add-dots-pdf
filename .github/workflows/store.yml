@@ -96,17 +96,29 @@ jobs:
           if ($env:TENANT.Trim() -notmatch $guid) { throw 'PARTNER_CENTER_TENANT_ID is not a GUID: use the Directory (tenant) ID' }
           if ($env:CLIENT.Trim() -notmatch $guid) { throw 'PARTNER_CENTER_CLIENT_ID is not a GUID: use the Application (client) ID' }
           if ($env:SELLER.Trim() -notmatch '^\d+$') { throw 'PARTNER_CENTER_SELLER_ID is not a number' }
+          # The tenant linked in Partner Center (Account settings -> Tenants) and
+          # the Entra app added there with the Manager role.
+          "tenant is adddots2026.onmicrosoft.com: $($env:TENANT.Trim() -eq '34203831-3481-43cb-8d13-96aa5f1d7c1d')"
+          "app is AddDots Store Publisher: $($env:CLIENT.Trim() -eq 'd74824c6-6abc-4308-8ea8-496d0a1ed2e0')"
           if ($env:SECRET -ne $env:SECRET.Trim()) { throw 'PARTNER_CENTER_CLIENT_SECRET has spaces or a line break at the start or end' }
           try {
-            Invoke-RestMethod -Method Post "https://login.microsoftonline.com/$($env:TENANT.Trim())/oauth2/token" -Body @{
+            $token = (Invoke-RestMethod -Method Post "https://login.microsoftonline.com/$($env:TENANT.Trim())/oauth2/token" -Body @{
               grant_type = 'client_credentials'; client_id = $env:CLIENT.Trim()
               client_secret = $env:SECRET; resource = 'https://manage.devcenter.microsoft.com'
-            } | Out-Null
+            }).access_token
             'Entra sign-in: OK'
           } catch {
             $err = $_.ErrorDetails.Message | ConvertFrom-Json -ErrorAction SilentlyContinue
             if ($err) { throw "Entra sign-in failed: $($err.error) - $(($err.error_description -split "`r?`n")[0])" }
             throw "Entra sign-in failed: $($_.Exception.Message)"
+          }
+          # Can this app see the product in Partner Center? (Manager role on the account)
+          try {
+            $app = Invoke-RestMethod "https://manage.devcenter.microsoft.com/v1.0/my/applications/9PGHPBRMLQMS" -Headers @{ Authorization = "Bearer $token" }
+            "Partner Center access: OK ($($app.primaryName))"
+          } catch {
+            $code = [int]$_.Exception.Response.StatusCode
+            throw "Partner Center access failed: HTTP $code $($_.ErrorDetails.Message). The Entra app needs the Manager role in Partner Center -> Account settings -> User management -> Microsoft Entra applications, on the account that owns the product."
           }
           $msix = @(Get-ChildItem msix -Filter *.msix)
           if ($msix.Count -ne 1) { throw "expected one .msix in the artifact, found $($msix.Count)" }
