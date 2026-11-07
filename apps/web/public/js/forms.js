@@ -257,6 +257,8 @@
       '<button class="sw on" data-c="#1B2A4A" style="background:#1B2A4A"></button>' +
       '<button class="sw" data-c="#0B0B0B" style="background:#0B0B0B"></button>' +
       '<button class="sw" data-c="#123C8C" style="background:#123C8C"></button>' +
+      '<button type="button" class="swmore" id="sigInkMore" title="More colours…">' +
+      '<i id="sigInkMoreChip"></i><b>▾</b></button>' +
       '</div>' +
       '<footer>' +
       '<label class="sigsave"><input type="checkbox" id="sigRemember" checked> Remember on this device</label>' +
@@ -275,6 +277,36 @@
     let sigData = null;          /* dataURL of the signature about to be placed */
     let sigTarget = null;        /* {it, field} when a Sig widget asked for it */
     let sigKind = 'sig';         /* sig | initials */
+
+    /* "More colours…": the same full palette every other colour option in
+       the app opens (js/core.js buildPalette) — theme colours, shades,
+       standard colours, recent, hex, the eyedropper, and the advanced
+       dialog (js/colordlg.js) behind its own <input type="color">. */
+    function wireMore(btn, chip, getCurrent, onPick) {
+      const pop = document.createElement('div');
+      pop.className = 'swpop palette'; pop.hidden = true;
+      document.body.appendChild(pop);
+      if (chip) chip.style.background = getCurrent();
+      btn.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (!pop.hidden) { pop.hidden = true; return; }
+        pop.innerHTML = '';
+        X.buildPalette(pop, getCurrent(), function (c) {
+          if (chip) chip.style.background = c;
+          onPick(c);
+          pop.hidden = true;
+        });
+        pop.hidden = false;
+        const r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+        pop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left)) + 'px';
+        let top = r.bottom + 6;
+        if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+        pop.style.top = top + 'px';
+      });
+      document.addEventListener('click', function (e) {
+        if (!pop.hidden && !pop.contains(e.target) && !btn.contains(e.target)) pop.hidden = true;
+      });
+    }
 
     $('sigFonts').innerHTML = SIG_FONTS.map(function (f, i) {
       return '<button data-f="' + i + '"' + (i === 0 ? ' class="on"' : '') +
@@ -329,6 +361,12 @@
       Array.prototype.forEach.call(b.parentNode.querySelectorAll('.sw'), function (x) {
         x.classList.toggle('on', x === b);
       });
+      $('sigFonts').style.color = sigInk;
+      syncApply();
+    });
+    wireMore($('sigInkMore'), $('sigInkMoreChip'), function () { return sigInk; }, function (c) {
+      sigInk = c;
+      Array.prototype.forEach.call(sigModal.querySelectorAll('.sigcolors .sw'), function (x) { x.classList.remove('on'); });
       $('sigFonts').style.color = sigInk;
       syncApply();
     });
@@ -702,7 +740,9 @@
         '<div class="row sigink"><span class="anno-lbl">Ink</span>' +
         SIG_INKS.map(function (c) {
           return '<button class="sw" data-ink="' + c + '" style="background:' + c + '" title="Ink ' + c + '"></button>';
-        }).join('') + '</div>' +
+        }).join('') +
+        '<button type="button" class="swmore" id="mpSigInkMore" title="More colours…">' +
+        '<i id="mpSigInkMoreChip"></i><b>▾</b></button>' + '</div>' +
         '<div class="row" style="gap:6px">' +
         '<button class="btn" id="mpSigLock" style="flex:1" title="On: corners keep the proportions. Off: they scale freely (Shift does the opposite)">Keep proportions</button>' +
         '<button class="btn" id="mpSigReset" style="flex:1" title="Back to the signature\'s own proportions">Original shape</button></div>';
@@ -713,9 +753,19 @@
           Array.prototype.forEach.call(el.querySelectorAll('[data-ink]'), function (b) {
             b.classList.toggle('on', (s.ink || '') === b.dataset.ink);
           });
+          el.querySelector('#mpSigInkMoreChip').style.background = s.ink || '#0B0B0B';
         }
       };
       el.addEventListener('click', function (e) { e.stopPropagation(); });
+      wireMore(el.querySelector('#mpSigInkMore'), el.querySelector('#mpSigInkMoreChip'),
+        function () { const s = selSig(); return (s && s.ink) || '#0B0B0B'; },
+        async function (h) {
+          const s = selSig(); if (!s) return;
+          const url = await recolour(s.url, h);
+          if (!url) { X.toast('That signature could not be recoloured'); return; }
+          sigEdit(function (m) { m.url = url; m.ink = h; });
+          X.markPop.sig.sync(selSig());
+        });
       el.querySelector('#mpSigLock').addEventListener('click', function () {
         sigEdit(function (s) { if (s.lock) delete s.lock; else s.lock = true; });
         X.markPop.sig.sync(selSig());
