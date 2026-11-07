@@ -298,7 +298,9 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
         y: (b.y1 + b.y2) / 2,
         xScale: (b.x2 - b.x1) / 2,
         yScale: (b.y2 - b.y1) / 2,
-        ...(s.nos ? { borderWidth: 0 } : { borderColor: hexRgb(s.c), borderWidth: s.w, borderOpacity: shOp(s) }),
+        ...(s.nos
+          ? { borderWidth: 0 }
+          : { borderColor: hexRgb(s.c), borderWidth: s.w, borderOpacity: shOp(s) }),
       };
       if (s.fill) {
         opts.color = hexRgb(s.fill);
