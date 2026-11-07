@@ -432,6 +432,21 @@
       const st = s.ds || 'arrow';
       const k = S.scale;                          /* points to screen pixels */
 
+      /* a dimension is a hairline: give the mouse a wider, unseen strip
+         along it to take hold of, and the reading too (css: .anno .grab) */
+      function grab(el) {
+        el.classList.add('grab');
+        if (idx >= 0) el.addEventListener('pointerdown', function (e) { X.beginDrag(it, idx, e, 'move'); });
+        return el;
+      }
+      const hit = document.createElementNS(SVGNS, 'line');
+      hit.setAttribute('x1', a[0]); hit.setAttribute('y1', a[1]);
+      hit.setAttribute('x2', b[0]); hit.setAttribute('y2', b[1]);
+      hit.style.stroke = 'transparent';
+      hit.style.strokeWidth = Math.max(sw, 12);
+      hit.style.strokeLinecap = 'round';
+      g.appendChild(grab(hit));
+
       const line = document.createElementNS(SVGNS, 'line');
       line.setAttribute('x1', a[0]); line.setAttribute('y1', a[1]);
       line.setAttribute('x2', b[0]); line.setAttribute('y2', b[1]);
@@ -518,7 +533,7 @@
         pad.setAttribute('width', pw); pad.setAttribute('height', ph);
         pad.setAttribute('transform', 'rotate(' + ang + ' ' + px + ' ' + py + ')');
         pad.style.fill = 'rgba(255,255,255,.8)';
-        g.appendChild(pad);
+        g.appendChild(grab(pad));
         /* the middle of a capital is about 0.36 of a size over the baseline */
         mx += up[0] * (base + size * 0.36); my += up[1] * (base + size * 0.36);
       } else {
@@ -539,8 +554,7 @@
       t.style.fontFamily = 'Helvetica, Arial, sans-serif';
       t.style.fontWeight = '600';
       t.style.fontSize = size + 'px';
-      t.style.pointerEvents = 'none';
-      g.appendChild(t);
+      g.appendChild(grab(t));
       return g;
     };
 

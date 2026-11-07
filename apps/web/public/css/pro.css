@@ -1167,6 +1167,9 @@ body[data-tool="select"] .anno .sh,
 body[data-tool="select"] .anno .tx,
 body[data-tool="select"] .anno .patch,
 body[data-tool="select"] .anno .redact-mk { cursor: var(--cur-arrow-obj) }
+/* the unseen grab strip and reading of a dimension: held only by Select */
+.anno .grab { pointer-events: none }
+body[data-tool="select"] .anno .grab { pointer-events: all; cursor: var(--cur-arrow-obj) }
 .anno .kn { cursor: var(--cur-nwse) }
 .anno .kn[data-cur="nesw"] { cursor: var(--cur-nesw) }
 .anno .kn[data-cur="point"] { cursor: var(--cur-arrow-point) }
