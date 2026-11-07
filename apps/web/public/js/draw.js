@@ -378,7 +378,7 @@
     function stroked(el, s, idx, it) {
       const sw = Math.max(0.6, s.w * S.scale);
       el.setAttribute('class', 'sh');
-      el.style.stroke = s.c;
+      el.style.stroke = s.nos ? 'none' : s.c;
       el.style.strokeWidth = sw;
       el.style.strokeOpacity = X.shOp(s);
       el.style.strokeLinecap = X.CAP_CSS[X.shCap(s)];

@@ -31,6 +31,8 @@ interface MarkBase {
   o?: number;
   /** Rotation in degrees, about the mark's centre (text: about its anchor `a`). */
   r?: number;
+  /** Hidden in the Layers panel: skipped on screen and left out of the saved PDF. */
+  hide?: boolean;
   [key: string]: unknown;
 }
 
@@ -47,6 +49,8 @@ export interface Mark extends MarkBase {
   j?: number;
   /** Fill colour for boxes. */
   fill?: string | null;
+  /** No outline (boxes only: a rect or ellipse can be filled with no border). */
+  nos?: boolean;
 }
 
 /** A standard PDF font, or 'g:<id>': a Google Font the page supplies (see SaveHooks.fonts). */

@@ -294,10 +294,20 @@
           <input class="search-in" id="findIn" placeholder="Search this document" aria-label="Search this document">
           <button class="btn findstep" id="findPrev" type="button" title="Previous match (Shift+Enter)" aria-label="Previous match" disabled=""><svg viewBox="0 0 24 24"><polyline points="6 15 12 9 18 15"></polyline></svg></button>
           <button class="btn findstep" id="findNext" type="button" title="Next match (Enter)" aria-label="Next match" disabled=""><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"></polyline></svg></button>
+          <button class="btn findstep" id="findOptsBtn" type="button" title="Search options" aria-label="Search options" aria-expanded="false">
+            <svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"></circle><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"></circle><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"></circle></svg>
+          </button>
+        </div>
+        <div class="findopts" id="findOptsPop" hidden="">
+          <label class="foopt"><input type="checkbox" id="foWhole"><span>Whole words</span></label>
+          <label class="foopt"><input type="checkbox" id="foCase"><span>Case sensitive</span></label>
+          <label class="foopt"><input type="checkbox" id="foBooks"><span>Include bookmarks</span></label>
+          <label class="foopt"><input type="checkbox" id="foComments"><span>Include comments</span></label>
         </div>
         <div class="findnow" id="findNow" hidden=""></div>
         <div class="hitcount" id="hitCount"></div>
         <div id="hitList"></div>
+        <div id="hitExtra"></div>
       </div>
     </aside>
 
@@ -1147,6 +1157,7 @@
 <script src="js/winlayout.js"></script>
 <script src="js/skin.js"></script>
 <script src="js/books.js"></script>
+<script src="js/layers.js"></script>
 <script src="js/toolprops.js"></script>
 <script src="js/toolbar.js"></script>
 <script src="js/toolpanel.js"></script>

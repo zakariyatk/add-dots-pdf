@@ -298,9 +298,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
         y: (b.y1 + b.y2) / 2,
         xScale: (b.x2 - b.x1) / 2,
         yScale: (b.y2 - b.y1) / 2,
-        borderColor: hexRgb(s.c),
-        borderWidth: s.w,
-        borderOpacity: shOp(s),
+        ...(s.nos ? { borderWidth: 0 } : { borderColor: hexRgb(s.c), borderWidth: s.w, borderOpacity: shOp(s) }),
       };
       if (s.fill) {
         opts.color = hexRgb(s.fill);
@@ -313,7 +311,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
        the outline sits on top */
     const ring = ellipsePts(s, 96);
     if (s.fill) fillPolygon(p, ring, hexRgb(s.fill), shOp(s));
-    paintPts(p, ring, s);
+    if (!s.nos) paintPts(p, ring, s);
   };
 
   const cloud: Painter = (p, s: CloudMark) => paintPts(p, cloudPts(s, 8), s, true);

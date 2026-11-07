@@ -118,7 +118,8 @@ const rgb = (hex: unknown) => (typeof hex === 'string' && hex ? hexToRgb01(hex) 
 function fieldsOf(s: AnyMark): Record<string, unknown> {
   const m = s as Mark & Anyish;
   const w = typeof m.w === 'number' ? m.w : 1;
-  const border = { W: w, S: m.d ? 'D' : 'S', ...(m.d ? { D: m.d === 2 ? [w, w * 2] : [w * 3, w * 2] } : {}) };
+  const bw = m.nos ? 0 : w;
+  const border = { W: bw, S: m.d ? 'D' : 'S', ...(m.d ? { D: m.d === 2 ? [w, w * 2] : [w * 3, w * 2] } : {}) };
   switch (s.t) {
     case 'markup': {
       const quads = ((m.quads as Quad[]) || []).flatMap((q) => [

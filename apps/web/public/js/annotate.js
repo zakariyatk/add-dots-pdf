@@ -893,6 +893,7 @@
     X.on('reset', function () { openOn = null; pop.hidden = true; });
     X.renderComments = renderComments;
     X.allComments = allComments;
+    X.openThread = openThread;
     X.MARKUP = MARKUP;
     renderComments();
   });

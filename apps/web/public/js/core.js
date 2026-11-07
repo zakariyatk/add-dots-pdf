@@ -809,6 +809,7 @@
        hit, a jump): left running, it carries on into the new one */
     stage.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     $('hitList').innerHTML = ''; hitsShown = 0; $('hitCount').textContent = ''; $('findIn').value = '';
+    $('hitExtra').innerHTML = ''; extraHits = { books: [], comments: [] };
     setUndoState();
   }
 
@@ -2361,7 +2362,11 @@
     while (it.anno.firstChild) it.anno.removeChild(it.anno.firstChild);
     const vp = it.vp;
     if (!vp) return;
-    it.shapes.forEach(function (s, idx) { it.anno.appendChild(shapeEl(it, s, vp, idx)); });
+    it.shapes.forEach(function (s, idx) {
+      const el = shapeEl(it, s, vp, idx);
+      if (s.hide) el.style.display = 'none';
+      it.anno.appendChild(el);
+    });
     if (ghost) it.anno.appendChild(shapeEl(it, ghost, vp, -1));
     if (!ghost && S.tool === 'select' && S.sel && S.sel.it === it) {
       const list = selList();
@@ -2403,7 +2408,7 @@
     /* inline styles, because the sheet's .sh rule would win over attributes */
     function stroke(el, noDash) {
       el.setAttribute('class', 'sh');
-      el.style.stroke = s.c;
+      el.style.stroke = s.nos ? 'none' : s.c;
       el.style.strokeWidth = sw;
       el.style.strokeOpacity = shOp(s);
       el.style.strokeLinecap = CAP_CSS[shCap(s)];
@@ -3114,8 +3119,8 @@
       });
       pop.appendChild(n);
     }
-    /* a shape off the page may have been only filled: its outline can go, or come */
-    if (key === 'c' && s.t === 'vpath') {
+    /* a box, a circle, or a shape off the page can drop its outline and keep just the fill */
+    if (key === 'c' && (s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath')) {
       const n = document.createElement('button');
       n.type = 'button';
       n.className = 'pnofill' + (s.nos ? ' on' : '');
@@ -3167,7 +3172,7 @@
     if (!s || dragOn) { pop.hidden = true; closeSwatches(); return; }
     buildMarkPop();
     const isText = s.t === 'text';
-    const isBox = s.t === 'rect' || s.t === 'vpath';     /* a shape off the page fills too */
+    const isBox = s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath';     /* a shape off the page fills too */
     const isPic = s.t === 'sig';              /* a picture: no line to style */
     const count = selList().length;
     $('mpTitle').textContent = count > 1 ? count + ' marks' : (MARK_NAME[s.t] || 'Mark');
@@ -7792,7 +7797,11 @@
   });
 
   /* ---------------- search ---------------- */
-  function invalidateSearch() { S.hits = []; S.hitIndex = -1; $('hitList').innerHTML = ''; hitsShown = 0; showFindNow(); if (S.query) runSearch(); }
+  function invalidateSearch() {
+    S.hits = []; S.hitIndex = -1; $('hitList').innerHTML = ''; hitsShown = 0; showFindNow();
+    if (S.query) runSearch();
+    else { $('hitExtra').innerHTML = ''; extraHits = { books: [], comments: [] }; }
+  }
 
   async function textOf(it) {
     const key = it.src.id + ':' + it.num;
@@ -7822,6 +7831,32 @@
   });
   $('findPrev').addEventListener('click', function () { stepHit(-1); });
   $('findNext').addEventListener('click', function () { stepHit(1); });
+
+  /* Whole words, case sensitive, and widening the search past the page text
+     to bookmarks and your own comments — a dropdown under the "…" button,
+     the way Acrobat's own search options sit under its search box. */
+  $('findOptsBtn').addEventListener('click', function (e) {
+    e.stopPropagation();
+    const on = $('findOptsPop').hidden;
+    $('findOptsPop').hidden = !on;
+    $('findOptsBtn').classList.toggle('on', on);
+    $('findOptsBtn').setAttribute('aria-expanded', on ? 'true' : 'false');
+  });
+  document.addEventListener('click', function (e) {
+    if ($('findOptsPop').hidden) return;
+    if (e.target.closest('#findOptsPop') || e.target.closest('#findOptsBtn')) return;
+    $('findOptsPop').hidden = true;
+    $('findOptsBtn').classList.remove('on');
+    $('findOptsBtn').setAttribute('aria-expanded', 'false');
+  });
+  ['foWhole', 'foCase', 'foBooks', 'foComments'].forEach(function (id) {
+    $(id).addEventListener('change', function () { if (S.query) runSearch(); });
+  });
+  /* on a word's own boundaries: neither side is a letter, digit or underscore */
+  function wordBoundary(hay, at, len) {
+    const before = hay.charAt(at - 1), after = hay.charAt(at + len);
+    return !/[\w]/.test(before) && !/[\w]/.test(after);
+  }
   /* where you are in the matches, big enough to read at a glance, as in Foxit */
   function showFindNow() {
     const n = S.hits.length, h = S.hits[S.hitIndex];
@@ -7838,13 +7873,21 @@
     try { await searchNow(); }
     finally { thumbsResume(); }
   }
+  /* read once per search, and again by markItem so the on-page highlights
+     match what the list found */
+  let findCase = false, findWhole = false;
   async function searchNow() {
     const q = $('findIn').value.trim();
+    findCase = $('foCase').checked; findWhole = $('foWhole').checked;
     S.query = q; S.hits = []; S.hitIndex = -1;
     $('hitList').innerHTML = ''; hitsShown = 0; revealFor = null; clearMarks(); showFindNow();
-    if (q.length < 2) { $('hitCount').textContent = q ? 'Type at least two characters' : ''; return; }
+    if (q.length < 2) {
+      $('hitCount').textContent = q ? 'Type at least two characters' : '';
+      $('hitExtra').innerHTML = ''; extraHits = { books: [], comments: [] };
+      return;
+    }
     $('hitCount').textContent = 'Reading text…';
-    const needle = q.toLowerCase();
+    const needle = findCase ? q : q.toLowerCase();
     /* pages are read a few at a time, so the pdf.js worker always has the next
        one to work on, and looked through in order */
     const items = S.items.slice(), total = items.length, BATCH = 8;
@@ -7852,13 +7895,14 @@
       const texts = await Promise.all(items.slice(at, at + BATCH).map(textOf));
       if (S.query !== q) return;
       for (let k = 0; k < texts.length; k++) {
-        const t = texts[k], hay = t.toLowerCase();
+        const t = texts[k], hay = findCase ? t : t.toLowerCase();
         let from = 0, idx, nth = 0;
         /* every match (the list is written as it is read, see showHits); only
            a word found tens of thousands of times stops early. There used to
            be a limit of 400 that stopped only the page it was reached on, so
            every later page then listed just its first match. */
         while (S.hits.length < MAX_HITS && (idx = hay.indexOf(needle, from)) !== -1) {
+          if (findWhole && !wordBoundary(hay, idx, needle.length)) { from = idx + 1; continue; }
           S.hits.push({ page: at + k + 1, nth: nth++, snippet: snippetOf(t, idx, q.length) });
           from = idx + needle.length;
         }
@@ -7875,7 +7919,75 @@
     showHits(HIT_CHUNK);
     S.items.forEach(function (it) { if (it.rendered) markItem(it); });
     if (S.hits.length) activateHit(0);
+    await searchExtra(q, needle);
   }
+
+  /* "Include bookmarks" and "Include comments": outside the page text, so
+     outside S.hits and its Enter-to-step-through and on-page highlights —
+     their own short list under the text matches, each a plain jump. */
+  let extraHits = { books: [], comments: [] };
+  function textMatches(s, needle) {
+    s = String(s || ''); if (!s) return false;
+    const hay = findCase ? s : s.toLowerCase();
+    const idx = hay.indexOf(needle);
+    return idx !== -1 && (!findWhole || wordBoundary(hay, idx, needle.length));
+  }
+  async function searchExtra(q, needle) {
+    const wantBooks = $('foBooks').checked, wantComments = $('foComments').checked;
+    const books = [], comments = [];
+    if (wantBooks && EXT.bookmarks) {
+      const flat = [];
+      (function walk(list) {
+        (list || []).forEach(function (n) { flat.push(n); if (n.kids && n.kids.length) walk(n.kids); });
+      })(await (EXT.bookmarks.tree ? EXT.bookmarks.tree() : []));
+      flat.forEach(function (n) { if (n.p && textMatches(n.title, needle)) books.push({ p: n.p, title: n.title }); });
+      (EXT.bookmarks.own ? EXT.bookmarks.own() : []).forEach(function (m) {
+        const title = m.name || ('Page ' + m.p);
+        if (textMatches(title, needle)) books.push({ p: m.p, title: title });
+      });
+    }
+    if (wantComments && EXT.allComments) {
+      EXT.allComments().forEach(function (c) {
+        const text = (c.s.note && c.s.note.text) || '', quote = c.s.quote || '';
+        if (textMatches(text, needle) || textMatches(quote, needle)) {
+          comments.push({ it: c.it, idx: c.idx, page: c.page, text: text || quote });
+        }
+      });
+    }
+    if (S.query !== q) return;
+    extraHits = { books: books, comments: comments };
+    renderExtra();
+  }
+  function renderExtra() {
+    const host = $('hitExtra');
+    const parts = [];
+    if (extraHits.books.length) {
+      parts.push('<div class="hit-sec">Bookmarks</div>' + extraHits.books.map(function (b, i) {
+        return '<button type="button" class="hit-item hit-book" data-kind="book" data-i="' + i + '">' +
+          '<span class="pg">Page ' + b.p + '</span>' + esc(b.title) + '</button>';
+      }).join(''));
+    }
+    if (extraHits.comments.length) {
+      parts.push('<div class="hit-sec">Comments</div>' + extraHits.comments.map(function (c, i) {
+        return '<button type="button" class="hit-item hit-comment" data-kind="comment" data-i="' + i + '">' +
+          '<span class="pg">Page ' + c.page + '</span>' + esc(c.text.slice(0, 90)) + '</button>';
+      }).join(''));
+    }
+    host.innerHTML = parts.join('');
+  }
+  $('hitExtra').addEventListener('click', function (e) {
+    const b = e.target.closest('.hit-item'); if (!b) return;
+    const kind = b.dataset.kind, i = +b.dataset.i;
+    if (kind === 'book') {
+      const h = extraHits.books[i]; if (!h) return;
+      goTo(h.p);
+    } else {
+      const h = extraHits.comments[i]; if (!h) return;
+      goTo(S.items.indexOf(h.it) + 1);
+      if (EXT.openThread) setTimeout(function () { EXT.openThread(h.it, h.idx); }, 260);
+    }
+    if (isMobile()) setRail(false);
+  });
 
   /* The list of results is written a chunk at a time: the first ones, and
      more as it is scrolled near its end or a step reaches past them. A word
@@ -7963,7 +8075,7 @@
     if (!it.tl) return;
     unmark(it);
     if (!S.query) return;
-    const q = S.query.toLowerCase();
+    const q = findCase ? S.query : S.query.toLowerCase();
     const cur = S.hits[S.hitIndex];
     const nth = cur && S.items[cur.page - 1] === it ? cur.nth : -1;
     const marks = [];
@@ -7971,8 +8083,9 @@
     const spans = Array.from(it.tl.querySelectorAll('span'));
     spans.sort(function (a, b) { return a.dataset.i - b.dataset.i; });
     spans.forEach(function (span) {
-      const t = span.textContent, low = t.toLowerCase();
+      const t = span.textContent, low = findCase ? t : t.toLowerCase();
       let idx = low.indexOf(q);
+      while (idx !== -1 && findWhole && !wordBoundary(low, idx, q.length)) idx = low.indexOf(q, idx + 1);
       if (idx === -1) return;
       const frag = document.createDocumentFragment();
       let from = 0;
@@ -7985,6 +8098,7 @@
         marks.push(m);
         from = idx + q.length;
         idx = low.indexOf(q, from);
+        while (idx !== -1 && findWhole && !wordBoundary(low, idx, q.length)) idx = low.indexOf(q, idx + 1);
       }
       if (from < t.length) frag.appendChild(document.createTextNode(t.slice(from)));
       span.textContent = '';
@@ -10026,7 +10140,7 @@
     /* the system's print dialog, and a PDF printed with it (js/print.js) */
     printSystem: printSystem, printFrame: printFrame,
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
-    stackSelected: stackSelected,
+    stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE,
     ZOOM_MIN: ZOOM_MIN, ZOOM_MAX: ZOOM_MAX,
     /* the document put away (its tab closed): back to the home screen */
     closeDocument: function () { hardReset(); updateMeta(); showHome(); },

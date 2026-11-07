@@ -454,7 +454,9 @@
       return walk(items);
     }
 
-    X.bookmarks = { show: function () { showPanel(false); } };
+    /* for the Find panel's "Include bookmarks" (core.js): the PDF's own
+       outline, and the ones you added yourself (Ctrl+B) */
+    X.bookmarks = { show: function () { showPanel(false); }, tree: outlineTree, own: marks };
 
     /* ---------------- the book view ---------------- */
 
