@@ -2471,7 +2471,7 @@
       return out;
     }
     if (s.pts && !s.a) return s.pts;
-    if (s.a && s.b) return [s.a, s.b];
+    if (s.a && isPt(s.b)) return [s.a, s.b];
     return s.a ? [s.a] : [];
   }
   function markBox(s) {
@@ -2483,7 +2483,9 @@
     });
     return P.length ? { x1: x1, y1: y1, x2: x2, y2: y2 } : { x1: 0, y1: 0, x2: 0, y2: 0 };
   }
-  function twoPoint(s) { return !!(s.a && s.b && !s.quads && !(s.pts && !s.a)); }
+  function twoPoint(s) { return !!(s.a && isPt(s.b) && !s.quads && !(s.pts && !s.a)); }
+  /* b is a mark's second point, except on text, where it means bold */
+  function isPt(v) { return Array.isArray(v); }
   /* the four corners of a box, turned by its own rotation */
   function rectCorners(s) { return E.rectCorners(s); }
   /* text turns about its own anchor, which is also where pdf-lib turns it */
@@ -2668,7 +2670,7 @@
   /** Move one mark by (mx, my) from its state o — every kind of point it has. */
   function moveShape(s, o, mx, my) {
     if (o.a) s.a = [o.a[0] + mx, o.a[1] + my];
-    if (o.b) s.b = [o.b[0] + mx, o.b[1] + my];
+    if (isPt(o.b)) s.b = [o.b[0] + mx, o.b[1] + my];
     if (o.m) s.m = [o.m[0] + mx, o.m[1] + my];    /* a third point, e.g. a Leader's elbow */
     if (o.patch) s.patch = Object.assign({}, o.patch, { x: o.patch.x + mx, y: o.patch.y + my });
     if (o.pts && !o.a) s.pts = o.pts.map(function (q) { return [q[0] + mx, q[1] + my]; });
@@ -2708,13 +2710,13 @@
     }
     if (o.pts && !o.a) s.pts = o.pts.map(f);
     if (o.a) s.a = f(o.a);
-    if (o.b) s.b = f(o.b);
+    if (isPt(o.b)) s.b = f(o.b);
   }
 
   function copyShape(s) {
     return Object.assign({}, s, {
       a: s.a ? s.a.slice() : null,
-      b: s.b ? s.b.slice() : null,
+      b: isPt(s.b) ? s.b.slice() : s.b,
       patch: s.patch ? Object.assign({}, s.patch) : null
     });
   }
