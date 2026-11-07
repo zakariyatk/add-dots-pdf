@@ -3113,7 +3113,7 @@
       const n = document.createElement('button');
       n.type = 'button';
       n.className = 'pnofill' + (s.fill ? '' : ' on');
-      n.innerHTML = '<i></i>No fill';
+      n.title = 'No fill'; n.setAttribute('aria-label', 'No fill');
       n.addEventListener('click', function (e) {
         e.stopPropagation(); markEdit(function (x) { delete x.fill; }); closeSwatches();
       });
@@ -3124,7 +3124,7 @@
       const n = document.createElement('button');
       n.type = 'button';
       n.className = 'pnofill' + (s.nos ? ' on' : '');
-      n.innerHTML = '<i></i>No outline';
+      n.title = 'No outline'; n.setAttribute('aria-label', 'No outline');
       n.addEventListener('click', function (e) {
         e.stopPropagation(); markEdit(function (x) { x.nos = true; }); closeSwatches();
       });
