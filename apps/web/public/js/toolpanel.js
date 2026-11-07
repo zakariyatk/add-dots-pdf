@@ -285,11 +285,12 @@
       tabFind: ic('<circle cx="11" cy="11" r="7"/><line x1="16" y1="16" x2="21" y2="21"/>'),
       tabPins: ic('<path d="M12 21s-6.5-6.2-6.5-11a6.5 6.5 0 0 1 13 0c0 4.8-6.5 11-6.5 11z"/><circle cx="12" cy="10" r="2.4"/>'),
       tabComments: ic('<path d="M4 5h16v11H9l-5 4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="12" x2="13" y2="12"/>'),
-      tabBookmarks: ic('<path d="M6 3h10v18l-5-4-5 4z"/><line x1="19" y1="7" x2="22" y2="7"/><line x1="19" y1="11" x2="22" y2="11"/>')
+      tabBookmarks: ic('<path d="M6 3h10v18l-5-4-5 4z"/><line x1="19" y1="7" x2="22" y2="7"/><line x1="19" y1="11" x2="22" y2="11"/>'),
+      tabLayers: ic('<polygon points="12 3 21 8.5 12 14 3 8.5"/><polyline points="3 13 12 18.5 21 13"/><polyline points="3 17.5 12 23 21 17.5"/>')
     };
     const SIDE = [
       ['tabPages', 'Pages'], ['tabFind', 'Find'], ['tabComments', 'Notes'],
-      ['tabPins', 'Site photos'], ['tabBookmarks', 'Bookmarks']
+      ['tabPins', 'Site photos'], ['tabBookmarks', 'Bookmarks'], ['tabLayers', 'Layers']
     ];
     SIDE.forEach(function (s) {
       if (!$(s[0])) return;

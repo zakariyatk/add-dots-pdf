@@ -335,7 +335,7 @@ async function compose(
     /* in the order they stack on screen: the last is the one on top, so
        Bring to front and Send to back hold in the saved file. Pins go last. */
     it.shapes.forEach((s) => {
-      if (s.t === 'pin') return;
+      if (s.t === 'pin' || s.hide) return;
       if (isText(s)) onto(s, (p) => paintText(p, s));
       else onto(s, (p) => paintMark(p, s));
     });
@@ -484,9 +484,7 @@ async function compose(
           width: bx.x2 - bx.x1,
           height: bx.y2 - bx.y1,
           rotate: degrees(s.r || 0),
-          borderColor: col,
-          borderWidth: th,
-          borderOpacity: op,
+          ...(s.nos ? { borderWidth: 0 } : { borderColor: col, borderWidth: th, borderOpacity: op }),
         };
         if (s.fill) {
           ro.color = hexRgb(s.fill);

@@ -380,6 +380,16 @@
   .hit-item mark{background:rgba(255,255,255,.22);color:var(--text);border-radius:2px;padding:0 1px}
   .hit-item .pg{display:block;font-family:var(--mono);font-size:10px;color:var(--text-dim);margin-bottom:2px}
 
+  /* search options: whole words, case sensitive, and widening the search to
+     bookmarks and comments (js/core.js, the Find panel) */
+  .findopts{display:flex;flex-direction:column;gap:2px;padding:8px 10px;margin:0 0 6px;border-radius:7px;
+            background:var(--chrome-2);border:1px solid var(--line)}
+  .foopt{display:flex;align-items:center;gap:8px;padding:4px 2px;font-size:12.5px;color:var(--text);cursor:pointer}
+  .foopt input{margin:0}
+  .hit-sec{padding:8px 8px 4px;font-family:var(--mono);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+           color:var(--text-dim)}
+  .hit-item.hit-book .pg, .hit-item.hit-comment .pg{color:var(--text-dim)}
+
   /* ---------- stage ---------- */
   /* safe: a page zoomed wider than the window starts at the left edge, where
      it can be scrolled to (and a zoom can keep the spot under the pointer),
