@@ -3090,6 +3090,10 @@
     row.appendChild(lab); row.appendChild(pick); row.appendChild(eye); row.appendChild(hex); row.appendChild(ok);
     host.appendChild(row);
   }
+  /* so any module can offer this same palette — theme colours, shades,
+     standard colours, recent, hex, the eyedropper and the full custom
+     dialog (js/colordlg.js) behind the browser's <input type="color"> */
+  EXT.buildPalette = buildPalette;
 
   /* the colour picker shared by Fill and Border */
   let swFor = null;
