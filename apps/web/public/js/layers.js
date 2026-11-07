@@ -65,9 +65,12 @@
     $('railPages').parentNode.appendChild(panel);
 
     function bodies() { return Array.prototype.slice.call(document.querySelectorAll('#rail > .rail-body')); }
+    /* the tab always opens it, as Bookmarks' does: the side rail button
+       (js/toolpanel.js) opens the rail and then presses this tab, and the
+       panel is still marked shown from last time, so a toggle here would
+       shut it again at once — the second time it would never come out */
     function showPanel() {
       if (!S.items.length) { X.toast('Open a PDF first'); return; }
-      if (!$('rail').hidden && !panel.hidden) { X.setRail(false); return; }
       X.setRail(true);
       bodies().forEach(function (b) { b.hidden = b !== panel; });
       document.querySelectorAll('.rail-tabs .btn').forEach(function (t) { t.classList.toggle('on', t === tab); });
