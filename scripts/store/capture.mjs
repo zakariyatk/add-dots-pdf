@@ -38,11 +38,18 @@ const geo = await sp.evaluate(() => {
     const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     let n;
     while ((n = w.nextNode())) {
-      const i = n.data.indexOf(phrase);
-      if (i < 0) continue;
+      /* the source wraps its lines: any run of white space matches a space */
+      const re = new RegExp(
+        phrase
+          .split(/\s+/)
+          .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+          .join('\\s+'),
+      );
+      const m = re.exec(n.data);
+      if (!m) continue;
       const r = document.createRange();
-      r.setStart(n, i);
-      r.setEnd(n, i + phrase.length);
+      r.setStart(n, m.index);
+      r.setEnd(n, m.index + m[0].length);
       const { top, left } = where(el);
       const lines = [];
       for (const q of r.getClientRects()) {
@@ -594,6 +601,31 @@ async function desk() {
     return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) };
   });
   await p.keyboard.press('Escape');
+  await settle(p, 600);
+
+  /* 10. layers: the marks on a page, one hidden, one picked */
+  await click(p, 'ribView');
+  await addMarks(p, 2, [
+    { t: 'rect', id: 9101, a: [340, 250], b: [560, 330], c: '#2A78D6', w: 2, hide: true },
+    { t: 'cloud', id: 9102, a: [345, 380], b: [560, 480], c: '#E2483D', w: 2 },
+    { t: 'arrow', id: 9103, a: [330, 520], b: [470, 610], c: '#E2483D', w: 3 },
+    { t: 'ellipse', id: 9104, a: [360, 560], b: [530, 700], c: '#22A06B', w: 3 },
+    { t: 'text', id: 9105, a: [420, 82], text: 'Approved', size: 24, c: '#6A4BF0', f: 'helv', b: true, w: 1 },
+  ]);
+  await goPage(p, 2, 'page');
+  await p.evaluate(() => {
+    const X = window.ADDPDF,
+      it = X.S.items[1];
+    X.S.sel = { it: it, i: it.shapes.findIndex((s) => s.id === 9104) };
+    X.redrawAll();
+    const side = document.getElementById('sTabLayers');
+    if (side) side.click();
+    else {
+      X.setRail(true);
+      document.getElementById('tabLayers').click();
+    }
+  });
+  await shot(p, 'd10-layers');
 
   await ctx.close();
 }
@@ -709,6 +741,28 @@ async function phone() {
     (b.closest('button') || b).click();
   });
   await shot(p, 'p5-menu');
+  await p.keyboard.press('Escape');
+  await settle(p, 600);
+
+  /* layers: the marks on a page, one hidden, one picked */
+  await addMarks(p, 2, [
+    { t: 'rect', id: 9101, a: [340, 250], b: [560, 330], c: '#2A78D6', w: 2, hide: true },
+    { t: 'cloud', id: 9102, a: [345, 380], b: [560, 480], c: '#E2483D', w: 2 },
+    { t: 'arrow', id: 9103, a: [330, 520], b: [470, 610], c: '#E2483D', w: 3 },
+    { t: 'ellipse', id: 9104, a: [360, 560], b: [530, 700], c: '#22A06B', w: 3 },
+    { t: 'text', id: 9105, a: [420, 82], text: 'Approved', size: 24, c: '#6A4BF0', f: 'helv', b: true, w: 1 },
+  ]);
+  await goPage(p, 2);
+  await p.evaluate(() => {
+    const X = window.ADDPDF,
+      it = X.S.items[1];
+    X.S.sel = { it: it, i: it.shapes.findIndex((s) => s.id === 9104) };
+    X.redrawAll();
+    X.setRail(true);
+    document.getElementById('tabLayers').click();
+  });
+  await shot(p, 'p7-layers');
+  boxes.p7 = { list: await rectOf(p, '#railLayers') };
   await ctx.close();
 }
 
