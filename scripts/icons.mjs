@@ -99,6 +99,8 @@ const jobs = [
   [W + 'icon-maskable-192.png', 192, 192, square(0.84), false],
   [W + 'icon-maskable-512.png', 512, 512, square(0.84), false],
   [W + 'apple-touch-icon-180.png', 180, 180, square(1), false],
+  /* Google Play's store icon: a full square, no alpha — Play rounds the corners itself */
+  ['design/store/google-play/icon-512.png', 512, 512, square(1), false],
   [D + 'src-tauri/icons/32x32.png', 32, 32, rounded, true],
   [D + 'src-tauri/icons/128x128.png', 128, 128, rounded, true],
   [D + 'src-tauri/icons/128x128@2x.png', 256, 256, rounded, true],
