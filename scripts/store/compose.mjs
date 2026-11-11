@@ -54,6 +54,7 @@ const ICON = {
   ruler: I(
     '<path d="M3 3h18v5H8v13H3z"/><path d="M7 3v2.5M11 3v2.5M15 3v2.5M19 3v2.5M3 11h2.5M3 15h2.5M3 19h2.5"/>',
   ),
+  layers: I('<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/><path d="M3 17.5l9 5 9-5"/>'),
   tools: I(
     '<path d="M14.5 5.5a4 4 0 0 0-5 5L3.8 16.2a1.8 1.8 0 0 0 2.5 2.5L12 13a4 4 0 0 0 5-5l-2.4 2.4-2.5-.6-.6-2.5z"/>',
   ),
@@ -352,6 +353,115 @@ const PHONE = [
     sub: 'Edit text, merge, split, organize, convert and more.',
     extra: badge('tools', 92, 1040, 168),
   },
+  {
+    file: '08-layers',
+    theme: 'light',
+    screen: 'p7-layers',
+    eyebrow: 'Layers',
+    title: 'Every mark,<br><em>in its place.</em>',
+    sub: 'Hide, reorder or pick any mark from the Layers list.',
+    extra: badge('layers', 92, 1040, 168),
+  },
+];
+
+/* ---------------- Google Play tablets: 2560 x 1440 (16:9), a tablet ----------------
+   On a tablet the app shows its full layout, as on Windows, so these use the
+   big-screen captures. The same set serves 7-inch and 10-inch tablets. */
+
+function tablet(screen, x, y, w) {
+  const sh = (w * 10) / 16,
+    bez = 30;
+  return `
+  <div style="position:absolute;left:${x}px;top:${y}px;width:${w + bez * 2}px;padding:${bez}px;border-radius:64px;z-index:2;
+    background:linear-gradient(160deg,#2A2D35,#0B0C0F 60%);box-shadow:0 0 0 3px #3E424C inset, 0 0 0 1px rgba(255,255,255,.08), 0 80px 180px rgba(0,0,0,.5)">
+    <div style="position:absolute;left:50%;top:12px;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:#1B1D22"></div>
+    <div style="width:${w}px;height:${sh}px;border-radius:30px;overflow:hidden;background:#fff url('${img(screen)}') 0 0 / ${w}px ${sh}px no-repeat"></div>
+  </div>`;
+}
+
+function tabletSlide(o) {
+  const head = `
+    <div style="position:absolute;left:140px;top:300px;width:760px;z-index:3">
+      <div class="pill" style="font-size:30px;padding:12px 26px 12px 18px"><i></i>${o.eyebrow}</div>
+      <h1 style="font-size:${o.hsize || 104}px;margin-top:36px">${o.title}</h1>
+      <p class="sub" style="font-size:38px;margin-top:28px;line-height:1.4">${o.sub}</p>
+    </div>`;
+  return page(2560, 1440, o.theme, head + tablet(o.screen, 900, 200, 1520) + badge(o.icon, 140, 1060, 190));
+}
+
+const TABLET = [
+  {
+    file: '01-read',
+    theme: 'dark',
+    screen: 'd1-read',
+    icon: 'read',
+    eyebrow: 'Add Dots PDF',
+    title: 'Your PDFs,<br><em>on the big screen.</em>',
+    sub: 'Read, edit, sign and convert, all in one app.',
+  },
+  {
+    file: '02-comment',
+    theme: 'light',
+    screen: 'd2-comment',
+    icon: 'comment',
+    eyebrow: 'Review together',
+    title: 'Comment and<br><em>mark up.</em>',
+    sub: 'Highlight, add notes and reply right on the page.',
+  },
+  {
+    file: '03-edit',
+    theme: 'dark',
+    screen: 'd3-edit',
+    icon: 'edit',
+    eyebrow: 'Edit objects',
+    title: 'Edit text<br><em>on the page.</em>',
+    sub: 'Change the PDF’s own words, in its own font.',
+  },
+  {
+    file: '04-sign',
+    theme: 'light',
+    screen: 'd4-sign',
+    icon: 'sign',
+    eyebrow: 'Fill & Sign',
+    title: 'Fill and sign<br><em>in seconds.</em>',
+    sub: 'Type into any form, then sign it with your own hand.',
+  },
+  {
+    file: '05-site-photos',
+    theme: 'dark',
+    screen: 'd7-pins',
+    icon: 'pin',
+    eyebrow: 'Site photos',
+    title: 'Pin site photos<br><em>to the drawing.</em>',
+    sub: 'Numbered pins with photos, notes and BOQ items.',
+  },
+  {
+    file: '06-measure',
+    theme: 'light',
+    screen: 'd8-dims',
+    icon: 'measure',
+    eyebrow: 'Measure',
+    title: 'Dimension<br><em>to scale.</em>',
+    sub: 'Lengths, radii and angles in real units.',
+  },
+  {
+    file: '07-layers',
+    theme: 'dark',
+    screen: 'd10-layers',
+    icon: 'layers',
+    eyebrow: 'Layers',
+    title: 'Every mark,<br><em>in its place.</em>',
+    sub: 'Hide, reorder or pick any mark from the Layers list.',
+  },
+  {
+    file: '08-convert',
+    theme: 'light',
+    screen: 'd6-convert',
+    icon: 'convert',
+    eyebrow: 'Convert',
+    title: 'PDF to Word,<br><em>Excel and more.</em>',
+    sub: 'Word, Excel, PowerPoint, pictures and text.',
+  },
 ];
 
 /* ---------------- Google Play feature graphic: 1024 x 500 ---------------- */
@@ -390,4 +500,6 @@ for (const s of DESK) await render(deskSlide(s), 1920, 1080, join(out, 'microsof
 for (const s of PHONE)
   await render(phoneSlide(s), 1080, 1920, join(out, 'google-play', 'phone-' + s.file + '.png'));
 await render(feature(), 1024, 500, join(out, 'google-play', 'feature-graphic.png'));
+for (const s of TABLET)
+  await render(tabletSlide(s), 2560, 1440, join(out, 'google-play', 'tablet-' + s.file + '.png'));
 await browser.close();

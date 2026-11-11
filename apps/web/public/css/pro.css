@@ -1167,6 +1167,9 @@ body[data-tool="select"] .anno .sh,
 body[data-tool="select"] .anno .tx,
 body[data-tool="select"] .anno .patch,
 body[data-tool="select"] .anno .redact-mk { cursor: var(--cur-arrow-obj) }
+/* the unseen grab strip and reading of a dimension: held only by Select */
+.anno .grab { pointer-events: none }
+body[data-tool="select"] .anno .grab { pointer-events: all; cursor: var(--cur-arrow-obj) }
 .anno .kn { cursor: var(--cur-nwse) }
 .anno .kn[data-cur="nesw"] { cursor: var(--cur-nesw) }
 .anno .kn[data-cur="point"] { cursor: var(--cur-arrow-point) }
@@ -1441,16 +1444,15 @@ body.cdpicking, body.cdpicking * { cursor: crosshair !important }
   .cdbasic { gap: 4px }
 }
 .pcustom .btn { height: 26px; padding: 0 10px; font-size: 12.5px; border-color: var(--line) }
-.pnofill {
-  display: flex; align-items: center; gap: 8px; width: 100%; height: 28px; margin-bottom: 8px; padding: 0 8px;
-  border: 1px solid var(--line) !important; border-radius: 5px !important; background: transparent !important;
-  color: var(--text); font: inherit; font-size: 12.5px; cursor: pointer;
+/* No fill / No outline: a swatch-sized square with the red "no colour" slash,
+   named by its tooltip rather than by text that would not fit */
+.swpop.palette .pnofill {
+  display: block; width: 20px; height: 20px; min-width: 0; margin: 0 0 6px; padding: 0; cursor: pointer;
+  border: 1px solid rgba(0,0,0,.3) !important; border-radius: 2px !important;
+  background: linear-gradient(45deg, transparent 44%, var(--danger) 44%, var(--danger) 56%, transparent 56%), #fff !important;
 }
-.pnofill.on { border-color: var(--marker) !important }
-.pnofill i {
-  width: 16px; height: 16px; border: 1px solid rgba(0,0,0,.3); border-radius: 2px; display: block;
-  background: linear-gradient(45deg, transparent 44%, var(--danger) 44%, var(--danger) 56%, transparent 56%), #fff;
-}
+.swpop.palette .pnofill:hover { outline: 2px solid var(--text); outline-offset: 0 }
+.swpop.palette .pnofill.on { outline: 2px solid var(--marker); outline-offset: 1px }
 .swpop.palette .pcustom .btn { width: auto; min-width: 44px; border-width: 1px; border-radius: 5px !important }
 .swpop.palette .pcustom input[type="color"] { width: 30px; height: 26px }
 
