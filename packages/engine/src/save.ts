@@ -45,7 +45,15 @@ import {
   textRect,
   type MeasureText,
 } from './geometry';
-import { isText, type AnyMark, type Mark, type PageItem, type Source, type TextMark } from './model';
+import {
+  isText,
+  type AnyMark,
+  type FontFamily,
+  type Mark,
+  type PageItem,
+  type Source,
+  type TextMark,
+} from './model';
 import { dashOf, hexToRgb01, shCap, shJoin, shOp } from './style';
 import { drawLine, embedFallbacks, needsUnicode, textIn, textWidth, type UnicodeFontSource } from './text';
 import { readXrefTail, reserveNumbers, snapshot, writeUpdate } from './append';
@@ -279,10 +287,17 @@ async function compose(
   for (const it of items) {
     for (const s of it.shapes) {
       if (!isText(s) || !String(s.text).trim()) {
-        /* a module mark can ask for a standard font by name */
+        /* a module mark can ask for a standard font by name ('HelveticaBold'),
+           or a Google Font file at a style ('g:<id>|<fontIdx>', fonts.ts) —
+           embedTextFont falls back to Helvetica on its own if that file
+           cannot be had, so this never fails a save over a missing font */
         const want = fontNeeds[s.t] && fontNeeds[s.t]!(s);
-        if (want && !embedded[want])
-          embedded[want] = await out.embedFont(StandardFonts[want as keyof typeof StandardFonts]);
+        const file = want ? /^(g:[\w-]+)\|(\d)$/.exec(want) : null;
+        if (want && !embedded[want]) {
+          embedded[want] = file
+            ? await embedTextFont(out, file[1] as FontFamily, Number(file[2]), hooks.fonts)
+            : await out.embedFont(StandardFonts[want as keyof typeof StandardFonts]);
+        }
         continue;
       }
       /* the mark's own style, and each bold or italic its runs add */

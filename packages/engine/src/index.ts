@@ -22,3 +22,4 @@ export * from './content';
 export * from './contenttext';
 export * from './pagefont';
 export * from './painters/vpath';
+export * from './painters/poly';

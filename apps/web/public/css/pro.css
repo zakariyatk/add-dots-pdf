@@ -1502,6 +1502,25 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
 .laybtns button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8 }
 .laybtns button.laydel:hover { color: var(--danger) }
 
+/* --- the layer bar above the list: a document-wide set of named layers
+   (js/layers.js), on top of the per-mark rows above --- */
+.laygroupbar button {
+  display: grid; place-items: center; width: 26px; height: 26px; padding: 0; flex: none;
+  border: none; background: transparent; color: var(--text-dim); cursor: pointer; border-radius: 5px;
+}
+.laygroupbar button:hover { color: var(--text); background: rgba(255,255,255,.08) }
+.laygroupbar button:disabled { opacity: .3; cursor: default; background: none !important; color: var(--text-dim) !important }
+.laygroupbar button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8 }
+.laygroupbar select {
+  height: 26px; border: 1px solid var(--line); border-radius: 5px; background: transparent;
+  color: var(--text); font-size: 12px; padding: 0 4px;
+}
+.layfilter { color: var(--text-dim) }
+.rowlayer {
+  flex: none; height: 20px; margin-right: 2px; border: 1px solid var(--line); border-radius: 4px;
+  background: transparent; color: var(--text-dim); font-size: 11px; padding: 0 2px;
+}
+
 /* ---------- colour and width: one dropdown each ---------- */
 .swmore { margin-left: 0 }
 .wdrop {

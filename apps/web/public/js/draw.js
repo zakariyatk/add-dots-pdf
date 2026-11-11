@@ -152,7 +152,13 @@
         hint: 'Click one <b>Line</b> you have drawn, then <b>another</b> — the corner between them ' +
               'rounds to the <b>Radius</b> set here, trimming both to the curve. Lines made with ' +
               'other tools, or the page’s own drawing, cannot be picked. <b>Esc</b> starts again.',
-        path: '<path d="M4 20V10a6 6 0 0 1 6-6h10"/>' }
+        path: '<path d="M4 20V10a6 6 0 0 1 6-6h10"/>' },
+      { t: 'poly', id: 'tPoly', label: 'Continuous Line', key: null,
+        hint: 'Click the first point, then each next point — every click adds another segment ' +
+              'on from the last, with a rubber-band preview of the next one. <b>Enter</b>, ' +
+              '<b>Esc</b> or double-click ends the line. Hold <b>Shift</b> to keep a segment ' +
+              'level, plumb or at 45°.',
+        path: '<polyline points="3 18 8 7 13 15 21 5"/>' }
     ];
 
     const grpTools = $('grpTools');
@@ -444,6 +450,17 @@
       return g;
     };
 
+    /* a Continuous Line: straight segments through s.pts (PDF points), the
+       same points the saved PDF draws between (packages/engine/src/painters/
+       poly.ts) — no a/b, so it moves and resizes as a whole (core.js's
+       markPts/moveShape/scaleBy already know a pts-only mark, the way ink
+       and vpath work). */
+    X.shapeRenderers.poly = function (it, s, vp, idx) {
+      const g = document.createElementNS(SVGNS, 'g');
+      g.appendChild(stroked(polyline(s.pts, vp, false), s, idx, it));
+      return g;
+    };
+
     X.shapeRenderers.dim = function (it, s, vp, idx) {
       const g = document.createElementNS(SVGNS, 'g');
       const G = dimGeom(s);
@@ -593,12 +610,18 @@
       t.setAttribute('transform', 'rotate(' + ang + ' ' + mx + ' ' + my + ')');
       t.textContent = text;
       t.style.fill = s.c;
-      t.style.fontFamily = 'Helvetica, Arial, sans-serif';
+      t.style.fontFamily = DIM_FONT;
       t.style.fontWeight = '600';
       t.style.fontSize = size + 'px';
       g.appendChild(grab(t));
       return g;
     };
+
+    /* Dimension readings, drawn with the same embedded webfont the Text tool
+       offers (js/fonts.js) rather than the system's own Helvetica/Arial,
+       so the reading is crisp and consistent wherever the PDF is opened
+       (packages/engine/src/painters/draw.ts embeds the matching file). */
+    const DIM_FONT = '"ADG Inter", Helvetica, Arial, sans-serif';
 
     /** The reading's size on paper, in points — shared by screen and PDF. */
     function dimTextPt(s) { return E.dimTextPt(s); }
@@ -608,6 +631,7 @@
     X.handleKind.cloud = 'rect';
     X.handleKind.arc = 'line';
     X.handleKind.dim = 'line';
+    X.handleKind.poly = 'bbox';
 
     /* ---------------- writing into the PDF ---------------- */
 
@@ -907,6 +931,86 @@
     });
     X.on('tool', function (t) { if (t !== 'dimc') endChain(); });
 
+    /* --- continuous line (polyline) ---
+       Click, click, click, the same gesture as Continuous Dimension above:
+       each click adds a segment on from the last point, with a rubber-band
+       preview of the next one; double-click, right-click, Enter or Esc ends
+       it. Unlike a dimension chain, each segment is free to run any way —
+       Shift constrains it off the *previous* point only (snapLine), not the
+       whole line's first direction. */
+    let poly = null;                               /* {it, pts:[[x,y],...]} */
+
+    function polyGhost(pts) { return { t: 'poly', pts: pts, c: S.color, w: S.width }; }
+
+    function endPoly(commit) {
+      const had = poly;
+      poly = null;
+      if (!had) return;
+      const it = had.it;
+      if (commit && had.pts.length > 1) {
+        X.snapshot();
+        it.shapes.push(polyGhost(had.pts.map(function (p) { return [p[0], p[1]]; })));
+        X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+        X.toast(had.pts.length - 1 + ' segment' + (had.pts.length > 2 ? 's' : '') + ' in the line');
+      } else {
+        X.drawShapes(it);
+      }
+      if (S.tool === 'poly') $('modeHint').innerHTML = X.hints.poly;
+    }
+
+    X.tools.poly = {
+      colors: true, widths: true,
+      down: function () { /* a click tool: everything happens on release */ },
+      move: function (it, at, e) {
+        if (!poly || poly.it !== it || !it.vp) return;
+        const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+        const sn = X.snapPt(it, raw, e);
+        const last = poly.pts[poly.pts.length - 1];
+        let p = sn || raw;
+        if (e && e.shiftKey && !sn) p = X.snapLine(last, p);
+        X.drawShapes(it, polyGhost(poly.pts.concat([p])));
+      },
+      cancel: function () { endPoly(poly && poly.pts.length >= 2); },
+      up: function (it, at, e) {
+        if (!it.vp || (e && e.button > 0)) return;
+        const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+        const sn = X.snapPt(it, raw, e);
+        const p = sn || raw;
+        if (!poly || poly.it !== it) {          /* the first point, or a jump to another page */
+          endPoly(false);
+          poly = { it: it, pts: [p] };
+          $('modeHint').innerHTML = 'Click the next point. <b>Enter</b>, <b>Esc</b> or ' +
+            'double-click ends the line.';
+          return;
+        }
+        const last = poly.pts[poly.pts.length - 1];
+        let q = p;
+        if (e && e.shiftKey && !sn) q = X.snapLine(last, q);
+        if (Math.hypot(q[0] - last[0], q[1] - last[1]) < 3) return;   /* the second click of a double-click */
+        poly.pts.push(q);
+        X.drawShapes(it, polyGhost(poly.pts));
+      }
+    };
+    /* Esc and Enter end the line but keep the tool, so the next click starts
+       a fresh one; a second Esc puts the tool down as usual. Capture phase,
+       to get there before core's own Esc handling. */
+    document.addEventListener('keydown', function (e) {
+      if (!poly || S.tool !== 'poly') return;
+      if (e.key === 'Escape' || e.key === 'Enter') {
+        e.preventDefault(); e.stopImmediatePropagation();
+        endPoly(poly.pts.length >= 2);
+      }
+    }, true);
+    $('stage').addEventListener('dblclick', function () {
+      if (poly && S.tool === 'poly') endPoly(poly.pts.length >= 2);
+    });
+    $('stage').addEventListener('contextmenu', function (e) {
+      if (S.tool !== 'poly' || !poly) return;
+      e.preventDefault();
+      endPoly(poly.pts.length >= 2);
+    });
+    X.on('tool', function (t) { if (t !== 'poly') endPoly(poly && poly.pts.length >= 2); });
+
     /* ---------------- radius, diameter and angular dimensions ---------------- */
 
     /* A PDF has no circles or lines to pick, only ink, so these are defined by
@@ -919,7 +1023,7 @@
 
     const measureCtx = document.createElement('canvas').getContext('2d');
     function textPx(str, px) {
-      measureCtx.font = '600 ' + px + 'px Helvetica, Arial, sans-serif';
+      measureCtx.font = '600 ' + px + 'px ' + DIM_FONT;
       return measureCtx.measureText(str).width;
     }
     function unitOf(p, q) {
@@ -969,7 +1073,7 @@
       if (central) t.setAttribute('dominant-baseline', 'central');
       t.textContent = str;
       t.style.fill = s.c;
-      t.style.fontFamily = 'Helvetica, Arial, sans-serif';
+      t.style.fontFamily = DIM_FONT;
       t.style.fontWeight = '600';
       t.style.fontSize = size + 'px';
       t.style.pointerEvents = 'none';
@@ -1199,7 +1303,7 @@
        Ctrl to ignore it for a moment. */
 
     const SNAP_TOOLS = { rect: 1, line: 1, arrow: 1, ellipse: 1, cloud: 1, arc: 1,
-                         dim: 1, dimc: 1, dimr: 1, dimd: 1, dima: 1 };
+                         dim: 1, dimc: 1, dimr: 1, dimd: 1, dima: 1, poly: 1 };
     const SNAP_KINDS = [['end', 'Endpoint'], ['mid', 'Midpoint'], ['int', 'Intersection'],
                         ['near', 'Nearest'], ['mark', 'Points of your marks'], ['guide', 'Guides']];
     const SNAP_RANK = { end: 0, mark: 0, cen: 0, int: 1, gint: 1, mid: 2, guide: 2, near: 3 };

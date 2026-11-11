@@ -5,11 +5,20 @@
    be shown or hidden, duplicated, deleted, or moved up or down the stack; a
    click selects the mark on the page, the same as clicking it there.
 
-   Nothing new is stored to make this work: a mark is already an ordinary
-   entry in it.shapes (core.js), in the order it draws — last is topmost —
-   so undo, Save and the thumbnails already follow every change made here.
-   The one new field is `hide`, which core.js's renderer and the engine's
-   save (packages/engine/src/save.ts) both already skip. */
+   On top of that, a document-wide set of named layers (the bar above the
+   list): every mark belongs to one (S.layers, s.layer — a mark with none is
+   the first layer's), picked per row from a small dropdown there. The bar
+   itself picks which layer is "focused" — hide it, rename it, merge it into
+   another, or filter the list down to just its marks. A layer's hide is the
+   same per-mark `hide` flag the eye button above sets, applied to every one
+   of its members at once; there is nothing else to serialize, so Save needs
+   no changes for either feature.
+
+   Nothing new is stored to make the per-mark list work: a mark is already an
+   ordinary entry in it.shapes (core.js), in the order it draws — last is
+   topmost — so undo, Save and the thumbnails already follow every change
+   made here. The one new field there is `hide`, which core.js's renderer and
+   the engine's save (packages/engine/src/save.ts) both already skip. */
 (function () {
   'use strict';
 
@@ -28,7 +37,7 @@
       dimd: 'Diameter', dima: 'Angle', ink: 'Drawing', markup: 'Highlight',
       note: 'Note', stamp: 'Stamp', vpath: 'Shape', sig: 'Signature',
       image: 'Image', table: 'Table', link: 'Link', video: 'Video',
-      text: 'Text', leader: 'Leader'
+      text: 'Text', leader: 'Leader', poly: 'Line'
     };
     function label(s) {
       if (s.t === 'text') { const t = String(s.text || '').trim(); return t ? t.slice(0, 28) : 'Text box'; }
@@ -46,6 +55,40 @@
     const DUP = icon('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 15V6a2 2 0 0 1 2-2h9"/>');
     const DEL = icon('<path d="M4 7h16"/><path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"/>' +
       '<path d="M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13"/><path d="M10 11v6M14 11v6"/>');
+    const PENCIL = icon('<path d="M4 20h4L19 9l-4-4L4 16z"/>');
+    const PLUS = icon('<path d="M12 4v16M4 12h16"/>');
+    const MERGE = icon('<path d="M7 3v8a4 4 0 0 0 4 4h6"/><path d="M17 3v8a4 4 0 0 1-4 4h-1"/>' +
+      '<polyline points="14 12 17 15 20 12"/>');
+
+    /* ---------------- layers ----------------
+       A layer is just a name shapes can carry (s.layer, a layer's own id):
+       organisational, not a PDF concept — a layer's "hide" works the same
+       way a mark's own does (s.hide), which core.js's renderer and the
+       engine's save already skip, so hiding a layer is only ever setting
+       that flag on its members. A shape with no s.layer belongs to the
+       first layer, so every shape has one without every tool that creates
+       a mark (annotate.js, insert.js, …) needing to know layers exist. */
+    let focusLayer = null;              /* the layer id picked in the bar below */
+    let onlyThisLayer = false;          /* the list filtered to just it */
+    let layerSeq = 1;
+
+    function ensureLayers() {
+      if (!S.layers || !S.layers.length) { S.layers = [{ id: 'L0', name: 'Layer 1', hidden: false }]; layerSeq = 1; }
+      if (!focusLayer || !S.layers.some(function (l) { return l.id === focusLayer; })) focusLayer = S.layers[0].id;
+      return S.layers;
+    }
+    function layerOf(id) {
+      return ensureLayers().filter(function (l) { return l.id === id; })[0] || S.layers[0];
+    }
+    /* the layer a shape belongs to — its own, or the first, if it names none
+       or one that was since merged away */
+    function layerIdOf(s) {
+      const L = ensureLayers();
+      return s.layer != null && L.some(function (l) { return l.id === s.layer; }) ? s.layer : L[0].id;
+    }
+    function redrawEverywhere() {
+      S.items.forEach(function (it) { X.drawShapes(it); X.drawThumb(it); });
+    }
 
     /* ---------------- the tab and its panel ----------------
        Like Bookmarks (js/books.js): reached from the side rail of icons
@@ -61,8 +104,88 @@
     panel.className = 'rail-body'; panel.id = 'railLayers'; panel.hidden = true;
     panel.innerHTML =
       '<div class="laybar"><b>Layers</b><span class="laycount" id="layCount"></span><span class="grow"></span></div>' +
+      '<div class="laygroupbar" id="layGroupBar" style="display:flex;align-items:center;gap:4px;padding:4px 8px;">' +
+        '<select id="layPick" aria-label="Layer" style="flex:1;min-width:0;"></select>' +
+        '<button type="button" id="layEye" title="Show or hide this layer" aria-label="Show or hide this layer">' + EYE_ON + '</button>' +
+        '<button type="button" id="layRename" title="Rename this layer" aria-label="Rename this layer">' + PENCIL + '</button>' +
+        '<button type="button" id="layAdd" title="New layer" aria-label="New layer">' + PLUS + '</button>' +
+        '<button type="button" id="layMerge" title="Merge this layer into another" aria-label="Merge into…">' + MERGE + '</button>' +
+      '</div>' +
+      '<label class="layfilter" style="display:flex;align-items:center;gap:6px;padding:0 8px 6px;font-size:12px;">' +
+        '<input type="checkbox" id="layFilter"><span>This layer only</span></label>' +
       '<div id="layList"></div>';
     $('railPages').parentNode.appendChild(panel);
+
+    function renderLayerBar() {
+      ensureLayers();
+      $('layPick').innerHTML = S.layers.map(function (l) {
+        return '<option value="' + l.id + '"' + (l.id === focusLayer ? ' selected' : '') + '>' +
+          X.esc(l.name) + (l.hidden ? ' (hidden)' : '') + '</option>';
+      }).join('');
+      const L = layerOf(focusLayer);
+      $('layEye').innerHTML = L.hidden ? EYE_OFF : EYE_ON;
+      $('layEye').title = L.hidden ? 'Show this layer' : 'Hide this layer';
+      $('layMerge').disabled = S.layers.length < 2;
+      $('layFilter').checked = onlyThisLayer;
+    }
+
+    $('layPick').addEventListener('change', function () {
+      focusLayer = this.value;
+      renderLayerBar();
+      render();
+    });
+    $('layEye').addEventListener('click', function () {
+      const L = layerOf(focusLayer);
+      X.snapshot();
+      L.hidden = !L.hidden;
+      S.items.forEach(function (it) {
+        it.shapes.forEach(function (s) { if (layerIdOf(s) === L.id) s.hide = L.hidden; });
+      });
+      if (L.hidden) { S.sel = null; S.multi = null; }
+      redrawEverywhere(); X.updateMeta();
+      renderLayerBar(); render();
+    });
+    $('layRename').addEventListener('click', function () {
+      const L = layerOf(focusLayer);
+      const name = window.prompt('Rename this layer', L.name);
+      if (!name || !name.trim()) return;
+      L.name = name.trim().slice(0, 60);
+      renderLayerBar(); render();
+    });
+    $('layAdd').addEventListener('click', function () {
+      ensureLayers();
+      layerSeq++;
+      const L = { id: 'L' + Date.now().toString(36) + layerSeq, name: 'Layer ' + layerSeq, hidden: false };
+      S.layers.push(L);
+      focusLayer = L.id;
+      renderLayerBar(); render();
+      X.toast('<b>' + X.esc(L.name) + '</b> added — move marks into it from the list below');
+    });
+    $('layMerge').addEventListener('click', function () {
+      const source = layerOf(focusLayer);
+      const others = ensureLayers().filter(function (l) { return l.id !== source.id; });
+      if (!others.length) { X.toast('There is only one layer'); return; }
+      const listing = others.map(function (l, i) { return (i + 1) + '. ' + l.name; }).join('\n');
+      const ans = window.prompt('Merge "' + source.name + '" into which layer?\n\n' + listing +
+        '\n\nType its number.', '1');
+      if (!ans) return;
+      const n = parseInt(ans, 10);
+      const target = others[n - 1];
+      if (!target) { X.toast('Not one of the layers listed'); return; }
+      X.snapshot();
+      S.items.forEach(function (it) {
+        it.shapes.forEach(function (s) { if (layerIdOf(s) === source.id) s.layer = target.id; });
+      });
+      S.layers = S.layers.filter(function (l) { return l.id !== source.id; });
+      focusLayer = target.id;
+      redrawEverywhere(); X.updateMeta();
+      renderLayerBar(); render();
+      X.toast('Merged into <b>' + X.esc(target.name) + '</b>');
+    });
+    $('layFilter').addEventListener('change', function () {
+      onlyThisLayer = this.checked;
+      render();
+    });
 
     function bodies() { return Array.prototype.slice.call(document.querySelectorAll('#rail > .rail-body')); }
     /* the tab always opens it, as Bookmarks' does: the side rail button
@@ -74,6 +197,7 @@
       X.setRail(true);
       bodies().forEach(function (b) { b.hidden = b !== panel; });
       document.querySelectorAll('.rail-tabs .btn').forEach(function (t) { t.classList.toggle('on', t === tab); });
+      renderLayerBar();
       render();
     }
     tab.addEventListener('click', showPanel);
@@ -85,10 +209,15 @@
 
     /* ---------------- the list ---------------- */
 
-    /* every selectable mark on the page, front of the stack first */
+    /* every selectable mark on the page, front of the stack first — just
+       the focused layer's, while "This layer only" is checked */
     function rows(it) {
       const out = [];
-      it.shapes.forEach(function (s, idx) { if (!NOT_SELECTABLE[s.t]) out.push({ idx: idx, s: s }); });
+      it.shapes.forEach(function (s, idx) {
+        if (NOT_SELECTABLE[s.t]) return;
+        if (onlyThisLayer && layerIdOf(s) !== focusLayer) return;
+        out.push({ idx: idx, s: s });
+      });
       out.reverse();
       return out;
     }
@@ -115,11 +244,19 @@
       const it0 = list[0].idx, itN = list[list.length - 1].idx;
       host.innerHTML = list.map(function (r) {
         const s = r.s, hid = !!s.hide, sel = S.sel && S.sel.it === it && S.sel.i === r.idx;
+        const rowLayer = layerIdOf(s);
+        const layerPick = '<select class="rowlayer" data-idx="' + r.idx + '" title="Move to layer" ' +
+          'aria-label="Layer, for this mark" style="max-width:72px;font-size:11px;">' +
+          S.layers.map(function (l) {
+            return '<option value="' + l.id + '"' + (l.id === rowLayer ? ' selected' : '') + '>' +
+              X.esc(l.name) + '</option>';
+          }).join('') + '</select>';
         return '<div class="layrow' + (hid ? ' hid' : '') + (sel ? ' sel' : '') + '" data-idx="' + r.idx + '">' +
           '<button type="button" class="layeye" data-act="eye" title="' + (hid ? 'Show' : 'Hide') +
             '" aria-label="' + (hid ? 'Show' : 'Hide') + '">' + (hid ? EYE_OFF : EYE_ON) + '</button>' +
           '<i class="layswatch" style="background:' + X.esc(swatch(s)) + '"></i>' +
           '<span class="laylabel">' + X.esc(label(s)) + '</span>' +
+          (S.layers.length > 1 ? layerPick : '') +
           '<span class="laybtns">' +
             '<button type="button" data-act="up"' + (r.idx === it0 ? ' disabled' : '') +
               ' title="Bring forward" aria-label="Bring forward">' + UP + '</button>' +
@@ -132,9 +269,17 @@
       Array.prototype.forEach.call(host.children, function (el) {
         const idx = +el.dataset.idx;
         el.addEventListener('click', function (e) {
+          if (e.target.closest('.rowlayer')) { e.stopPropagation(); return; }
           const act = e.target.closest('[data-act]');
           if (act) { e.stopPropagation(); if (!act.disabled) doAction(it, idx, act.dataset.act); return; }
           select(it, idx);
+        });
+        const picker = el.querySelector('.rowlayer');
+        if (picker) picker.addEventListener('change', function () {
+          X.snapshot();
+          it.shapes[idx].layer = this.value;
+          X.updateMeta();
+          render();
         });
       });
     }
@@ -165,7 +310,10 @@
     }
 
     X.on('pages', function () { if (!panel.hidden) render(); });
-    X.on('reset', function () { panel.hidden = true; tab.classList.remove('on'); lastSig = null; });
+    X.on('reset', function () {
+      panel.hidden = true; tab.classList.remove('on'); lastSig = null;
+      S.layers = null; focusLayer = null; onlyThisLayer = false;
+    });
     /* the stack and selection also change straight from the canvas (drag,
        Delete key, the Format panel's Bring to front…); a light poll catches
        those while the panel is actually open, same as the side rail's own
