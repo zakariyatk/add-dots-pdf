@@ -159,6 +159,31 @@ export interface DimMark extends Mark {
   a2?: number;
   l1?: number;
   l2?: number;
+  /** dim: how far the dimension line sits off the measured run, in points,
+      signed by which side (0 or unset: directly on a-b, no extension lines —
+      a quick dimension, measured and drawn in one place). Set once the line
+      is pulled clear of what it measures, as a CAD dimension usually is: a
+      short extension line then runs from each of a and b out to it. */
+  off?: number;
+}
+
+/** Where a plain dim's own line sits once pulled clear of a-b by s.off: A and
+    B are where it runs (what the arrows, text and a-b's own length are read
+    against), nx/ny the unit normal a positive off moves along. */
+export function dimGeom(s: DimMark): { A: Pt; B: Pt; nx: number; ny: number; off: number } {
+  const dx = s.b[0] - s.a[0],
+    dy = s.b[1] - s.a[1];
+  const len = Math.hypot(dx, dy) || 1;
+  const nx = -dy / len,
+    ny = dx / len;
+  const off = s.off || 0;
+  return {
+    A: [s.a[0] + nx * off, s.a[1] + ny * off],
+    B: [s.b[0] + nx * off, s.b[1] + ny * off],
+    nx,
+    ny,
+    off,
+  };
 }
 
 /** Radius and diameter: a is the centre, rad the radius, b where the reading sits. */
@@ -322,8 +347,26 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
       th = s.w,
       op = shOp(s);
     const st = s.ds || 'arrow';
-    const A = { x: s.a[0], y: s.a[1] },
-      B = { x: s.b[0], y: s.b[1] };
+    const G = dimGeom(s);
+    const A = { x: G.A[0], y: G.A[1] },
+      B = { x: G.B[0], y: G.B[1] };
+    /* pulled clear of a-b: a short extension line from each out to where the
+       dimension line itself runs, a small gap off the point and a small
+       overshoot past the line, as a CAD extension line has them */
+    if (Math.abs(G.off) > 0.5) {
+      const sign = G.off > 0 ? 1 : -1,
+        gap = 2 * sign,
+        over = 3 * sign;
+      [s.a, s.b].forEach((pt) => {
+        p.drawLine({
+          start: { x: pt[0] + G.nx * gap, y: pt[1] + G.ny * gap },
+          end: { x: pt[0] + G.nx * (G.off + over), y: pt[1] + G.ny * (G.off + over) },
+          thickness: Math.min(th, 1),
+          color: col,
+          opacity: op,
+        });
+      });
+    }
     p.drawLine({ start: A, end: B, thickness: th, color: col, opacity: op });
 
     const dx = B.x - A.x,

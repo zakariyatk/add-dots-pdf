@@ -17,8 +17,8 @@ body[data-ui="light"][data-skin="wps"] {
   --text: #1F2329;
   --text-dim: #575E6A;
   --marker: #7B5CFF;          /* Add Dots violet */
-  --btn: #6A4BF0;
-  --btn-hover: #5A3BE0;
+  --btn: #0265DC;
+  --btn-hover: #0256BB;
   --marker-ink: #6141EA;
   --wps-red: #C8262C;         /* WPS red, 5:1 on the desk */
   --wps-desk: #F2F4F8;

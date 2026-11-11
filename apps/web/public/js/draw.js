@@ -76,6 +76,9 @@
     /** a: centre, rad: radius, b: where the reading sits. */
     function radGeom(s) { return E.radGeom(s); }
 
+    /** Where a plain dim's own line sits once pulled clear of a-b by s.off. */
+    function dimGeom(s) { return E.dimGeom(s); }
+
     function normAng(v) { return E.normAng(v); }
 
     /** a: vertex, a1/a2: the two arms' directions, l1/l2: how far along each
@@ -112,10 +115,11 @@
               'curves, <b>Alt</b> flips which way, and <b>Shift</b> keeps it level, plumb or at 45°.',
         path: '<path d="M3 19a13 13 0 0 1 18-12"/><circle cx="3" cy="19" r="1.6"/><circle cx="21" cy="7" r="1.6"/>' },
       { t: 'dim', id: 'tDim', label: 'Dimension', key: 'D', shift: true,
-        hint: 'Drag between the two points you want measured. Set the drawing ' +
-              '<b>Scale</b> to match the sheet, or <b>Calibrate</b> against ' +
-              'something you already know. Hold <b>Shift</b> to measure level, plumb or at 45°. ' +
-              'Double-click a dimension to retype it.',
+        hint: 'Click the first point you want measured, then the second (or drag straight between ' +
+              'them) — then move to set how far clear of them the dimension line itself sits, and ' +
+              'click, or drag and let go, to place it. Set the drawing <b>Scale</b> to match the ' +
+              'sheet, or <b>Calibrate</b> against something you already know. Hold <b>Shift</b> to ' +
+              'measure level, plumb or at 45°. Double-click a dimension to retype it.',
         path: '<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="7" x2="3" y2="17"/>' +
               '<line x1="21" y1="7" x2="21" y2="17"/><polyline points="7 9 4 12 7 15"/>' +
               '<polyline points="17 9 20 12 17 15"/>' },
@@ -143,7 +147,12 @@
               'meet. Move to choose the side and size of the arc, and click to place it. ' +
               '<b>Esc</b> starts again.',
         path: '<line x1="3" y1="20" x2="21" y2="20"/><line x1="3" y1="20" x2="14" y2="4"/>' +
-              '<path d="M12 20A9 9 0 0 0 8.1 12.6"/>' }
+              '<path d="M12 20A9 9 0 0 0 8.1 12.6"/>' },
+      { t: 'fillet', id: 'tFillet', label: 'Fillet', key: null,
+        hint: 'Click one <b>Line</b> you have drawn, then <b>another</b> — the corner between them ' +
+              'rounds to the <b>Radius</b> set here, trimming both to the curve. Lines made with ' +
+              'other tools, or the page’s own drawing, cannot be picked. <b>Esc</b> starts again.',
+        path: '<path d="M4 20V10a6 6 0 0 1 6-6h10"/>' }
     ];
 
     const grpTools = $('grpTools');
@@ -199,6 +208,11 @@
       '<option value="9" selected>Medium</option>' +
       '<option value="14">Broad</option></select>');
 
+    const filletCtl = ctl('filletCtl',
+      '<span class="anno-lbl">Radius</span>' +
+      '<input type="number" id="filletRadius" min="1" max="2000" step="1" value="20" aria-label="Fillet radius, in points">' +
+      '<span class="anno-lbl">pt</span>');
+
     /* How a dimension closes its ends: arrowheads (the reading sits on the
        line), architectural ticks, or dots (both with the reading above). */
     const DIM_STYLES = [['arrow', 'Arrow'], ['tick', 'Tick'], ['dot', 'Dot']];
@@ -227,10 +241,14 @@
       '<button class="tg" id="dimCal" title="Measure something whose real length you know and have the scale worked out from it">Calibrate</button>' +
       '<span class="anno-lbl" id="dimScaleNote"></span>');
 
-    let bulge = 0.25, scallop = 9;
+    let bulge = 0.25, scallop = 9, filletRadius = 20;
     $('dimStyle').addEventListener('change', function () { dimStyle = this.value; });
     $('arcBulge').addEventListener('change', function () { bulge = parseFloat(this.value); });
     $('cloudArc').addEventListener('change', function () { scallop = parseFloat(this.value); });
+    $('filletRadius').addEventListener('change', function () {
+      filletRadius = Math.max(1, parseFloat(this.value) || 20);
+      this.value = filletRadius;
+    });
     function redrawDims() {
       S.items.forEach(function (it) { X.drawShapes(it); X.drawThumb(it); });
     }
@@ -329,6 +347,8 @@
       arcCtl.hidden = t !== 'arc';
       cloudCtl.hidden = t !== 'cloud';
       dimCtl.hidden = !/^dim[crda]?$/.test(t);
+      filletCtl.hidden = t !== 'fillet';
+      if (t !== 'fillet') fpick = null;
     });
 
     /* --- calibration --- */
@@ -426,11 +446,38 @@
 
     X.shapeRenderers.dim = function (it, s, vp, idx) {
       const g = document.createElementNS(SVGNS, 'g');
-      const a = vp.convertToViewportPoint(s.a[0], s.a[1]);
-      const b = vp.convertToViewportPoint(s.b[0], s.b[1]);
+      const G = dimGeom(s);
+      const toVp = function (p) { return vp.convertToViewportPoint(p[0], p[1]); };
+      /* a and b, from here on, are where the dimension line itself runs —
+         s.a/s.b (what it actually measures) only once off pulls it clear */
+      const a = toVp(G.A);
+      const b = toVp(G.B);
       const sw = Math.max(0.6, s.w * S.scale);
       const st = s.ds || 'arrow';
       const k = S.scale;                          /* points to screen pixels */
+
+      function solid(el) {
+        const e2 = stroked(el, s, idx, it);
+        e2.style.strokeDasharray = 'none';
+        return e2;
+      }
+
+      /* pulled clear of a-b: a short extension line from each real point out
+         to where the dimension line runs (painters/draw.ts has the same gap
+         and overshoot, in PDF points so it comes out identical on paper) */
+      if (Math.abs(G.off) > 0.5) {
+        const sign = G.off > 0 ? 1 : -1, gap = 2 * sign, over = 3 * sign;
+        [s.a, s.b].forEach(function (pt) {
+          const p1 = toVp([pt[0] + G.nx * gap, pt[1] + G.ny * gap]);
+          const p2 = toVp([pt[0] + G.nx * (G.off + over), pt[1] + G.ny * (G.off + over)]);
+          const el = document.createElementNS(SVGNS, 'line');
+          el.setAttribute('x1', p1[0]); el.setAttribute('y1', p1[1]);
+          el.setAttribute('x2', p2[0]); el.setAttribute('y2', p2[1]);
+          const e2 = solid(el);
+          e2.style.strokeWidth = Math.max(0.6, Math.min(sw, k));
+          g.appendChild(e2);
+        });
+      }
 
       const line = document.createElementNS(SVGNS, 'line');
       line.setAttribute('x1', a[0]); line.setAttribute('y1', a[1]);
@@ -440,11 +487,6 @@
       const dx = b[0] - a[0], dy = b[1] - a[1];
       const len = Math.hypot(dx, dy) || 1;
       const ux = dx / len, uy = dy / len;
-      function solid(el) {
-        const e2 = stroked(el, s, idx, it);
-        e2.style.strokeDasharray = 'none';
-        return e2;
-      }
 
       /* the extension bars that close each end, perpendicular to the run:
          in page points, as the PDF has them, so they keep to the drawing at
@@ -562,6 +604,8 @@
     /* ---------------- the tools ---------------- */
 
     let drag = null;
+    let dimPend = null;          /* {it, a} — a dimension's first point, placed by a click rather
+                                     than a drag, waiting for the second click to finish it */
 
     function common(t) {
       return {
@@ -620,7 +664,109 @@
     X.tools.ellipse = common('ellipse');
     X.tools.cloud = common('cloud');
     X.tools.arc = common('arc');
-    X.tools.dim = common('dim');
+
+    /* --- the Dimension tool, placed the way a CAD linear dimension is: pick
+       the first point, the second (either a drag straight between them, or a
+       click and then another), then move clear of that line and click — or
+       drag and release — to say how far off it the dimension line itself
+       sits; a short extension line then runs from each real point out to it
+       (s.off, dimGeom in painters/draw.ts). Leaving the offset at zero keeps
+       today's quick, on-the-line dimension, which is still there for a fast
+       single drag that overshoots nothing. */
+    let dimOff = null;          /* {it, a, b, base} — the two points are set; now
+                                    choosing how far off them the line sits */
+
+    /** The signed distance from line a-b to m, in the direction s.off moves. */
+    function offAt(a, b, m) {
+      const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
+      return ((m[0] - a[0]) * -dy + (m[1] - a[1]) * dx) / len;
+    }
+
+    function dimTool() {
+      return {
+        colors: true, widths: true,
+        down: function (it, at, e) {
+          if (!it.vp || (dimOff && dimOff.it === it)) return;
+          const pinned = dimPend && dimPend.it === it;
+          drag = { it: it, a: pinned ? dimPend.a : pdfAt(it, at, e) };
+          dimPend = null;
+        },
+        move: function (it, at, e) {
+          if (dimOff && dimOff.it === it) {
+            const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+            X.drawShapes(it, Object.assign({}, dimOff.base, { off: offAt(dimOff.a, dimOff.b, raw) }));
+            return;
+          }
+          if (dimPend && dimPend.it === it && (!drag || drag.it !== it)) {
+            const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+            const sn = X.snapPt(it, raw, e);
+            X.drawShapes(it, ghost('dim', dimPend.a, sn || raw, sn ? null : e));
+            return;
+          }
+          if (!drag || drag.it !== it) return;
+          const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+          const sn = X.snapPt(it, raw, e);
+          drag.snap = sn;
+          X.drawShapes(it, ghost('dim', drag.a, sn || raw, sn ? { altKey: e && e.altKey } : e));
+        },
+        cancel: function (it) {
+          if (dimOff && dimOff.it === it) { dimOff = null; X.drawShapes(it); }
+          if (drag) { drag = null; X.drawShapes(it); }
+        },
+        up: function (it, at, e) {
+          if (dimOff && dimOff.it === it) {
+            const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+            const g = Object.assign({}, dimOff.base, { off: offAt(dimOff.a, dimOff.b, raw) });
+            dimOff = null;
+            snapHide();
+            $('modeHint').innerHTML = X.hints.dim;
+            X.snapshot();
+            it.shapes.push(g);
+            X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+            X.toast('<b>' + measure(g) + '</b> · double-click it to retype the reading');
+            return;
+          }
+          if (!drag || drag.it !== it) return;
+          const a = drag.a, raw = it.vp.convertToPdfPoint(at[0], at[1]);
+          const sn = X.snapPt(it, raw, e);
+          drag = null;
+          const g = ghost('dim', a, sn || raw, sn ? { altKey: e && e.altKey } : e);
+          if (Math.hypot(g.b[0] - g.a[0], g.b[1] - g.a[1]) < 3) {
+            /* that was a click, not a drag: hold this point and wait for the next one */
+            dimPend = { it: it, a: a };
+            $('modeHint').innerHTML = 'Click the <b>second point</b> — then set how far the ' +
+              'dimension line sits off it. <b>Esc</b> cancels.';
+            X.drawShapes(it);
+            return;
+          }
+          snapHide();
+          if (calibrating) {
+            $('modeHint').innerHTML = X.hints.dim;
+            X.drawShapes(it); finishCalibration(g); return;
+          }
+          /* both points are down — now how far clear of them does the
+             dimension line itself sit? Move and click, or drag and let go. */
+          dimOff = { it: it, a: g.a, b: g.b, base: g };
+          $('modeHint').innerHTML = 'Move to set how far the dimension line sits off the ' +
+            'line you measured, then click (or let go). <b>Esc</b> cancels.';
+          X.drawShapes(it, g);
+        }
+      };
+    }
+    X.tools.dim = dimTool();
+    document.addEventListener('keydown', function (e) {
+      if (S.tool !== 'dim' || e.key !== 'Escape' || (!dimPend && !dimOff)) return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      const it = (dimOff || dimPend).it;
+      dimPend = null; dimOff = null;
+      X.drawShapes(it);
+      $('modeHint').innerHTML = X.hints.dim;
+    }, true);
+    X.on('tool', function (t) {
+      if (t === 'dim') return;
+      const pend = dimOff || dimPend;
+      if (pend) { dimPend = null; dimOff = null; X.drawShapes(pend.it); }
+    });
 
     /* --- continuous dimensions ---
        Click, click, click: each click closes one dimension and opens the next
@@ -866,6 +1012,7 @@
 
     /* --- the picking tools --- */
     let pick = null;                               /* {t, it, pts} */
+    let fpick = null;                              /* {it, first: {idx, s}} — fillet's own two-line pick */
     const STEP_HINT = {
       circle: ['Click <b>three points</b> on the edge of the circle or arc.',
                'Click a <b>second point</b> on the edge.',
@@ -1476,6 +1623,144 @@
       if (it) pageSegments(it);
     });
 
+    /* ---------------- fillet ----------------
+       AutoCAD's Fillet: pick two straight Line marks and the corner where
+       they meet (or would meet, extended) is rounded to the set Radius,
+       each line trimmed back to where the arc touches it. Unlike Angular
+       above, this one has to edit what it picks, so it only ever looks at
+       the app's own Line marks (it.shapes, t:'line') — never the page's own
+       drawing, which nothing here ever rewrites (see the file's own note). */
+
+    /** The app's own drawn Line nearest p, within a few screen pixels. */
+    function lineShapeAt(it, p) {
+      const tol = 7 / Math.max(0.05, S.scale);
+      let idx = -1, bd = tol;
+      it.shapes.forEach(function (s, i) {
+        if (s.t !== 'line') return;
+        const a = s.a, b = s.b, dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+        if (!l2) return;
+        let t = ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2;
+        t = Math.max(0, Math.min(1, t));
+        const d = Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+        if (d < bd) { bd = d; idx = i; }
+      });
+      return idx < 0 ? null : { idx: idx, s: it.shapes[idx] };
+    }
+
+    /** Where two (infinite) lines cross, or null if they run parallel —
+        the same determinant Angular's armsFromLines uses. */
+    function lineCross(s1, s2) {
+      const p1 = s1.a, d1 = [s1.b[0] - p1[0], s1.b[1] - p1[1]];
+      const p2 = s2.a, d2 = [s2.b[0] - p2[0], s2.b[1] - p2[1]];
+      const den = d1[0] * d2[1] - d1[1] * d2[0];
+      if (Math.abs(den) < 0.01 * Math.hypot(d1[0], d1[1]) * Math.hypot(d2[0], d2[1])) return null;
+      const t = ((p2[0] - p1[0]) * d2[1] - (p2[1] - p1[1]) * d2[0]) / den;
+      return [p1[0] + t * d1[0], p1[1] + t * d1[1]];
+    }
+
+    /** Which of s's two ends is nearer the corner v (the one that gets
+        trimmed) and the unit direction out of v toward the other (kept)
+        end, with how far off that reaches — the line is too short for a
+        wider fillet than that. */
+    function armOut(s, v) {
+      const da = Math.hypot(s.a[0] - v[0], s.a[1] - v[1]);
+      const db = Math.hypot(s.b[0] - v[0], s.b[1] - v[1]);
+      const near = da <= db ? 'a' : 'b', far = near === 'a' ? s.b : s.a;
+      const len = Math.hypot(far[0] - v[0], far[1] - v[1]);
+      if (len < 0.01) return null;                 /* a zero-length line */
+      return { near: near, dir: [(far[0] - v[0]) / len, (far[1] - v[1]) / len], reach: len };
+    }
+
+    /** Fillets s1 and s2 of `it` at the given radius (PDF points): trims
+        each to where a tangent arc of that radius would touch it, and adds
+        the arc between. Returns why not, or null for success. */
+    function tryFillet(it, i1, i2, radius) {
+      const s1 = it.shapes[i1], s2 = it.shapes[i2];
+      const v = lineCross(s1, s2);
+      if (!v) return 'Those lines run parallel — they never meet in a corner';
+      const A1 = armOut(s1, v), A2 = armOut(s2, v);
+      if (!A1 || !A2) return 'One of those lines has no length';
+      const dot = Math.max(-1, Math.min(1, A1.dir[0] * A2.dir[0] + A1.dir[1] * A2.dir[1]));
+      const theta = Math.acos(dot);
+      if (theta < 0.03 || theta > Math.PI - 0.03) {
+        return 'Those lines do not make a corner to round';
+      }
+      const tanDist = radius / Math.tan(theta / 2);
+      if (tanDist > A1.reach - 0.5 || tanDist > A2.reach - 0.5) {
+        return 'That radius is too large for these lines — try a smaller one';
+      }
+      const t1 = [v[0] + A1.dir[0] * tanDist, v[1] + A1.dir[1] * tanDist];
+      const t2 = [v[0] + A2.dir[0] * tanDist, v[1] + A2.dir[1] * tanDist];
+      /* the arc is stored as two points and a bulge (see the file's own
+         note); work the bulge back from the known radius and chord, same
+         sagitta maths arcPts itself uses, then sign it so the arc bulges
+         toward the corner it is rounding off rather than away from it */
+      const chord = Math.hypot(t2[0] - t1[0], t2[1] - t1[1]);
+      const sagitta = radius - Math.sqrt(Math.max(0, radius * radius - (chord / 2) * (chord / 2)));
+      const nx = -(t2[1] - t1[1]) / chord, ny = (t2[0] - t1[0]) / chord;
+      const mid = [(t1[0] + t2[0]) / 2, (t1[1] + t2[1]) / 2];
+      const sign = (nx * (v[0] - mid[0]) + ny * (v[1] - mid[1])) >= 0 ? 1 : -1;
+
+      X.snapshot();
+      s1[A1.near] = t1;
+      s2[A2.near] = t2;
+      it.shapes.push({ t: 'arc', a: t1, b: t2, bulge: sign * (sagitta / chord), c: S.color, w: S.width });
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      return null;
+    }
+
+    function filletReset() {
+      if (!fpick) return;
+      const it = fpick.it;
+      fpick = null;
+      X.drawShapes(it);
+      $('modeHint').innerHTML = X.hints.fillet;
+    }
+
+    X.tools.fillet = {
+      colors: true, widths: true,
+      down: function () { /* a click tool: everything happens on release */ },
+      move: function (it, at) {
+        if (!it.vp) return;
+        const p = it.vp.convertToPdfPoint(at[0], at[1]);
+        if (!fpick || fpick.it !== it) {
+          const h = lineShapeAt(it, p);
+          X.drawShapes(it, h ? { t: 'dimguide', c: S.color, lines: [[h.s.a, h.s.b]] } : undefined);
+          return;
+        }
+        const gh = { t: 'dimguide', c: S.color, solid: [[fpick.first.s.a, fpick.first.s.b]], lines: [] };
+        const h = lineShapeAt(it, p);
+        if (h && h.idx !== fpick.first.idx) gh.lines.push([h.s.a, h.s.b]);
+        X.drawShapes(it, gh);
+      },
+      cancel: function () { filletReset(); },
+      up: function (it, at, e) {
+        if (!it.vp || (e && e.button > 0)) return;
+        const p = it.vp.convertToPdfPoint(at[0], at[1]);
+        if (!fpick || fpick.it !== it) {
+          const h = lineShapeAt(it, p);
+          if (!h) { X.toast('Click right on a Line you drew — not another kind of mark'); return; }
+          fpick = { it: it, first: h };
+          $('modeHint').innerHTML = 'Click the <b>second line</b> to fillet against the first.';
+          X.drawShapes(it, { t: 'dimguide', c: S.color, solid: [[h.s.a, h.s.b]] });
+          return;
+        }
+        const h = lineShapeAt(it, p);
+        if (!h) { X.toast('No drawn line there — click right on the second line'); return; }
+        if (h.idx === fpick.first.idx) { X.toast('That is the same line — click a second, different one'); return; }
+        const why = tryFillet(it, fpick.first.idx, h.idx, filletRadius);
+        if (why) { X.toast(why); return; }             /* the first line stays picked; try another second one */
+        fpick = null;
+        $('modeHint').innerHTML = X.hints.fillet;
+        X.toast('Filleted at <b>' + filletRadius + 'pt</b> radius');
+      }
+    };
+    document.addEventListener('keydown', function (e) {
+      if (!fpick || S.tool !== 'fillet' || e.key !== 'Escape') return;
+      e.preventDefault(); e.stopImmediatePropagation();
+      filletReset();
+    }, true);
+
     document.addEventListener('keydown', function (e) {
       if (!pick || !RADIAL[S.tool] || e.key !== 'Escape') return;
       e.preventDefault(); e.stopImmediatePropagation();
@@ -1547,6 +1832,9 @@
       drag = null;
       chain = null;
       pick = null;
+      fpick = null;
+      dimPend = null;
+      dimOff = null;
       calibrating = false;
       $('dimCal').classList.remove('on');
       scale = { unit: 'mm', denom: 1, custom: null };
