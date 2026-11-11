@@ -181,6 +181,30 @@
       armPlacement('insimg', 'Click where the image should go', function (it, c) { placeImage(url, iw, ih, it, c); });
     }
 
+    /* Ctrl+V with a picture on the OS clipboard (copied from outside the
+       app — a screenshot, another document, a browser image) drops it onto
+       the current page as an ordinary image mark, centred, the same as
+       picking one from disk. Typing into a field keeps its own paste; so
+       does clipboard text with no picture alongside it. */
+    document.addEventListener('paste', function (e) {
+      const t = e.target;
+      if (t && t.matches && t.matches('input,textarea,select,[contenteditable="true"]')) return;
+      const cd = e.clipboardData || window.clipboardData;
+      if (!cd) return;
+      let file = null;
+      if (cd.items) {
+        for (let i = 0; i < cd.items.length; i++) {
+          const item = cd.items[i];
+          if (item.kind === 'file' && /^image\//.test(item.type)) { file = item.getAsFile(); break; }
+        }
+      }
+      if (!file && cd.files && cd.files.length && /^image\//.test(cd.files[0].type)) file = cd.files[0];
+      if (!file) return;
+      e.preventDefault();
+      readImageFile(file).then(function (img) { placeImage(img.url, img.w, img.h, currentItem(), null); })
+        .catch(function () { X.toast('Could not paste that image'); });
+    });
+
     /* device picker */
     $('btnInsImage').addEventListener('click', function () { X.togglePop('insImgPop', $('btnInsImage')); });
     X.registerPop('insImgPop', 'btnInsImage');

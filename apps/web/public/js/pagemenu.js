@@ -41,7 +41,12 @@
       edit: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
       dup: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/>',
       front: '<rect x="8" y="8" width="12" height="12" rx="2" fill="currentColor" fill-opacity=".25"/><path d="M4 14V5a1 1 0 0 1 1-1h9"/>',
-      back: '<rect x="4" y="4" width="12" height="12" rx="2" fill="currentColor" fill-opacity=".25"/><path d="M20 10v9a1 1 0 0 1-1 1h-9"/>'
+      back: '<rect x="4" y="4" width="12" height="12" rx="2" fill="currentColor" fill-opacity=".25"/><path d="M20 10v9a1 1 0 0 1-1 1h-9"/>',
+      group: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="13" width="8" height="8" rx="1.5"/>' +
+        '<rect x="3" y="13" width="8" height="8" rx="1.5" fill="currentColor" fill-opacity=".2"/>' +
+        '<rect x="13" y="3" width="8" height="8" rx="1.5" fill="currentColor" fill-opacity=".2"/>',
+      ungroup: '<rect x="3" y="3" width="7" height="7" rx="1.5" stroke-dasharray="2.2 2.2"/>' +
+        '<rect x="14" y="14" width="7" height="7" rx="1.5" stroke-dasharray="2.2 2.2"/>'
     };
 
     const menu = document.createElement('div');
@@ -66,9 +71,14 @@
       if (c.mark) {
         const s = c.it.shapes[S.sel.i];
         const many = c.many > 1;
+        const canGroup = many;
+        const canUngroup = !!(s && s.grp != null);
         return '<div class="hd">' + (many ? c.many + ' marks' : 'Mark') + '</div>' +
           (!many && s && s.t === 'text' ? item('mkedit', 'edit', 'Edit text') : '') +
           item('mkdup', 'dup', 'Duplicate') +
+          (canGroup || canUngroup ? '<hr>' : '') +
+          (canGroup ? item('mkgroup', 'group', 'Group', 'Ctrl+G') : '') +
+          (canUngroup ? item('mkungroup', 'ungroup', 'Ungroup', 'Ctrl+Shift+G') : '') +
           '<hr>' + item('mkfront', 'front', 'Bring to front') +
           item('mkup', 'front', 'Bring forward') +
           item('mkdown', 'back', 'Send backward') +
@@ -219,6 +229,8 @@
         case 'print': X.print(); break;
         case 'mkedit': X.editText(it, S.sel.i); break;
         case 'mkdup': X.duplicateSelected(); break;
+        case 'mkgroup': X.groupSelected(); break;
+        case 'mkungroup': X.ungroupSelected(); break;
         case 'mkfront': X.stackSelected('front'); break;
         case 'mkup': X.stackSelected('up'); break;
         case 'mkdown': X.stackSelected('down'); break;

@@ -5,7 +5,7 @@
    identical line. The dimension readings depend on the drawing scale, which
    belongs to the editor, so the painters take it through getScale(). */
 
-import { degrees, rgb, type PDFPage } from 'pdf-lib';
+import { degrees, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { arrowHead, boxOf, rotPt } from '../geometry';
 import { formatLength, type Scale } from '../measure';
 import type { Mark, Pt } from '../model';
@@ -426,7 +426,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
       });
     }
 
-    const font = ctx.fonts.HelveticaBold;
+    const font = readingFont(ctx);
     if (!font) return;
     const text = dimLabel(s, getScale());
     const size = dimTextPt(s);
@@ -480,7 +480,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
     endPaint(p, G.near, G.u, s);
     if (s.t === 'dimd') endPaint(p, G.far, [-G.u[0], -G.u[1]], s);
 
-    const font = ctx.fonts.HelveticaBold;
+    const font = readingFont(ctx);
     if (!font) return;
     const text = dimLabel(s, getScale()),
       size = dimTextPt(s);
@@ -519,7 +519,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
       });
     });
     angEnds(s, G).forEach((e) => endPaint(p, e.p, e.u, s));
-    const font = ctx.fonts.HelveticaBold;
+    const font = readingFont(ctx);
     if (!font) return;
     const text = dimLabel(s, getScale()),
       size = dimTextPt(s);
@@ -531,5 +531,14 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
   return { ellipse, cloud, arc, dim, dimr: radial, dimd: radial, dima };
 }
 
-const bold: FontNeed = () => 'HelveticaBold';
+/* The reading's font: the same embedded webfont the Text tool offers
+   (fonts.ts' 'g:<id>' file fonts), bold, so it reads crisper than the
+   Standard 14 Helvetica — with 'HelveticaBold' as the fallback save.ts
+   reaches for on its own if the file cannot be embedded. */
+export const DIM_FONT = 'g:inter|1';
+const bold: FontNeed = () => DIM_FONT;
 export const drawFontNeeds: Record<string, FontNeed> = { dim: bold, dimr: bold, dimd: bold, dima: bold };
+/** The embedded reading font, however save.ts resolved DIM_FONT. */
+function readingFont(ctx: { fonts: Record<string, PDFFont> }): PDFFont | undefined {
+  return ctx.fonts[DIM_FONT] || ctx.fonts.HelveticaBold;
+}

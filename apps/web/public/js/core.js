@@ -2751,7 +2751,13 @@
   function beginDrag(it, idx, e, mode, extra) {
     /* a right-click on a mark selects it, for the menu (js/pagemenu.js) */
     if (e.button === 2 && S.tool === 'select' && it.vp && it.shapes[idx] && it.shapes[idx].t !== 'pin') {
-      if (!S.sel || S.sel.it !== it || selList().indexOf(idx) < 0) { S.sel = { it: it, i: idx }; S.multi = null; redrawAll(); }
+      if (!S.sel || S.sel.it !== it || selList().indexOf(idx) < 0) {
+        const s0 = it.shapes[idx];
+        S.sel = { it: it, i: idx };
+        S.multi = null;
+        if (s0 && s0.grp != null) setGroup(it, groupMembers(it, idx));
+        redrawAll();
+      }
       return;
     }
     if (S.tool !== 'select' || !it.vp || e.button > 0) return;
@@ -2768,6 +2774,14 @@
       }, { passive: false, once: true });
     }
     const at = annoPt(it, e), c = rotCenter(s);
+    /* a grouped mark, clicked fresh (not already the whole group selected),
+       pulls in the rest of its group — so grabbing any one of them moves
+       them all, the way a plain multi-selection already does below */
+    if (mode === 'move' && s.grp != null) {
+      const have = S.multi && S.multi.it === it && S.multi.n === it.shapes.length &&
+        S.multi.idx.indexOf(idx) >= 0;
+      if (!have) setGroup(it, groupMembers(it, idx));
+    }
     /* grabbing a member of a group moves the whole group */
     const list = selList();
     const group = mode === 'move' && list.length > 1 && S.sel.it === it && list.indexOf(idx) >= 0
@@ -3686,7 +3700,12 @@
       /* touching is enough, as in Illustrator */
       if (b.x <= bx2 && b.x + b.width >= bx1 && b.y <= by2 && b.y + b.height >= by1) picked.push(i);
     });
-    setGroup(it, picked);
+    /* a group caught in part comes along whole */
+    const grouped = [];
+    picked.forEach(function (i) {
+      groupMembers(it, i).forEach(function (k) { if (grouped.indexOf(k) < 0) grouped.push(k); });
+    });
+    setGroup(it, grouped);
     redrawAll();
     if (S.sel) {
       syncMarkPop();
@@ -3706,6 +3725,16 @@
     setGroup(it, it.shapes.map(function (s, i) { return NOT_SELECTABLE[s.t] ? -1 : i; })
       .filter(function (i) { return i >= 0; }));
     redrawAll();
+    if (S.sel) syncMarkPop();
+  }, true);
+
+  /* Ctrl+G groups the selected marks; Ctrl+Shift+G ungroups (js/pagemenu.js
+     has the same two on its menu) */
+  document.addEventListener('keydown', function (e) {
+    if (S.tool !== 'select' || !(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'g') return;
+    if (e.target.matches && e.target.matches('input,textarea,select,[contenteditable]')) return;
+    e.preventDefault(); e.stopImmediatePropagation();
+    if (e.shiftKey) ungroupSelected(); else groupSelected();
     if (S.sel) syncMarkPop();
   }, true);
   /* the panel floats over the page, so it has to follow it */
@@ -3741,11 +3770,16 @@
     snapshot();
     const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
     const off = 12 / Math.max(0.2, S.scale);                          /* 12 screen pixels, in points */
+    const grpMap = {};        /* a duplicated group becomes its own group, not more members of the old one */
     const made = list.map(function (i) {
       const o = JSON.parse(JSON.stringify(it.shapes[i]));
       const c = JSON.parse(JSON.stringify(o));
       moveShape(c, o, off, -off);
       if (c.id != null) c.id = String(c.id) + '-' + Date.now().toString(36) + i;
+      if (c.grp != null) {
+        if (!grpMap[c.grp]) grpMap[c.grp] = newGroupId();
+        c.grp = grpMap[c.grp];
+      }
       it.shapes.push(c);
       return it.shapes.length - 1;
     });
@@ -3775,6 +3809,47 @@
     return true;
   }
   function frontSelected() { return stackSelected('front'); }
+
+  /* ---- groups ----
+     A persistent group, unlike the plain multi-selection S.multi already is
+     (above): it survives a click elsewhere and back, the way Illustrator's
+     Group does. Each member just carries the same s.grp id; clicking any one
+     of them (beginDrag, below) expands the selection to the rest, so moving
+     one moves them all — the same "a member of a group moves the whole
+     group" machinery multi-selection already has. */
+  let groupSeq = 0;
+  function newGroupId() { return 'g' + Date.now().toString(36) + (groupSeq++); }
+  function groupMembers(it, i) {
+    const s = it.shapes[i];
+    if (!s || s.grp == null) return [i];
+    const out = [];
+    it.shapes.forEach(function (sh, k) { if (sh && sh.grp === s.grp) out.push(k); });
+    return out;
+  }
+  function groupSelected() {
+    if (!S.sel) return false;
+    const it = S.sel.it, list = selList();
+    if (list.length < 2) return false;
+    snapshot();
+    const gid = newGroupId();
+    list.forEach(function (i) { const s = it.shapes[i]; if (s) s.grp = gid; });
+    setGroup(it, list);
+    drawShapes(it); updateMeta();
+    toast(list.length + ' marks grouped');
+    return true;
+  }
+  function ungroupSelected() {
+    if (!S.sel) return false;
+    const it = S.sel.it, s = it.shapes[S.sel.i];
+    if (!s || s.grp == null) return false;
+    const list = groupMembers(it, S.sel.i);
+    snapshot();
+    list.forEach(function (i) { const sh = it.shapes[i]; if (sh) delete sh.grp; });
+    setGroup(it, list);
+    drawShapes(it); updateMeta();
+    toast('Ungrouped');
+    return true;
+  }
 
   /* ---------------- photo pins (site photo locations) ---------------- */
   /* A pin is a shape {t:'pin', a:[x,y], id} so it moves, rotates, undoes and is
@@ -10061,6 +10136,7 @@
     $: $, toast: toast, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
     snapLine: snapLine, snapBox: snapBox, constrainPt: constrainPt,
     selList: selList, setGroup: setGroup,
+    groupSelected: groupSelected, ungroupSelected: ungroupSelected, groupMembers: groupMembers,
     snapshot: snapshot, setUndoState: setUndoState,
     drawShapes: drawShapes, drawThumb: drawThumb, drawVisibleThumbs: drawVisibleThumbs,
     relayout: relayout, syncAll: syncAll, applyLayout: applyLayout,

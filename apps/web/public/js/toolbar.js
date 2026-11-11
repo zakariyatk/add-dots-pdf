@@ -28,7 +28,7 @@
     const DRAW_GROUPS = [
       { ids: ['tDrawPan', 'tDrawSelect'] },
       { ids: ['tRect', 'tEllipse', 'tLine', 'tArrow'] },
-      { ids: ['tArc', 'tCloud'] },
+      { ids: ['tArc', 'tCloud', 'tPoly'] },
       { ids: ['tText'] },
       { ids: ['tDim', 'tDimC', 'tDimR', 'tDimD', 'tDimA'] }
     ];
