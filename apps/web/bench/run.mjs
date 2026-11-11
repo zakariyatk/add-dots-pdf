@@ -300,7 +300,7 @@ async function measure(browser, file) {
 
   /* save */
   const sv0 = await page.evaluate(() => performance.now());
-  await page.click('#btnSave');
+  await page.click('#btnQSave');
   const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 600000 }), page.click('#saveGo')]);
   Object.assign(
     r,
