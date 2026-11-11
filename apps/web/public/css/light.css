@@ -17,8 +17,8 @@ body[data-ui="light"] {
   --text: #1F2328;
   --text-dim: #646A73;
   --marker: #7B5CFF;
-  --btn: #6A4BF0;                 /* filled buttons: white text on it 5.4:1 */
-  --btn-hover: #5A3BE0;
+  --btn: #0265DC;                 /* filled buttons: white text on it 5.4:1 */
+  --btn-hover: #0256BB;
   --marker-ink: #6141EA;          /* the violet as text: 5:1 on every grey here */
   --danger: #D7373F;
   --accent-ink: #FFFFFF;          /* text on a violet fill */
