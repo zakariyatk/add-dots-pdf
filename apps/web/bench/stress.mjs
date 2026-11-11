@@ -150,7 +150,7 @@ for (let r = 1; r <= ROUNDS; r++) {
       id: 'st' + Date.now(),
     }),
   );
-  await page.click('#btnSave');
+  await page.click('#btnQSave');
   const [dl] = await Promise.all([page.waitForEvent('download', { timeout: 120000 }), page.click('#saveGo')]);
   await dl.delete();
   await page.waitForTimeout(1500);
