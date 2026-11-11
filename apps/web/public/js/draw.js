@@ -785,8 +785,13 @@
     /* --- continuous dimensions ---
        Click, click, click: each click closes one dimension and opens the next
        from the same point. After the first, each point is brought onto that
-       first dimension's line, so the chain reads as one run: 30 · 20 · 20. */
-    let chain = null;                              /* {it, last:[x,y], dir:[ux,uy]|null, n} */
+       first dimension's line, so the chain reads as one run: 30 · 20 · 20.
+       The first segment asks, once, how far clear of the run its dimension
+       line sits — same as the plain Dimension tool — and every segment after
+       that reuses that same offset, the way a CAD continued dimension stays
+       on the one line rather than asking again each time. */
+    let chain = null;                              /* {it, last:[x,y], dir:[ux,uy]|null, n, off:number|null} */
+    let chainPend = null;                          /* {it, a, b} — a segment is measured; now choosing its offset */
 
     function chainEnd(p, e) {
       const L = chain.last;
@@ -797,6 +802,7 @@
       return e && e.shiftKey ? X.snapLine(L, p) : [p[0], p[1]];
     }
     function endChain() {
+      chainPend = null;
       if (!chain) return;
       const it = chain.it, n = chain.n;
       chain = null;
@@ -804,50 +810,90 @@
       if (S.tool === 'dimc') $('modeHint').innerHTML = X.hints.dimc;
       if (n) X.toast(n + ' dimension' + (n > 1 ? 's' : '') + ' in the chain');
     }
+    function commitChainSegment(a, b, off) {
+      const it = chain.it;
+      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      X.snapshot();
+      it.shapes.push(Object.assign(ghost('dim', a, b, null), { off: off }));
+      if (!chain.dir) chain.dir = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
+      if (chain.off == null) chain.off = off;
+      chain.last = b; chain.n++;
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      $('modeHint').innerHTML = 'Click the next point. <b>Enter</b> or <b>Esc</b> ends the chain.';
+    }
 
     X.tools.dimc = {
       colors: true, widths: true,
       down: function () { /* a click tool: everything happens on release */ },
       move: function (it, at, e) {
+        if (chainPend && chainPend.it === it) {
+          const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+          X.drawShapes(it, Object.assign({}, ghost('dim', chainPend.a, chainPend.b, null),
+            { off: offAt(chainPend.a, chainPend.b, raw) }));
+          return;
+        }
         if (!chain || chain.it !== it || !it.vp) return;
         const raw = it.vp.convertToPdfPoint(at[0], at[1]);
         const sn = X.snapPt(it, raw, e);
         /* a snapped point is still carried onto the chain's line, the way a
            CAD continued dimension measures to the feature it was snapped to */
         const b = chainEnd(sn || raw, sn ? null : e);
-        X.drawShapes(it, ghost('dim', chain.last, b, null));
+        X.drawShapes(it, Object.assign({}, ghost('dim', chain.last, b, null), { off: chain.off || 0 }));
       },
-      cancel: function () { endChain(); },
+      cancel: function () {
+        if (chainPend) { chainPend = null; if (chain) X.drawShapes(chain.it); return; }
+        endChain();
+      },
       up: function (it, at, e) {
         if (!it.vp || (e && e.button > 0)) return;
+        if (chainPend && chainPend.it === it) {
+          const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+          const off = offAt(chainPend.a, chainPend.b, raw);
+          const a = chainPend.a, b = chainPend.b;
+          chainPend = null;
+          commitChainSegment(a, b, off);
+          return;
+        }
         const raw = it.vp.convertToPdfPoint(at[0], at[1]);
         const sn = X.snapPt(it, raw, e);
         const p = sn || raw;
         if (sn) e = null;                          /* the snap wins over Shift */
         if (!chain || chain.it !== it) {           /* first point, or a jump to another page */
           endChain();
-          chain = { it: it, last: p, dir: null, n: 0 };
+          chain = { it: it, last: p, dir: null, n: 0, off: null };
           $('modeHint').innerHTML = 'Click the next point. <b>Enter</b> or <b>Esc</b> ends the chain.';
           return;
         }
         const L = chain.last, b = chainEnd(p, e);
         const len = Math.hypot(b[0] - L[0], b[1] - L[1]);
         if (len < 3) return;                       /* the second click of a double-click */
-        X.snapshot();
-        it.shapes.push(ghost('dim', L, b, null));
-        if (!chain.dir) chain.dir = [(b[0] - L[0]) / len, (b[1] - L[1]) / len];
-        chain.last = b; chain.n++;
-        X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+        if (chain.off == null) {
+          /* the first segment: how far clear of it does the chain's line sit? */
+          chainPend = { it: it, a: L, b: b };
+          $('modeHint').innerHTML = 'Move to set how far the dimension line sits off the line ' +
+            'you measured, then click (or let go).';
+          X.drawShapes(it, ghost('dim', L, b, null));
+          return;
+        }
+        commitChainSegment(L, b, chain.off);
       }
     };
 
     /* Esc and Enter end the chain but keep the tool, so the next click starts
-       a fresh run; a second Esc puts the tool down as usual. Capture phase,
-       to get there before core's own Esc handling. */
+       a fresh run; a second Esc puts the tool down as usual. While a segment
+       is still choosing its offset, the first Esc only drops that segment
+       and keeps the chain going from its last committed point. Capture
+       phase, to get there before core's own Esc handling. */
     document.addEventListener('keydown', function (e) {
       if (!chain || S.tool !== 'dimc') return;
       if (e.key === 'Escape' || e.key === 'Enter') {
         e.preventDefault(); e.stopImmediatePropagation();
+        if (chainPend) {
+          chainPend = null;
+          X.drawShapes(chain.it);
+          $('modeHint').innerHTML = 'Click the next point. <b>Enter</b> or <b>Esc</b> ends the chain.';
+          return;
+        }
         endChain();
       }
     }, true);
@@ -1845,6 +1891,7 @@
     X.on('reset', function () {
       drag = null;
       chain = null;
+      chainPend = null;
       pick = null;
       fpick = null;
       dimPend = null;
