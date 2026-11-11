@@ -55,9 +55,18 @@
   .btn:hover:not(:disabled){background:var(--chrome-2);border-color:var(--line)}
   .btn:disabled{opacity:.3;cursor:default}
   .btn.on{background:var(--chrome-2);border-color:var(--line);color:var(--marker-ink)}
-  .btn.primary{background:var(--btn,var(--marker));color:#050505;font-weight:650}
+  /* Segoe UI's bold weight reserves more space above a capital letter than
+     below it (its own ascent/descent split, not this button's box), so
+     centering the label by the book still reads as sitting a touch high;
+     a couple of points more padding above than below nudges it to match
+     what the eye sees as centre, without moving the pill's own box */
+  .btn.primary{background:var(--btn,var(--marker));color:#050505;font-weight:650;padding-top:2px}
   .btn.primary:hover:not(:disabled){background:#DDDDDD;border-color:transparent}
   .btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+  /* same optical correction as .btn.primary's, applied to the label instead
+     of the button's own padding since a .lbl sits beside an icon that does
+     not need it */
+  .btn .lbl{display:inline-block;transform:translateY(1px)}
   .sep{width:1px;height:20px;background:var(--line);margin:0 3px;flex:none}
   .meta{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--text-dim);
         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28vw;
@@ -74,7 +83,9 @@
   /* ---------- ribbon: tab strip in the bar, labelled buttons below ---------- */
   .tabs{display:flex;align-items:center;gap:1px;flex:none}
   .tabs .tab{height:30px;padding:0 15px;background:none;border:none;border-radius:0;cursor:pointer;
-             position:relative;white-space:nowrap;font-size:13.5px;color:var(--text-dim)}
+             position:relative;white-space:nowrap;font-size:13.5px;color:var(--text-dim);
+             /* the same optical correction as .btn.primary below, for the same reason */
+             padding-top:2px}
   .tabs .tab:hover{color:var(--text)}
   .tabs .tab.on{color:var(--marker-ink);font-weight:650}
   .tabs .tab.on::after{content:"";position:absolute;left:12px;right:12px;bottom:-9px;height:2px;
