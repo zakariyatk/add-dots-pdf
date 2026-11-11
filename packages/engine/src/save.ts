@@ -45,7 +45,15 @@ import {
   textRect,
   type MeasureText,
 } from './geometry';
-import { isText, type AnyMark, type FontFamily, type Mark, type PageItem, type Source, type TextMark } from './model';
+import {
+  isText,
+  type AnyMark,
+  type FontFamily,
+  type Mark,
+  type PageItem,
+  type Source,
+  type TextMark,
+} from './model';
 import { dashOf, hexToRgb01, shCap, shJoin, shOp } from './style';
 import { drawLine, embedFallbacks, needsUnicode, textIn, textWidth, type UnicodeFontSource } from './text';
 import { readXrefTail, reserveNumbers, snapshot, writeUpdate } from './append';
