@@ -289,8 +289,11 @@ try {
        built, tools and all (46,000 elements for 2,000 pages) */
     const built = () => page.evaluate(() => window.ADDPDF.S.items.filter((i) => i.thumbTools).length);
     const hidden = await built();
-    /* the search tab covers the rail; back to its pages */
-    await page.click('#tabPages');
+    /* the search tab covers the rail; back to its pages. On wide layouts
+       #tabPages itself is hidden behind the icon-only side rail (which just
+       calls .click() on it), so click it the same way rather than assume
+       it's the one currently visible. */
+    await page.evaluate(() => document.getElementById('tabPages').click());
     await page.waitForTimeout(1000);
     const shown = await built();
     check('a second file builds only the thumbnails near view', hidden <= 60 && shown > 0 && shown <= 60, {
