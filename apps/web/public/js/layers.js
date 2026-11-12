@@ -59,6 +59,10 @@
     const PLUS = icon('<path d="M12 4v16M4 12h16"/>');
     const MERGE = icon('<path d="M7 3v8a4 4 0 0 0 4 4h6"/><path d="M17 3v8a4 4 0 0 1-4 4h-1"/>' +
       '<polyline points="14 12 17 15 20 12"/>');
+    /* a selection dropping into a layer: the same "add to layer" glyph
+       Photoshop's own panel uses */
+    const ADDSEL = icon('<path d="M12 3v9"/><polyline points="8.2 8.2 12 12 15.8 8.2"/>' +
+      '<path d="M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/>');
 
     /* ---------------- layers ----------------
        A layer is just a name shapes can carry (s.layer, a layer's own id):
@@ -111,11 +115,34 @@
         '<button type="button" id="layAdd" title="New layer" aria-label="New layer">' + PLUS + '</button>' +
         '<button type="button" id="layMerge" title="Merge this layer into another" aria-label="Merge into…">' + MERGE + '</button>' +
       '</div>' +
+      '<div class="laygroupbar" id="layAddSelBar" style="display:flex;align-items:center;gap:6px;padding:0 8px 6px;">' +
+        '<button type="button" class="layaddsel" id="layAddSel" disabled ' +
+          'title="Add the marks selected on the page to the layer picked above" ' +
+          'aria-label="Add selection to this layer">' + ADDSEL + '<span>Add selection to layer</span></button>' +
+      '</div>' +
       '<label class="layfilter" style="display:flex;align-items:center;gap:6px;padding:0 8px 6px;font-size:12px;">' +
         '<input type="checkbox" id="layFilter"><span>This layer only</span></label>' +
       '<div id="layList"></div>';
     $('railPages').parentNode.appendChild(panel);
 
+    /* the marks selected on the page right now, wherever that selection was
+       made (the canvas, a marquee, Ctrl+click) — not just a row clicked
+       here, which is the point: pick several things up on the page, then
+       drop them in a layer in one click, the way Photoshop's panel does. */
+    function pageSelection() {
+      if (!S.sel || !S.sel.it) return null;
+      const it = S.sel.it, list = X.selList().filter(function (i) { return it.shapes[i]; });
+      return list.length ? { it: it, list: list } : null;
+    }
+    function syncAddSelBtn() {
+      const sel = pageSelection();
+      const btn = $('layAddSel');
+      btn.disabled = !sel;
+      btn.title = sel
+        ? 'Add ' + (sel.list.length > 1 ? sel.list.length + ' selected marks' : 'the selected mark') +
+          ' to the layer picked above'
+        : 'Select one or more marks on the page first';
+    }
     function renderLayerBar() {
       ensureLayers();
       $('layPick').innerHTML = S.layers.map(function (l) {
@@ -127,6 +154,8 @@
       $('layEye').title = L.hidden ? 'Show this layer' : 'Hide this layer';
       $('layMerge').disabled = S.layers.length < 2;
       $('layFilter').checked = onlyThisLayer;
+      $('layAdd').title = pageSelection() ? 'New layer from the selected marks' : 'New layer';
+      syncAddSelBtn();
     }
 
     $('layPick').addEventListener('change', function () {
@@ -158,8 +187,30 @@
       const L = { id: 'L' + Date.now().toString(36) + layerSeq, name: 'Layer ' + layerSeq, hidden: false };
       S.layers.push(L);
       focusLayer = L.id;
+      /* marks already picked up on the page land straight in the new layer,
+         the way "New layer from selection" works elsewhere */
+      const sel = pageSelection();
+      if (sel) {
+        X.snapshot();
+        sel.list.forEach(function (i) { const s = sel.it.shapes[i]; if (s) s.layer = L.id; });
+        X.updateMeta();
+      }
       renderLayerBar(); render();
-      X.toast('<b>' + X.esc(L.name) + '</b> added — move marks into it from the list below');
+      X.toast(sel
+        ? '<b>' + X.esc(L.name) + '</b> added — ' + sel.list.length +
+          (sel.list.length > 1 ? ' marks moved into it' : ' mark moved into it')
+        : '<b>' + X.esc(L.name) + '</b> added — move marks into it from the list below');
+    });
+    $('layAddSel').addEventListener('click', function () {
+      const sel = pageSelection();
+      if (!sel) { X.toast('Select one or more marks on the page first'); return; }
+      const L = layerOf(focusLayer);
+      X.snapshot();
+      sel.list.forEach(function (i) { const s = sel.it.shapes[i]; if (s) s.layer = L.id; });
+      X.updateMeta();
+      renderLayerBar(); render();
+      X.toast((sel.list.length > 1 ? sel.list.length + ' marks' : '1 mark') +
+        ' added to <b>' + X.esc(L.name) + '</b>');
     });
     $('layMerge').addEventListener('click', function () {
       const source = layerOf(focusLayer);
@@ -223,14 +274,16 @@
     }
     function sigOf(it) {
       if (!it) return '';
+      const multi = S.multi && S.multi.it === it ? S.multi.idx.join(',') : '';
       return S.current + ':' + it.shapes.map(function (s) { return (s.hide ? '1' : '0'); }).join('') +
-        ':' + (S.sel && S.sel.it === it ? S.sel.i : -1);
+        ':' + (S.sel && S.sel.it === it ? S.sel.i : -1) + ':' + multi;
     }
 
     let lastSig = null;
     function render() {
       const it = S.items[S.current - 1];
       lastSig = sigOf(it);
+      syncAddSelBtn();
       const host = $('layList');
       if (!it) { host.innerHTML = ''; $('layCount').textContent = ''; return; }
       const list = rows(it);
