@@ -180,6 +180,13 @@ body.acro .qrail .btn.on svg { stroke: currentColor }
 body.acro .main > #ribbon { order: 0 }
 body.acro .main > .stage { order: 2 }
 body.acro .main > #rail { order: 3; border-right: none; border-left: 1px solid var(--line) }
+/* #rail's own tab row (Pages, Find, Properties, Notes, Bookmarks, Layers…) is
+   what the icon rail below is actually clicking (src.click(), js/toolpanel.js)
+   — here it would only be a second, redundant switcher stacked above whatever
+   panel is open. Hiding it costs nothing: the buttons, their handlers and
+   their .on state are untouched, and the open panel still closes by pressing
+   its own lit icon again in .srail. */
+body.acro .rail-tabs { display: none }
 
 /* ---------- the rail down the right: side panels, then page and zoom ---------- */
 .srail, .sbrot { display: none }

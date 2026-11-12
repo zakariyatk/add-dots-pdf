@@ -1516,6 +1516,13 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
   color: var(--text); font-size: 12px; padding: 0 4px;
 }
 .layfilter { color: var(--text-dim) }
+/* the one button in the bar with a label, not just an icon — picking the
+   page's own selection up and dropping it into the layer above */
+.laygroupbar button.layaddsel {
+  width: auto; height: 26px; padding: 0 9px; gap: 6px; border: 1px solid var(--line);
+  font-size: 11.5px; white-space: nowrap;
+}
+.laygroupbar button.layaddsel svg { width: 14px; height: 14px; flex: none }
 .rowlayer {
   flex: none; height: 20px; margin-right: 2px; border: 1px solid var(--line); border-radius: 4px;
   background: transparent; color: var(--text-dim); font-size: 11px; padding: 0 2px;
