@@ -153,18 +153,32 @@ jobs:
           "INSTALLED_DIR=$dir" >> $env:GITHUB_ENV
       # Windows' own text reader (src-tauri/src/ocr.rs) needs the English OCR
       # component, which a server image may not carry; a reader's Windows
-      # has it with its display language. Arabic too, for English and Arabic
-      # read together
-      - name: English and Arabic for Windows' text reader
+      # has it with its display language. The runner image already has this
+      # one, so it costs seconds.
+      - name: English for Windows' text reader
         shell: pwsh
         run: |
-          foreach ($l in 'en-US', 'ar-SA') {
-            $n = "Language.OCR~~~$l~0.0.1.0"
-            $c = Get-WindowsCapability -Online -Name $n
-            "OCR ${l}: $($c.State)"
-            if ($c.State -ne 'Installed') { Add-WindowsCapability -Online -Name $n | Out-Null }
-            (Get-WindowsCapability -Online -Name $n).State
-          }
+          $n = 'Language.OCR~~~en-US~0.0.1.0'
+          $c = Get-WindowsCapability -Online -Name $n
+          "OCR en-US: $($c.State)"
+          if ($c.State -ne 'Installed') { Add-WindowsCapability -Online -Name $n | Out-Null }
+          (Get-WindowsCapability -Online -Name $n).State
+      # Arabic, for English and Arabic read together, is not on the image, so
+      # every run that wants it downloads it from Windows Update — about
+      # twelve minutes, more than half this job. On a push to main that is
+      # worth paying, the same bargain this workflow already strikes by only
+      # building each app when its own folder changed; on a pull request it is
+      # not, and apps/desktop/e2e.mjs passes over the Arabic check when the
+      # language is not there.
+      - name: Arabic for Windows' text reader
+        if: github.event_name != 'pull_request'
+        shell: pwsh
+        run: |
+          $n = 'Language.OCR~~~ar-SA~0.0.1.0'
+          $c = Get-WindowsCapability -Online -Name $n
+          "OCR ar-SA: $($c.State)"
+          if ($c.State -ne 'Installed') { Add-WindowsCapability -Online -Name $n | Out-Null }
+          (Get-WindowsCapability -Online -Name $n).State
       # the installed app driven end to end: Playwright over WebView2's
       # DevTools port
       - run: node e2e.mjs
