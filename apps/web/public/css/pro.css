@@ -1463,20 +1463,24 @@ body.cdpicking, body.cdpicking * { cursor: crosshair !important }
 .laybar b { font-size: 12.5px; font-weight: 600 }
 .laybar .laycount { font-size: 11.5px; color: var(--text-dim) }
 .laybar .grow { flex: 1 }
-.layempty { padding: 18px 14px; font-size: 12.5px; color: var(--text-dim); line-height: 1.6 }
 .layrow {
-  position: relative; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 6px;
+  position: relative; display: flex; align-items: center; gap: 7px; padding: 6px 8px 6px 0;
   border-bottom: 1px solid var(--line); cursor: pointer;
 }
 .layrow:hover { background: rgba(255,255,255,.045) }
 .layrow.sel { background: var(--chrome-2) }
-.layrow.hid { opacity: .5 }
-.layeye {
+.layrow.hid { opacity: .6 }
+/* the column of dots down the left edge: filled shows, hollow hides — one
+   per layer and one per mark, so visibility reads as a single column */
+.laydot {
   flex: none; display: grid; place-items: center; width: 26px; height: 26px; padding: 0;
-  border: none; background: transparent; color: var(--text-dim); cursor: pointer; border-radius: 5px;
+  border: none; background: transparent; cursor: pointer; border-radius: 5px;
 }
-.layeye:hover { color: var(--text); background: rgba(255,255,255,.08) }
-.layeye svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8 }
+.laydot:hover { background: rgba(255,255,255,.08) }
+.laydot .dot {
+  width: 9px; height: 9px; border-radius: 50%; background: var(--text); display: block;
+}
+.laydot .dot.off { background: transparent; border: 1px solid var(--text-dim) }
 .layswatch {
   flex: none; width: 13px; height: 13px; border-radius: 3px; border: 1px solid rgba(0,0,0,.3);
 }
@@ -1502,30 +1506,56 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
 .laybtns button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8 }
 .laybtns button.laydel:hover { color: var(--danger) }
 
-/* --- the layer bar above the list: a document-wide set of named layers
-   (js/layers.js), on top of the per-mark rows above --- */
-.laygroupbar button {
+/* --- the tools above the tree, acting on the active layer (js/layers.js) --- */
+.laytools {
+  display: flex; align-items: center; gap: 4px; padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.laytools .grow { flex: 1 }
+.laytools button {
   display: grid; place-items: center; width: 26px; height: 26px; padding: 0; flex: none;
   border: none; background: transparent; color: var(--text-dim); cursor: pointer; border-radius: 5px;
 }
-.laygroupbar button:hover { color: var(--text); background: rgba(255,255,255,.08) }
-.laygroupbar button:disabled { opacity: .3; cursor: default; background: none !important; color: var(--text-dim) !important }
-.laygroupbar button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8 }
-.laygroupbar select {
-  height: 26px; border: 1px solid var(--line); border-radius: 5px; background: transparent;
-  color: var(--text); font-size: 12px; padding: 0 4px;
+.laytools button:hover { color: var(--text); background: rgba(255,255,255,.08) }
+.laytools button:disabled { opacity: .3; cursor: default; background: none !important; color: var(--text-dim) !important }
+.laytools button svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8 }
+.laytools button.laydanger:hover { color: var(--danger) }
+/* the one button with a label, not just an icon */
+.laytools button.laynew {
+  display: flex; align-items: center; width: auto; padding: 0 9px; gap: 6px;
+  border: 1px solid var(--line); font-size: 11.5px; white-space: nowrap;
 }
-.layfilter { color: var(--text-dim) }
-/* the one button in the bar with a label, not just an icon — picking the
-   page's own selection up and dropping it into the layer above */
-.laygroupbar button.layaddsel {
-  width: auto; height: 26px; padding: 0 9px; gap: 6px; border: 1px solid var(--line);
-  font-size: 11.5px; white-space: nowrap;
+.laytools button.laynew svg { width: 14px; height: 14px; flex: none }
+
+/* --- a layer's own row in the tree, and the branch under it --- */
+.layrow.layhead { padding-right: 6px }
+.layrow.layhead.active { background: var(--chrome-2) }
+.layrow.layhead .laylabel { font-weight: 600 }
+.laytwist {
+  flex: none; display: grid; place-items: center; width: 18px; height: 22px; padding: 0;
+  border: none; background: transparent; color: var(--text-dim); cursor: pointer;
 }
-.laygroupbar button.layaddsel svg { width: 14px; height: 14px; flex: none }
-.rowlayer {
-  flex: none; height: 20px; margin-right: 2px; border: 1px solid var(--line); border-radius: 4px;
-  background: transparent; color: var(--text-dim); font-size: 11px; padding: 0 2px;
+.laytwist svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2 }
+.laystrip { flex: none; width: 4px; height: 17px; border-radius: 2px }
+.laynum { flex: none; font-size: 11px; color: var(--text-dim) }
+.laypen { flex: none; display: grid; place-items: center; width: 16px; color: var(--marker) }
+.laypen svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.8 }
+/* a mark sits under its layer: indented past the layer's own name, with the
+   hairline of the branch it belongs to running down beside it */
+.layrow.mrow .layswatch { margin-left: 30px }
+.layrow.mrow::before {
+  content: ''; position: absolute; left: 33px; top: 0; bottom: 0; width: 1px;
+  background: var(--line); pointer-events: none;
+}
+.layrow.laynone {
+  padding: 7px 8px 7px 56px; font-size: 11.5px; color: var(--text-dim); cursor: default;
+}
+/* dragging a mark onto another layer's row, or in front of another mark */
+.layrow.dragging { opacity: .4 }
+.layrow.over { background: color-mix(in srgb, var(--marker) 18%, transparent) }
+.layrow.over::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  box-shadow: inset 0 0 0 1px var(--marker); border-radius: 3px;
 }
 
 /* ---------- colour and width: one dropdown each ---------- */

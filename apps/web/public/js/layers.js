@@ -1,18 +1,28 @@
 /* Add Dots PDF — Layers
    ----------------------
-   A panel listing every mark on the current page, topmost first — the way
-   Illustrator's Layers panel lists a flat (ungrouped) artboard. Each row can
-   be shown or hidden, duplicated, deleted, or moved up or down the stack; a
-   click selects the mark on the page, the same as clicking it there.
+   A panel listing every mark on the current page the way Illustrator's Layers
+   panel does: a tree of named layers, each one opening to show its own marks,
+   topmost first. Every mark can be shown or hidden, duplicated, deleted, or
+   moved up or down the stack; a click selects it on the page, the same as
+   clicking it there.
 
-   On top of that, a document-wide set of named layers (the bar above the
-   list): every mark belongs to one (S.layers, s.layer — a mark with none is
-   the first layer's), picked per row from a small dropdown there. The bar
-   itself picks which layer is "focused" — hide it, rename it, merge it into
-   another, or filter the list down to just its marks. A layer's hide is the
-   same per-mark `hide` flag the eye button above sets, applied to every one
-   of its members at once; there is nothing else to serialize, so Save needs
-   no changes for either feature.
+   Two things drive the tree:
+
+   • the active layer — the row with the pencil. Click a layer to make it
+     active, and every mark made from then on (drawn, stamped, signed,
+     inserted…) lands in it by itself: claimNew() below stamps any shape that
+     arrives without a layer, so no tool that creates a mark has to know
+     layers exist.
+
+   • drag and drop — pick a mark's row up and drop it on another layer's row
+     to move it there, or on another mark's row to drop it in front of that
+     mark. That is the only way to move a mark between layers; there is no
+     "add selection" button and no per-row dropdown.
+
+   Visibility is the column of dots down the left edge: filled is shown,
+   hollow is hidden. A layer's dot is the same per-mark `hide` flag applied to
+   every one of its members at once; there is nothing else to serialize, so
+   Save needs no changes for either feature.
 
    Nothing new is stored to make the per-mark list work: a mark is already an
    ordinary entry in it.shapes (core.js), in the order it draws — last is
@@ -47,9 +57,6 @@
     function swatch(s) { return s.fill || s.c || '#8A8F98'; }
 
     function icon(p) { return '<svg viewBox="0 0 24 24">' + p + '</svg>'; }
-    const EYE_ON = icon('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>');
-    const EYE_OFF = icon('<path d="M3 3l18 18"/><path d="M10.6 5.2A10.4 10.4 0 0 1 12 5c6.4 0 10 7 10 7a15.5 15.5 0 0 1-3.1 4"/>' +
-      '<path d="M6.6 6.6C4 8.3 2 12 2 12s3.6 7 10 7a9.5 9.5 0 0 0 3.3-.6"/><path d="M9.5 9.8a3 3 0 0 0 4.2 4.2"/>');
     const UP = icon('<polyline points="18 15 12 9 6 15"/>');
     const DOWN = icon('<polyline points="6 9 12 15 18 9"/>');
     const DUP = icon('<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 15V6a2 2 0 0 1 2-2h9"/>');
@@ -59,25 +66,25 @@
     const PLUS = icon('<path d="M12 4v16M4 12h16"/>');
     const MERGE = icon('<path d="M7 3v8a4 4 0 0 0 4 4h6"/><path d="M17 3v8a4 4 0 0 1-4 4h-1"/>' +
       '<polyline points="14 12 17 15 20 12"/>');
-    /* a selection dropping into a layer: the same "add to layer" glyph
-       Photoshop's own panel uses */
-    const ADDSEL = icon('<path d="M12 3v9"/><polyline points="8.2 8.2 12 12 15.8 8.2"/>' +
-      '<path d="M4 13v5a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-5"/>');
+    const TWIST_OPEN = icon('<polyline points="6 9 12 15 18 9"/>');
+    const TWIST_SHUT = icon('<polyline points="9 6 15 12 9 18"/>');
 
     /* ---------------- layers ----------------
        A layer is just a name shapes can carry (s.layer, a layer's own id):
        organisational, not a PDF concept — a layer's "hide" works the same
        way a mark's own does (s.hide), which core.js's renderer and the
        engine's save already skip, so hiding a layer is only ever setting
-       that flag on its members. A shape with no s.layer belongs to the
-       first layer, so every shape has one without every tool that creates
-       a mark (annotate.js, insert.js, …) needing to know layers exist. */
-    let focusLayer = null;              /* the layer id picked in the bar below */
-    let onlyThisLayer = false;          /* the list filtered to just it */
+       that flag on its members. */
+    let focusLayer = null;              /* the active layer: where new marks land */
     let layerSeq = 1;
+    const shut = {};                    /* layer id -> its branch is collapsed */
+
+    /* the stripe at the left of a layer's row, so a glance tells them apart */
+    const STRIPES = ['#7B5CFF', '#5DCAA5', '#E8B14C', '#E27C68', '#7FB3FF', '#D4537E', '#9FE1CB'];
 
     function ensureLayers() {
       if (!S.layers || !S.layers.length) { S.layers = [{ id: 'L0', name: 'Layer 1', hidden: false }]; layerSeq = 1; }
+      S.layers.forEach(function (l, i) { if (!l.color) l.color = STRIPES[i % STRIPES.length]; });
       if (!focusLayer || !S.layers.some(function (l) { return l.id === focusLayer; })) focusLayer = S.layers[0].id;
       return S.layers;
     }
@@ -94,6 +101,29 @@
       S.items.forEach(function (it) { X.drawShapes(it); X.drawThumb(it); });
     }
 
+    /* ---------------- new marks land in the active layer ----------------
+       Every tool that makes a mark just pushes it onto it.shapes (annotate.js,
+       draw.js, insert.js, forms.js…) and knows nothing about layers, so rather
+       than touch all of them this claims whatever has turned up since the last
+       look. A mark the user cannot see in this panel (a watermark, a header, a
+       redaction — NOT_SELECTABLE) is left alone: it belongs to the first layer
+       by default, the way everything did before layers existed. */
+    function claimNew() {
+      if (!S.items || !S.items.length) return false;
+      ensureLayers();
+      const L = layerOf(focusLayer);
+      let got = false;
+      S.items.forEach(function (it) {
+        it.shapes.forEach(function (s) {
+          if (s.layer != null || NOT_SELECTABLE[s.t]) return;
+          s.layer = L.id;
+          if (L.hidden) s.hide = true;
+          got = true;
+        });
+      });
+      return got;
+    }
+
     /* ---------------- the tab and its panel ----------------
        Like Bookmarks (js/books.js): reached from the side rail of icons
        (js/toolpanel.js) on a wide screen rather than this row of tabs,
@@ -108,109 +138,55 @@
     panel.className = 'rail-body'; panel.id = 'railLayers'; panel.hidden = true;
     panel.innerHTML =
       '<div class="laybar"><b>Layers</b><span class="laycount" id="layCount"></span><span class="grow"></span></div>' +
-      '<div class="laygroupbar" id="layGroupBar" style="display:flex;align-items:center;gap:4px;padding:4px 8px;">' +
-        '<select id="layPick" aria-label="Layer" style="flex:1;min-width:0;"></select>' +
-        '<button type="button" id="layEye" title="Show or hide this layer" aria-label="Show or hide this layer">' + EYE_ON + '</button>' +
-        '<button type="button" id="layRename" title="Rename this layer" aria-label="Rename this layer">' + PENCIL + '</button>' +
-        '<button type="button" id="layAdd" title="New layer" aria-label="New layer">' + PLUS + '</button>' +
-        '<button type="button" id="layMerge" title="Merge this layer into another" aria-label="Merge into…">' + MERGE + '</button>' +
+      '<div class="laytools">' +
+        '<button type="button" class="laynew" id="layAdd" title="New layer" aria-label="New layer">' +
+          PLUS + '<span>New layer</span></button>' +
+        '<span class="grow"></span>' +
+        '<button type="button" id="layRename" title="Rename the active layer" aria-label="Rename layer">' + PENCIL + '</button>' +
+        '<button type="button" id="layMerge" title="Merge the active layer into another" aria-label="Merge layer">' + MERGE + '</button>' +
+        '<button type="button" class="laydanger" id="layDel" title="Delete the active layer" aria-label="Delete layer">' + DEL + '</button>' +
       '</div>' +
-      '<div class="laygroupbar" id="layAddSelBar" style="display:flex;align-items:center;gap:6px;padding:0 8px 6px;">' +
-        '<button type="button" class="layaddsel" id="layAddSel" disabled ' +
-          'title="Add the marks selected on the page to the layer picked above" ' +
-          'aria-label="Add selection to this layer">' + ADDSEL + '<span>Add selection to layer</span></button>' +
-      '</div>' +
-      '<label class="layfilter" style="display:flex;align-items:center;gap:6px;padding:0 8px 6px;font-size:12px;">' +
-        '<input type="checkbox" id="layFilter"><span>This layer only</span></label>' +
       '<div id="layList"></div>';
     $('railPages').parentNode.appendChild(panel);
 
     /* the marks selected on the page right now, wherever that selection was
-       made (the canvas, a marquee, Ctrl+click) — not just a row clicked
-       here, which is the point: pick several things up on the page, then
-       drop them in a layer in one click, the way Photoshop's panel does. */
+       made (the canvas, a marquee, Ctrl+click) — a new layer takes them with
+       it, the way "New layer from selection" works elsewhere */
     function pageSelection() {
       if (!S.sel || !S.sel.it) return null;
       const it = S.sel.it, list = X.selList().filter(function (i) { return it.shapes[i]; });
       return list.length ? { it: it, list: list } : null;
     }
-    function syncAddSelBtn() {
-      const sel = pageSelection();
-      const btn = $('layAddSel');
-      btn.disabled = !sel;
-      btn.title = sel
-        ? 'Add ' + (sel.list.length > 1 ? sel.list.length + ' selected marks' : 'the selected mark') +
-          ' to the layer picked above'
-        : 'Select one or more marks on the page first';
-    }
-    function renderLayerBar() {
-      ensureLayers();
-      $('layPick').innerHTML = S.layers.map(function (l) {
-        return '<option value="' + l.id + '"' + (l.id === focusLayer ? ' selected' : '') + '>' +
-          X.esc(l.name) + (l.hidden ? ' (hidden)' : '') + '</option>';
-      }).join('');
-      const L = layerOf(focusLayer);
-      $('layEye').innerHTML = L.hidden ? EYE_OFF : EYE_ON;
-      $('layEye').title = L.hidden ? 'Show this layer' : 'Hide this layer';
-      $('layMerge').disabled = S.layers.length < 2;
-      $('layFilter').checked = onlyThisLayer;
-      $('layAdd').title = pageSelection() ? 'New layer from the selected marks' : 'New layer';
-      syncAddSelBtn();
-    }
 
-    $('layPick').addEventListener('change', function () {
-      focusLayer = this.value;
-      renderLayerBar();
-      render();
-    });
-    $('layEye').addEventListener('click', function () {
-      const L = layerOf(focusLayer);
-      X.snapshot();
-      L.hidden = !L.hidden;
-      S.items.forEach(function (it) {
-        it.shapes.forEach(function (s) { if (layerIdOf(s) === L.id) s.hide = L.hidden; });
-      });
-      if (L.hidden) { S.sel = null; S.multi = null; }
-      redrawEverywhere(); X.updateMeta();
-      renderLayerBar(); render();
-    });
-    $('layRename').addEventListener('click', function () {
-      const L = layerOf(focusLayer);
-      const name = window.prompt('Rename this layer', L.name);
-      if (!name || !name.trim()) return;
-      L.name = name.trim().slice(0, 60);
-      renderLayerBar(); render();
-    });
     $('layAdd').addEventListener('click', function () {
       ensureLayers();
       layerSeq++;
-      const L = { id: 'L' + Date.now().toString(36) + layerSeq, name: 'Layer ' + layerSeq, hidden: false };
+      const L = {
+        id: 'L' + Date.now().toString(36) + layerSeq,
+        name: 'Layer ' + (S.layers.length + 1),
+        hidden: false,
+        color: STRIPES[S.layers.length % STRIPES.length]
+      };
       S.layers.push(L);
       focusLayer = L.id;
-      /* marks already picked up on the page land straight in the new layer,
-         the way "New layer from selection" works elsewhere */
       const sel = pageSelection();
       if (sel) {
         X.snapshot();
         sel.list.forEach(function (i) { const s = sel.it.shapes[i]; if (s) s.layer = L.id; });
         X.updateMeta();
       }
-      renderLayerBar(); render();
+      render();
       X.toast(sel
         ? '<b>' + X.esc(L.name) + '</b> added — ' + sel.list.length +
           (sel.list.length > 1 ? ' marks moved into it' : ' mark moved into it')
-        : '<b>' + X.esc(L.name) + '</b> added — move marks into it from the list below');
+        : '<b>' + X.esc(L.name) + '</b> added — everything you draw now lands in it');
     });
-    $('layAddSel').addEventListener('click', function () {
-      const sel = pageSelection();
-      if (!sel) { X.toast('Select one or more marks on the page first'); return; }
+    $('layRename').addEventListener('click', function () {
       const L = layerOf(focusLayer);
-      X.snapshot();
-      sel.list.forEach(function (i) { const s = sel.it.shapes[i]; if (s) s.layer = L.id; });
-      X.updateMeta();
-      renderLayerBar(); render();
-      X.toast((sel.list.length > 1 ? sel.list.length + ' marks' : '1 mark') +
-        ' added to <b>' + X.esc(L.name) + '</b>');
+      const name = window.prompt('Rename this layer', L.name);
+      if (!name || !name.trim()) return;
+      L.name = name.trim().slice(0, 60);
+      render();
     });
     $('layMerge').addEventListener('click', function () {
       const source = layerOf(focusLayer);
@@ -225,17 +201,38 @@
       if (!target) { X.toast('Not one of the layers listed'); return; }
       X.snapshot();
       S.items.forEach(function (it) {
-        it.shapes.forEach(function (s) { if (layerIdOf(s) === source.id) s.layer = target.id; });
+        it.shapes.forEach(function (s) {
+          if (layerIdOf(s) === source.id) { s.layer = target.id; s.hide = !!target.hidden; }
+        });
       });
       S.layers = S.layers.filter(function (l) { return l.id !== source.id; });
       focusLayer = target.id;
       redrawEverywhere(); X.updateMeta();
-      renderLayerBar(); render();
+      render();
       X.toast('Merged into <b>' + X.esc(target.name) + '</b>');
     });
-    $('layFilter').addEventListener('change', function () {
-      onlyThisLayer = this.checked;
+    /* Illustrator's own rule: deleting a layer deletes what is on it, so the
+       marks go with it — after saying how many, and undoably */
+    $('layDel').addEventListener('click', function () {
+      ensureLayers();
+      if (S.layers.length < 2) { X.toast('The last layer cannot be deleted'); return; }
+      const L = layerOf(focusLayer);
+      let n = 0;
+      S.items.forEach(function (it) {
+        it.shapes.forEach(function (s) { if (layerIdOf(s) === L.id) n++; });
+      });
+      if (n && !window.confirm('Delete "' + L.name + '" and the ' + n +
+        (n === 1 ? ' mark on it?' : ' marks on it?'))) return;
+      X.snapshot();
+      S.items.forEach(function (it) {
+        it.shapes = it.shapes.filter(function (s) { return layerIdOf(s) !== L.id; });
+      });
+      S.layers = S.layers.filter(function (l) { return l.id !== L.id; });
+      S.sel = null; S.multi = null;
+      focusLayer = S.layers[0].id;
+      redrawEverywhere(); X.updateMeta(); X.syncMarkPop();
       render();
+      X.toast('<b>' + X.esc(L.name) + '</b> deleted');
     });
 
     function bodies() { return Array.prototype.slice.call(document.querySelectorAll('#rail > .rail-body')); }
@@ -248,7 +245,6 @@
       X.setRail(true);
       bodies().forEach(function (b) { b.hidden = b !== panel; });
       document.querySelectorAll('.rail-tabs .btn').forEach(function (t) { t.classList.toggle('on', t === tab); });
-      renderLayerBar();
       render();
     }
     tab.addEventListener('click', showPanel);
@@ -258,83 +254,141 @@
       t.addEventListener('click', function () { panel.hidden = true; tab.classList.remove('on'); });
     });
 
-    /* ---------------- the list ---------------- */
+    /* ---------------- the tree ---------------- */
 
-    /* every selectable mark on the page, front of the stack first — just
-       the focused layer's, while "This layer only" is checked */
-    function rows(it) {
-      const out = [];
+    /* every selectable mark on the page, gathered under its layer, front of
+       the stack first — the order the panel reads in */
+    function marksByLayer(it) {
+      const map = {};
+      ensureLayers().forEach(function (l) { map[l.id] = []; });
       it.shapes.forEach(function (s, idx) {
         if (NOT_SELECTABLE[s.t]) return;
-        if (onlyThisLayer && layerIdOf(s) !== focusLayer) return;
-        out.push({ idx: idx, s: s });
+        map[layerIdOf(s)].push({ idx: idx, s: s });
       });
-      out.reverse();
-      return out;
+      Object.keys(map).forEach(function (k) { map[k].reverse(); });
+      return map;
     }
     function sigOf(it) {
       if (!it) return '';
       const multi = S.multi && S.multi.it === it ? S.multi.idx.join(',') : '';
-      return S.current + ':' + it.shapes.map(function (s) { return (s.hide ? '1' : '0'); }).join('') +
+      const marks = it.shapes.map(function (s) { return (s.hide ? '1' : '0') + (s.layer || '-'); }).join('|');
+      const lay = (S.layers || []).map(function (l) { return l.id + l.name + (l.hidden ? '1' : '0'); }).join('|');
+      return S.current + ':' + marks + ':' + lay + ':' + focusLayer +
         ':' + (S.sel && S.sel.it === it ? S.sel.i : -1) + ':' + multi;
+    }
+
+    function dot(on, lab) {
+      return '<button type="button" class="laydot" data-act="dot" title="' + lab +
+        '" aria-label="' + lab + '"><i class="' + (on ? 'dot' : 'dot off') + '"></i></button>';
     }
 
     let lastSig = null;
     function render() {
       const it = S.items[S.current - 1];
       lastSig = sigOf(it);
-      syncAddSelBtn();
       const host = $('layList');
       if (!it) { host.innerHTML = ''; $('layCount').textContent = ''; return; }
-      const list = rows(it);
-      $('layCount').textContent = list.length ? list.length + ' on page ' + S.current : 'Page ' + S.current;
-      if (!list.length) {
-        host.innerHTML = '<div class="layempty">No marks on this page yet.<br><br>' +
-          'Draw a box, line, or sign the page — each one lands here, with show/hide, duplicate ' +
-          'and front-to-back ordering, the way Illustrator’s Layers panel works.</div>';
-        return;
-      }
-      const it0 = list[0].idx, itN = list[list.length - 1].idx;
-      host.innerHTML = list.map(function (r) {
-        const s = r.s, hid = !!s.hide, sel = S.sel && S.sel.it === it && S.sel.i === r.idx;
-        const rowLayer = layerIdOf(s);
-        const layerPick = '<select class="rowlayer" data-idx="' + r.idx + '" title="Move to layer" ' +
-          'aria-label="Layer, for this mark" style="max-width:72px;font-size:11px;">' +
-          S.layers.map(function (l) {
-            return '<option value="' + l.id + '"' + (l.id === rowLayer ? ' selected' : '') + '>' +
-              X.esc(l.name) + '</option>';
-          }).join('') + '</select>';
-        return '<div class="layrow' + (hid ? ' hid' : '') + (sel ? ' sel' : '') + '" data-idx="' + r.idx + '">' +
-          '<button type="button" class="layeye" data-act="eye" title="' + (hid ? 'Show' : 'Hide') +
-            '" aria-label="' + (hid ? 'Show' : 'Hide') + '">' + (hid ? EYE_OFF : EYE_ON) + '</button>' +
-          '<i class="layswatch" style="background:' + X.esc(swatch(s)) + '"></i>' +
-          '<span class="laylabel">' + X.esc(label(s)) + '</span>' +
-          (S.layers.length > 1 ? layerPick : '') +
-          '<span class="laybtns">' +
-            '<button type="button" data-act="up"' + (r.idx === it0 ? ' disabled' : '') +
-              ' title="Bring forward" aria-label="Bring forward">' + UP + '</button>' +
-            '<button type="button" data-act="down"' + (r.idx === itN ? ' disabled' : '') +
-              ' title="Send backward" aria-label="Send backward">' + DOWN + '</button>' +
-            '<button type="button" data-act="dup" title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
-            '<button type="button" class="laydel" data-act="del" title="Delete" aria-label="Delete">' + DEL + '</button>' +
-          '</span></div>';
-      }).join('');
-      Array.prototype.forEach.call(host.children, function (el) {
-        const idx = +el.dataset.idx;
-        el.addEventListener('click', function (e) {
-          if (e.target.closest('.rowlayer')) { e.stopPropagation(); return; }
-          const act = e.target.closest('[data-act]');
-          if (act) { e.stopPropagation(); if (!act.disabled) doAction(it, idx, act.dataset.act); return; }
-          select(it, idx);
-        });
-        const picker = el.querySelector('.rowlayer');
-        if (picker) picker.addEventListener('change', function () {
-          X.snapshot();
-          it.shapes[idx].layer = this.value;
-          X.updateMeta();
-          render();
+      ensureLayers();
+      const map = marksByLayer(it);
+      let total = 0;
+      Object.keys(map).forEach(function (k) { total += map[k].length; });
+      $('layCount').textContent = S.layers.length + (S.layers.length === 1 ? ' layer · ' : ' layers · ') +
+        total + ' on page ' + S.current;
+      $('layMerge').disabled = S.layers.length < 2;
+      $('layDel').disabled = S.layers.length < 2;
+
+      /* newest layer at the top, the way the stack reads everywhere else */
+      let h = '';
+      S.layers.slice().reverse().forEach(function (L) {
+        const list = map[L.id] || [], open = !shut[L.id], active = L.id === focusLayer;
+        h += '<div class="layrow layhead' + (active ? ' active' : '') + (L.hidden ? ' hid' : '') +
+            '" data-lay="' + L.id + '">' +
+          dot(!L.hidden, L.hidden ? 'Show this layer' : 'Hide this layer') +
+          '<button type="button" class="laytwist" data-act="twist" aria-label="' +
+            (open ? 'Collapse' : 'Expand') + '">' + (open ? TWIST_OPEN : TWIST_SHUT) + '</button>' +
+          '<i class="laystrip" style="background:' + X.esc(L.color) + '"></i>' +
+          '<span class="laylabel">' + X.esc(L.name) + '</span>' +
+          '<span class="laynum">' + list.length + '</span>' +
+          '<span class="laypen" title="New marks land here">' + (active ? PENCIL : '') + '</span>' +
+          '</div>';
+        if (!open) return;
+        if (!list.length) {
+          h += '<div class="layrow mrow laynone" data-lay="' + L.id + '">Empty — drag marks here</div>';
+          return;
+        }
+        const top = list[0].idx, bottom = list[list.length - 1].idx;
+        list.forEach(function (r) {
+          const s = r.s, hid = !!s.hide, sel = S.sel && S.sel.it === it && S.sel.i === r.idx;
+          h += '<div class="layrow mrow' + (hid ? ' hid' : '') + (sel ? ' sel' : '') +
+              '" data-lay="' + L.id + '" data-idx="' + r.idx + '" draggable="true">' +
+            dot(!hid, hid ? 'Show' : 'Hide') +
+            '<i class="layswatch" style="background:' + X.esc(swatch(s)) + '"></i>' +
+            '<span class="laylabel">' + X.esc(label(s)) + '</span>' +
+            '<span class="laybtns">' +
+              '<button type="button" data-act="up"' + (r.idx === top ? ' disabled' : '') +
+                ' title="Bring forward" aria-label="Bring forward">' + UP + '</button>' +
+              '<button type="button" data-act="down"' + (r.idx === bottom ? ' disabled' : '') +
+                ' title="Send backward" aria-label="Send backward">' + DOWN + '</button>' +
+              '<button type="button" data-act="dup" title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
+              '<button type="button" class="laydel" data-act="del" title="Delete" aria-label="Delete">' + DEL + '</button>' +
+            '</span></div>';
         });
       });
+      host.innerHTML = h;
+    }
+
+    /* ---------------- clicks, in one place for the whole tree ---------------- */
+
+    const host = $('layList');
+    host.addEventListener('click', function (e) {
+      const row = e.target.closest('.layrow');
+      if (!row) return;
+      const it = S.items[S.current - 1];
+      if (!it) return;
+      const act = e.target.closest('[data-act]');
+      const isMark = row.dataset.idx !== undefined;
+
+      if (act && act.dataset.act === 'dot') {
+        if (isMark) toggleMark(it, +row.dataset.idx);
+        else toggleLayer(row.dataset.lay);
+        return;
+      }
+      if (act && act.dataset.act === 'twist') {
+        shut[row.dataset.lay] = !shut[row.dataset.lay];
+        render();
+        return;
+      }
+      if (!isMark) {                       /* a layer's own row: make it active */
+        focusLayer = row.dataset.lay;
+        render();
+        return;
+      }
+      if (act && !act.disabled) { doAction(it, +row.dataset.idx, act.dataset.act); return; }
+      select(it, +row.dataset.idx);
+    });
+
+    function toggleLayer(id) {
+      const L = layerOf(id);
+      X.snapshot();
+      L.hidden = !L.hidden;
+      S.items.forEach(function (it) {
+        it.shapes.forEach(function (s) { if (layerIdOf(s) === L.id) s.hide = L.hidden; });
+      });
+      if (L.hidden) { S.sel = null; S.multi = null; }
+      redrawEverywhere(); X.updateMeta(); X.syncMarkPop();
+      render();
+    }
+    /* a mark shown again inside a hidden layer brings the layer back with it,
+       otherwise the dot would say shown and the page would disagree */
+    function toggleMark(it, idx) {
+      const s = it.shapes[idx];
+      if (!s) return;
+      X.snapshot();
+      s.hide = !s.hide;
+      if (s.hide) { S.sel = null; S.multi = null; }
+      else { const L = layerOf(layerIdOf(s)); if (L.hidden) L.hidden = false; }
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+      render();
     }
 
     function select(it, idx) {
@@ -348,13 +402,7 @@
     function doAction(it, idx, act) {
       X.setTool('select');
       X.setGroup(it, [idx]);
-      if (act === 'eye') {
-        X.snapshot();
-        const s = it.shapes[idx];
-        s.hide = !s.hide;
-        if (s.hide) { S.sel = null; S.multi = null; }
-        X.drawShapes(it); X.updateMeta();
-      } else if (act === 'up') { X.stackSelected('up'); }
+      if (act === 'up') { X.stackSelected('up'); }
       else if (act === 'down') { X.stackSelected('down'); }
       else if (act === 'dup') { X.duplicateSelected(); }
       else if (act === 'del') { X.deleteSelected(); }
@@ -362,19 +410,100 @@
       render();
     }
 
-    X.on('pages', function () { if (!panel.hidden) render(); });
+    /* ---------------- drag and drop ----------------
+       A mark's row dropped on a layer's row joins that layer, on top of what
+       is already in it; dropped on another mark's row it lands in front of
+       that mark, which moves it in the page's own stack (it.shapes) as well —
+       the two orders are the same thing. */
+    let dragIdx = null;
+
+    function clearOver() {
+      Array.prototype.forEach.call(host.children, function (c) { c.classList.remove('over'); });
+    }
+    host.addEventListener('dragstart', function (e) {
+      const row = e.target.closest('.mrow[draggable]');
+      if (!row) return;
+      dragIdx = +row.dataset.idx;
+      row.classList.add('dragging');
+      try {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(dragIdx));
+      } catch (err) { /* older engines refuse setData outside a user gesture */ }
+    });
+    host.addEventListener('dragend', function () { dragIdx = null; clearOver(); render(); });
+    host.addEventListener('dragover', function (e) {
+      if (dragIdx == null) return;
+      const row = e.target.closest('.layrow');
+      if (!row) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      if (!row.classList.contains('over')) { clearOver(); row.classList.add('over'); }
+    });
+    host.addEventListener('dragleave', function (e) {
+      const row = e.target.closest('.layrow');
+      if (row && !row.contains(e.relatedTarget)) row.classList.remove('over');
+    });
+    host.addEventListener('drop', function (e) {
+      if (dragIdx == null) return;
+      const row = e.target.closest('.layrow');
+      if (!row) return;
+      e.preventDefault();
+      const from = dragIdx;
+      dragIdx = null; clearOver();
+      drop(S.items[S.current - 1], from, row);
+    });
+
+    function drop(it, from, row) {
+      if (!it || !it.shapes[from]) { render(); return; }
+      const s = it.shapes[from];
+      const L = layerOf(row.dataset.lay);
+      const was = layerIdOf(s);
+      let at;
+      if (row.dataset.idx !== undefined) {
+        const onto = +row.dataset.idx;
+        if (onto === from) { render(); return; }
+        at = onto + 1;                      /* in front of the mark dropped on */
+      } else {
+        /* a layer's own row, or its empty placeholder: on top of its members */
+        let top = -1;
+        it.shapes.forEach(function (x, i) {
+          if (!NOT_SELECTABLE[x.t] && layerIdOf(x) === L.id) top = i;
+        });
+        at = top >= 0 ? top + 1 : it.shapes.length;
+      }
+      if (was === L.id && (at === from || at === from + 1)) { render(); return; }
+
+      X.snapshot();
+      it.shapes.splice(from, 1);
+      if (from < at) at--;
+      if (at > it.shapes.length) at = it.shapes.length;
+      it.shapes.splice(at, 0, s);
+      if (was !== L.id) { s.layer = L.id; s.hide = !!L.hidden; }
+
+      if (s.hide) { S.sel = null; S.multi = null; } else { X.setGroup(it, [at]); }
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+      render();
+      if (was !== L.id) X.toast('Moved to <b>' + X.esc(L.name) + '</b>');
+    }
+
+    /* ---------------- keeping up with the page ---------------- */
+
+    X.on('pages', function () { claimNew(); if (!panel.hidden) render(); });
+    X.on('meta', function () { if (claimNew() && !panel.hidden) render(); });
     X.on('reset', function () {
       panel.hidden = true; tab.classList.remove('on'); lastSig = null;
-      S.layers = null; focusLayer = null; onlyThisLayer = false;
+      S.layers = null; focusLayer = null;
+      Object.keys(shut).forEach(function (k) { delete shut[k]; });
     });
-    /* the stack and selection also change straight from the canvas (drag,
-       Delete key, the Format panel's Bring to front…); a light poll catches
-       those while the panel is actually open, same as the side rail's own
-       400ms tick (js/toolpanel.js) for its pressed state */
+    /* marks also arrive, move and vanish straight from the canvas (a drag, the
+       Delete key, the Format panel's Bring to front…); a light poll claims the
+       new ones for the active layer and catches the rest, the same 400ms tick
+       the side rail (js/toolpanel.js) uses for its pressed state */
     setInterval(function () {
+      const fresh = claimNew();
       if (panel.hidden) return;
       const it = S.items[S.current - 1];
-      if (sigOf(it) !== lastSig) render();
+      if (fresh || sigOf(it) !== lastSig) render();
     }, 400);
   });
 })();
