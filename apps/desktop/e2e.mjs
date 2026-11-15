@@ -308,7 +308,14 @@ try {
       : !!ocr.languages && ocr.languages.length === 0,
     ocr,
   );
-  if (WIN) {
+  /* Arabic is not on the CI runner image and takes about twelve minutes to
+     install, so .github/workflows/ci.yml only puts it there on a push to
+     main. Without it there is nothing to read, and the check is passed over
+     rather than failed. */
+  if (WIN && !ocr.ar) {
+    console.log('SKIP  English and Arabic at once: Windows here has no Arabic reader');
+  }
+  if (WIN && ocr.ar) {
     /* the English word from the English reader, the Arabic from the Arabic
        one, and no Latin reading of the Arabic word beside it */
     const both = ocr.both || [];
