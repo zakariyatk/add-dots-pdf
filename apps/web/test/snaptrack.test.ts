@@ -16,7 +16,7 @@ type Ray = { v: number; at: number; from: Pt; label: string; start?: number };
 type Hit = { p: Pt; kind: string; label: string; d: number; v: number; ray?: Ray; ray2?: Ray };
 type Opt = Record<string, unknown>;
 type Api = {
-  RANK: Record<string, number>;
+  RANK: { ton: number; tcross: number; tseg: number; txg: number };
   ALONG: number;
   CROSS_EXTRA: number;
   guides: (a: Pt | Pt[], o?: Opt) => Ray[];
@@ -43,7 +43,7 @@ describe('the guides an acquired point sends out', () => {
       [1, 100],
       [0, 100],
     ]);
-    expect(g[0].from).toEqual(A);
+    expect(g[0]?.from).toEqual(A);
   });
 
   it('sends a pair from each point held, and from the one a drawing started at', () => {
@@ -61,16 +61,16 @@ describe('lying along a guide', () => {
   it('catches the pointer onto the guide across, keeping its own x', () => {
     const got = T.onGuide(A, [160, 104], TOL);
     expect(got).toHaveLength(1);
-    expect(got[0].p).toEqual([160, 100]);
-    expect(got[0].label).toBe('Horizontal from point');
-    expect(got[0].d).toBe(4);
+    expect(got[0]?.p).toEqual([160, 100]);
+    expect(got[0]?.label).toBe('Horizontal from point');
+    expect(got[0]?.d).toBe(4);
   });
 
   it('catches the pointer onto the upright guide, keeping its own y', () => {
     const got = T.onGuide(A, [104, 160], TOL);
     expect(got).toHaveLength(1);
-    expect(got[0].p).toEqual([100, 160]);
-    expect(got[0].label).toBe('Vertical from point');
+    expect(got[0]?.p).toEqual([100, 160]);
+    expect(got[0]?.label).toBe('Vertical from point');
   });
 
   it('offers nothing further out than the tolerance', () => {
@@ -82,8 +82,8 @@ describe('lying along a guide', () => {
   });
 
   it('catches either point once two are held', () => {
-    expect(T.onGuide([A, B], [160, 104], TOL)[0].p).toEqual([160, 100]);
-    expect(T.onGuide([A, B], [160, 264], TOL)[0].p).toEqual([160, 260]);
+    expect(T.onGuide([A, B], [160, 104], TOL)[0]?.p).toEqual([160, 100]);
+    expect(T.onGuide([A, B], [160, 264], TOL)[0]?.p).toEqual([160, 260]);
   });
 });
 
@@ -91,9 +91,9 @@ describe('where two guides cross', () => {
   it('catches the corner made by one point across and the other upright', () => {
     const got = T.crossGuides([A, B], [296, 103], TOL);
     expect(got).toHaveLength(1);
-    expect(got[0].p).toEqual([300, 100]);
-    expect(got[0].label).toBe('Guides cross');
-    expect(got[0].kind).toBe('txg');
+    expect(got[0]?.p).toEqual([300, 100]);
+    expect(got[0]?.label).toBe('Guides cross');
+    expect(got[0]?.kind).toBe('txg');
   });
 
   it('crosses an acquired point with the point the drawing started at', () => {
@@ -114,14 +114,14 @@ describe('where a guide crosses a ruler guide', () => {
   it('catches the crossing of an upright ruler guide with the guide across', () => {
     const got = T.guideCross(A, [158, 103], TOL, [{ v: 1, at: 160 }]);
     expect(got).toHaveLength(1);
-    expect(got[0].p).toEqual([160, 100]);
-    expect(got[0].kind).toBe('tcross');
+    expect(got[0]?.p).toEqual([160, 100]);
+    expect(got[0]?.kind).toBe('tcross');
   });
 
   it('catches the crossing of a flat ruler guide with the upright guide', () => {
     const got = T.guideCross(A, [103, 158], TOL, [{ v: 0, at: 160 }]);
     expect(got).toHaveLength(1);
-    expect(got[0].p).toEqual([100, 160]);
+    expect(got[0]?.p).toEqual([100, 160]);
   });
 
   it('leaves a crossing alone while the pointer is nowhere near it', () => {
@@ -138,8 +138,8 @@ describe('where a guide crosses one of the drawing lines', () => {
   it('catches where the guide across meets the line', () => {
     const got = T.segCross(A, [157, 102], TOL, [upright]);
     expect(got).toHaveLength(1);
-    expect(got[0].p).toEqual([160, 100]);
-    expect(got[0].kind).toBe('tseg');
+    expect(got[0]?.p).toEqual([160, 100]);
+    expect(got[0]?.kind).toBe('tseg');
   });
 
   it('does not run the line past its own ends', () => {
@@ -201,7 +201,7 @@ describe('which guides to show', () => {
   });
 
   it('shows both guides that make a crossing', () => {
-    const hit = T.crossGuides([A, B], [296, 103], TOL)[0];
+    const hit = T.crossGuides([A, B], [296, 103], TOL)[0] ?? null;
     expect(T.live([A, B], hit)).toEqual([false, true, true, false]);
   });
 });
