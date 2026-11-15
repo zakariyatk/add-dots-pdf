@@ -3441,6 +3441,7 @@
     function dropGhost() {
       if (!start && !ghost) return;
       start = null; ghost = null;
+      if (EXT.snapOpStart) EXT.snapOpStart(it, null);
       drawShapes(it);
     }
 
@@ -3481,6 +3482,9 @@
       /* object snap: start exactly on the point the marker shows */
       const s0 = S.tool !== 'crop' && EXT.snapPt ? EXT.snapPt(it, start, e) : null;
       if (s0) start = s0;
+      /* the point it started from sends its own guides out while it is drawn
+         (object snap tracking, js/draw.js) */
+      if (S.tool !== 'crop' && EXT.snapOpStart) EXT.snapOpStart(it, start);
       ghost = {
         t: S.tool === 'crop' ? 'rect' : S.tool, a: start, b: start,
         c: S.tool === 'crop' ? '#F2C14E' : S.color,
@@ -3506,6 +3510,7 @@
       ghost.b = ghost.snap ? ghost.snap
         : (e.shiftKey && S.tool !== 'crop') ? constrainPt(ghost.t, ghost.a, ghost.raw) : ghost.raw;
       drawShapes(it, ghost);
+      if (S.tool !== 'crop' && EXT.snapReading) EXT.snapReading(it, ghost.a, ghost.b);
     });
 
     function finish(e) {
@@ -3526,6 +3531,9 @@
       if (capBlock) { dropGhost(); return; }
       const g = ghost, shift = e && e.shiftKey;
       start = null; ghost = null;
+      /* the drawing is finished: its guides and the points acquired for it go
+         back, so none of them carries into the next one */
+      if (EXT.snapOpStart) EXT.snapOpStart(it, null);
       if (g.raw && S.tool !== 'crop') g.b = g.snap ? g.snap : shift ? constrainPt(g.t, g.a, g.raw) : g.raw;
       if (EXT.snapHide) EXT.snapHide();
       delete g.raw; delete g.snap;

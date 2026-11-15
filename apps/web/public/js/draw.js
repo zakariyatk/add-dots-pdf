@@ -651,6 +651,8 @@
         down: function (it, at, e) {
           if (!it.vp) return;
           drag = { it: it, a: pdfAt(it, at, e) };
+          /* the point it started from sends out its own guides until it ends */
+          trackStart(it, drag.a);
         },
         move: function (it, at, e) {
           if (!drag || drag.it !== it) return;
@@ -658,12 +660,16 @@
           const sn = X.snapPt(it, raw, e);
           drag.snap = sn;
           /* a snap point wins over Shift; Alt still flips an arc */
-          X.drawShapes(it, ghost(t, drag.a, sn || raw, sn ? { altKey: e && e.altKey } : e));
+          const g = ghost(t, drag.a, sn || raw, sn ? { altKey: e && e.altKey } : e);
+          X.drawShapes(it, g);
+          readShow(it, g.a, g.b);
         },
         cancel: function (it) {
           /* a second finger landed: throw the half-drawn mark away */
           if (!drag) return;
           drag = null;
+          trackStart(it, null);
+          readHide();
           X.drawShapes(it);
         },
         up: function (it, at, e) {
@@ -672,6 +678,10 @@
           const sn = X.snapPt(it, raw, e);
           drag = null;
           snapHide();
+          readHide();
+          /* the drawing is finished: its guides and the points acquired for it
+             go back, so none of them carries into the next one */
+          trackStart(it, null);
           const g = ghost(t, a, sn || raw, sn ? { altKey: e && e.altKey } : e);
           if (Math.hypot(g.b[0] - g.a[0], g.b[1] - g.a[1]) < 3) { X.drawShapes(it); return; }
 
@@ -1306,7 +1316,11 @@
                          dim: 1, dimc: 1, dimr: 1, dimd: 1, dima: 1, poly: 1 };
     const SNAP_KINDS = [['end', 'Endpoint'], ['mid', 'Midpoint'], ['int', 'Intersection'],
                         ['near', 'Nearest'], ['mark', 'Points of your marks'], ['guide', 'Guides']];
-    const SNAP_RANK = { end: 0, mark: 0, cen: 0, int: 1, gint: 1, tcross: 1, tseg: 1,
+    /* A crossing of two real lines is as much a point as an end is, so it
+       ranks with them and the nearer of the two wins; the crossings tracking
+       and the rulers invent rank below that, and lying along something below
+       that again. */
+    const SNAP_RANK = { end: 0, mark: 0, cen: 0, int: 0, gint: 1, tcross: 1, tseg: 1, txg: 1,
                         mid: 2, guide: 2, ton: 2, near: 3 };
     const snap = { on: true, kinds: { end: 1, mid: 1, int: 1, near: 1, mark: 1, guide: 1 } };
     try {
@@ -1390,9 +1404,28 @@
       return out;
     }
 
+    /** A mark's own straight lines, in PDF points, for crossing against the
+        page's and against each other. Curves and freehand are left out: their
+        crossings are not places a reader points at. */
+    function markSegs(s) {
+      const t = s.t;
+      if (s.hide) return [];
+      if (s.b && (t === 'line' || t === 'arrow' || t === 'dim')) return [[s.a, s.b]];
+      if (s.b && (t === 'rect' || t === 'cloud' || t === 'redact') && !s.r) {
+        const a = s.a, b = s.b, c = [s.a[0], s.b[1]], d = [s.b[0], s.a[1]];
+        return [[a, d], [d, b], [b, c], [c, a]];
+      }
+      if (t === 'poly' && s.pts && s.pts.length > 1) {
+        const out = [];
+        for (let i = 1; i < s.pts.length && out.length < 24; i++) out.push([s.pts[i - 1], s.pts[i]]);
+        return out;
+      }
+      return [];
+    }
+
     function snapFind(it, p, opts) {
       const K = snap.kinds;
-      const tol = (X.isMobile() ? 16 : 10) / Math.max(0.05, S.scale);
+      const tol = (X.isMobile() ? 16 : 15) / Math.max(0.05, S.scale);
       let best = null;
       function consider(q, kind, label) {
         const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
@@ -1404,9 +1437,9 @@
       }
 
       const grid = gridOf(it);
+      const lines = [];
       if (grid) {
         const ids = nearSegs(grid, p, tol);
-        const lines = [];
         for (let n = 0; n < ids.length; n++) {
           const s = grid.segs[ids[n]], a = s[0], b = s[1];
           if (!s[2]) {
@@ -1421,19 +1454,37 @@
             consider([a[0] + t * dx, a[1] + t * dy], 'near', 'Nearest');
           }
         }
-        if (K.int && lines.length > 1) {
-          const L = lines.length > 60 ? lines.slice(0, 60) : lines;
-          for (let i = 0; i < L.length; i++) {
-            for (let j = i + 1; j < L.length; j++) {
-              const p1 = L[i][0], q1 = L[i][1], p2 = L[j][0], q2 = L[j][1];
-              const d1x = q1[0] - p1[0], d1y = q1[1] - p1[1], d2x = q2[0] - p2[0], d2y = q2[1] - p2[1];
-              const den = d1x * d2y - d1y * d2x;
-              if (Math.abs(den) < 1e-9) continue;
-              const t = ((p2[0] - p1[0]) * d2y - (p2[1] - p1[1]) * d2x) / den;
-              const u = ((p2[0] - p1[0]) * d1y - (p2[1] - p1[1]) * d1x) / den;
-              if (t < -1e-3 || t > 1 + 1e-3 || u < -1e-3 || u > 1 + 1e-3) continue;
-              consider([p1[0] + t * d1x, p1[1] + t * d1y], 'int', 'Intersection');
-            }
+      }
+
+      /* where two things you drew cross is a point as much as where two of the
+         page's own lines do: the marks near the pointer join the list. Only
+         the near ones, and capped, because crossing is quadratic. */
+      if (K.int) {
+        it.shapes.forEach(function (s, idx) {
+          if (opts && opts.skip === idx) return;
+          if (lines.length > 80) return;
+          markSegs(s).forEach(function (g) {
+            if (lines.length > 80) return;
+            const lo = Math.min(g[0][0], g[1][0]) - tol, hi = Math.max(g[0][0], g[1][0]) + tol;
+            const bo = Math.min(g[0][1], g[1][1]) - tol, to = Math.max(g[0][1], g[1][1]) + tol;
+            if (p[0] < lo || p[0] > hi || p[1] < bo || p[1] > to) return;
+            lines.push(g);
+          });
+        });
+      }
+
+      if (K.int && lines.length > 1) {
+        const L = lines.length > 60 ? lines.slice(0, 60) : lines;
+        for (let i = 0; i < L.length; i++) {
+          for (let j = i + 1; j < L.length; j++) {
+            const p1 = L[i][0], q1 = L[i][1], p2 = L[j][0], q2 = L[j][1];
+            const d1x = q1[0] - p1[0], d1y = q1[1] - p1[1], d2x = q2[0] - p2[0], d2y = q2[1] - p2[1];
+            const den = d1x * d2y - d1y * d2x;
+            if (Math.abs(den) < 1e-9) continue;
+            const t = ((p2[0] - p1[0]) * d2y - (p2[1] - p1[1]) * d2x) / den;
+            const u = ((p2[0] - p1[0]) * d1y - (p2[1] - p1[1]) * d1x) / den;
+            if (t < -1e-3 || t > 1 + 1e-3 || u < -1e-3 || u > 1 + 1e-3) continue;
+            consider([p1[0] + t * d1x, p1[1] + t * d1y], 'int', 'Intersection');
           }
         }
       }
@@ -1476,6 +1527,41 @@
     marker.className = 'snapmark'; marker.id = 'snapMark'; marker.hidden = true;
     marker.setAttribute('aria-hidden', 'true');
     document.body.appendChild(marker);
+
+    /* ---- the reading that rides with the pointer while something is drawn:
+       how long it is in the document's own units, and at what angle ---- */
+    const readout = document.createElement('div');
+    readout.className = 'drawread'; readout.id = 'drawRead'; readout.hidden = true;
+    readout.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(readout);
+    const startDot = document.createElement('div');
+    startDot.className = 'drawstart'; startDot.id = 'drawStart'; startDot.hidden = true;
+    startDot.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(startDot);
+
+    function readHide() {
+      if (!readout.hidden) readout.hidden = true;
+      if (!startDot.hidden) startDot.hidden = true;
+    }
+    /** a and b in PDF points on it: the reading beside b, the dot on a. */
+    function readShow(it, a, b) {
+      if (!it.anno) return;
+      const r = it.anno.getBoundingClientRect();
+      const va = it.vp.convertToViewportPoint(a[0], a[1]);
+      const vb = it.vp.convertToViewportPoint(b[0], b[1]);
+      const dx = b[0] - a[0], dy = b[1] - a[1];
+      const len = Math.hypot(dx, dy);
+      if (len < 1) { readHide(); return; }
+      const ang = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+      readout.textContent = measureLen(len) + '   ' + ang.toFixed(0) + '°';
+      /* clear of the snap marker's own label, which hangs just below right */
+      readout.style.transform =
+        'translate(' + Math.round(r.left + vb[0] + 14) + 'px,' + Math.round(r.top + vb[1] + 34) + 'px)';
+      readout.hidden = false;
+      startDot.style.transform =
+        'translate(' + Math.round(r.left + va[0]) + 'px,' + Math.round(r.top + va[1]) + 'px)';
+      startDot.hidden = false;
+    }
     const MARK_SVG = {
       end: '<rect x="3.5" y="3.5" width="11" height="11"/>',
       mark: '<rect x="3.5" y="3.5" width="11" height="11"/><circle cx="9" cy="9" r="1.2" class="dot"/>',
@@ -1517,41 +1603,61 @@
 
     /* ---- tracking ----
        Rest on a snap point and it is acquired: two dashed guides go out from
-       it, one across and one down, and the pointer is caught along them and
-       where they cross a ruler guide or one of the drawing's lines. The
-       geometry is js/snaptrack.js, in screen pixels; this part holds the
-       acquired point, the dwell that acquires it, and the guides on screen. */
+       it, one across and one down. Two points are held at once — a third drops
+       the oldest — and the point a drawing started from sends out its own pair
+       as well. The pointer is caught along any of them, where two of them
+       cross, and where one crosses a ruler guide or one of the drawing's
+       lines. The geometry is js/snaptrack.js, in screen pixels; this part
+       holds the acquired points, the dwell that acquires them, and the guides
+       on screen. */
     const TRK = window.ADDPDF_SNAPTRACK;
-    const DWELL = 250;                     /* ms resting on a point to acquire it */
+    const DWELL = 380;                     /* ms resting on a point to acquire it */
+    const MAX_ACQ = 2;                     /* held at once; a third drops the oldest */
     /* the catches worth tracking from: real points, not somewhere along a line */
     const ACQUIRE = { end: 1, mid: 1, int: 1, mark: 1, cen: 1, gint: 1 };
-    let acq = null;                        /* {it, p} — the acquired point, in PDF points */
+    let acqs = [];                         /* [{it, p}] — acquired points, in PDF points */
+    let opStart = null;                    /* {it, p} — where the drawing in hand began */
     let dwellAt = null, dwellTimer = 0;
 
-    function tolPx() { return X.isMobile() ? 16 : 10; }
+    function tolPx() { return X.isMobile() ? 16 : 15; }
     function samePt(a, b) { return a && b && Math.abs(a[0] - b[0]) < 0.01 && Math.abs(a[1] - b[1]) < 0.01; }
+
+    /** The acquired points on this page, and the start point if it is here. */
+    function trackOn(it) {
+      return acqs.filter(function (a) { return a.it === it; });
+    }
 
     function dwellStop() {
       if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = 0; }
       dwellAt = null;
     }
-    /** Give up the acquired point and take its guides off the screen. */
+    /** Give up every acquired point and take the guides off the screen. */
     function trackClear() {
       dwellStop();
-      if (acq) { acq = null; trackPaint(null, null); }
+      acqs = [];
+      trackPaint(null, null);        /* takes the guides off, start point or not */
+    }
+    /** The drawing in hand has begun at p, or finished (p null). Its own pair
+        of guides goes up while it runs, and the points acquired for it are
+        given back when it ends, so none of it carries into the next one. */
+    function trackStart(it, p) {
+      opStart = p ? { it: it, p: [p[0], p[1]] } : null;
+      if (!p) trackClear();
+      else trackPaint(it, null);
     }
     /* Resting on the same point for DWELL acquires it. Moving to another point,
        or off the geometry, starts the wait again. */
     function dwellWatch(it, hit) {
       if (!TRK || !hit || !ACQUIRE[hit.kind]) { dwellStop(); return; }
-      if (acq && acq.it === it && samePt(acq.p, hit.p)) { dwellStop(); return; }
+      if (acqs.some(function (a) { return a.it === it && samePt(a.p, hit.p); })) { dwellStop(); return; }
       if (dwellAt && samePt(dwellAt, hit.p)) return;         /* already waiting on it */
       dwellStop();
       dwellAt = [hit.p[0], hit.p[1]];
       dwellTimer = setTimeout(function () {
         dwellTimer = 0;
         if (!dwellAt || !snap.on) return;
-        acq = { it: it, p: dwellAt };
+        acqs.push({ it: it, p: dwellAt });
+        while (acqs.length > MAX_ACQ) acqs.shift();
         dwellAt = null;
         trackPaint(it, null);
       }, DWELL);
@@ -1573,13 +1679,21 @@
         PDF points — or null. The segments looked at are only the few already
         under the pointer, so this costs the same on a busy page as an empty one. */
     function trackFind(it, p, opts) {
-      if (!TRK || !acq || acq.it !== it) return null;
+      if (!TRK) return null;
+      const here = trackOn(it);
+      const start = opStart && opStart.it === it ? opStart.p : null;
+      if (!here.length && !start) return null;
       /* tracking is for drawing and measuring; dragging a mark's own end keeps
          the plain snaps it always had */
       if (opts && opts.skip != null) return null;
-      const a = it.vp.convertToViewportPoint(acq.p[0], acq.p[1]);
+      const toVp = function (q) {
+        const w = it.vp.convertToViewportPoint(q[0], q[1]);
+        return [w[0], w[1]];
+      };
+      const as = here.map(function (a) { return toVp(a.p); });
       const v = it.vp.convertToViewportPoint(p[0], p[1]);
-      const tol = tolPx();
+      /* a guide is a line, so it is caught a little tighter than a point */
+      const tol = X.isMobile() ? 12 : 11;
       const segs = [];
       const grid = gridOf(it);
       if (grid) {
@@ -1590,12 +1704,15 @@
                      it.vp.convertToViewportPoint(s[1][0], s[1][1])]);
         }
       }
-      const hit = TRK.best([a[0], a[1]], [v[0], v[1]], tol, { rulers: rulerPx(it), segs: segs });
+      const opt = { rulers: rulerPx(it), segs: segs, start: start ? [toVp(start)] : null };
+      const hit = TRK.best(as, [v[0], v[1]], tol, opt);
       if (!hit) return null;
       const q = it.vp.convertToPdfPoint(hit.p[0], hit.p[1]);
       /* d is in pixels here; snapFind's ranking only compares within a kind, and
          the tracking kinds are compared against each other in these same units */
-      return { p: [q[0], q[1]], kind: hit.kind, label: hit.label, d: hit.d, r: SNAP_RANK[hit.kind], v: hit.v };
+      /* ray and ray2 ride along so the paint knows which guides to light up */
+      return { p: [q[0], q[1]], kind: hit.kind, label: hit.label, d: hit.d,
+               r: SNAP_RANK[hit.kind], v: hit.v, ray: hit.ray, ray2: hit.ray2 };
     }
 
     /* ---- the guides on screen ---- */
@@ -1604,42 +1721,80 @@
     trkSvg.setAttribute('class', 'snaptrack');
     trkSvg.setAttribute('aria-hidden', 'true');
     trkSvg.hidden = true;
-    const trkH = document.createElementNS(NS, 'line');       /* across */
-    const trkV = document.createElementNS(NS, 'line');       /* down */
-    const trkDot = document.createElementNS(NS, 'path');     /* the acquired point's badge */
-    trkSvg.appendChild(trkH); trkSvg.appendChild(trkV); trkSvg.appendChild(trkDot);
     document.body.appendChild(trkSvg);
+    /* one line per guide and one badge per acquired point, kept and reused:
+       this is redrawn on every pointer move */
+    const trkPool = { line: [], path: [] };
+    function trkEl(kind, n) {
+      const pool = trkPool[kind];
+      while (pool.length <= n) {
+        const el = document.createElementNS(NS, kind);
+        pool.push(el);
+        trkSvg.appendChild(el);
+      }
+      pool[n].removeAttribute('hidden');
+      return pool[n];
+    }
+    function trkTrim(kind, n) {
+      const pool = trkPool[kind];
+      for (let i = n; i < pool.length; i++) pool[i].setAttribute('hidden', '');
+    }
 
     /** Draw the acquired point and whichever of its guides are live. The guides
         are clipped to the stage, so they never run out over the chrome. */
     function trackPaint(ignored, hit) {
-      /* always the acquired point's own page, whatever page the pointer is over */
-      const it = acq && acq.it;
-      if (!acq || !it || !it.vp || !it.anno) { if (!trkSvg.hidden) trkSvg.hidden = true; return; }
+      /* always the acquired points' own page, whatever page the pointer is over */
+      const it = (acqs[0] && acqs[0].it) || (opStart && opStart.it);
+      if (!it || !it.vp || !it.anno || (!acqs.length && !opStart)) {
+        if (!trkSvg.hidden) trkSvg.hidden = true;
+        return;
+      }
       const stage = $('stage').getBoundingClientRect();
       const r = it.anno.getBoundingClientRect();
-      const v = it.vp.convertToViewportPoint(acq.p[0], acq.p[1]);
-      const x = r.left + v[0], y = r.top + v[1];
       trkSvg.style.left = Math.round(stage.left) + 'px';
       trkSvg.style.top = Math.round(stage.top) + 'px';
       trkSvg.setAttribute('width', Math.round(stage.width));
       trkSvg.setAttribute('height', Math.round(stage.height));
-      const cx = x - stage.left, cy = y - stage.top;
-      const on = TRK.live(hit);
-      trkH.setAttribute('x1', 0); trkH.setAttribute('x2', Math.round(stage.width));
-      trkH.setAttribute('y1', cy); trkH.setAttribute('y2', cy);
-      trkV.setAttribute('y1', 0); trkV.setAttribute('y2', Math.round(stage.height));
-      trkV.setAttribute('x1', cx); trkV.setAttribute('x2', cx);
-      trkH.style.opacity = on.across ? 1 : 0.35;
-      trkV.style.opacity = on.upright ? 1 : 0.35;
-      /* a small plus on the point itself: this is the one being tracked from */
-      trkDot.setAttribute('d', 'M' + (cx - 4) + ' ' + cy + 'h8M' + cx + ' ' + (cy - 4) + 'v8');
+      /* The guides are worked out in the page's own viewport pixels, which is
+         what trackFind answered in, so that what came back can be matched
+         against them; only the drawing is moved to the stage. */
+      const toVp = function (q) {
+        const v = it.vp.convertToViewportPoint(q[0], q[1]);
+        return [v[0], v[1]];
+      };
+      const dx = r.left - stage.left, dy = r.top - stage.top;
+      const here = trackOn(it).map(function (a) { return toVp(a.p); });
+      const start = opStart && opStart.it === it ? [toVp(opStart.p)] : null;
+      const gs = TRK.guides(here, { start: start });
+      const on = TRK.live(here, hit, { start: start });
+      const W = Math.round(stage.width), H = Math.round(stage.height);
+      gs.forEach(function (g, i) {
+        const ln = trkEl('line', i);
+        if (g.v) {
+          const x = g.at + dx;
+          ln.setAttribute('x1', x); ln.setAttribute('x2', x);
+          ln.setAttribute('y1', 0); ln.setAttribute('y2', H);
+        } else {
+          const y = g.at + dy;
+          ln.setAttribute('x1', 0); ln.setAttribute('x2', W);
+          ln.setAttribute('y1', y); ln.setAttribute('y2', y);
+        }
+        ln.style.opacity = on[i] ? 1 : 0.35;
+      });
+      trkTrim('line', gs.length);
+      /* a small plus on each acquired point: these are the ones tracked from */
+      here.forEach(function (q, i) {
+        const x = q[0] + dx, y = q[1] + dy;
+        trkEl('path', i).setAttribute(
+          'd', 'M' + (x - 4) + ' ' + y + 'h8M' + x + ' ' + (y - 4) + 'v8');
+      });
+      trkTrim('path', here.length);
       trkSvg.hidden = false;
     }
     /* the guides are drawn against the window, so anything that moves the page
        under them has to put them back */
     X.snapTrackRepaint = function () {
-      if (acq) trackPaint(acq.it, null);
+      if (acqs.length || opStart) trackPaint(null, null);
     };
 
     /** The snap point for p on this page, showing the marker — or null. */
@@ -1659,6 +1814,11 @@
     };
     X.snapHide = snapHide;
     X.snapTrackClear = trackClear;
+    /* core.js drives the built-in tools (rect, line, arrow, dimension), so it
+       tells us when one begins and ends, and what it has drawn so far */
+    X.snapOpStart = function (it, p) { trackStart(it, p); if (!p) readHide(); };
+    X.snapReading = function (it, a, b) { readShow(it, a, b); };
+    X.snapReadingHide = readHide;
     /** A module tool's point: snapped when there is something to catch. */
     function pdfAt(it, at, e) {
       const p = it.vp.convertToPdfPoint(at[0], at[1]);
@@ -1743,7 +1903,7 @@
     /* Escape gives up the tracked point. The tools have their own Escape
        handlers for what they are drawing; this only drops the guides. */
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && acq) trackClear();
+      if (e.key === 'Escape' && acqs.length) trackClear();
     });
 
     /** Two picked lines to an angle: the corner is where they meet, and each
