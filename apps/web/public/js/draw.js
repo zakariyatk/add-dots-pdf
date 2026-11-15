@@ -1829,7 +1829,10 @@
     document.addEventListener('pointermove', function (e) {
       if (e.buttons || !SNAP_TOOLS[S.tool]) return;
       const cap = e.target && e.target.closest ? e.target.closest('.capture') : null;
-      if (!cap) { snapHide(); return; }
+      /* off the page altogether — the toolbar, the rail, the margin — and
+         nothing being drawn: the acquired points go with the pointer, rather
+         than leaving their guides lying across the page */
+      if (!cap) { snapHide(); if (!opStart && acqs.length) trackClear(); return; }
       const it = S.items.filter(function (x) { return x.capture === cap; })[0];
       if (!it || !it.vp) return;
       const r = cap.getBoundingClientRect();
