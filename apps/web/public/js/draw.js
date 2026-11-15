@@ -1306,7 +1306,8 @@
                          dim: 1, dimc: 1, dimr: 1, dimd: 1, dima: 1, poly: 1 };
     const SNAP_KINDS = [['end', 'Endpoint'], ['mid', 'Midpoint'], ['int', 'Intersection'],
                         ['near', 'Nearest'], ['mark', 'Points of your marks'], ['guide', 'Guides']];
-    const SNAP_RANK = { end: 0, mark: 0, cen: 0, int: 1, gint: 1, mid: 2, guide: 2, near: 3 };
+    const SNAP_RANK = { end: 0, mark: 0, cen: 0, int: 1, gint: 1, tcross: 1, tseg: 1,
+                        mid: 2, guide: 2, ton: 2, near: 3 };
     const snap = { on: true, kinds: { end: 1, mid: 1, int: 1, near: 1, mark: 1, guide: 1 } };
     try {
       const pref = JSON.parse(localStorage.getItem('adpdf.snap') || 'null');
@@ -1483,7 +1484,11 @@
       int: '<path d="M4 4l10 10M14 4L4 14"/>',
       near: '<path d="M4 4h10L4 14h10z"/>',
       guide: '<path d="M2 9h14" stroke-dasharray="2.5 1.5"/><circle cx="9" cy="9" r="2.6"/>',
-      gint: '<path d="M2 9h14M9 2v14" stroke-dasharray="2.5 1.5"/><circle cx="9" cy="9" r="2.6"/>'
+      gint: '<path d="M2 9h14M9 2v14" stroke-dasharray="2.5 1.5"/><circle cx="9" cy="9" r="2.6"/>',
+      /* tracking: the dashes say the guide is one this point sent out */
+      ton: '<path d="M2 9h14" stroke-dasharray="3 2"/><path d="M9 5.5v7"/>',
+      tcross: '<path d="M2 9h14M9 2v14" stroke-dasharray="3 2"/><circle cx="9" cy="9" r="2.2"/>',
+      tseg: '<path d="M2 9h14" stroke-dasharray="3 2"/><path d="M5 14L13 4"/>'
     };
     let markerKind = '';
     function snapHide() { if (!marker.hidden) marker.hidden = true; }
@@ -1510,16 +1515,150 @@
       return true;
     }
 
+    /* ---- tracking ----
+       Rest on a snap point and it is acquired: two dashed guides go out from
+       it, one across and one down, and the pointer is caught along them and
+       where they cross a ruler guide or one of the drawing's lines. The
+       geometry is js/snaptrack.js, in screen pixels; this part holds the
+       acquired point, the dwell that acquires it, and the guides on screen. */
+    const TRK = window.ADDPDF_SNAPTRACK;
+    const DWELL = 250;                     /* ms resting on a point to acquire it */
+    /* the catches worth tracking from: real points, not somewhere along a line */
+    const ACQUIRE = { end: 1, mid: 1, int: 1, mark: 1, cen: 1, gint: 1 };
+    let acq = null;                        /* {it, p} — the acquired point, in PDF points */
+    let dwellAt = null, dwellTimer = 0;
+
+    function tolPx() { return X.isMobile() ? 16 : 10; }
+    function samePt(a, b) { return a && b && Math.abs(a[0] - b[0]) < 0.01 && Math.abs(a[1] - b[1]) < 0.01; }
+
+    function dwellStop() {
+      if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = 0; }
+      dwellAt = null;
+    }
+    /** Give up the acquired point and take its guides off the screen. */
+    function trackClear() {
+      dwellStop();
+      if (acq) { acq = null; trackPaint(null, null); }
+    }
+    /* Resting on the same point for DWELL acquires it. Moving to another point,
+       or off the geometry, starts the wait again. */
+    function dwellWatch(it, hit) {
+      if (!TRK || !hit || !ACQUIRE[hit.kind]) { dwellStop(); return; }
+      if (acq && acq.it === it && samePt(acq.p, hit.p)) { dwellStop(); return; }
+      if (dwellAt && samePt(dwellAt, hit.p)) return;         /* already waiting on it */
+      dwellStop();
+      dwellAt = [hit.p[0], hit.p[1]];
+      dwellTimer = setTimeout(function () {
+        dwellTimer = 0;
+        if (!dwellAt || !snap.on) return;
+        acq = { it: it, p: dwellAt };
+        dwellAt = null;
+        trackPaint(it, null);
+      }, DWELL);
+    }
+
+    /** The ruler guides on this page as screen pixels, the way snapFind reads
+        them, or an empty list when the rulers are off. */
+    function rulerPx(it) {
+      if (!it.guides || !it.guides.length || !it.wrap) return [];
+      if (!document.body.classList.contains('rulers-on')) return [];
+      const off = it.off || { left: 0, top: 0 };
+      const W = it.wrap.clientWidth, H = it.wrap.clientHeight;
+      return it.guides.map(function (g) {
+        return g.v ? { v: 1, at: g.at * W + off.left } : { v: 0, at: g.at * H + off.top };
+      });
+    }
+
+    /** What the acquired point's guides catch at p, as a snapFind-shaped hit in
+        PDF points — or null. The segments looked at are only the few already
+        under the pointer, so this costs the same on a busy page as an empty one. */
+    function trackFind(it, p, opts) {
+      if (!TRK || !acq || acq.it !== it) return null;
+      /* tracking is for drawing and measuring; dragging a mark's own end keeps
+         the plain snaps it always had */
+      if (opts && opts.skip != null) return null;
+      const a = it.vp.convertToViewportPoint(acq.p[0], acq.p[1]);
+      const v = it.vp.convertToViewportPoint(p[0], p[1]);
+      const tol = tolPx();
+      const segs = [];
+      const grid = gridOf(it);
+      if (grid) {
+        const ids = nearSegs(grid, p, tol / Math.max(0.05, S.scale));
+        for (let i = 0; i < ids.length && segs.length < 40; i++) {
+          const s = grid.segs[ids[i]];
+          segs.push([it.vp.convertToViewportPoint(s[0][0], s[0][1]),
+                     it.vp.convertToViewportPoint(s[1][0], s[1][1])]);
+        }
+      }
+      const hit = TRK.best([a[0], a[1]], [v[0], v[1]], tol, { rulers: rulerPx(it), segs: segs });
+      if (!hit) return null;
+      const q = it.vp.convertToPdfPoint(hit.p[0], hit.p[1]);
+      /* d is in pixels here; snapFind's ranking only compares within a kind, and
+         the tracking kinds are compared against each other in these same units */
+      return { p: [q[0], q[1]], kind: hit.kind, label: hit.label, d: hit.d, r: SNAP_RANK[hit.kind], v: hit.v };
+    }
+
+    /* ---- the guides on screen ---- */
+    const NS = 'http://www.w3.org/2000/svg';
+    const trkSvg = document.createElementNS(NS, 'svg');
+    trkSvg.setAttribute('class', 'snaptrack');
+    trkSvg.setAttribute('aria-hidden', 'true');
+    trkSvg.hidden = true;
+    const trkH = document.createElementNS(NS, 'line');       /* across */
+    const trkV = document.createElementNS(NS, 'line');       /* down */
+    const trkDot = document.createElementNS(NS, 'path');     /* the acquired point's badge */
+    trkSvg.appendChild(trkH); trkSvg.appendChild(trkV); trkSvg.appendChild(trkDot);
+    document.body.appendChild(trkSvg);
+
+    /** Draw the acquired point and whichever of its guides are live. The guides
+        are clipped to the stage, so they never run out over the chrome. */
+    function trackPaint(ignored, hit) {
+      /* always the acquired point's own page, whatever page the pointer is over */
+      const it = acq && acq.it;
+      if (!acq || !it || !it.vp || !it.anno) { if (!trkSvg.hidden) trkSvg.hidden = true; return; }
+      const stage = $('stage').getBoundingClientRect();
+      const r = it.anno.getBoundingClientRect();
+      const v = it.vp.convertToViewportPoint(acq.p[0], acq.p[1]);
+      const x = r.left + v[0], y = r.top + v[1];
+      trkSvg.style.left = Math.round(stage.left) + 'px';
+      trkSvg.style.top = Math.round(stage.top) + 'px';
+      trkSvg.setAttribute('width', Math.round(stage.width));
+      trkSvg.setAttribute('height', Math.round(stage.height));
+      const cx = x - stage.left, cy = y - stage.top;
+      const on = TRK.live(hit);
+      trkH.setAttribute('x1', 0); trkH.setAttribute('x2', Math.round(stage.width));
+      trkH.setAttribute('y1', cy); trkH.setAttribute('y2', cy);
+      trkV.setAttribute('y1', 0); trkV.setAttribute('y2', Math.round(stage.height));
+      trkV.setAttribute('x1', cx); trkV.setAttribute('x2', cx);
+      trkH.style.opacity = on.across ? 1 : 0.35;
+      trkV.style.opacity = on.upright ? 1 : 0.35;
+      /* a small plus on the point itself: this is the one being tracked from */
+      trkDot.setAttribute('d', 'M' + (cx - 4) + ' ' + cy + 'h8M' + cx + ' ' + (cy - 4) + 'v8');
+      trkSvg.hidden = false;
+    }
+    /* the guides are drawn against the window, so anything that moves the page
+       under them has to put them back */
+    X.snapTrackRepaint = function () {
+      if (acq) trackPaint(acq.it, null);
+    };
+
     /** The snap point for p on this page, showing the marker — or null. */
     X.snapPt = function (it, p, e, opts) {
-      if (!it || !it.vp || !snapActive(e, opts)) { snapHide(); return null; }
+      if (!it || !it.vp || !snapActive(e, opts)) { snapHide(); trackClear(); return null; }
       if (!it._segs) pageSegments(it);                        /* the lines arrive shortly */
-      const hit = snapFind(it, p, opts);
+      let hit = snapFind(it, p, opts);
+      const tr = trackFind(it, p, opts);
+      /* an ordinary catch of the same rank or better wins: a real endpoint
+         beats riding a guide past it */
+      if (tr && (!hit || SNAP_RANK[tr.kind] < hit.r)) hit = tr;
+      if (!opts || opts.skip == null) dwellWatch(it, hit);
+      trackPaint(it, hit);
       if (!hit) { snapHide(); return null; }
       snapShow(it, hit);
       return [hit.p[0], hit.p[1]];
     };
     X.snapHide = snapHide;
+    X.snapTrackClear = trackClear;
     /** A module tool's point: snapped when there is something to catch. */
     function pdfAt(it, at, e) {
       const p = it.vp.convertToPdfPoint(at[0], at[1]);
@@ -1537,12 +1676,19 @@
       const at = [e.clientX - r.left + (it.off ? it.off.left : 0), e.clientY - r.top + (it.off ? it.off.top : 0)];
       X.snapPt(it, it.vp.convertToPdfPoint(at[0], at[1]), e);
     }, { passive: true });
-    $('stage').addEventListener('scroll', snapHide, { passive: true });
+    $('stage').addEventListener('scroll', function () {
+      snapHide();
+      X.snapTrackRepaint();          /* the guides are placed against the window */
+    }, { passive: true });
+    window.addEventListener('resize', function () { snapHide(); X.snapTrackRepaint(); });
     X.on('tool', function (t) {
       snapHide();
+      trackClear();                  /* a point acquired for one tool is not the next one's */
       snapCtl.hidden = !SNAP_TOOLS[t];
       if (SNAP_TOOLS[t]) { const it = S.items[S.current - 1]; if (it) pageSegments(it); }
     });
+    X.on('reset', trackClear);
+    X.on('pages', trackClear);
 
     /* ---- the switch, in the tool's properties ---- */
     const snapCtl = ctl('snapCtl',
@@ -1553,7 +1699,8 @@
     snapPop.className = 'snappop'; snapPop.id = 'snapPop'; snapPop.hidden = true;
     snapPop.innerHTML = '<div class="snappop-h">Snap to</div>' + SNAP_KINDS.map(function (k) {
       return '<label><input type="checkbox" data-k="' + k[0] + '"><span>' + k[1] + '</span></label>';
-    }).join('') + '<p class="snappop-note"><b>F3</b> turns snapping on and off · hold <b>Ctrl</b> to ignore it</p>';
+    }).join('') + '<p class="snappop-note"><b>F3</b> turns snapping on and off · hold <b>Ctrl</b> to ignore it' +
+      '<br>Rest on a point to track from it · <b>Esc</b> lets it go</p>';
     document.body.appendChild(snapPop);
 
     function paintSnap() {
@@ -1566,7 +1713,7 @@
     paintSnap();
     function toggleSnap() {
       snap.on = !snap.on; saveSnap(); paintSnap();
-      if (!snap.on) snapHide();
+      if (!snap.on) { snapHide(); trackClear(); }
       X.toast('Snap <b>' + (snap.on ? 'on' : 'off') + '</b>');
     }
     $('snapOn').addEventListener('click', toggleSnap);
@@ -1593,6 +1740,11 @@
       toggleSnap();
     });
     document.addEventListener('keyup', function (e) { if (e.key === 'Control') snapHide(); });
+    /* Escape gives up the tracked point. The tools have their own Escape
+       handlers for what they are drawing; this only drops the guides. */
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape' && acq) trackClear();
+    });
 
     /** Two picked lines to an angle: the corner is where they meet, and each
         arm points from the corner toward the side of the line that was clicked. */
