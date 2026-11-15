@@ -9,17 +9,68 @@ export interface StampDef {
   k: string;
   text: string;
   c: string;
+  /** The group it sits under in the picker. */
+  g?: string;
+  /** Carries a second line with the day it was placed (the mark's `d`). */
+  dated?: boolean;
 }
 
+/* The colours the stamps are drawn in: a verdict reads by its colour before
+   its words do, so the same five do all of them. */
+const GO = '#1F9D55';
+const NO = '#D23C2E';
+const FLAT = '#8A8A8A';
+const COLD = '#1F6FEB';
+const WARM = '#C07A12';
+
+/* The first one is the fallback for a `k` we no longer know, so 'approved'
+   stays first. Every other `k` here is written into saved files, so a key
+   may be added but never renamed. */
 export const STAMPS: readonly StampDef[] = [
-  { k: 'approved', text: 'APPROVED', c: '#1F9D55' },
-  { k: 'rejected', text: 'REJECTED', c: '#D23C2E' },
-  { k: 'draft', text: 'DRAFT', c: '#8A8A8A' },
-  { k: 'final', text: 'FINAL', c: '#1F6FEB' },
-  { k: 'review', text: 'FOR REVIEW', c: '#C07A12' },
-  { k: 'asbuilt', text: 'AS BUILT', c: '#1F9D55' },
-  { k: 'confid', text: 'CONFIDENTIAL', c: '#D23C2E' },
-  { k: 'void', text: 'VOID', c: '#D23C2E' },
+  /* a verdict on a drawing or a document that came back for checking */
+  { k: 'approved', text: 'APPROVED', c: GO, g: 'Review' },
+  { k: 'apprnote', text: 'APPROVED AS NOTED', c: GO, g: 'Review' },
+  { k: 'reviewed', text: 'REVIEWED', c: COLD, g: 'Review' },
+  { k: 'checked', text: 'CHECKED', c: COLD, g: 'Review' },
+  { k: 'review', text: 'FOR REVIEW', c: WARM, g: 'Review' },
+  { k: 'revise', text: 'REVISE AND RESUBMIT', c: WARM, g: 'Review' },
+  { k: 'notappr', text: 'NOT APPROVED', c: NO, g: 'Review' },
+  { k: 'rejected', text: 'REJECTED', c: NO, g: 'Review' },
+
+  /* where the document itself stands */
+  { k: 'draft', text: 'DRAFT', c: FLAT, g: 'Status' },
+  { k: 'prelim', text: 'PRELIMINARY', c: FLAT, g: 'Status' },
+  { k: 'final', text: 'FINAL', c: COLD, g: 'Status' },
+  { k: 'completed', text: 'COMPLETED', c: GO, g: 'Status' },
+  { k: 'onhold', text: 'ON HOLD', c: WARM, g: 'Status' },
+  { k: 'superseded', text: 'SUPERSEDED', c: FLAT, g: 'Status' },
+  { k: 'expired', text: 'EXPIRED', c: NO, g: 'Status' },
+  { k: 'void', text: 'VOID', c: NO, g: 'Status' },
+
+  /* who may see the copy in their hands, and which copy it is */
+  { k: 'confid', text: 'CONFIDENTIAL', c: NO, g: 'Handling' },
+  { k: 'internal', text: 'INTERNAL USE ONLY', c: WARM, g: 'Handling' },
+  { k: 'nocopy', text: 'DO NOT COPY', c: NO, g: 'Handling' },
+  { k: 'original', text: 'ORIGINAL', c: COLD, g: 'Handling' },
+  { k: 'copy', text: 'COPY', c: FLAT, g: 'Handling' },
+  { k: 'sample', text: 'SAMPLE', c: FLAT, g: 'Handling' },
+  { k: 'info', text: 'FOR INFORMATION', c: COLD, g: 'Handling' },
+
+  /* site drawings */
+  { k: 'asbuilt', text: 'AS BUILT', c: GO, g: 'Construction' },
+  { k: 'ifc', text: 'ISSUED FOR CONSTRUCTION', c: GO, g: 'Construction' },
+  { k: 'nfc', text: 'NOT FOR CONSTRUCTION', c: NO, g: 'Construction' },
+
+  /* the back office */
+  { k: 'paid', text: 'PAID', c: GO, g: 'Office' },
+  { k: 'received', text: 'RECEIVED', c: COLD, g: 'Office' },
+  { k: 'urgent', text: 'URGENT', c: NO, g: 'Office' },
+
+  /* the day it was stamped, printed underneath */
+  { k: 'datercv', text: 'RECEIVED', c: COLD, g: 'With the date', dated: true },
+  { k: 'dateappr', text: 'APPROVED', c: GO, g: 'With the date', dated: true },
+  { k: 'datervw', text: 'REVIEWED', c: COLD, g: 'With the date', dated: true },
+  { k: 'date', text: 'DATE', c: FLAT, g: 'With the date', dated: true },
 ];
 export const STAMP_BY_K: Readonly<Record<string, StampDef>> = Object.fromEntries(STAMPS.map((s) => [s.k, s]));
 
@@ -40,6 +91,62 @@ export interface NoteMark extends Mark {
 export interface StampMark extends Mark {
   t: 'stamp';
   k: string;
+  /** For a dated stamp: the day it was placed, as it was written then. */
+  dt?: string;
+}
+
+/** One line of words inside a stamp's box. */
+export interface StampLine {
+  text: string;
+  size: number;
+  /** The baseline, measured up from the bottom of the box. */
+  y: number;
+  /** How wide the text is at that size. */
+  w: number;
+}
+
+/** Measures a string in Helvetica-Bold at `size`. */
+export type StampMeasure = (text: string, size: number) => number;
+
+/**
+ * Where the words go inside a stamp's box. The on-screen renderer
+ * (annotate.js, measuring with a canvas) and the painter below both lay a
+ * stamp out through this, so what you place is what the saved file shows.
+ * A line too long for the box is shrunk until it fits rather than spilling
+ * out of it — 'ISSUED FOR CONSTRUCTION' in a narrow box, say.
+ */
+export function stampLayout(s: StampMark, w: number, h: number, measure: StampMeasure): StampLine[] {
+  const def = STAMP_BY_K[s.k] || STAMPS[0]!;
+  const date = s.dt ? String(s.dt) : '';
+  const fit = (text: string, want: number, y: number): StampLine => {
+    let size = Math.max(3, want);
+    /* a little air down each side, in proportion to the words */
+    const room = Math.max(1, w - size * 0.9);
+    let tw = measure(text, size);
+    if (tw > room && tw > 0) {
+      size = Math.max(2, (size * room) / tw);
+      tw = measure(text, size);
+    }
+    return { text, size, y: y * h, w: tw };
+  };
+  if (!date) {
+    const l = fit(def.text, h * 0.42, 0);
+    /* centred: the baseline sits a little below the middle */
+    return [{ ...l, y: h * 0.5 - l.size * 0.36 }];
+  }
+  return [fit(def.text, h * 0.34, 0.5), fit(date, h * 0.24, 0.18)];
+}
+
+/**
+ * The box a stamp gets from a plain click (no drag): tall enough for its
+ * lines and wide enough for its longest one, so a click never crops the
+ * words. In PDF points.
+ */
+export function stampBox(s: StampMark, measure: StampMeasure): { w: number; h: number } {
+  const h = s.dt ? 46 : 30;
+  const lines = stampLayout(s, 1e6, h, measure);
+  const wide = lines.reduce((m, l) => Math.max(m, l.w), 0);
+  return { w: Math.max(110, Math.round(wide + h * 0.5)), h };
 }
 
 const markup: Painter = (p, s: MarkupMark) => {
@@ -135,16 +242,16 @@ const stamp: Painter = (p, s: StampMark, ctx) => {
   });
   const font = ctx.fonts.HelveticaBold;
   if (!font) return;
-  const size = Math.max(4, h * 0.42);
-  const tw = font.widthOfTextAtSize(def.text, size);
-  p.drawText(def.text, {
-    x: x + (w - tw) / 2,
-    y: y + h / 2 - size * 0.36,
-    size,
-    font,
-    color: col,
-    opacity: 0.9,
-  });
+  for (const l of stampLayout(s, w, h, (t, size) => font.widthOfTextAtSize(t, size))) {
+    p.drawText(l.text, {
+      x: x + (w - l.w) / 2,
+      y: y + l.y,
+      size: l.size,
+      font,
+      color: col,
+      opacity: 0.9,
+    });
+  }
 };
 
 export const annotatePainters: Record<string, Painter> = { markup, ink, note, stamp };

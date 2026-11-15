@@ -45,7 +45,8 @@
       rect: 'Rectangle', ellipse: 'Circle', line: 'Line', arrow: 'Arrow',
       cloud: 'Cloud', arc: 'Arc', dim: 'Dimension', dimr: 'Radius',
       dimd: 'Diameter', dima: 'Angle', ink: 'Drawing', markup: 'Highlight',
-      note: 'Note', stamp: 'Stamp', vpath: 'Shape', sig: 'Signature',
+      note: 'Note', stamp: 'Stamp', istamp: 'Image stamp',
+      vpath: 'Shape', sig: 'Signature',
       image: 'Image', table: 'Table', link: 'Link', video: 'Video',
       text: 'Text', leader: 'Leader', poly: 'Line'
     };

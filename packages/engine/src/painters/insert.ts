@@ -18,8 +18,8 @@ import { drawLine, fitLine, textWidth, type Face } from '../text';
 import type { Painter } from './common';
 
 export interface ImageMark extends Mark {
-  t: 'image' | 'video' | 'sig';
-  /** data: URL of the picture (or the video's poster, or the signature). */
+  t: 'image' | 'video' | 'sig' | 'istamp';
+  /** data: URL of the picture (the video's poster, a signature, a stamp). */
   url: string;
   /** video: where it plays; an http(s) address also becomes a link. */
   src?: string;
@@ -90,12 +90,12 @@ export async function prepareInsert(out: PDFDocument, items: PageItem[], extra: 
   if (needTable && !extra.tableFont) extra.tableFont = await out.embedFont(StandardFonts.Helvetica);
 }
 
-/** Embeds signature images. */
+/** Embeds signature and image-stamp pictures: both are painted the same way. */
 export async function prepareSignatures(out: PDFDocument, items: PageItem[], extra: Extra): Promise<void> {
   const sigs: Record<string, PDFImage> = (extra.sigs = {});
   for (const it of items) {
     for (const s of it.shapes) {
-      if (s.t !== 'sig' || sigs[s.url as string]) continue;
+      if ((s.t !== 'sig' && s.t !== 'istamp') || sigs[s.url as string]) continue;
       const img = await embedAny(out, s.url as string);
       if (img) sigs[s.url as string] = img;
     }
@@ -259,4 +259,7 @@ const sig: Painter = (p, s: ImageMark, ctx) => {
 };
 
 export const insertPainters: Record<string, Painter> = { image, video, link, table };
-export const formsPainters: Record<string, Painter> = { sig };
+/* An image stamp is a picture in a box, turned and faded like a signature,
+   so it is the same painter. The two are separate mark types because they
+   are separate things to the reader: one is signed, the other is stamped. */
+export const formsPainters: Record<string, Painter> = { sig, istamp: sig };
