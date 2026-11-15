@@ -3189,7 +3189,8 @@
     buildMarkPop();
     const isText = s.t === 'text';
     const isBox = s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath';     /* a shape off the page fills too */
-    const isPic = s.t === 'sig';              /* a picture: no line to style */
+    /* a picture: no line to style (a signature, or a stamp made from one) */
+    const isPic = s.t === 'sig' || s.t === 'istamp';
     const count = selList().length;
     $('mpTitle').textContent = count > 1 ? count + ' marks' : (MARK_NAME[s.t] || 'Mark');
 

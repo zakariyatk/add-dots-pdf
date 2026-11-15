@@ -36,8 +36,45 @@
     const STAMP_BY_K = {};
     STAMPS.forEach(function (s) { STAMP_BY_K[s.k] = s; });
 
+    /* The engine lays a stamp's words out, so the page and the saved file
+       agree; it needs a way to measure Helvetica-Bold, which on screen is a
+       canvas (Arial's metrics stand in for Helvetica's closely enough). */
+    const stampLayout = window.ADDPDFEngine.stampLayout;
+    const stampBox = window.ADDPDFEngine.stampBox;
+    const measCx = document.createElement('canvas').getContext('2d');
+    function stampMeasure(text, size) {
+      measCx.font = '700 ' + size + 'px Helvetica, Arial, sans-serif';
+      return measCx.measureText(text).width;
+    }
+
+    /* A dated stamp carries the day it was placed, written once and then
+       kept on the mark: reopening the file next month must not move it. The
+       month is spelled out so 3/4 is never read as the 3rd of April. */
+    const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    function todayText() {
+      const d = new Date();
+      return d.getDate() + ' ' + MONTHS[d.getMonth()] + ' ' + d.getFullYear();
+    }
+
+    /* the picker's options, under the group each stamp belongs to */
+    function stampOptions() {
+      let out = '', g = null;
+      STAMPS.forEach(function (s) {
+        if (s.g !== g) {
+          if (g !== null) out += '</optgroup>';
+          g = s.g;
+          out += '<optgroup label="' + X.esc(g || 'Stamps') + '">';
+        }
+        out += '<option value="' + s.k + '">' + X.esc(s.text) +
+               (s.dated ? ' + date' : '') + '</option>';
+      });
+      return out + (g === null ? '' : '</optgroup>');
+    }
+
     let markupColor = { highlight: '#F2C14E', hlarea: '#F2C14E', underline: '#E2483D', strike: '#E2483D' };
     let stampKind = 'approved';
+    let stampImg = null;         /* id of the chosen picture stamp, if any */
     let inkWidth = 2.5;
     let uid = 0;
     function nextId() { return 'c' + (++uid) + '-' + Date.now().toString(36); }
@@ -80,7 +117,8 @@
         strike: 'Select text on a page to strike it out.',
         ink: 'Draw freehand on the page. Each stroke is one mark, so <b>Ctrl+Z</b> undoes it whole. Hold <b>Shift</b> for a straight stroke.',
         note: 'Click anywhere to drop a sticky note, then type your comment.',
-        stamp: 'Click a page to place the stamp, or drag to size it.'
+        stamp: 'Pick a stamp, then click a page to place it, or drag to size it. ' +
+               '<b>Image</b> turns a picture of your own into a stamp you can reuse.'
       }[T.t];
     });
 
@@ -94,13 +132,116 @@
       '<option value="5">Bold · 5pt</option><option value="12">Marker · 12pt</option></select>';
     const stampCtl = document.createElement('div');
     stampCtl.className = 'txctl anno-ctl'; stampCtl.id = 'stampCtl'; stampCtl.hidden = true;
-    stampCtl.innerHTML = '<span class="anno-lbl">Stamp</span><select id="stampK" aria-label="Stamp">' +
-      STAMPS.map(function (s) { return '<option value="' + s.k + '">' + s.text + '</option>'; }).join('') +
-      '</select>';
+    stampCtl.innerHTML = '<span class="anno-lbl">Stamp</span>' +
+      '<select id="stampK" aria-label="Stamp">' + stampOptions() + '</select>' +
+      '<span class="stampimgs" id="stampImgs"></span>' +
+      '<button type="button" class="btn stampadd" id="stampAdd" data-label="Image"' +
+      ' title="Make a stamp from a picture of your own" aria-label="Make a stamp from a picture">' +
+      '<svg viewBox="0 0 24 24"><rect x="3" y="5" width="12" height="11" rx="2"/>' +
+      '<circle cx="7.5" cy="9.5" r="1.4"/><path d="M3 14l3.5-2.6L10 14"/>' +
+      '<path d="M19 6v7M15.5 9.5h7"/></svg></button>' +
+      '<input type="file" id="stampFile" accept="image/png,image/jpeg,image/webp,image/*" hidden>';
     modeBar.insertBefore(inkCtl, $('pinShowList'));
     modeBar.insertBefore(stampCtl, $('pinShowList'));
     $('inkW').addEventListener('change', function () { inkWidth = parseFloat(this.value); });
-    $('stampK').addEventListener('change', function () { stampKind = this.value; });
+    $('stampK').addEventListener('change', function () {
+      stampKind = this.value; stampImg = null; paintImgStamps();
+    });
+
+    /* ---- stamps of your own: a picture, kept on this device ----
+       A placed one is an 'istamp' mark: the picture in a box, which the
+       engine embeds into the saved PDF the way it does a signature. */
+
+    const IMG_KEY = 'adddots.stamps';
+    const IMG_MAX = 8;              /* a strip, not a gallery */
+    let imgStamps = [];
+    try {
+      const got = JSON.parse(localStorage.getItem(IMG_KEY) || '[]');
+      if (Array.isArray(got)) {
+        imgStamps = got.filter(function (s) { return s && s.id && s.url; }).slice(0, IMG_MAX);
+      }
+    } catch (e) { imgStamps = []; }
+
+    function saveImgStamps() {
+      try { localStorage.setItem(IMG_KEY, JSON.stringify(imgStamps)); }
+      catch (e) { X.toast('This device has no room to remember that stamp'); }
+    }
+    function imgStampById(id) {
+      for (let i = 0; i < imgStamps.length; i++) if (imgStamps[i].id === id) return imgStamps[i];
+      return null;
+    }
+    function paintImgStamps() {
+      const box = $('stampImgs');
+      if (!box) return;
+      box.innerHTML = imgStamps.map(function (s) {
+        const nm = X.esc(s.name || 'Stamp');
+        return '<span class="stampimg' + (stampImg === s.id ? ' on' : '') + '" data-id="' + X.esc(s.id) + '">' +
+          '<button type="button" class="pick" title="' + nm + '" aria-label="' + nm + '"' +
+          (stampImg === s.id ? ' aria-pressed="true"' : '') + '>' +
+          '<img src="' + s.url + '" alt=""></button>' +
+          '<button type="button" class="x" data-del="' + X.esc(s.id) + '"' +
+          ' title="Forget this stamp" aria-label="Forget ' + nm + '">&times;</button></span>';
+      }).join('');
+      $('stampK').classList.toggle('off', !!stampImg);
+    }
+    $('stampImgs').addEventListener('click', function (e) {
+      const del = e.target.closest('[data-del]');
+      if (del) {
+        const id = del.getAttribute('data-del');
+        imgStamps = imgStamps.filter(function (s) { return s.id !== id; });
+        if (stampImg === id) stampImg = null;
+        saveImgStamps(); paintImgStamps();
+        return;
+      }
+      const row = e.target.closest('.stampimg');
+      if (!row) return;
+      stampImg = row.getAttribute('data-id');
+      paintImgStamps();
+    });
+    $('stampAdd').addEventListener('click', function () { $('stampFile').click(); });
+    $('stampFile').addEventListener('change', function (e) {
+      const f = e.target.files && e.target.files[0];
+      this.value = '';
+      if (!f) return;
+      readStampFile(f).then(function (got) {
+        if (!got) { X.toast('That picture could not be read'); return; }
+        const name = (f.name || 'Stamp').replace(/\.[^.]+$/, '').slice(0, 40) || 'Stamp';
+        imgStamps.unshift({ id: 'is' + Date.now().toString(36), name: name,
+                            url: got.url, w: got.w, h: got.h });
+        imgStamps = imgStamps.slice(0, IMG_MAX);
+        stampImg = imgStamps[0].id;
+        saveImgStamps(); paintImgStamps();
+        X.toast('Stamp ready — click a page to place it');
+      });
+    });
+
+    /* Big pictures are scaled down first. A stamp is a couple of inches
+       across, so 800 pixels is already more than printing can show, and the
+       whole picture rides inside every mark and inside this device's store. */
+    function readStampFile(f) {
+      return new Promise(function (res) {
+        const r = new FileReader();
+        r.onerror = function () { res(null); };
+        r.onload = function () {
+          const img = new Image();
+          img.onerror = function () { res(null); };
+          img.onload = function () {
+            const k = Math.min(1, 800 / Math.max(img.width, img.height));
+            if (k === 1) { res({ url: r.result, w: img.width, h: img.height }); return; }
+            const c = document.createElement('canvas');
+            c.width = Math.max(1, Math.round(img.width * k));
+            c.height = Math.max(1, Math.round(img.height * k));
+            c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+            /* a photograph stays a JPEG; anything else keeps its transparency */
+            const type = f.type === 'image/jpeg' ? 'image/jpeg' : 'image/png';
+            res({ url: c.toDataURL(type, 0.92), w: c.width, h: c.height });
+          };
+          img.src = r.result;
+        };
+        r.readAsDataURL(f);
+      });
+    }
+    paintImgStamps();
 
     /* a colour row of our own: the core swatches drive S.color, but a
        highlighter wants pastels and a strike-out wants ink colours */
@@ -435,17 +576,48 @@
       r.style.strokeWidth = Math.max(1.5, h * 0.06);
       r.style.strokeOpacity = 0.9;
       g.appendChild(r);
-      const t = document.createElementNS(SVGNS, 'text');
-      t.setAttribute('x', x + w / 2); t.setAttribute('y', y + h / 2);
-      t.setAttribute('text-anchor', 'middle');
-      t.setAttribute('dominant-baseline', 'central');
-      t.textContent = def.text;
-      t.style.fill = def.c;
-      t.style.fontWeight = '700';
-      t.style.fontFamily = 'Helvetica, Arial, sans-serif';
-      t.style.fontSize = Math.max(6, h * 0.42) + 'px';
-      t.style.letterSpacing = (h * 0.03) + 'px';
-      g.appendChild(t);
+      /* The engine places the lines (one, or a title over its date) and
+         shrinks a line too long for the box, so the saved file matches. Its
+         baselines come up from the bottom of the box; SVG measures down. */
+      stampLayout(s, w, h, stampMeasure).forEach(function (l) {
+        const t = document.createElementNS(SVGNS, 'text');
+        t.setAttribute('x', x + w / 2); t.setAttribute('y', y + h - l.y);
+        t.setAttribute('text-anchor', 'middle');
+        t.textContent = l.text;
+        t.style.fill = def.c;
+        t.style.fontWeight = '700';
+        t.style.fontFamily = 'Helvetica, Arial, sans-serif';
+        t.style.fontSize = l.size + 'px';
+        g.appendChild(t);
+      });
+      g.style.pointerEvents = 'all';
+      g.style.cursor = 'move';
+      if (idx >= 0) g.addEventListener('pointerdown', function (e) { X.beginDrag(it, idx, e, 'move'); });
+      return g;
+    }
+
+    /* A stamp made from a picture of your own: drawn like a signature, and
+       turned about its own middle the same way. */
+    function istampEl(it, s, vp, idx) {
+      const a = vp.convertToViewportPoint(s.a[0], s.a[1]);
+      const b = vp.convertToViewportPoint(s.b[0], s.b[1]);
+      const x = Math.min(a[0], b[0]), y = Math.min(a[1], b[1]);
+      const w = Math.abs(b[0] - a[0]), h = Math.abs(b[1] - a[1]);
+      const g = document.createElementNS(SVGNS, 'g');
+      g.setAttribute('class', 'stamp-mk istamp-mk');
+      if (s.r) {
+        const mid = X.shapeMid(s);
+        g.setAttribute('transform', 'rotate(' + X.dirAngle(vp, mid[0], mid[1], s.r) +
+          ',' + (x + w / 2) + ',' + (y + h / 2) + ')');
+      }
+      const im = document.createElementNS(SVGNS, 'image');
+      im.setAttribute('x', x); im.setAttribute('y', y);
+      im.setAttribute('width', w); im.setAttribute('height', h);
+      im.setAttribute('preserveAspectRatio', 'none');
+      im.setAttributeNS('http://www.w3.org/1999/xlink', 'href', s.url);
+      im.setAttribute('href', s.url);
+      if (s.o != null) im.setAttribute('opacity', s.o);
+      g.appendChild(im);
       g.style.pointerEvents = 'all';
       g.style.cursor = 'move';
       if (idx >= 0) g.addEventListener('pointerdown', function (e) { X.beginDrag(it, idx, e, 'move'); });
@@ -485,14 +657,18 @@
       const el = document.createElement('div');
       el.className = 'row';
       el.innerHTML = '<span class="anno-lbl">Stamp</span><select id="mpStampK" aria-label="Stamp">' +
-        STAMPS.map(function (d) { return '<option value="' + d.k + '">' + d.text + '</option>'; }).join('') +
-        '</select>';
+        stampOptions() + '</select>';
       el.addEventListener('click', function (e) { e.stopPropagation(); });
       el.querySelector('select').addEventListener('change', function () {
         const sel = S.sel, sh = sel && sel.it && sel.it.shapes[sel.i];
         if (!sh || sh.t !== 'stamp') return;
         X.snapshot();
         sh.k = this.value;
+        /* changed into a dated stamp, it takes today's date; out of one, it
+           drops the date rather than keeping a line with nothing to say */
+        const def = STAMP_BY_K[sh.k];
+        if (def && def.dated) { if (!sh.dt) sh.dt = todayText(); }
+        else delete sh.dt;
         X.drawShapes(sel.it); X.drawThumb(sel.it); X.updateMeta();
       });
       X.markPop.stamp = {
@@ -506,11 +682,15 @@
     X.handleKind.ink = 'bbox';
     X.handleKind.stamp = 'box';
     X.handleKind.note = 'point';
+    /* a picture scales from its corners, and holds its shape unless Shift */
+    X.handleKind.istamp = 'rect';
+    X.keepRatio.istamp = function (s) { return !!s.lock; };
 
     X.shapeRenderers.markup = markupEl;
     X.shapeRenderers.ink = inkEl;
     X.shapeRenderers.note = noteEl;
     X.shapeRenderers.stamp = stampEl;
+    X.shapeRenderers.istamp = istampEl;
 
     /* ---------------- writing the marks into the PDF ----------------
        E.annotatePainters, in E.saveHooks */
@@ -616,6 +796,40 @@
     };
 
     let stampDrag = null;
+
+    /* The mark a press makes, ready to draw: a dragged box when the drag is
+       big enough to mean one, and otherwise a sensible size under the
+       pointer. A picture holds its own shape either way. */
+    function stampShape(a, b) {
+      const drag = b && (Math.abs(b[0] - a[0]) >= 8 && Math.abs(b[1] - a[1]) >= 6);
+      if (stampImg) {
+        const def = imgStampById(stampImg);
+        if (!def) return null;
+        const ar = (def.w || 1) / Math.max(1, def.h || 1);
+        let w = drag ? Math.abs(b[0] - a[0]) : 120, h = drag ? Math.abs(b[1] - a[1]) : 0;
+        /* the picture fits inside the box drawn, keeping its proportions */
+        if (!drag || w / Math.max(h, 0.01) > ar) h = w / ar; else w = h * ar;
+        const x = drag && b[0] < a[0] ? a[0] - w : a[0];
+        /* dragged upwards it grows from the press; otherwise it hangs under it */
+        const y = drag && b[1] >= a[1] ? a[1] : a[1] - h;
+        return { t: 'istamp', url: def.url, iw: def.w, ih: def.h, lock: true,
+                 a: [x, y], b: [x + w, y + h] };
+      }
+      const def = STAMP_BY_K[stampKind] || STAMPS[0];
+      const sh = { t: 'stamp', k: def.k };
+      if (def.dated) sh.dt = todayText();
+      if (drag) {
+        sh.a = [Math.min(a[0], b[0]), Math.min(a[1], b[1])];
+        sh.b = [Math.max(a[0], b[0]), Math.max(a[1], b[1])];
+        return sh;
+      }
+      /* a click: a box the words fit in, hanging under the pointer */
+      const box = stampBox(sh, stampMeasure);
+      sh.a = [a[0], a[1] - box.h];
+      sh.b = [a[0] + box.w, a[1]];
+      return sh;
+    }
+
     X.tools.stamp = {
       down: function (it, at) {
         if (!it.vp) return;
@@ -623,8 +837,8 @@
       },
       move: function (it, at) {
         if (!stampDrag || stampDrag.it !== it) return;
-        const b = it.vp.convertToPdfPoint(at[0], at[1]);
-        X.drawShapes(it, { t: 'stamp', k: stampKind, a: stampDrag.a, b: b });
+        const sh = stampShape(stampDrag.a, it.vp.convertToPdfPoint(at[0], at[1]));
+        if (sh) X.drawShapes(it, sh);
       },
       cancel: function (it) {
         if (!stampDrag) return;
@@ -633,17 +847,13 @@
       },
       up: function (it, at) {
         if (!stampDrag || stampDrag.it !== it) return;
-        const a = stampDrag.a, b = it.vp.convertToPdfPoint(at[0], at[1]);
+        const a = stampDrag.a;
         stampDrag = null;
-        let x1 = a[0], y1 = a[1], x2 = b[0], y2 = b[1];
-        /* a plain click gets a sensible default size rather than nothing */
-        if (Math.abs(x2 - x1) < 8 || Math.abs(y2 - y1) < 6) {
-          x1 = a[0]; y1 = a[1] - 30; x2 = a[0] + 150; y2 = a[1];
-        }
+        const sh = stampShape(a, it.vp.convertToPdfPoint(at[0], at[1]));
+        if (!sh) { X.toast('Pick a stamp first'); return; }
+        sh.id = nextId();
         X.snapshot();
-        it.shapes.push({ t: 'stamp', k: stampKind, id: nextId(),
-                         a: [Math.min(x1, x2), Math.min(y1, y2)],
-                         b: [Math.max(x1, x2), Math.max(y1, y2)] });
+        it.shapes.push(sh);
         X.drawShapes(it); X.drawThumb(it); X.updateMeta();
       }
     };
