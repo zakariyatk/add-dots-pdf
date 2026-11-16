@@ -647,7 +647,7 @@
     X.handleKind.cloud = 'rect';
     X.handleKind.arc = 'line';
     X.handleKind.dim = 'line';
-    X.handleKind.poly = 'bbox';
+    X.handleKind.poly = 'verts';
 
     /* ---------------- writing into the PDF ---------------- */
 

@@ -2857,6 +2857,24 @@
     }
   }
 
+  /* One point of a pts-only mark (a Continuous Line) dragged to p. If it was
+     closed — its first and last point the same, before this drag touched it
+     — dragging either end keeps the loop shut by moving the other end with
+     it, the way dragging one corner of a closed shape should. */
+  function setVertex(s, o, i, p) {
+    /* o.pts is s.pts itself (copyShape never clones it), so whether it was
+       closed has to be read before this tick's own write touches it —
+       otherwise the far end is being compared against the near end's new
+       value, not its own old one */
+    const n = o.pts.length;
+    const closed = n > 2 && o.pts[0][0] === o.pts[n - 1][0] && o.pts[0][1] === o.pts[n - 1][1];
+    s.pts[i] = [p[0], p[1]];
+    if (closed) {
+      if (i === 0) s.pts[n - 1] = [p[0], p[1]];
+      else if (i === n - 1) s.pts[0] = [p[0], p[1]];
+    }
+  }
+
   function dragMove(e) {
     const d = dragOn; if (!d) return;
     const s = d.it.shapes[d.idx];
@@ -2892,6 +2910,10 @@
       s.a = [p[0], p[1]];
     } else if (d.mode === 'pb') {
       s.b = [p[0], p[1]];
+    } else if (d.mode === 'pv' && EXT.snapPt && (d.snapTo = EXT.snapPt(d.it, p, e, { skip: d.idx }))) {
+      setVertex(s, o, d.extra, d.snapTo);
+    } else if (d.mode === 'pv') {
+      setVertex(s, o, d.extra, p);
     } else if (d.mode === 'corner') {
       /* a mark that keeps its proportions (EXT.keepRatio) frees them with
          Shift; any other box squares up with Shift */
@@ -3301,7 +3323,7 @@
       el.setAttribute('cx', v[0]); el.setAttribute('cy', v[1]); el.setAttribute('r', turn ? 9 : 5);
       el.setAttribute('class', 'kn' + (turn ? ' turn' : ''));
       /* which cursor the grip wears: a point to drag, or a size to pull */
-      el.dataset.cur = turn ? 'rotate' : (mode === 'pa' || mode === 'pb') ? 'point' : 'nwse';
+      el.dataset.cur = turn ? 'rotate' : (mode === 'pa' || mode === 'pb' || mode === 'pv') ? 'point' : 'nwse';
       el.addEventListener('pointerdown', function (e) { beginDrag(it, idx, e, mode, extra); });
       g.appendChild(el);
       if (turn) {
@@ -3400,6 +3422,16 @@
       /* 'ends': two grips and nothing to turn — a radius or an angle is
          defined by where its points are, so rotating it means nothing */
       if (kind !== 'ends') turnGrip(a, b);
+    } else if (kind === 'verts') {
+      /* every point of its own line or polygon, each one draggable on its
+         own — a Continuous Line adjusts the way a plain Line's two ends do,
+         just with as many grips as it has points */
+      const vq = (s.pts || []).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+      const hl = document.createElementNS(SVGNS, 'polyline');
+      hl.setAttribute('class', 'halo');
+      hl.setAttribute('points', vpts(vq));
+      g.appendChild(hl);
+      vq.forEach(function (v, i) { knob(v, 'pv', i); });
     } else if (s.t === 'text') {
       const q = textQuad(s, vp);
       const out = document.createElementNS(SVGNS, 'polygon');
