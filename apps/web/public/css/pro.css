@@ -1212,6 +1212,10 @@ body.move-mode .anno .grab { cursor: var(--cur-move) }
    as a filled one already does, without touching fill itself (so a mark
    that really is filled keeps its own colour, not a forced transparent) */
 body.move-mode .anno .sh { pointer-events: all }
+/* the empty page too, not just a mark on it — ready to move something
+   wherever the pointer sits, the plain way Pan's own cursor covers its
+   whole capture area rather than only what is actually under it */
+body.move-mode .pagebox { cursor: var(--cur-move) }
 .anno .kn { cursor: var(--cur-nwse) }
 .anno .kn[data-cur="nesw"] { cursor: var(--cur-nesw) }
 .anno .kn[data-cur="point"] { cursor: var(--cur-arrow-point) }
