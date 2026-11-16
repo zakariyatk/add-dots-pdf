@@ -112,7 +112,12 @@
         /* setTool always drops the current selection, right for an actual
            tool change but not for a click that is only confirming the one
            you are already in — whatever was selected stays selected */
-        b.addEventListener('click', function () { if (X.S.tool !== 'select') X.setTool('select'); });
+        b.addEventListener('click', function () {
+          if (X.S.tool !== 'select') X.setTool('select');
+          /* setTool just dropped this (any real tool change does); back on,
+             so a shape under the pointer reads as move, not plain arrow-obj */
+          document.body.classList.add('move-mode');
+        });
       } else {
         b.title = 'Select (V)';
         b.setAttribute('aria-label', 'Select tool');

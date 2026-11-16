@@ -8302,6 +8302,9 @@
     S.tool = t;
     S.sel = null;
     document.body.dataset.tool = t;
+    /* the Move button's own "looks like Select" cursor (toolbar.js); any
+       real tool change drops it, Move puts it straight back on afterward */
+    document.body.classList.remove('move-mode');
     const BTNS = Object.assign({}, TOOL_BTN, EXT.toolBtn);   /* modules register after boot */
     Object.keys(BTNS).forEach(function (k) {
       const el = $(BTNS[k]); if (el) el.classList.toggle('on', k === t);
