@@ -455,9 +455,25 @@
        poly.ts) — no a/b, so it moves and resizes as a whole (core.js's
        markPts/moveShape/scaleBy already know a pts-only mark, the way ink
        and vpath work). */
+    /** Snapped back onto its own first point (polySelfSnap), a line is a
+        closed shape and can take a fill — same test the PDF side (poly.ts)
+        makes from the saved points. */
+    function polyClosed(s) {
+      if (!s.pts || s.pts.length < 3) return false;
+      const a = s.pts[0], b = s.pts[s.pts.length - 1];
+      return Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.01;
+    }
+    X.polyClosed = polyClosed;
     X.shapeRenderers.poly = function (it, s, vp, idx) {
       const g = document.createElementNS(SVGNS, 'g');
-      g.appendChild(stroked(polyline(s.pts, vp, false), s, idx, it));
+      const el = polyline(s.pts, vp, false);
+      stroked(el, s, idx, it);
+      if (s.fill && polyClosed(s)) {
+        el.style.fill = s.fill;
+        el.style.fillOpacity = X.shOp(s);
+        el.style.pointerEvents = 'all';
+      }
+      g.appendChild(el);
       return g;
     };
 

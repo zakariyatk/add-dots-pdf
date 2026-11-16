@@ -3188,7 +3188,10 @@
     if (!s || dragOn) { pop.hidden = true; closeSwatches(); return; }
     buildMarkPop();
     const isText = s.t === 'text';
-    const isBox = s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath';     /* a shape off the page fills too */
+    /* a shape off the page fills too — a Continuous Line only once it is
+       snapped shut back onto its own first point */
+    const isBox = s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath' ||
+      (s.t === 'poly' && EXT.polyClosed && EXT.polyClosed(s));
     /* a picture: no line to style (a signature, or a stamp made from one) */
     const isPic = s.t === 'sig' || s.t === 'istamp';
     const count = selList().length;
