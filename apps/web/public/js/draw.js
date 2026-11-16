@@ -961,7 +961,9 @@
       poly = null;
       if (!had) return;         /* nothing was in progress: the point just acquired for the
                                     line about to start is not this call's to give up */
-      trackClear();             /* this line is done; a tracked point is not the next one's */
+      trackStart(had.it, null); /* this line is done; its own guide and a tracked point
+                                    acquired for it go back, so neither carries into the next one */
+      readHide();
       const it = had.it;
       if (commit && had.pts.length > 1) {
         X.snapshot();
@@ -985,6 +987,7 @@
         let p = sn || raw;
         if (e && e.shiftKey && !sn) p = X.snapLine(last, p);
         X.drawShapes(it, polyGhost(poly.pts.concat([p])));
+        readShow(it, last, p);
       },
       cancel: function () { endPoly(poly && poly.pts.length >= 2); },
       up: function (it, at, e) {
@@ -995,6 +998,7 @@
         if (!poly || poly.it !== it) {          /* the first point, or a jump to another page */
           endPoly(false);
           poly = { it: it, pts: [p] };
+          trackStart(it, p);             /* the next segment's own guide, from here */
           $('modeHint').innerHTML = 'Click the next point. <b>Enter</b>, <b>Esc</b> or ' +
             'double-click ends the line.';
           return;
@@ -1004,6 +1008,7 @@
         if (e && e.shiftKey && !sn) q = X.snapLine(last, q);
         if (Math.hypot(q[0] - last[0], q[1] - last[1]) < 3) return;   /* the second click of a double-click */
         poly.pts.push(q);
+        trackStart(it, q);               /* each segment runs its guide from the point before it */
         X.drawShapes(it, polyGhost(poly.pts));
       }
     };
