@@ -1207,6 +1207,11 @@ body.move-mode .anno .tx,
 body.move-mode .anno .patch,
 body.move-mode .anno .redact-mk,
 body.move-mode .anno .grab { cursor: var(--cur-move) }
+/* an open box or circle (fill: none) only ever caught a click on its own
+   stroke — pointer-events: all catches one anywhere inside it too, same
+   as a filled one already does, without touching fill itself (so a mark
+   that really is filled keeps its own colour, not a forced transparent) */
+body.move-mode .anno .sh { pointer-events: all }
 .anno .kn { cursor: var(--cur-nwse) }
 .anno .kn[data-cur="nesw"] { cursor: var(--cur-nesw) }
 .anno .kn[data-cur="point"] { cursor: var(--cur-arrow-point) }
