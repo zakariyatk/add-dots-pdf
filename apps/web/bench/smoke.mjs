@@ -3709,10 +3709,14 @@ try {
     await page.goto(URL);
     /* the bell's own dot: unread build notes, lit without a click */
     await page
-      .waitForFunction(() => {
-        const d = document.querySelector('#abNews .abdot');
-        return !!d && !d.hidden;
-      }, null, { timeout: 10000 })
+      .waitForFunction(
+        () => {
+          const d = document.querySelector('#abNews .abdot');
+          return !!d && !d.hidden;
+        },
+        null,
+        { timeout: 10000 },
+      )
       .catch(() => {});
     const litForNotes = await page.evaluate(() => {
       const d = document.querySelector('#abNews .abdot');
