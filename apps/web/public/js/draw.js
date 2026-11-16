@@ -959,8 +959,9 @@
     function endPoly(commit) {
       const had = poly;
       poly = null;
+      if (!had) return;         /* nothing was in progress: the point just acquired for the
+                                    line about to start is not this call's to give up */
       trackClear();             /* this line is done; a tracked point is not the next one's */
-      if (!had) return;
       const it = had.it;
       if (commit && had.pts.length > 1) {
         X.snapshot();
