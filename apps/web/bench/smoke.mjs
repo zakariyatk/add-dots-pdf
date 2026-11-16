@@ -3688,8 +3688,6 @@ try {
         },
         event: { listen: async () => () => {} },
       };
-      /* a build seen before this one: this start follows an update */
-      localStorage.setItem('adddots.build.seen', 'an-older-build');
     });
     await uctx.route('https://pdf.adddots.com/latest.js*', (r) =>
       r.fulfill({
@@ -3709,30 +3707,36 @@ try {
       if (!/sandboxed and lacks the 'allow-same-origin' flag/.test(e.message)) errors.push(e.message);
     });
     await page.goto(URL);
-    const bars = [];
+    /* the bell's own dot: unread build notes, lit without a click */
     await page
-      .waitForFunction(
-        () => /updated/.test((document.querySelector('#updBar b') || {}).textContent || ''),
-        null,
-        { timeout: 10000 },
-      )
+      .waitForFunction(() => {
+        const d = document.querySelector('#abNews .abdot');
+        return !!d && !d.hidden;
+      }, null, { timeout: 10000 })
       .catch(() => {});
-    bars.push(await page.evaluate(() => (document.querySelector('#updBar b') || {}).textContent || ''));
-    await page.click('#updBar .btn.primary').catch(() => {});
+    const litForNotes = await page.evaluate(() => {
+      const d = document.querySelector('#abNews .abdot');
+      return !!d && !d.hidden;
+    });
+    /* its panel asks fresh, finds the newer build, and offers to take it */
+    await page.click('#abNews');
     await page
       .waitForFunction(
-        () => /available/.test((document.querySelector('#updBar b') || {}).textContent || ''),
+        () => /available/.test((document.getElementById('abVerState') || {}).textContent || ''),
         null,
         { timeout: 15000 },
       )
       .catch(() => {});
-    bars.push(await page.evaluate(() => (document.querySelector('#updBar b') || {}).textContent || ''));
-    await page.click('#updBar .btn.primary').catch(() => {});
+    const panel = await page.evaluate(() => ({
+      state: (document.getElementById('abVerState') || {}).textContent || '',
+      goShown: !document.getElementById('abVerGo').hidden,
+    }));
+    await page.click('#abVerGo').catch(() => {});
     const store = await page.evaluate(() => window.__store === true);
     check(
-      'after an update the app says what is new; the Windows app hears of a newer build and opens the Store',
-      /updated/.test(bars[0]) && /available/.test(bars[1]) && store,
-      { bars, store },
+      'the bell lights up for unread build notes and a newer build; its Update button opens the Store',
+      litForNotes && /available/.test(panel.state) && panel.goShown && store,
+      { litForNotes, panel, store },
     );
     check('no errors on the page', errors.length === 0, errors);
     await uctx.close();
