@@ -10052,6 +10052,11 @@
       /* A dialog on top owns Escape. Dropping the tool as well would be a
          second, unasked-for thing happening on one key press. */
       if (overlayOpen()) return;
+      /* Move looks like its own tool but is Select underneath (toolbar.js),
+         so dropping a real tool here never touches it — clear the one thing
+         that actually says Move is on, the same way any other tool goes
+         down on Escape */
+      if (document.body.classList.contains('move-mode')) { document.body.classList.remove('move-mode'); return; }
       if (S.tool !== 'select') setTool('select');
       return;
     }
