@@ -1725,7 +1725,12 @@
     const trkSvg = document.createElementNS(NS, 'svg');
     trkSvg.setAttribute('class', 'snaptrack');
     trkSvg.setAttribute('aria-hidden', 'true');
-    trkSvg.hidden = true;
+    /* trkSvg is an SVG element: the global `hidden` IDL attribute does not
+       reflect onto it the way it does on an HTMLElement (confirmed in real
+       Chrome — setting .hidden here never touches the actual attribute), so
+       CSS's [hidden] selector never matches it and it stays display:block
+       forever once first shown. style.display is what actually hides it. */
+    trkSvg.style.display = 'none';
     document.body.appendChild(trkSvg);
     /* one line per guide and one badge per acquired point, kept and reused:
        this is redrawn on every pointer move */
@@ -1751,7 +1756,7 @@
       /* always the acquired points' own page, whatever page the pointer is over */
       const it = (acqs[0] && acqs[0].it) || (opStart && opStart.it);
       if (!it || !it.vp || !it.anno || (!acqs.length && !opStart)) {
-        if (!trkSvg.hidden) trkSvg.hidden = true;
+        if (trkSvg.style.display !== 'none') trkSvg.style.display = 'none';
         return;
       }
       const stage = $('stage').getBoundingClientRect();
@@ -1794,7 +1799,7 @@
           'd', 'M' + (x - 4) + ' ' + y + 'h8M' + x + ' ' + (y - 4) + 'v8');
       });
       trkTrim('path', here.length);
-      trkSvg.hidden = false;
+      trkSvg.style.display = '';
     }
     /* the guides are drawn against the window, so anything that moves the page
        under them has to put them back */
