@@ -1285,7 +1285,6 @@
      in the Windows app the window's controls) stays in reach */
   body.has-appbar :is(.home,#lb,#vidPlay,#cam,#pm,.scrim,.orgview,.sigmodal,.docmodal,.shsplash,.bk){top:var(--appbar-h)}
   body.has-appbar .dtframes{top:calc(var(--appbar-h) + var(--doctabs-h,34px))}
-  body.has-appbar .updbar{top:calc(58px + var(--appbar-h))}
   /* the strip shows the logo; the toolbar's would be a second one under it */
   body.has-appbar .bar .brand,html.in-doctab .bar .brand{display:none}
   .appbar .abgrow{flex:1;align-self:stretch}

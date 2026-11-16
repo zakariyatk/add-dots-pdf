@@ -1,20 +1,22 @@
 /* Add Dots PDF — Updates
    ---------------------
-   Telling the reader about a new version, wherever the app runs:
+   Telling the reader about a new version, wherever the app runs — always
+   through the bell (What is new, js/appbar.js), never a banner of its own
+   over the page: flagBell() lights its dot, and the bell's own click
+   handler asks X.checkForUpdate() fresh for what to show and do about it.
 
    - On the website the service worker fetches a new version by itself
      (js/pwa.js). With no document open the page simply reloads into it; with
-     one open, the bar below says an update is ready and offers to take it.
+     one open, the bell lights up and the reload is one click away there.
    - The Windows app from the Microsoft Store asks the Store itself whether
      it has a newer version (src-tauri/src/store.rs), and installs it from
      the app. The website is no guide there: a build reaches the Store only
      once it is submitted and certified, days after the website has it.
    - The setup .exe and the phone apps carry every file and do not change on
      their own. They load latest.js from the website, which names the build
-     the website has; when that is newer than this one, the bar offers the
-     update: on Windows, this app's page in the Microsoft Store.
-   - After any update, the first start shows what is new (whatsnew.json,
-     built into js/build.js).
+     the website has; when that is newer than this one, the bell lights up,
+     and its own click takes the update: on Windows, this app's page in the
+     Microsoft Store.
 
    js/build.js says which build this is; without it (development) nothing
    here runs. */
@@ -30,49 +32,12 @@
   const IN_FRAME = window.parent !== window;
   const IN_PHONE = !!(window.Capacitor && window.Capacitor.isNativePlatform &&
     window.Capacitor.isNativePlatform());
-  const SEEN = 'adddots.build.seen';
-  const LATER = 'adddots.update.later';
 
-  function get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
-  function set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* not kept */ } }
-  function esc(s) { return X.esc ? X.esc(s) : String(s); }
-
-  /* ---------------- the bar ----------------
-     One at a time, under the top bar on the right, until it is acted on or
-     closed: a toast would be gone before it is read. */
-  let bar = null;
-  function showBar(title, text, actions) {
-    hideBar();
-    bar = document.createElement('div');
-    bar.className = 'updbar'; bar.id = 'updBar';
-    bar.setAttribute('role', 'status');
-    bar.innerHTML =
-      '<span class="updico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3v12"/>' +
-      '<polyline points="7 10 12 15 17 10"/><path d="M5 21h14"/></svg></span>' +
-      '<div class="updtxt"><b>' + esc(title) + '</b>' + (text ? '<span>' + text + '</span>' : '') + '</div>' +
-      '<div class="updacts"></div>' +
-      '<button type="button" class="updx" aria-label="Close" title="Close">×</button>';
-    const acts = bar.querySelector('.updacts');
-    (actions || []).forEach(function (a) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'btn' + (a.primary ? ' primary' : '');
-      b.textContent = a.label;
-      b.addEventListener('click', function () { if (a.run) a.run(); if (a.close !== false) hideBar(); });
-      acts.appendChild(b);
-    });
-    bar.querySelector('.updx').addEventListener('click', function () {
-      hideBar();
-      if (bar && bar.onclose) bar.onclose();
-    });
-    document.body.appendChild(bar);
-    return bar;
-  }
-  function hideBar() { if (bar) { bar.remove(); bar = null; } }
-
-  function notesHtml(notes) {
-    const n = (notes || []).slice(0, 4);
-    return n.length ? '<ul>' + n.map(function (t) { return '<li>' + esc(t) + '</li>'; }).join('') + '</ul>' : '';
+  /* the one visible sign any of this ever gives: What is new's own dot
+     (js/appbar.js) — lit, never a banner over the page */
+  function flagBell() {
+    const dot = document.querySelector('#abNews .abdot');
+    if (dot) dot.hidden = false;
   }
 
   /* ---------------- website: the service worker has the update ---------------- */
@@ -90,10 +55,7 @@
   /* js/pwa.js calls this when an update is ready but a document is open */
   X.updateReady = function () {
     webReady = true;
-    showBar('A new version of Add Dots PDF is ready', 'Update now to get the latest tools.', [
-      { label: 'Update now', primary: true, run: reloadIntoUpdate },
-      { label: 'Later' }
-    ]);
+    flagBell();
   };
 
   /* ---------------- Windows and phone apps: is the website newer? ---------------- */
@@ -146,24 +108,6 @@
   /* for the desktop end-to-end test: what the website says, or null */
   X.latestBuild = fetchLatest;
 
-  function offerAppUpdate(v) {
-    if (!v || !v.time || !BUILD || !BUILD.time) return;
-    if (!newer(v)) return;                                      /* this build, or older */
-    /* "Later" waits a day before asking about the same build again */
-    const later = (get(LATER) || '').split('|');
-    if (later[0] === v.id && Date.now() - (+later[1] || 0) < 86400000) return;
-    const later1 = { label: 'Later', run: function () { set(LATER, v.id + '|' + Date.now()); } };
-    if (IN_DESKTOP && X.openStore) {
-      showBar('An update for Add Dots PDF is available',
-        'The Microsoft Store installs it. What is new:' + notesHtml(v.notes),
-        [{ label: 'Update', primary: true, run: openStorePage }, later1]);
-    } else {
-      /* the phone apps, until they are in their stores: the website has it */
-      showBar('A newer version of Add Dots PDF is available',
-        'It is on the website now. What is new:' + notesHtml(v.notes),
-        [{ label: 'Open website', primary: true, run: openSite }, later1]);
-    }
-  }
   function newer(v) { return !!(v && v.time && BUILD && BUILD.time && v.time > BUILD.time + 60000); }
   function openStorePage() {
     X.openStore().catch(function () {
@@ -172,15 +116,6 @@
   }
   function openSite() { window.open(site(), '_blank'); }
 
-  /* the Store's install: the Store has a newer version */
-  function offerStoreUpdate() {
-    const later = (get(LATER) || '').split('|');
-    if (later[0] === 'store' && Date.now() - (+later[1] || 0) < 86400000) return;
-    showBar('An update for Add Dots PDF is available',
-      'The Microsoft Store has a new version. The app closes to install it, then starts again.',
-      [{ label: 'Update', primary: true, run: installFromStore },
-       { label: 'Later', run: function () { set(LATER, 'store|' + Date.now()); } }]);
-  }
   function installFromStore() {
     if (!window.confirm('Add Dots PDF closes to install the update. ' +
                         'Save your PDFs first. Install the update now?')) return;
@@ -196,8 +131,8 @@
 
   /* Asked by What is new (js/appbar.js), as a browser's About page asks:
      resolves to { state: 'latest' } or { state: 'update', run } (run takes
-     the update the way the bar would), or { state: 'unknown' } when no one
-     could say (offline, development). */
+     the update the way its own button does), or { state: 'unknown' } when
+     no one could say (offline, development). */
   X.checkForUpdate = function () {
     if (IN_DESKTOP || IN_PHONE) {
       const store = IN_DESKTOP && X.storeUpdate
@@ -218,36 +153,21 @@
     return Promise.resolve(webReady ? { state: 'update', run: reloadIntoUpdate } : { state: 'latest' });
   };
 
+  /* Soon after start, then every six hours while open: only ever lights
+     the bell, the panel's own click asks fresh for what to do about it. */
   function checkApp() {
     if (!(IN_DESKTOP || IN_PHONE) || !BUILD || IN_FRAME) return;
-    /* the Store's install asks the Store; null means this is not one */
     const store = IN_DESKTOP && X.storeUpdate
       ? X.storeUpdate().catch(function () { return false; })
       : Promise.resolve(null);
     store.then(function (has) {
-      if (has === true) offerStoreUpdate();
-      else if (has === null) fetchLatest().then(offerAppUpdate);
+      if (has === true) flagBell();
+      else if (has === null) fetchLatest().then(function (v) { if (newer(v)) flagBell(); });
     });
-  }
-
-  /* ---------------- after an update: what is new ---------------- */
-
-  function whatsNew() {
-    if (!BUILD || !BUILD.id) return;
-    const seen = get(SEEN);
-    set(SEEN, BUILD.id);
-    /* the very first start is not an update */
-    if (!seen || seen === BUILD.id || !(BUILD.notes && BUILD.notes.length)) return;
-    const b = showBar('Add Dots PDF has been updated', 'What is new:' + notesHtml(BUILD.notes), [
-      { label: 'Got it', primary: true }
-    ]);
-    b.classList.add('updnew');
   }
 
   X.on('ready', function () {
     if (!BUILD) return;
-    setTimeout(whatsNew, 1200);
-    /* the apps: soon after start, then every six hours while open */
     setTimeout(checkApp, 8000);
     setInterval(checkApp, 6 * 3600000);
   });
