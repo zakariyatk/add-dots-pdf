@@ -1272,6 +1272,17 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
   width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #7B5CFF;
   box-shadow: 0 0 0 1px rgba(255,255,255,.7);
 }
+/* how far a drag has moved a mark so far (core.js), beside the cursor */
+.movehud {
+  position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; will-change: transform;
+  padding: 3px 7px; border-radius: 4px; white-space: nowrap;
+  font: 600 11px/1.2 Helvetica, Arial, sans-serif; color: #FFFFFF; background: #2B2B2B;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+.movehud[hidden] { display: none }
+/* held at drop, Ctrl/Cmd leaves a copy behind rather than just moving —
+   the plain copy cursor while it is held says so during the drag itself */
+body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
 .snapbtn {
   height: 26px; padding: 0 9px; border-radius: 6px; border: 1px solid var(--line); background: transparent;
   color: var(--text-dim); font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;

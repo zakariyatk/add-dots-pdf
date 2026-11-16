@@ -2770,6 +2770,31 @@
       hy: bestY ? bestY.to : null
     };
   }
+  /* ---------------- the live dX/dY reading, while a mark is moved ---------- */
+  let moveHud = null;
+  function ensureMoveHud() {
+    if (moveHud) return;
+    moveHud = document.createElement('div');
+    moveHud.className = 'movehud';
+    moveHud.hidden = true;                /* a plain div: .hidden is fine here,
+                                              unlike the SVG guides above */
+    document.body.appendChild(moveHud);
+  }
+  function hideMoveHud() { if (moveHud) moveHud.hidden = true; }
+  /** How far a move has gone, in the document's own measurement unit (the
+      Dimension tool's own scale, EXT.saveState — a plain + or − sign rather
+      than a length going negative, which formatLength never does). */
+  function fmtDelta(v) {
+    const sc = EXT.saveState && EXT.saveState.scale && EXT.saveState.scale();
+    const text = E.formatLength(Math.abs(v), sc);
+    return (v < -0.005 ? '−' : v > 0.005 ? '+' : '±') + text;
+  }
+  function showMoveHud(e, mx, my) {
+    ensureMoveHud();
+    moveHud.textContent = 'x ' + fmtDelta(mx) + '   y ' + fmtDelta(my);
+    moveHud.style.transform = 'translate(' + Math.round(e.clientX + 16) + 'px,' + Math.round(e.clientY + 22) + 'px)';
+    moveHud.hidden = false;
+  }
   /** Move one mark by (mx, my) from its state o — every kind of point it has. */
   function moveShape(s, o, mx, my) {
     if (o.a) s.a = [o.a[0] + mx, o.a[1] + my];
@@ -3013,6 +3038,10 @@
       const guide = smartGuide(d.it, movedBox, skip);
       mx += guide.dx; my += guide.dy;
       showSmartGuide(d.it, guide.vx, guide.hy, offsetBox(movedBox, guide.dx, guide.dy));
+      showMoveHud(e, mx, my);
+      /* held at drop, Ctrl (or Cmd) leaves a copy where the drag started and
+         keeps dragging a new one — a plain cursor says so as it is held */
+      document.body.classList.toggle('dragdup', !!(e.ctrlKey || e.metaKey));
       if (d.group) {
         d.group.forEach(function (m) {
           const sh = d.it.shapes[m.i];
@@ -3061,12 +3090,21 @@
     drawShapes(d.it);
   }
 
-  function dragEnd() {
+  function dragEnd(e) {
     const d = dragOn; if (!d) return;
     dragOn = null;
     if (d.moved) S.draggedAt = Date.now();
     if (EXT.snapHide) EXT.snapHide();
     hideSmartGuide();
+    hideMoveHud();
+    document.body.classList.remove('dragdup');
+    /* Ctrl (or Cmd) still held at the drop: what was dragged is the new
+       copy, left where it landed, and the mark(s) it came from go back —
+       a fresh shape pushed on top at their old place, not a move at all */
+    if (d.moved && d.mode === 'move' && e && (e.ctrlKey || e.metaKey)) {
+      if (d.group) d.group.forEach(function (m) { d.it.shapes.push(copyShape(m.s0)); });
+      else d.it.shapes.push(copyShape(d.s0));
+    }
     if (d.moved) { drawShapes(d.it); updateMeta(); }
     syncMarkPop();
     if (!d.moved) toast('Mark selected · drag or the arrow keys to move, corners to resize, ↻ to turn, <b>Delete</b> to remove');
@@ -3077,6 +3115,8 @@
     const d = dragOn; if (!d) return;
     dragOn = null;
     hideSmartGuide();
+    hideMoveHud();
+    document.body.classList.remove('dragdup');
     if (d.moved) { d.it.shapes[d.idx] = d.s0; drawShapes(d.it); }
   });
 
