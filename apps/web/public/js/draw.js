@@ -2002,6 +2002,7 @@
       X.snapshot();
       it.shapes.push(g);
       pick = null;
+      trackClear();              /* this reading is done; a tracked point is not the next one's */
       $('modeHint').innerHTML = X.hints[t];
       X.drawShapes(it); X.drawThumb(it); X.updateMeta();
       X.toast('<b>' + X.esc(dimLabel(g)) + '</b> · double-click it to retype the reading');
