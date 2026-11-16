@@ -2817,13 +2817,17 @@
       screen-space box and the gap to it in px, or null. box and every
       mark considered are both already in screen pixels. */
   function nearestGap(it, box, skip, dir) {
+    /* box (showDistanceHuds) is already in real screen pixels — every other
+       mark's own has to be too, or "shares the other axis" and "which one
+       is closest" would be comparing an offset box against an unoffset one */
+    const r = it.anno.getBoundingClientRect();
     let best = null, bestGap = Infinity;
     it.shapes.forEach(function (sh, i) {
       if (skip[i] || NOT_SELECTABLE[sh.t]) return;
       const b = markBox(sh);
       const p1 = it.vp.convertToViewportPoint(b.x1, b.y1), p2 = it.vp.convertToViewportPoint(b.x2, b.y2);
-      const theirs = { x1: Math.min(p1[0], p2[0]), x2: Math.max(p1[0], p2[0]),
-                        y1: Math.min(p1[1], p2[1]), y2: Math.max(p1[1], p2[1]) };
+      const theirs = { x1: r.left + Math.min(p1[0], p2[0]), x2: r.left + Math.max(p1[0], p2[0]),
+                        y1: r.top + Math.min(p1[1], p2[1]), y2: r.top + Math.max(p1[1], p2[1]) };
       let gap = null, shares = false;
       if (dir === 'L' && theirs.x2 <= box.x1) { gap = box.x1 - theirs.x2; shares = theirs.y1 < box.y2 && theirs.y2 > box.y1; }
       else if (dir === 'R' && theirs.x1 >= box.x2) { gap = theirs.x1 - box.x2; shares = theirs.y1 < box.y2 && theirs.y2 > box.y1; }
@@ -2836,9 +2840,13 @@
   /** Up to one label a side, for boxPdf (the dragged mark's candidate box,
       in PDF points) against every other mark on it. */
   function showDistanceHuds(it, boxPdf, skip) {
+    /* convertToViewportPoint is relative to the page's own corner, not the
+       real screen — position: fixed needs it.anno's own corner added in,
+       the same offset showMoveHud/showSmartGuide already carry */
+    const r = it.anno.getBoundingClientRect();
     const p1 = it.vp.convertToViewportPoint(boxPdf.x1, boxPdf.y1), p2 = it.vp.convertToViewportPoint(boxPdf.x2, boxPdf.y2);
-    const box = { x1: Math.min(p1[0], p2[0]), x2: Math.max(p1[0], p2[0]),
-                  y1: Math.min(p1[1], p2[1]), y2: Math.max(p1[1], p2[1]) };
+    const box = { x1: r.left + Math.min(p1[0], p2[0]), x2: r.left + Math.max(p1[0], p2[0]),
+                  y1: r.top + Math.min(p1[1], p2[1]), y2: r.top + Math.max(p1[1], p2[1]) };
     const sc = EXT.saveState && EXT.saveState.scale && EXT.saveState.scale();
     const found = [];
     ['L', 'R', 'T', 'B'].forEach(function (dir) {
