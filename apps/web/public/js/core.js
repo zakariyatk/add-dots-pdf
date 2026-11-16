@@ -2795,6 +2795,70 @@
     moveHud.style.transform = 'translate(' + Math.round(e.clientX + 16) + 'px,' + Math.round(e.clientY + 22) + 'px)';
     moveHud.hidden = false;
   }
+
+  /* ---------------- the gap to a near neighbour, while moving --------------
+     Figma's and Illustrator's own: the space a mark's edge has cleared to
+     whatever else sits beyond it, left/right/above/below, labelled with how
+     far that is — only where the two actually share some of the other axis,
+     so a mark on a completely different row or column never measures as
+     "near" just because it happens to be the closest thing on the page. */
+  let distHuds = [];
+  function ensureDistHuds(n) {
+    while (distHuds.length < n) {
+      const d = document.createElement('div');
+      d.className = 'movehud disthud'; d.hidden = true;
+      document.body.appendChild(d);
+      distHuds.push(d);
+    }
+  }
+  function hideDistHuds() { distHuds.forEach(function (h) { h.hidden = true; }); }
+  /** The closest other mark beyond box's own edge in one screen direction
+      (L/R/T/B), sharing at least some of the other axis with it — its
+      screen-space box and the gap to it in px, or null. box and every
+      mark considered are both already in screen pixels. */
+  function nearestGap(it, box, skip, dir) {
+    let best = null, bestGap = Infinity;
+    it.shapes.forEach(function (sh, i) {
+      if (skip[i] || NOT_SELECTABLE[sh.t]) return;
+      const b = markBox(sh);
+      const p1 = it.vp.convertToViewportPoint(b.x1, b.y1), p2 = it.vp.convertToViewportPoint(b.x2, b.y2);
+      const theirs = { x1: Math.min(p1[0], p2[0]), x2: Math.max(p1[0], p2[0]),
+                        y1: Math.min(p1[1], p2[1]), y2: Math.max(p1[1], p2[1]) };
+      let gap = null, shares = false;
+      if (dir === 'L' && theirs.x2 <= box.x1) { gap = box.x1 - theirs.x2; shares = theirs.y1 < box.y2 && theirs.y2 > box.y1; }
+      else if (dir === 'R' && theirs.x1 >= box.x2) { gap = theirs.x1 - box.x2; shares = theirs.y1 < box.y2 && theirs.y2 > box.y1; }
+      else if (dir === 'T' && theirs.y2 <= box.y1) { gap = box.y1 - theirs.y2; shares = theirs.x1 < box.x2 && theirs.x2 > box.x1; }
+      else if (dir === 'B' && theirs.y1 >= box.y2) { gap = theirs.y1 - box.y2; shares = theirs.x1 < box.x2 && theirs.x2 > box.x1; }
+      if (gap != null && shares && gap < bestGap) { bestGap = gap; best = theirs; }
+    });
+    return best ? { px: bestGap, box: best } : null;
+  }
+  /** Up to one label a side, for boxPdf (the dragged mark's candidate box,
+      in PDF points) against every other mark on it. */
+  function showDistanceHuds(it, boxPdf, skip) {
+    const p1 = it.vp.convertToViewportPoint(boxPdf.x1, boxPdf.y1), p2 = it.vp.convertToViewportPoint(boxPdf.x2, boxPdf.y2);
+    const box = { x1: Math.min(p1[0], p2[0]), x2: Math.max(p1[0], p2[0]),
+                  y1: Math.min(p1[1], p2[1]), y2: Math.max(p1[1], p2[1]) };
+    const sc = EXT.saveState && EXT.saveState.scale && EXT.saveState.scale();
+    const found = [];
+    ['L', 'R', 'T', 'B'].forEach(function (dir) {
+      const g = nearestGap(it, box, skip, dir);
+      if (g) found.push({ dir: dir, g: g });
+    });
+    ensureDistHuds(found.length);
+    found.forEach(function (f, i) {
+      const h = distHuds[i], g = f.g, dir = f.dir;
+      const mid = (dir === 'L' || dir === 'R')
+        ? [dir === 'L' ? (g.box.x2 + box.x1) / 2 : (box.x2 + g.box.x1) / 2,
+           (Math.max(box.y1, g.box.y1) + Math.min(box.y2, g.box.y2)) / 2]
+        : [(Math.max(box.x1, g.box.x1) + Math.min(box.x2, g.box.x2)) / 2,
+           dir === 'T' ? (g.box.y2 + box.y1) / 2 : (box.y2 + g.box.y1) / 2];
+      h.textContent = E.formatLength(g.px / Math.max(0.05, S.scale), sc);
+      h.style.transform = 'translate(' + Math.round(mid[0]) + 'px,' + Math.round(mid[1]) + 'px) translate(-50%,-50%)';
+      h.hidden = false;
+    });
+    for (let i = found.length; i < distHuds.length; i++) distHuds[i].hidden = true;
+  }
   /** Move one mark by (mx, my) from its state o — every kind of point it has. */
   function moveShape(s, o, mx, my) {
     if (o.a) s.a = [o.a[0] + mx, o.a[1] + my];
@@ -3037,7 +3101,9 @@
         : offsetBox(markBox(o), mx, my);
       const guide = smartGuide(d.it, movedBox, skip);
       mx += guide.dx; my += guide.dy;
-      showSmartGuide(d.it, guide.vx, guide.hy, offsetBox(movedBox, guide.dx, guide.dy));
+      const snappedBox = offsetBox(movedBox, guide.dx, guide.dy);
+      showSmartGuide(d.it, guide.vx, guide.hy, snappedBox);
+      showDistanceHuds(d.it, snappedBox, skip);
       showMoveHud(e, mx, my);
       /* held at drop, Ctrl (or Cmd) leaves a copy where the drag started and
          keeps dragging a new one — a plain cursor says so as it is held */
@@ -3097,6 +3163,7 @@
     if (EXT.snapHide) EXT.snapHide();
     hideSmartGuide();
     hideMoveHud();
+    hideDistHuds();
     document.body.classList.remove('dragdup');
     /* Ctrl (or Cmd) still held at the drop: what was dragged is the new
        copy, left where it landed, and the mark(s) it came from go back —
@@ -3116,6 +3183,7 @@
     dragOn = null;
     hideSmartGuide();
     hideMoveHud();
+    hideDistHuds();
     document.body.classList.remove('dragdup');
     if (d.moved) { d.it.shapes[d.idx] = d.s0; drawShapes(d.it); }
   });

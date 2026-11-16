@@ -1280,6 +1280,9 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
   box-shadow: 0 1px 3px rgba(0,0,0,.35);
 }
 .movehud[hidden] { display: none }
+/* the gap to a near neighbour (core.js), centred in it rather than beside
+   the cursor — the smart guides' own magenta, so the two read as one family */
+.disthud { background: #FF2BD6; font-weight: 700; padding: 2px 6px }
 /* held at drop, Ctrl/Cmd leaves a copy behind rather than just moving —
    the plain copy cursor while it is held says so during the drag itself */
 body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
