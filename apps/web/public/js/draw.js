@@ -760,6 +760,7 @@
         cancel: function (it) {
           if (dimOff && dimOff.it === it) { dimOff = null; X.drawShapes(it); }
           if (drag) { drag = null; X.drawShapes(it); }
+          trackClear();
         },
         up: function (it, at, e) {
           if (dimOff && dimOff.it === it) {
@@ -767,6 +768,7 @@
             const g = Object.assign({}, dimOff.base, { off: offAt(dimOff.a, dimOff.b, raw) });
             dimOff = null;
             snapHide();
+            trackClear();         /* this dimension is done; a tracked point is not the next one's */
             $('modeHint').innerHTML = X.hints.dim;
             X.snapshot();
             it.shapes.push(g);
@@ -789,6 +791,7 @@
           }
           snapHide();
           if (calibrating) {
+            trackClear();
             $('modeHint').innerHTML = X.hints.dim;
             X.drawShapes(it); finishCalibration(g); return;
           }
@@ -840,6 +843,7 @@
       if (!chain) return;
       const it = chain.it, n = chain.n;
       chain = null;
+      trackClear();            /* the chain is done; a tracked point is not the next one's */
       X.drawShapes(it);
       if (S.tool === 'dimc') $('modeHint').innerHTML = X.hints.dimc;
       if (n) X.toast(n + ' dimension' + (n > 1 ? 's' : '') + ' in the chain');
@@ -955,6 +959,7 @@
     function endPoly(commit) {
       const had = poly;
       poly = null;
+      trackClear();             /* this line is done; a tracked point is not the next one's */
       if (!had) return;
       const it = had.it;
       if (commit && had.pts.length > 1) {
@@ -1955,6 +1960,7 @@
       const it = pick.it;
       pick = null;
       X.drawShapes(it);
+      trackClear();             /* this reading is done; a tracked point is not the next one's */
       if (RADIAL[S.tool]) $('modeHint').innerHTML = X.hints[S.tool];
     }
     function pickedShape(cur) {
