@@ -10089,8 +10089,16 @@
          so dropping a real tool here never touches it — clear the one thing
          that actually says Move is on, the same way any other tool goes
          down on Escape */
-      if (document.body.classList.contains('move-mode')) { document.body.classList.remove('move-mode'); return; }
-      if (S.tool !== 'select') setTool('select');
+      document.body.classList.remove('move-mode');
+      if (S.tool !== 'select') { setTool('select'); return; }
+      /* on Select (or Move, which is Select) already: the same thing a
+         click outside every mark already does, so one key drops whatever
+         was picked up without needing to find empty space to click on */
+      if (S.sel) {
+        S.sel = null; S.multi = null;
+        S.items.forEach(function (x) { drawShapes(x); });
+        hideMarkPop();
+      }
       return;
     }
     if (typing || !S.items.length) return;
