@@ -1199,6 +1199,23 @@ body[data-tool="select"] .anno .redact-mk { cursor: var(--cur-arrow-obj) }
 /* the unseen grab strip and reading of a dimension: held only by Select */
 .anno .grab { pointer-events: none }
 body[data-tool="select"] .anno .grab { pointer-events: all; cursor: var(--cur-arrow-obj) }
+/* the Move button (toolbar.js): the same tool as Select underneath, but
+   every mark reads as move, not just the one already picked up — one more
+   hint than Select's own subtler arrow-obj that this is what it is for */
+body.move-mode .anno .sh,
+body.move-mode .anno .tx,
+body.move-mode .anno .patch,
+body.move-mode .anno .redact-mk,
+body.move-mode .anno .grab { cursor: var(--cur-move) }
+/* an open box or circle (fill: none) only ever caught a click on its own
+   stroke — pointer-events: all catches one anywhere inside it too, same
+   as a filled one already does, without touching fill itself (so a mark
+   that really is filled keeps its own colour, not a forced transparent) */
+body.move-mode .anno .sh { pointer-events: all }
+/* the empty page too, not just a mark on it — ready to move something
+   wherever the pointer sits, the plain way Pan's own cursor covers its
+   whole capture area rather than only what is actually under it */
+body.move-mode .pagebox { cursor: var(--cur-move) }
 .anno .kn { cursor: var(--cur-nwse) }
 .anno .kn[data-cur="nesw"] { cursor: var(--cur-nesw) }
 .anno .kn[data-cur="point"] { cursor: var(--cur-arrow-point) }
@@ -1259,6 +1276,20 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
   width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #7B5CFF;
   box-shadow: 0 0 0 1px rgba(255,255,255,.7);
 }
+/* how far a drag has moved a mark so far (core.js), beside the cursor */
+.movehud {
+  position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; will-change: transform;
+  padding: 3px 7px; border-radius: 4px; white-space: nowrap;
+  font: 600 11px/1.2 Helvetica, Arial, sans-serif; color: #FFFFFF; background: #2B2B2B;
+  box-shadow: 0 1px 3px rgba(0,0,0,.35);
+}
+.movehud[hidden] { display: none }
+/* the gap to a near neighbour (core.js), centred in it rather than beside
+   the cursor — the smart guides' own magenta, so the two read as one family */
+.disthud { background: #FF2BD6; font-weight: 700; padding: 2px 6px }
+/* held at drop, Ctrl/Cmd leaves a copy behind rather than just moving —
+   the plain copy cursor while it is held says so during the drag itself */
+body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
 .snapbtn {
   height: 26px; padding: 0 9px; border-radius: 6px; border: 1px solid var(--line); background: transparent;
   color: var(--text-dim); font: inherit; font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 5px;
@@ -1287,6 +1318,13 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
   shape-rendering: crispEdges;
 }
 .snaptrack path { stroke: #E8882A; stroke-width: 2; fill: none }
+
+/* Smart guides, while a mark is dragged (core.js): solid, in Illustrator's
+   own magenta, through whatever it has just lined up with — distinct from
+   the snap guides above, which only ever run from a point you dwelled on
+   while drawing, not while moving something already on the page. */
+.smartguide { position: fixed; z-index: 59; pointer-events: none; overflow: visible }
+.smartguide line { stroke: #FF2BD6; stroke-width: 1; shape-rendering: crispEdges }
 
 /* The marker is a zero-size anchor at the snap point itself: the symbol is
    centred on it, and the label hangs off to the lower right, so neither can
@@ -1534,6 +1572,18 @@ body.cdpicking, body.cdpicking * { cursor: crosshair !important }
   width: 9px; height: 9px; border-radius: 50%; background: var(--text); display: block;
 }
 .laydot .dot.off { background: transparent; border: 1px solid var(--text-dim) }
+/* the lock beside it: open or shut, its own column — a layer and each of
+   its marks lock separately, same as they hide separately */
+.laylock {
+  flex: none; display: grid; place-items: center; width: 22px; height: 26px; padding: 0;
+  border: none; background: transparent; color: var(--text-dim); cursor: pointer; border-radius: 5px;
+}
+.laylock:hover { color: var(--text); background: rgba(255,255,255,.08) }
+.laylock.on { color: var(--marker) }
+.laylock svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8 }
+.layrow.locked { cursor: default }
+.layrow.locked .laylabel { color: var(--text-dim) }
+.layrow.mrow.locked .laybtns { opacity: 0 !important; pointer-events: none !important }
 .layswatch {
   flex: none; width: 13px; height: 13px; border-radius: 3px; border: 1px solid rgba(0,0,0,.3);
 }

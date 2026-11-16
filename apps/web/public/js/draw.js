@@ -455,9 +455,25 @@
        poly.ts) — no a/b, so it moves and resizes as a whole (core.js's
        markPts/moveShape/scaleBy already know a pts-only mark, the way ink
        and vpath work). */
+    /** Snapped back onto its own first point (polySelfSnap), a line is a
+        closed shape and can take a fill — same test the PDF side (poly.ts)
+        makes from the saved points. */
+    function polyClosed(s) {
+      if (!s.pts || s.pts.length < 3) return false;
+      const a = s.pts[0], b = s.pts[s.pts.length - 1];
+      return Math.hypot(a[0] - b[0], a[1] - b[1]) < 0.01;
+    }
+    X.polyClosed = polyClosed;
     X.shapeRenderers.poly = function (it, s, vp, idx) {
       const g = document.createElementNS(SVGNS, 'g');
-      g.appendChild(stroked(polyline(s.pts, vp, false), s, idx, it));
+      const el = polyline(s.pts, vp, false);
+      stroked(el, s, idx, it);
+      if (s.fill && polyClosed(s)) {
+        el.style.fill = s.fill;
+        el.style.fillOpacity = X.shOp(s);
+        el.style.pointerEvents = 'all';
+      }
+      g.appendChild(el);
       return g;
     };
 
@@ -631,7 +647,7 @@
     X.handleKind.cloud = 'rect';
     X.handleKind.arc = 'line';
     X.handleKind.dim = 'line';
-    X.handleKind.poly = 'bbox';
+    X.handleKind.poly = 'verts';
 
     /* ---------------- writing into the PDF ---------------- */
 
@@ -959,8 +975,11 @@
     function endPoly(commit) {
       const had = poly;
       poly = null;
-      trackClear();             /* this line is done; a tracked point is not the next one's */
-      if (!had) return;
+      if (!had) return;         /* nothing was in progress: the point just acquired for the
+                                    line about to start is not this call's to give up */
+      trackStart(had.it, null); /* this line is done; its own guide and a tracked point
+                                    acquired for it go back, so neither carries into the next one */
+      readHide();
       const it = had.it;
       if (commit && had.pts.length > 1) {
         X.snapshot();
@@ -973,27 +992,48 @@
       if (S.tool === 'poly') $('modeHint').innerHTML = X.hints.poly;
     }
 
+    /** A point of this same line, not yet a real mark so snapFind never sees
+        it — close a loop by snapping back onto it anyway. The nearest one
+        inside tolerance, shown and returned the way an ordinary Endpoint is. */
+    function polySelfSnap(it, raw) {
+      if (!poly || poly.it !== it) return null;
+      const tol = (X.isMobile() ? 16 : 15) / Math.max(0.05, S.scale);
+      let best = null, bd = tol;
+      poly.pts.forEach(function (q) {
+        const d = Math.hypot(q[0] - raw[0], q[1] - raw[1]);
+        if (d < bd) { bd = d; best = q; }
+      });
+      if (!best) return null;
+      const hit = { p: best, kind: 'end', label: 'Endpoint', d: bd, r: SNAP_RANK.end };
+      snapShow(it, hit);
+      return hit;
+    }
+
     X.tools.poly = {
       colors: true, widths: true,
       down: function () { /* a click tool: everything happens on release */ },
       move: function (it, at, e) {
         if (!poly || poly.it !== it || !it.vp) return;
         const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-        const sn = X.snapPt(it, raw, e);
+        const self = polySelfSnap(it, raw);
+        const sn = self ? self.p : X.snapPt(it, raw, e);
         const last = poly.pts[poly.pts.length - 1];
         let p = sn || raw;
         if (e && e.shiftKey && !sn) p = X.snapLine(last, p);
         X.drawShapes(it, polyGhost(poly.pts.concat([p])));
+        readShow(it, last, p);
       },
       cancel: function () { endPoly(poly && poly.pts.length >= 2); },
       up: function (it, at, e) {
         if (!it.vp || (e && e.button > 0)) return;
         const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-        const sn = X.snapPt(it, raw, e);
+        const self = polySelfSnap(it, raw);
+        const sn = self ? self.p : X.snapPt(it, raw, e);
         const p = sn || raw;
         if (!poly || poly.it !== it) {          /* the first point, or a jump to another page */
           endPoly(false);
           poly = { it: it, pts: [p] };
+          trackStart(it, p);             /* the next segment's own guide, from here */
           $('modeHint').innerHTML = 'Click the next point. <b>Enter</b>, <b>Esc</b> or ' +
             'double-click ends the line.';
           return;
@@ -1003,6 +1043,7 @@
         if (e && e.shiftKey && !sn) q = X.snapLine(last, q);
         if (Math.hypot(q[0] - last[0], q[1] - last[1]) < 3) return;   /* the second click of a double-click */
         poly.pts.push(q);
+        trackStart(it, q);               /* each segment runs its guide from the point before it */
         X.drawShapes(it, polyGhost(poly.pts));
       }
     };
@@ -1725,7 +1766,12 @@
     const trkSvg = document.createElementNS(NS, 'svg');
     trkSvg.setAttribute('class', 'snaptrack');
     trkSvg.setAttribute('aria-hidden', 'true');
-    trkSvg.hidden = true;
+    /* trkSvg is an SVG element: the global `hidden` IDL attribute does not
+       reflect onto it the way it does on an HTMLElement (confirmed in real
+       Chrome — setting .hidden here never touches the actual attribute), so
+       CSS's [hidden] selector never matches it and it stays display:block
+       forever once first shown. style.display is what actually hides it. */
+    trkSvg.style.display = 'none';
     document.body.appendChild(trkSvg);
     /* one line per guide and one badge per acquired point, kept and reused:
        this is redrawn on every pointer move */
@@ -1751,7 +1797,7 @@
       /* always the acquired points' own page, whatever page the pointer is over */
       const it = (acqs[0] && acqs[0].it) || (opStart && opStart.it);
       if (!it || !it.vp || !it.anno || (!acqs.length && !opStart)) {
-        if (!trkSvg.hidden) trkSvg.hidden = true;
+        if (trkSvg.style.display !== 'none') trkSvg.style.display = 'none';
         return;
       }
       const stage = $('stage').getBoundingClientRect();
@@ -1794,7 +1840,7 @@
           'd', 'M' + (x - 4) + ' ' + y + 'h8M' + x + ' ' + (y - 4) + 'v8');
       });
       trkTrim('path', here.length);
-      trkSvg.hidden = false;
+      trkSvg.style.display = '';
     }
     /* the guides are drawn against the window, so anything that moves the page
        under them has to put them back */

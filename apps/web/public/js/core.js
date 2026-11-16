@@ -2636,7 +2636,7 @@
   function setGroup(it, idx) {
     idx = idx.filter(function (i, k) {
       const s = it.shapes[i];
-      return s && !NOT_SELECTABLE[s.t] && idx.indexOf(i) === k;
+      return s && !NOT_SELECTABLE[s.t] && !s.locked && idx.indexOf(i) === k;
     });
     if (!idx.length) { S.sel = null; S.multi = null; return; }
     S.sel = { it: it, i: idx[idx.length - 1] };
@@ -2666,6 +2666,198 @@
     drawThumb(it);
     updateMeta();
     syncMarkPop();
+  }
+  /* ---------------- smart guides, while a mark is being moved ----------------
+     Illustrator's own: dragging a mark (or a selected group, as one) compares
+     its left/right/centre and top/bottom/middle against every other mark's on
+     the same page. Landing within GUIDE_TOL snaps the move to line up with
+     the closest one exactly, on each axis separately, and a line is drawn
+     through the match — a vertical one for a left/right/centre-x hit, a
+     horizontal one for a top/bottom/centre-y hit. */
+  const GUIDE_TOL = 6;                    /* px, however the page is zoomed */
+  let sgSvg = null, sgV = null, sgH = null;
+  function ensureSmartGuide() {
+    if (sgSvg) return;
+    sgSvg = document.createElementNS(SVGNS, 'svg');
+    sgSvg.setAttribute('class', 'smartguide');
+    sgSvg.setAttribute('aria-hidden', 'true');
+    /* an SVG element: style.display, not .hidden — js/draw.js's own object-
+       snap guide learned the hard way that .hidden never reflects to the
+       real attribute on one, so [hidden]{display:none} never matched it */
+    sgSvg.style.display = 'none';
+    sgV = document.createElementNS(SVGNS, 'line');
+    sgH = document.createElementNS(SVGNS, 'line');
+    sgSvg.appendChild(sgV); sgSvg.appendChild(sgH);
+    document.body.appendChild(sgSvg);
+  }
+  function hideSmartGuide() { if (sgSvg) sgSvg.style.display = 'none'; }
+  /** The guide line(s) for a match at PDF x = vx and/or y = hy (either one
+      null, for the axis that found nothing), over it's own stage. box is the
+      mark's (candidate) position, only to pair with vx/hy for the screen
+      conversion — correct wherever the page itself is turned, the same way
+      the object-snap guide already does it from a real point rather than a
+      bare x or y. */
+  function showSmartGuide(it, vx, hy, box) {
+    if (vx == null && hy == null) { hideSmartGuide(); return; }
+    ensureSmartGuide();
+    const stage = $('stage').getBoundingClientRect();
+    const r = it.anno.getBoundingClientRect();
+    sgSvg.style.left = Math.round(stage.left) + 'px';
+    sgSvg.style.top = Math.round(stage.top) + 'px';
+    sgSvg.setAttribute('width', Math.round(stage.width));
+    sgSvg.setAttribute('height', Math.round(stage.height));
+    if (vx != null) {
+      const v = it.vp.convertToViewportPoint(vx, (box.y1 + box.y2) / 2);
+      const cx = r.left + v[0] - stage.left;
+      sgV.setAttribute('x1', cx); sgV.setAttribute('x2', cx);
+      sgV.setAttribute('y1', 0); sgV.setAttribute('y2', Math.round(stage.height));
+      sgV.style.display = '';
+    } else sgV.style.display = 'none';
+    if (hy != null) {
+      const v = it.vp.convertToViewportPoint((box.x1 + box.x2) / 2, hy);
+      const cy = r.top + v[1] - stage.top;
+      sgH.setAttribute('y1', cy); sgH.setAttribute('y2', cy);
+      sgH.setAttribute('x1', 0); sgH.setAttribute('x2', Math.round(stage.width));
+      sgH.style.display = '';
+    } else sgH.style.display = 'none';
+    sgSvg.style.display = '';
+  }
+  function offsetBox(b, mx, my) {
+    return { x1: b.x1 + mx, y1: b.y1 + my, x2: b.x2 + mx, y2: b.y2 + my };
+  }
+  function unionBox(boxes) {
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    boxes.forEach(function (b) {
+      x1 = Math.min(x1, b.x1); y1 = Math.min(y1, b.y1);
+      x2 = Math.max(x2, b.x2); y2 = Math.max(y2, b.y2);
+    });
+    return { x1: x1, y1: y1, x2: x2, y2: y2 };
+  }
+  /** Where box — the dragged mark's (or group's combined) box, already offset
+      to its candidate position — comes within GUIDE_TOL of lining up with
+      another mark on it, on either axis: its left, right or centre against
+      theirs, its top, bottom or middle against theirs. The nudge that lines
+      it up exactly, on whichever axis (axes) found a match, and the PDF-point
+      x/y the guide line for each runs through (null where neither did). */
+  function smartGuide(it, box, skip) {
+    const tol = GUIDE_TOL / Math.max(0.05, S.scale);
+    const mine = { L: box.x1, R: box.x2, Cx: (box.x1 + box.x2) / 2,
+                   T: box.y1, B: box.y2, Cy: (box.y1 + box.y2) / 2 };
+    let bestXD = tol, bestX = null, bestYD = tol, bestY = null;
+    const XK = ['L', 'R', 'Cx'], YK = ['T', 'B', 'Cy'];
+    it.shapes.forEach(function (sh, i) {
+      if (skip[i] || NOT_SELECTABLE[sh.t]) return;
+      const b = markBox(sh);
+      const theirs = { L: b.x1, R: b.x2, Cx: (b.x1 + b.x2) / 2,
+                        T: b.y1, B: b.y2, Cy: (b.y1 + b.y2) / 2 };
+      XK.forEach(function (k) {
+        XK.forEach(function (k2) {
+          const d = Math.abs(mine[k] - theirs[k2]);
+          if (d < bestXD) { bestXD = d; bestX = { from: k, to: theirs[k2] }; }
+        });
+      });
+      YK.forEach(function (k) {
+        YK.forEach(function (k2) {
+          const d = Math.abs(mine[k] - theirs[k2]);
+          if (d < bestYD) { bestYD = d; bestY = { from: k, to: theirs[k2] }; }
+        });
+      });
+    });
+    return {
+      dx: bestX ? bestX.to - mine[bestX.from] : 0,
+      dy: bestY ? bestY.to - mine[bestY.from] : 0,
+      vx: bestX ? bestX.to : null,
+      hy: bestY ? bestY.to : null
+    };
+  }
+  /* ---------------- the live dX/dY reading, while a mark is moved ---------- */
+  let moveHud = null;
+  function ensureMoveHud() {
+    if (moveHud) return;
+    moveHud = document.createElement('div');
+    moveHud.className = 'movehud';
+    moveHud.hidden = true;                /* a plain div: .hidden is fine here,
+                                              unlike the SVG guides above */
+    document.body.appendChild(moveHud);
+  }
+  function hideMoveHud() { if (moveHud) moveHud.hidden = true; }
+  /** How far a move has gone, in the document's own measurement unit (the
+      Dimension tool's own scale, EXT.saveState — a plain + or − sign rather
+      than a length going negative, which formatLength never does). */
+  function fmtDelta(v) {
+    const sc = EXT.saveState && EXT.saveState.scale && EXT.saveState.scale();
+    const text = E.formatLength(Math.abs(v), sc);
+    return (v < -0.005 ? '−' : v > 0.005 ? '+' : '±') + text;
+  }
+  function showMoveHud(e, mx, my) {
+    ensureMoveHud();
+    moveHud.textContent = 'x ' + fmtDelta(mx) + '   y ' + fmtDelta(my);
+    moveHud.style.transform = 'translate(' + Math.round(e.clientX + 16) + 'px,' + Math.round(e.clientY + 22) + 'px)';
+    moveHud.hidden = false;
+  }
+
+  /* ---------------- the gap to a near neighbour, while moving --------------
+     Figma's and Illustrator's own: the space a mark's edge has cleared to
+     whatever else sits beyond it, left/right/above/below, labelled with how
+     far that is — only where the two actually share some of the other axis,
+     so a mark on a completely different row or column never measures as
+     "near" just because it happens to be the closest thing on the page. */
+  let distHuds = [];
+  function ensureDistHuds(n) {
+    while (distHuds.length < n) {
+      const d = document.createElement('div');
+      d.className = 'movehud disthud'; d.hidden = true;
+      document.body.appendChild(d);
+      distHuds.push(d);
+    }
+  }
+  function hideDistHuds() { distHuds.forEach(function (h) { h.hidden = true; }); }
+  /** The closest other mark beyond box's own edge in one screen direction
+      (L/R/T/B), sharing at least some of the other axis with it — its
+      screen-space box and the gap to it in px, or null. box and every
+      mark considered are both already in screen pixels. */
+  function nearestGap(it, box, skip, dir) {
+    let best = null, bestGap = Infinity;
+    it.shapes.forEach(function (sh, i) {
+      if (skip[i] || NOT_SELECTABLE[sh.t]) return;
+      const b = markBox(sh);
+      const p1 = it.vp.convertToViewportPoint(b.x1, b.y1), p2 = it.vp.convertToViewportPoint(b.x2, b.y2);
+      const theirs = { x1: Math.min(p1[0], p2[0]), x2: Math.max(p1[0], p2[0]),
+                        y1: Math.min(p1[1], p2[1]), y2: Math.max(p1[1], p2[1]) };
+      let gap = null, shares = false;
+      if (dir === 'L' && theirs.x2 <= box.x1) { gap = box.x1 - theirs.x2; shares = theirs.y1 < box.y2 && theirs.y2 > box.y1; }
+      else if (dir === 'R' && theirs.x1 >= box.x2) { gap = theirs.x1 - box.x2; shares = theirs.y1 < box.y2 && theirs.y2 > box.y1; }
+      else if (dir === 'T' && theirs.y2 <= box.y1) { gap = box.y1 - theirs.y2; shares = theirs.x1 < box.x2 && theirs.x2 > box.x1; }
+      else if (dir === 'B' && theirs.y1 >= box.y2) { gap = theirs.y1 - box.y2; shares = theirs.x1 < box.x2 && theirs.x2 > box.x1; }
+      if (gap != null && shares && gap < bestGap) { bestGap = gap; best = theirs; }
+    });
+    return best ? { px: bestGap, box: best } : null;
+  }
+  /** Up to one label a side, for boxPdf (the dragged mark's candidate box,
+      in PDF points) against every other mark on it. */
+  function showDistanceHuds(it, boxPdf, skip) {
+    const p1 = it.vp.convertToViewportPoint(boxPdf.x1, boxPdf.y1), p2 = it.vp.convertToViewportPoint(boxPdf.x2, boxPdf.y2);
+    const box = { x1: Math.min(p1[0], p2[0]), x2: Math.max(p1[0], p2[0]),
+                  y1: Math.min(p1[1], p2[1]), y2: Math.max(p1[1], p2[1]) };
+    const sc = EXT.saveState && EXT.saveState.scale && EXT.saveState.scale();
+    const found = [];
+    ['L', 'R', 'T', 'B'].forEach(function (dir) {
+      const g = nearestGap(it, box, skip, dir);
+      if (g) found.push({ dir: dir, g: g });
+    });
+    ensureDistHuds(found.length);
+    found.forEach(function (f, i) {
+      const h = distHuds[i], g = f.g, dir = f.dir;
+      const mid = (dir === 'L' || dir === 'R')
+        ? [dir === 'L' ? (g.box.x2 + box.x1) / 2 : (box.x2 + g.box.x1) / 2,
+           (Math.max(box.y1, g.box.y1) + Math.min(box.y2, g.box.y2)) / 2]
+        : [(Math.max(box.x1, g.box.x1) + Math.min(box.x2, g.box.x2)) / 2,
+           dir === 'T' ? (g.box.y2 + box.y1) / 2 : (box.y2 + g.box.y1) / 2];
+      h.textContent = E.formatLength(g.px / Math.max(0.05, S.scale), sc);
+      h.style.transform = 'translate(' + Math.round(mid[0]) + 'px,' + Math.round(mid[1]) + 'px) translate(-50%,-50%)';
+      h.hidden = false;
+    });
+    for (let i = found.length; i < distHuds.length; i++) distHuds[i].hidden = true;
   }
   /** Move one mark by (mx, my) from its state o — every kind of point it has. */
   function moveShape(s, o, mx, my) {
@@ -2763,6 +2955,7 @@
     if (S.tool !== 'select' || !it.vp || e.button > 0) return;
     const s = it.shapes[idx];
     if (!s || s.t === 'pin') return;             /* pins have their own tool */
+    if (s.locked) return;                        /* a locked mark neither selects nor drags */
     e.preventDefault(); e.stopPropagation();
     /* A finger would otherwise start the page scrolling, and the browser then
        cancels the drag — the resize springs back. The touch lands on this very
@@ -2856,6 +3049,36 @@
     }
   }
 
+  /* The point next to i that Shift runs it level, plumb or at 45° off of —
+     the one before it, wrapping past a closed line's own start to the point
+     before that (its last point is i itself); the one after, for the first
+     point of a line still open. Read from o, the drag's own snapshot, so
+     dragging the first point of a closed line does not chase a far end that
+     this same drag just moved. */
+  function polyShiftRef(o, i) {
+    const n = o.pts.length;
+    if (i > 0) return o.pts[i - 1];
+    const closed = n > 2 && o.pts[0][0] === o.pts[n - 1][0] && o.pts[0][1] === o.pts[n - 1][1];
+    return closed ? o.pts[n - 2] : (o.pts[1] || o.pts[0]);
+  }
+  /* One point of a pts-only mark (a Continuous Line) dragged to p. If it was
+     closed — its first and last point the same, before this drag touched it
+     — dragging either end keeps the loop shut by moving the other end with
+     it, the way dragging one corner of a closed shape should. */
+  function setVertex(s, o, i, p) {
+    /* o.pts is s.pts itself (copyShape never clones it), so whether it was
+       closed has to be read before this tick's own write touches it —
+       otherwise the far end is being compared against the near end's new
+       value, not its own old one */
+    const n = o.pts.length;
+    const closed = n > 2 && o.pts[0][0] === o.pts[n - 1][0] && o.pts[0][1] === o.pts[n - 1][1];
+    s.pts[i] = [p[0], p[1]];
+    if (closed) {
+      if (i === 0) s.pts[n - 1] = [p[0], p[1]];
+      else if (i === n - 1) s.pts[0] = [p[0], p[1]];
+    }
+  }
+
   function dragMove(e) {
     const d = dragOn; if (!d) return;
     const s = d.it.shapes[d.idx];
@@ -2871,6 +3094,20 @@
     if (d.mode === 'move') {
       let mx = dx, my = dy;
       if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) my = 0; else mx = 0; }   /* along one axis */
+      const skip = {};
+      if (d.group) d.group.forEach(function (m) { skip[m.i] = 1; }); else skip[d.idx] = 1;
+      const movedBox = d.group
+        ? unionBox(d.group.map(function (m) { return offsetBox(markBox(m.s0), mx, my); }))
+        : offsetBox(markBox(o), mx, my);
+      const guide = smartGuide(d.it, movedBox, skip);
+      mx += guide.dx; my += guide.dy;
+      const snappedBox = offsetBox(movedBox, guide.dx, guide.dy);
+      showSmartGuide(d.it, guide.vx, guide.hy, snappedBox);
+      showDistanceHuds(d.it, snappedBox, skip);
+      showMoveHud(e, mx, my);
+      /* held at drop, Ctrl (or Cmd) leaves a copy where the drag started and
+         keeps dragging a new one — a plain cursor says so as it is held */
+      document.body.classList.toggle('dragdup', !!(e.ctrlKey || e.metaKey));
       if (d.group) {
         d.group.forEach(function (m) {
           const sh = d.it.shapes[m.i];
@@ -2891,6 +3128,12 @@
       s.a = [p[0], p[1]];
     } else if (d.mode === 'pb') {
       s.b = [p[0], p[1]];
+    } else if (d.mode === 'pv' && EXT.snapPt && (d.snapTo = EXT.snapPt(d.it, p, e, { skip: d.idx }))) {
+      setVertex(s, o, d.extra, d.snapTo);
+    } else if (d.mode === 'pv' && e.shiftKey) {
+      setVertex(s, o, d.extra, snapLine(polyShiftRef(o, d.extra), p));
+    } else if (d.mode === 'pv') {
+      setVertex(s, o, d.extra, p);
     } else if (d.mode === 'corner') {
       /* a mark that keeps its proportions (EXT.keepRatio) frees them with
          Shift; any other box squares up with Shift */
@@ -2913,11 +3156,22 @@
     drawShapes(d.it);
   }
 
-  function dragEnd() {
+  function dragEnd(e) {
     const d = dragOn; if (!d) return;
     dragOn = null;
     if (d.moved) S.draggedAt = Date.now();
     if (EXT.snapHide) EXT.snapHide();
+    hideSmartGuide();
+    hideMoveHud();
+    hideDistHuds();
+    document.body.classList.remove('dragdup');
+    /* Ctrl (or Cmd) still held at the drop: what was dragged is the new
+       copy, left where it landed, and the mark(s) it came from go back —
+       a fresh shape pushed on top at their old place, not a move at all */
+    if (d.moved && d.mode === 'move' && e && (e.ctrlKey || e.metaKey)) {
+      if (d.group) d.group.forEach(function (m) { d.it.shapes.push(copyShape(m.s0)); });
+      else d.it.shapes.push(copyShape(d.s0));
+    }
     if (d.moved) { drawShapes(d.it); updateMeta(); }
     syncMarkPop();
     if (!d.moved) toast('Mark selected · drag or the arrow keys to move, corners to resize, ↻ to turn, <b>Delete</b> to remove');
@@ -2927,6 +3181,10 @@
   document.addEventListener('pointercancel', function () {
     const d = dragOn; if (!d) return;
     dragOn = null;
+    hideSmartGuide();
+    hideMoveHud();
+    hideDistHuds();
+    document.body.classList.remove('dragdup');
     if (d.moved) { d.it.shapes[d.idx] = d.s0; drawShapes(d.it); }
   });
 
@@ -3188,7 +3446,10 @@
     if (!s || dragOn) { pop.hidden = true; closeSwatches(); return; }
     buildMarkPop();
     const isText = s.t === 'text';
-    const isBox = s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath';     /* a shape off the page fills too */
+    /* a shape off the page fills too — a Continuous Line only once it is
+       snapped shut back onto its own first point */
+    const isBox = s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath' ||
+      (s.t === 'poly' && EXT.polyClosed && EXT.polyClosed(s));
     /* a picture: no line to style (a signature, or a stamp made from one) */
     const isPic = s.t === 'sig' || s.t === 'istamp';
     const count = selList().length;
@@ -3297,7 +3558,7 @@
       el.setAttribute('cx', v[0]); el.setAttribute('cy', v[1]); el.setAttribute('r', turn ? 9 : 5);
       el.setAttribute('class', 'kn' + (turn ? ' turn' : ''));
       /* which cursor the grip wears: a point to drag, or a size to pull */
-      el.dataset.cur = turn ? 'rotate' : (mode === 'pa' || mode === 'pb') ? 'point' : 'nwse';
+      el.dataset.cur = turn ? 'rotate' : (mode === 'pa' || mode === 'pb' || mode === 'pv') ? 'point' : 'nwse';
       el.addEventListener('pointerdown', function (e) { beginDrag(it, idx, e, mode, extra); });
       g.appendChild(el);
       if (turn) {
@@ -3396,6 +3657,16 @@
       /* 'ends': two grips and nothing to turn — a radius or an angle is
          defined by where its points are, so rotating it means nothing */
       if (kind !== 'ends') turnGrip(a, b);
+    } else if (kind === 'verts') {
+      /* every point of its own line or polygon, each one draggable on its
+         own — a Continuous Line adjusts the way a plain Line's two ends do,
+         just with as many grips as it has points */
+      const vq = (s.pts || []).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+      const hl = document.createElementNS(SVGNS, 'polyline');
+      hl.setAttribute('class', 'halo');
+      hl.setAttribute('points', vpts(vq));
+      g.appendChild(hl);
+      vq.forEach(function (v, i) { knob(v, 'pv', i); });
     } else if (s.t === 'text') {
       const q = textQuad(s, vp);
       const out = document.createElementNS(SVGNS, 'polygon');
@@ -3603,7 +3874,7 @@
     let el = target;
     while (el && el.parentNode !== anno) el = el.parentNode;
     const i = el ? Array.prototype.indexOf.call(anno.children, el) : -1;
-    if (i < 0 || i >= it.shapes.length || NOT_SELECTABLE[it.shapes[i].t]) return null;
+    if (i < 0 || i >= it.shapes.length || NOT_SELECTABLE[it.shapes[i].t] || it.shapes[i].locked) return null;
     return { it: it, i: i };
   }
 
@@ -8252,6 +8523,9 @@
     S.tool = t;
     S.sel = null;
     document.body.dataset.tool = t;
+    /* the Move button's own "looks like Select" cursor (toolbar.js); any
+       real tool change drops it, Move puts it straight back on afterward */
+    document.body.classList.remove('move-mode');
     const BTNS = Object.assign({}, TOOL_BTN, EXT.toolBtn);   /* modules register after boot */
     Object.keys(BTNS).forEach(function (k) {
       const el = $(BTNS[k]); if (el) el.classList.toggle('on', k === t);
@@ -9778,6 +10052,11 @@
       /* A dialog on top owns Escape. Dropping the tool as well would be a
          second, unasked-for thing happening on one key press. */
       if (overlayOpen()) return;
+      /* Move looks like its own tool but is Select underneath (toolbar.js),
+         so dropping a real tool here never touches it — clear the one thing
+         that actually says Move is on, the same way any other tool goes
+         down on Escape */
+      if (document.body.classList.contains('move-mode')) { document.body.classList.remove('move-mode'); return; }
       if (S.tool !== 'select') setTool('select');
       return;
     }
@@ -9811,7 +10090,8 @@
       case 'a': setTool('arrow'); break;
       case 'e': setTool('text'); break;
       case 'c': setTool('crop'); break;
-      case 'm': setTool('pin'); break;
+      case 'z': setTool('pin'); break;
+      case 'm': if (EXT.activateMove) EXT.activateMove(); break;
       case 'M': setRail(true); switchTab('pins'); break;
       case 'r': case 'R': e.shiftKey ? rotateAll(90) : rotateItem(S.current - 1, 90); break;
       case 'Delete': case 'Backspace':

@@ -130,8 +130,9 @@
       return CORE_TOOL[id] || null;
     }
     [
-      ['tSelect', 'Select (V)'], ['tPan', 'Pan (H)'], ['tNote', 'Comment'], ['tHighlight', 'Highlight text'],
-      ['tInk', 'Draw'], ['tText', 'Add or edit text'], ['tDim', 'Measure'], ['btnRulers', 'Rulers (Ctrl+R)']
+      ['tSelect', 'Select (V)'], ['tPan', 'Pan (H)'], ['tEditMove', 'Move (M)'], ['tNote', 'Comment'],
+      ['tHighlight', 'Highlight text'], ['tInk', 'Draw'], ['tText', 'Add or edit text'],
+      ['tDim', 'Measure'], ['btnRulers', 'Rulers (Ctrl+R)']
     ].forEach(function (q) {
       const src = $(q[0]);
       if (!src) return;
@@ -140,7 +141,10 @@
       b.title = q[1]; b.setAttribute('aria-label', q[1]);
       const svg = src.querySelector('svg');
       b.innerHTML = svg ? svg.outerHTML : '';
-      const tool = toolOf(q[0]);
+      /* tEditMove already carries its own data-tool-btn (it lights up with
+         Select, under its own icon); toolOf has no way to find that on its
+         own since nothing registers a tool called "move" */
+      const tool = toolOf(q[0]) || src.dataset.toolBtn || null;
       if (tool) {
         b.dataset.toolBtn = tool;           /* core lights it with the tool */
         b.classList.toggle('on', X.S.tool === tool);

@@ -69,6 +69,8 @@
       '<polyline points="14 12 17 15 20 12"/>');
     const TWIST_OPEN = icon('<polyline points="6 9 12 15 18 9"/>');
     const TWIST_SHUT = icon('<polyline points="9 6 15 12 9 18"/>');
+    const LOCK = icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>');
+    const UNLOCK = icon('<rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.6-1.5"/>');
 
     /* ---------------- layers ----------------
        A layer is just a name shapes can carry (s.layer, a layer's own id):
@@ -84,7 +86,7 @@
     const STRIPES = ['#7B5CFF', '#5DCAA5', '#E8B14C', '#E27C68', '#7FB3FF', '#D4537E', '#9FE1CB'];
 
     function ensureLayers() {
-      if (!S.layers || !S.layers.length) { S.layers = [{ id: 'L0', name: 'Layer 1', hidden: false }]; layerSeq = 1; }
+      if (!S.layers || !S.layers.length) { S.layers = [{ id: 'L0', name: 'Layer 1', hidden: false, locked: false }]; layerSeq = 1; }
       S.layers.forEach(function (l, i) { if (!l.color) l.color = STRIPES[i % STRIPES.length]; });
       if (!focusLayer || !S.layers.some(function (l) { return l.id === focusLayer; })) focusLayer = S.layers[0].id;
       return S.layers;
@@ -119,6 +121,7 @@
           if (s.layer != null || NOT_SELECTABLE[s.t]) return;
           s.layer = L.id;
           if (L.hidden) s.hide = true;
+          if (L.locked) s.locked = true;
           got = true;
         });
       });
@@ -166,6 +169,7 @@
         id: 'L' + Date.now().toString(36) + layerSeq,
         name: 'Layer ' + (S.layers.length + 1),
         hidden: false,
+        locked: false,
         color: STRIPES[S.layers.length % STRIPES.length]
       };
       S.layers.push(L);
@@ -203,7 +207,7 @@
       X.snapshot();
       S.items.forEach(function (it) {
         it.shapes.forEach(function (s) {
-          if (layerIdOf(s) === source.id) { s.layer = target.id; s.hide = !!target.hidden; }
+          if (layerIdOf(s) === source.id) { s.layer = target.id; s.hide = !!target.hidden; s.locked = !!target.locked; }
         });
       });
       S.layers = S.layers.filter(function (l) { return l.id !== source.id; });
@@ -272,8 +276,12 @@
     function sigOf(it) {
       if (!it) return '';
       const multi = S.multi && S.multi.it === it ? S.multi.idx.join(',') : '';
-      const marks = it.shapes.map(function (s) { return (s.hide ? '1' : '0') + (s.layer || '-'); }).join('|');
-      const lay = (S.layers || []).map(function (l) { return l.id + l.name + (l.hidden ? '1' : '0'); }).join('|');
+      const marks = it.shapes.map(function (s) {
+        return (s.hide ? '1' : '0') + (s.locked ? '1' : '0') + (s.layer || '-');
+      }).join('|');
+      const lay = (S.layers || []).map(function (l) {
+        return l.id + l.name + (l.hidden ? '1' : '0') + (l.locked ? '1' : '0');
+      }).join('|');
       return S.current + ':' + marks + ':' + lay + ':' + focusLayer +
         ':' + (S.sel && S.sel.it === it ? S.sel.i : -1) + ':' + multi;
     }
@@ -281,6 +289,10 @@
     function dot(on, lab) {
       return '<button type="button" class="laydot" data-act="dot" title="' + lab +
         '" aria-label="' + lab + '"><i class="' + (on ? 'dot' : 'dot off') + '"></i></button>';
+    }
+    function lockBtn(on, lab) {
+      return '<button type="button" class="laylock' + (on ? ' on' : '') + '" data-act="lock" title="' + lab +
+        '" aria-label="' + lab + '">' + (on ? LOCK : UNLOCK) + '</button>';
     }
 
     let lastSig = null;
@@ -303,8 +315,9 @@
       S.layers.slice().reverse().forEach(function (L) {
         const list = map[L.id] || [], open = !shut[L.id], active = L.id === focusLayer;
         h += '<div class="layrow layhead' + (active ? ' active' : '') + (L.hidden ? ' hid' : '') +
-            '" data-lay="' + L.id + '">' +
+            (L.locked ? ' locked' : '') + '" data-lay="' + L.id + '">' +
           dot(!L.hidden, L.hidden ? 'Show this layer' : 'Hide this layer') +
+          lockBtn(!!L.locked, L.locked ? 'Unlock this layer' : 'Lock this layer') +
           '<button type="button" class="laytwist" data-act="twist" aria-label="' +
             (open ? 'Collapse' : 'Expand') + '">' + (open ? TWIST_OPEN : TWIST_SHUT) + '</button>' +
           '<i class="laystrip" style="background:' + X.esc(L.color) + '"></i>' +
@@ -319,19 +332,22 @@
         }
         const top = list[0].idx, bottom = list[list.length - 1].idx;
         list.forEach(function (r) {
-          const s = r.s, hid = !!s.hide, sel = S.sel && S.sel.it === it && S.sel.i === r.idx;
-          h += '<div class="layrow mrow' + (hid ? ' hid' : '') + (sel ? ' sel' : '') +
-              '" data-lay="' + L.id + '" data-idx="' + r.idx + '" draggable="true">' +
+          const s = r.s, hid = !!s.hide, lck = !!s.locked, sel = S.sel && S.sel.it === it && S.sel.i === r.idx;
+          h += '<div class="layrow mrow' + (hid ? ' hid' : '') + (lck ? ' locked' : '') + (sel ? ' sel' : '') +
+              '" data-lay="' + L.id + '" data-idx="' + r.idx + '" draggable="' + (lck ? 'false' : 'true') + '">' +
             dot(!hid, hid ? 'Show' : 'Hide') +
+            lockBtn(lck, lck ? 'Unlock' : 'Lock') +
             '<i class="layswatch" style="background:' + X.esc(swatch(s)) + '"></i>' +
             '<span class="laylabel">' + X.esc(label(s)) + '</span>' +
             '<span class="laybtns">' +
-              '<button type="button" data-act="up"' + (r.idx === top ? ' disabled' : '') +
+              '<button type="button" data-act="up"' + (r.idx === top || lck ? ' disabled' : '') +
                 ' title="Bring forward" aria-label="Bring forward">' + UP + '</button>' +
-              '<button type="button" data-act="down"' + (r.idx === bottom ? ' disabled' : '') +
+              '<button type="button" data-act="down"' + (r.idx === bottom || lck ? ' disabled' : '') +
                 ' title="Send backward" aria-label="Send backward">' + DOWN + '</button>' +
-              '<button type="button" data-act="dup" title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
-              '<button type="button" class="laydel" data-act="del" title="Delete" aria-label="Delete">' + DEL + '</button>' +
+              '<button type="button" data-act="dup"' + (lck ? ' disabled' : '') +
+                ' title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
+              '<button type="button" class="laydel" data-act="del"' + (lck ? ' disabled' : '') +
+                ' title="Delete" aria-label="Delete">' + DEL + '</button>' +
             '</span></div>';
         });
       });
@@ -352,6 +368,11 @@
       if (act && act.dataset.act === 'dot') {
         if (isMark) toggleMark(it, +row.dataset.idx);
         else toggleLayer(row.dataset.lay);
+        return;
+      }
+      if (act && act.dataset.act === 'lock') {
+        if (isMark) toggleMarkLock(it, +row.dataset.idx);
+        else toggleLayerLock(row.dataset.lay);
         return;
       }
       if (act && act.dataset.act === 'twist') {
@@ -389,6 +410,35 @@
       if (s.hide) { S.sel = null; S.multi = null; }
       else { const L = layerOf(layerIdOf(s)); if (L.hidden) L.hidden = false; }
       X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+      render();
+    }
+
+    /* locking is its own flag, separate from a layer's hidden one — a layer
+       can be locked and still shown, or hidden and still unlocked. Locking
+       it locks every one of its members at once, the same way hiding does
+       (core.js's setGroup, markUnder and beginDrag all skip a locked mark),
+       and nothing selected on it survives the lock. */
+    function toggleLayerLock(id) {
+      const L = layerOf(id);
+      X.snapshot();
+      L.locked = !L.locked;
+      S.items.forEach(function (it) {
+        it.shapes.forEach(function (s) { if (layerIdOf(s) === L.id) s.locked = L.locked; });
+      });
+      if (L.locked) { S.sel = null; S.multi = null; }
+      X.updateMeta(); X.syncMarkPop();
+      render();
+    }
+    /* a mark unlocked on its own brings its layer's own lock off with it,
+       the same symmetry toggleMark keeps for hidden */
+    function toggleMarkLock(it, idx) {
+      const s = it.shapes[idx];
+      if (!s) return;
+      X.snapshot();
+      s.locked = !s.locked;
+      if (s.locked && S.sel && S.sel.it === it && S.sel.i === idx) { S.sel = null; S.multi = null; }
+      else if (!s.locked) { const L = layerOf(layerIdOf(s)); if (L.locked) L.locked = false; }
+      X.updateMeta(); X.syncMarkPop();
       render();
     }
 
@@ -479,7 +529,7 @@
       if (from < at) at--;
       if (at > it.shapes.length) at = it.shapes.length;
       it.shapes.splice(at, 0, s);
-      if (was !== L.id) { s.layer = L.id; s.hide = !!L.hidden; }
+      if (was !== L.id) { s.layer = L.id; s.hide = !!L.hidden; s.locked = !!L.locked; }
 
       if (s.hide) { S.sel = null; S.multi = null; } else { X.setGroup(it, [at]); }
       X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();

@@ -26,7 +26,7 @@
     /* Everything that draws a shape on the page. Ordered so the pair you
        reach for most sit first, and grouped by what they are for. */
     const DRAW_GROUPS = [
-      { ids: ['tDrawPan', 'tDrawSelect'] },
+      { ids: ['tDrawPan', 'tDrawMove', 'tDrawSelect'] },
       { ids: ['tRect', 'tEllipse', 'tLine', 'tArrow'] },
       { ids: ['tArc', 'tCloud', 'tPoly'] },
       { ids: ['tText'] },
@@ -36,7 +36,7 @@
     /* What is left on Edit: review marks, and the page tools. Text moved to
        Draw — it puts a shape on the page like everything else there. */
     const EDIT_GROUPS = [
-      { ids: ['tEditPan', 'tSelect'] },
+      { ids: ['tEditPan', 'tEditMove', 'tSelect'] },
       /* the three you mark a page up with most, side by side */
       { ids: ['tHighlight', 'tHighlightDd', 'tHlArea', 'tHlAreaDd', 'tInk'] },
       { ids: ['tUnderline', 'tStrike'] },
@@ -80,17 +80,47 @@
       '<path d="M15.4 10.4V5.6a1.6 1.6 0 0 1 3.2 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-4.5-2l-3-3.4a1.7 1.7 0 0 1 2.4-2.4L9 15.4V11"/>' +
       '</svg>';
     const SEL_SVG = '<svg viewBox="0 0 24 24"><path d="M5 3l14 8-6 1.4L10 19z"/></svg>';
+    /* a cross of four arrows: the usual "move" glyph, next to Pan and Select
+       rather than a third tool of its own — clicking it just puts Select
+       down, the same click Select's own button makes (so whatever was
+       already selected stays selected, ready to drag) */
+    const MOVE_SVG =
+      '<svg viewBox="0 0 24 24">' +
+      '<path d="M12 3v18M3 12h18"/>' +
+      '<path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>' +
+      '</svg>';
+    /* setTool always drops the current selection, right for an actual tool
+       change but not for a click (or the M shortcut, core.js) that is only
+       confirming the one already in hand — whatever was selected stays
+       selected, ready to drag */
+    function activateMove() {
+      if (X.S.tool !== 'select') X.setTool('select');
+      /* setTool just dropped this (any real tool change does); back on, so
+         a shape — and now the empty page too — reads as move */
+      document.body.classList.add('move-mode');
+    }
+    X.activateMove = activateMove;
 
     function toolCopy(id, tool) {
       const b = document.createElement('button');
       b.className = 'btn'; b.id = id; b.type = 'button';
-      b.dataset.toolBtn = tool;
+      /* Move acts as Select for every purpose core cares about — which
+         button lights up, what a click does — it only looks like its own
+         tool */
+      const acts = tool === 'move' ? 'select' : tool;
+      b.dataset.toolBtn = acts;
       if (tool === 'pan') {
         b.title = 'Pan — drag the page anywhere (H, or hold Space)';
         b.setAttribute('aria-label', 'Pan tool');
         b.dataset.label = 'Pan';
         b.innerHTML = PAN_SVG;
         b.addEventListener('click', function () { X.toggleTool('pan'); });
+      } else if (tool === 'move') {
+        b.title = 'Move (M) — drag any shape to move it (Select, under another name)';
+        b.setAttribute('aria-label', 'Move tool');
+        b.dataset.label = 'Move';
+        b.innerHTML = MOVE_SVG;
+        b.addEventListener('click', activateMove);
       } else {
         b.title = 'Select (V)';
         b.setAttribute('aria-label', 'Select tool');
@@ -98,7 +128,7 @@
         b.innerHTML = SEL_SVG;
         b.addEventListener('click', function () { X.setTool('select'); });
       }
-      b.classList.toggle('on', X.S.tool === tool);
+      b.classList.toggle('on', X.S.tool === acts);
       return b;
     }
 
@@ -120,7 +150,9 @@
 
     /* Edit and Draw already open with a tool row, so the pair joins it. */
     $('grpTools').insertBefore(toolCopy('tEditPan', 'pan'), $('tSelect'));
+    $('grpTools').insertBefore(toolCopy('tEditMove', 'move'), $('tSelect'));
     drawTools.appendChild(toolCopy('tDrawPan', 'pan'));
+    drawTools.appendChild(toolCopy('tDrawMove', 'move'));
     drawTools.appendChild(toolCopy('tDrawSelect', 'select'));
 
     /* ---------------- moving the buttons ---------------- */
