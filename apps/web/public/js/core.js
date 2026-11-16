@@ -2857,6 +2857,18 @@
     }
   }
 
+  /* The point next to i that Shift runs it level, plumb or at 45° off of —
+     the one before it, wrapping past a closed line's own start to the point
+     before that (its last point is i itself); the one after, for the first
+     point of a line still open. Read from o, the drag's own snapshot, so
+     dragging the first point of a closed line does not chase a far end that
+     this same drag just moved. */
+  function polyShiftRef(o, i) {
+    const n = o.pts.length;
+    if (i > 0) return o.pts[i - 1];
+    const closed = n > 2 && o.pts[0][0] === o.pts[n - 1][0] && o.pts[0][1] === o.pts[n - 1][1];
+    return closed ? o.pts[n - 2] : (o.pts[1] || o.pts[0]);
+  }
   /* One point of a pts-only mark (a Continuous Line) dragged to p. If it was
      closed — its first and last point the same, before this drag touched it
      — dragging either end keeps the loop shut by moving the other end with
@@ -2912,6 +2924,8 @@
       s.b = [p[0], p[1]];
     } else if (d.mode === 'pv' && EXT.snapPt && (d.snapTo = EXT.snapPt(d.it, p, e, { skip: d.idx }))) {
       setVertex(s, o, d.extra, d.snapTo);
+    } else if (d.mode === 'pv' && e.shiftKey) {
+      setVertex(s, o, d.extra, snapLine(polyShiftRef(o, d.extra), p));
     } else if (d.mode === 'pv') {
       setVertex(s, o, d.extra, p);
     } else if (d.mode === 'corner') {
