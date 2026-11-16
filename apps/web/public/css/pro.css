@@ -1534,6 +1534,18 @@ body.cdpicking, body.cdpicking * { cursor: crosshair !important }
   width: 9px; height: 9px; border-radius: 50%; background: var(--text); display: block;
 }
 .laydot .dot.off { background: transparent; border: 1px solid var(--text-dim) }
+/* the lock beside it: open or shut, its own column — a layer and each of
+   its marks lock separately, same as they hide separately */
+.laylock {
+  flex: none; display: grid; place-items: center; width: 22px; height: 26px; padding: 0;
+  border: none; background: transparent; color: var(--text-dim); cursor: pointer; border-radius: 5px;
+}
+.laylock:hover { color: var(--text); background: rgba(255,255,255,.08) }
+.laylock.on { color: var(--marker) }
+.laylock svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8 }
+.layrow.locked { cursor: default }
+.layrow.locked .laylabel { color: var(--text-dim) }
+.layrow.mrow.locked .laybtns { opacity: 0 !important; pointer-events: none !important }
 .layswatch {
   flex: none; width: 13px; height: 13px; border-radius: 3px; border: 1px solid rgba(0,0,0,.3);
 }

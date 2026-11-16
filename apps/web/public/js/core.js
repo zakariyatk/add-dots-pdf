@@ -2636,7 +2636,7 @@
   function setGroup(it, idx) {
     idx = idx.filter(function (i, k) {
       const s = it.shapes[i];
-      return s && !NOT_SELECTABLE[s.t] && idx.indexOf(i) === k;
+      return s && !NOT_SELECTABLE[s.t] && !s.locked && idx.indexOf(i) === k;
     });
     if (!idx.length) { S.sel = null; S.multi = null; return; }
     S.sel = { it: it, i: idx[idx.length - 1] };
@@ -2763,6 +2763,7 @@
     if (S.tool !== 'select' || !it.vp || e.button > 0) return;
     const s = it.shapes[idx];
     if (!s || s.t === 'pin') return;             /* pins have their own tool */
+    if (s.locked) return;                        /* a locked mark neither selects nor drags */
     e.preventDefault(); e.stopPropagation();
     /* A finger would otherwise start the page scrolling, and the browser then
        cancels the drag — the resize springs back. The touch lands on this very
@@ -3606,7 +3607,7 @@
     let el = target;
     while (el && el.parentNode !== anno) el = el.parentNode;
     const i = el ? Array.prototype.indexOf.call(anno.children, el) : -1;
-    if (i < 0 || i >= it.shapes.length || NOT_SELECTABLE[it.shapes[i].t]) return null;
+    if (i < 0 || i >= it.shapes.length || NOT_SELECTABLE[it.shapes[i].t] || it.shapes[i].locked) return null;
     return { it: it, i: i };
   }
 
