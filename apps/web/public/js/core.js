@@ -10085,7 +10085,8 @@
       case 'a': setTool('arrow'); break;
       case 'e': setTool('text'); break;
       case 'c': setTool('crop'); break;
-      case 'm': setTool('pin'); break;
+      case 'z': setTool('pin'); break;
+      case 'm': if (EXT.activateMove) EXT.activateMove(); break;
       case 'M': setRail(true); switchTab('pins'); break;
       case 'r': case 'R': e.shiftKey ? rotateAll(90) : rotateItem(S.current - 1, 90); break;
       case 'Delete': case 'Backspace':

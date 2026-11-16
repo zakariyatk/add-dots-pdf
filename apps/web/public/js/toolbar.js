@@ -89,6 +89,17 @@
       '<path d="M12 3v18M3 12h18"/>' +
       '<path d="M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/>' +
       '</svg>';
+    /* setTool always drops the current selection, right for an actual tool
+       change but not for a click (or the M shortcut, core.js) that is only
+       confirming the one already in hand — whatever was selected stays
+       selected, ready to drag */
+    function activateMove() {
+      if (X.S.tool !== 'select') X.setTool('select');
+      /* setTool just dropped this (any real tool change does); back on, so
+         a shape — and now the empty page too — reads as move */
+      document.body.classList.add('move-mode');
+    }
+    X.activateMove = activateMove;
 
     function toolCopy(id, tool) {
       const b = document.createElement('button');
@@ -105,19 +116,11 @@
         b.innerHTML = PAN_SVG;
         b.addEventListener('click', function () { X.toggleTool('pan'); });
       } else if (tool === 'move') {
-        b.title = 'Move — drag any shape to move it (Select, under another name)';
+        b.title = 'Move (M) — drag any shape to move it (Select, under another name)';
         b.setAttribute('aria-label', 'Move tool');
         b.dataset.label = 'Move';
         b.innerHTML = MOVE_SVG;
-        /* setTool always drops the current selection, right for an actual
-           tool change but not for a click that is only confirming the one
-           you are already in — whatever was selected stays selected */
-        b.addEventListener('click', function () {
-          if (X.S.tool !== 'select') X.setTool('select');
-          /* setTool just dropped this (any real tool change does); back on,
-             so a shape under the pointer reads as move, not plain arrow-obj */
-          document.body.classList.add('move-mode');
-        });
+        b.addEventListener('click', activateMove);
       } else {
         b.title = 'Select (V)';
         b.setAttribute('aria-label', 'Select tool');
