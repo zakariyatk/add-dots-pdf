@@ -2371,8 +2371,33 @@
     if (!ghost && S.tool === 'select' && S.sel && S.sel.it === it) {
       const list = selList();
       if (list.length > 1) {
-        /* a group: a dashed box round each member, no grips — you move a
-           group, you resize one mark at a time */
+        /* a group: one frame round the whole thing first, as its own drag
+           handle — the gap between two members had nothing to grab before,
+           so a group only moved together if the drag happened to start
+           right on one of them — then a dashed box round each member on
+           top of it, no grips, since you resize a group's marks one at a
+           time */
+        let ux1 = Infinity, uy1 = Infinity, ux2 = -Infinity, uy2 = -Infinity;
+        list.forEach(function (i) {
+          const el = it.anno.children[i];
+          if (!el || !el.getBBox) return;
+          let b;
+          try { b = el.getBBox(); } catch (e) { return; }
+          ux1 = Math.min(ux1, b.x); uy1 = Math.min(uy1, b.y);
+          ux2 = Math.max(ux2, b.x + b.width); uy2 = Math.max(uy2, b.y + b.height);
+        });
+        if (ux2 > ux1) {
+          const frame = document.createElementNS(SVGNS, 'rect');
+          frame.setAttribute('class', 'halo multi-frame');
+          frame.setAttribute('x', ux1 - 3); frame.setAttribute('y', uy1 - 3);
+          frame.setAttribute('width', ux2 - ux1 + 6); frame.setAttribute('height', uy2 - uy1 + 6);
+          frame.addEventListener('pointerdown', function (e) { beginDrag(it, S.sel.i, e, 'move'); });
+          /* under every mark (first child, SVG's own paint order), so one
+             still catches its own click first — Ctrl+click to drop it out
+             of the group included — and the frame only ever answers for
+             the gap between members, where nothing else is there to */
+          it.anno.insertBefore(frame, it.anno.firstChild);
+        }
         list.forEach(function (i) {
           const el = it.anno.children[i];
           if (!el || !el.getBBox) return;
@@ -2817,13 +2842,17 @@
       screen-space box and the gap to it in px, or null. box and every
       mark considered are both already in screen pixels. */
   function nearestGap(it, box, skip, dir) {
+    /* box (showDistanceHuds) is already in real screen pixels — every other
+       mark's own has to be too, or "shares the other axis" and "which one
+       is closest" would be comparing an offset box against an unoffset one */
+    const r = it.anno.getBoundingClientRect();
     let best = null, bestGap = Infinity;
     it.shapes.forEach(function (sh, i) {
       if (skip[i] || NOT_SELECTABLE[sh.t]) return;
       const b = markBox(sh);
       const p1 = it.vp.convertToViewportPoint(b.x1, b.y1), p2 = it.vp.convertToViewportPoint(b.x2, b.y2);
-      const theirs = { x1: Math.min(p1[0], p2[0]), x2: Math.max(p1[0], p2[0]),
-                        y1: Math.min(p1[1], p2[1]), y2: Math.max(p1[1], p2[1]) };
+      const theirs = { x1: r.left + Math.min(p1[0], p2[0]), x2: r.left + Math.max(p1[0], p2[0]),
+                        y1: r.top + Math.min(p1[1], p2[1]), y2: r.top + Math.max(p1[1], p2[1]) };
       let gap = null, shares = false;
       if (dir === 'L' && theirs.x2 <= box.x1) { gap = box.x1 - theirs.x2; shares = theirs.y1 < box.y2 && theirs.y2 > box.y1; }
       else if (dir === 'R' && theirs.x1 >= box.x2) { gap = theirs.x1 - box.x2; shares = theirs.y1 < box.y2 && theirs.y2 > box.y1; }
@@ -2836,9 +2865,13 @@
   /** Up to one label a side, for boxPdf (the dragged mark's candidate box,
       in PDF points) against every other mark on it. */
   function showDistanceHuds(it, boxPdf, skip) {
+    /* convertToViewportPoint is relative to the page's own corner, not the
+       real screen — position: fixed needs it.anno's own corner added in,
+       the same offset showMoveHud/showSmartGuide already carry */
+    const r = it.anno.getBoundingClientRect();
     const p1 = it.vp.convertToViewportPoint(boxPdf.x1, boxPdf.y1), p2 = it.vp.convertToViewportPoint(boxPdf.x2, boxPdf.y2);
-    const box = { x1: Math.min(p1[0], p2[0]), x2: Math.max(p1[0], p2[0]),
-                  y1: Math.min(p1[1], p2[1]), y2: Math.max(p1[1], p2[1]) };
+    const box = { x1: r.left + Math.min(p1[0], p2[0]), x2: r.left + Math.max(p1[0], p2[0]),
+                  y1: r.top + Math.min(p1[1], p2[1]), y2: r.top + Math.max(p1[1], p2[1]) };
     const sc = EXT.saveState && EXT.saveState.scale && EXT.saveState.scale();
     const found = [];
     ['L', 'R', 'T', 'B'].forEach(function (dir) {
@@ -10056,8 +10089,16 @@
          so dropping a real tool here never touches it — clear the one thing
          that actually says Move is on, the same way any other tool goes
          down on Escape */
-      if (document.body.classList.contains('move-mode')) { document.body.classList.remove('move-mode'); return; }
-      if (S.tool !== 'select') setTool('select');
+      document.body.classList.remove('move-mode');
+      if (S.tool !== 'select') { setTool('select'); return; }
+      /* on Select (or Move, which is Select) already: the same thing a
+         click outside every mark already does, so one key drops whatever
+         was picked up without needing to find empty space to click on */
+      if (S.sel) {
+        S.sel = null; S.multi = null;
+        S.items.forEach(function (x) { drawShapes(x); });
+        hideMarkPop();
+      }
       return;
     }
     if (typing || !S.items.length) return;
