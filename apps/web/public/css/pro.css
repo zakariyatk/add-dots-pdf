@@ -1339,7 +1339,17 @@ body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
   border: 1px dashed #7B5CFF; background: rgba(123,92,255,.08);
 }
 .marquee[hidden] { display: none }
-.anno .halo.multi { stroke: #7B5CFF; stroke-width: 1; stroke-dasharray: 4 3; fill: rgba(123,92,255,.04); opacity: 1 }
+/* visual only — a translucent fill still catches clicks by default in
+   SVG, which was quietly stealing them from whatever is under it (a
+   member's own Ctrl+click-to-deselect, among others) before this */
+.anno .halo.multi { stroke: #7B5CFF; stroke-width: 1; stroke-dasharray: 4 3; fill: rgba(123,92,255,.04); opacity: 1; pointer-events: none }
+/* the whole group's own frame, under the per-member boxes above — its
+   own drag handle (core.js), so the gap between two marks moves them
+   both the same as grabbing either one already does */
+.anno .halo.multi-frame {
+  stroke: #7B5CFF; stroke-width: 1.5; stroke-dasharray: none; fill: rgba(123,92,255,.03);
+  opacity: 1; pointer-events: all; cursor: var(--cur-move);
+}
 
 /* ---------- ribbon: bigger, darker, cleaner ----------
    Larger icons with a firmer line, labels in the main text colour at a

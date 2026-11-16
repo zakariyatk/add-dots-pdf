@@ -2371,8 +2371,33 @@
     if (!ghost && S.tool === 'select' && S.sel && S.sel.it === it) {
       const list = selList();
       if (list.length > 1) {
-        /* a group: a dashed box round each member, no grips — you move a
-           group, you resize one mark at a time */
+        /* a group: one frame round the whole thing first, as its own drag
+           handle — the gap between two members had nothing to grab before,
+           so a group only moved together if the drag happened to start
+           right on one of them — then a dashed box round each member on
+           top of it, no grips, since you resize a group's marks one at a
+           time */
+        let ux1 = Infinity, uy1 = Infinity, ux2 = -Infinity, uy2 = -Infinity;
+        list.forEach(function (i) {
+          const el = it.anno.children[i];
+          if (!el || !el.getBBox) return;
+          let b;
+          try { b = el.getBBox(); } catch (e) { return; }
+          ux1 = Math.min(ux1, b.x); uy1 = Math.min(uy1, b.y);
+          ux2 = Math.max(ux2, b.x + b.width); uy2 = Math.max(uy2, b.y + b.height);
+        });
+        if (ux2 > ux1) {
+          const frame = document.createElementNS(SVGNS, 'rect');
+          frame.setAttribute('class', 'halo multi-frame');
+          frame.setAttribute('x', ux1 - 3); frame.setAttribute('y', uy1 - 3);
+          frame.setAttribute('width', ux2 - ux1 + 6); frame.setAttribute('height', uy2 - uy1 + 6);
+          frame.addEventListener('pointerdown', function (e) { beginDrag(it, S.sel.i, e, 'move'); });
+          /* under every mark (first child, SVG's own paint order), so one
+             still catches its own click first — Ctrl+click to drop it out
+             of the group included — and the frame only ever answers for
+             the gap between members, where nothing else is there to */
+          it.anno.insertBefore(frame, it.anno.firstChild);
+        }
         list.forEach(function (i) {
           const el = it.anno.children[i];
           if (!el || !el.getBBox) return;
