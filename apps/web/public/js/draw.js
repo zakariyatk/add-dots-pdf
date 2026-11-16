@@ -976,13 +976,31 @@
       if (S.tool === 'poly') $('modeHint').innerHTML = X.hints.poly;
     }
 
+    /** A point of this same line, not yet a real mark so snapFind never sees
+        it — close a loop by snapping back onto it anyway. The nearest one
+        inside tolerance, shown and returned the way an ordinary Endpoint is. */
+    function polySelfSnap(it, raw) {
+      if (!poly || poly.it !== it) return null;
+      const tol = (X.isMobile() ? 16 : 15) / Math.max(0.05, S.scale);
+      let best = null, bd = tol;
+      poly.pts.forEach(function (q) {
+        const d = Math.hypot(q[0] - raw[0], q[1] - raw[1]);
+        if (d < bd) { bd = d; best = q; }
+      });
+      if (!best) return null;
+      const hit = { p: best, kind: 'end', label: 'Endpoint', d: bd, r: SNAP_RANK.end };
+      snapShow(it, hit);
+      return hit;
+    }
+
     X.tools.poly = {
       colors: true, widths: true,
       down: function () { /* a click tool: everything happens on release */ },
       move: function (it, at, e) {
         if (!poly || poly.it !== it || !it.vp) return;
         const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-        const sn = X.snapPt(it, raw, e);
+        const self = polySelfSnap(it, raw);
+        const sn = self ? self.p : X.snapPt(it, raw, e);
         const last = poly.pts[poly.pts.length - 1];
         let p = sn || raw;
         if (e && e.shiftKey && !sn) p = X.snapLine(last, p);
@@ -993,7 +1011,8 @@
       up: function (it, at, e) {
         if (!it.vp || (e && e.button > 0)) return;
         const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-        const sn = X.snapPt(it, raw, e);
+        const self = polySelfSnap(it, raw);
+        const sn = self ? self.p : X.snapPt(it, raw, e);
         const p = sn || raw;
         if (!poly || poly.it !== it) {          /* the first point, or a jump to another page */
           endPoly(false);
