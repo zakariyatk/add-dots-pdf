@@ -1301,6 +1301,13 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
 }
 .snaptrack path { stroke: #E8882A; stroke-width: 2; fill: none }
 
+/* Smart guides, while a mark is dragged (core.js): solid, in Illustrator's
+   own magenta, through whatever it has just lined up with — distinct from
+   the snap guides above, which only ever run from a point you dwelled on
+   while drawing, not while moving something already on the page. */
+.smartguide { position: fixed; z-index: 59; pointer-events: none; overflow: visible }
+.smartguide line { stroke: #FF2BD6; stroke-width: 1; shape-rendering: crispEdges }
+
 /* The marker is a zero-size anchor at the snap point itself: the symbol is
    centred on it, and the label hangs off to the lower right, so neither can
    push the other out of place. */

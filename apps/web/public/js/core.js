@@ -2667,6 +2667,109 @@
     updateMeta();
     syncMarkPop();
   }
+  /* ---------------- smart guides, while a mark is being moved ----------------
+     Illustrator's own: dragging a mark (or a selected group, as one) compares
+     its left/right/centre and top/bottom/middle against every other mark's on
+     the same page. Landing within GUIDE_TOL snaps the move to line up with
+     the closest one exactly, on each axis separately, and a line is drawn
+     through the match — a vertical one for a left/right/centre-x hit, a
+     horizontal one for a top/bottom/centre-y hit. */
+  const GUIDE_TOL = 6;                    /* px, however the page is zoomed */
+  let sgSvg = null, sgV = null, sgH = null;
+  function ensureSmartGuide() {
+    if (sgSvg) return;
+    sgSvg = document.createElementNS(SVGNS, 'svg');
+    sgSvg.setAttribute('class', 'smartguide');
+    sgSvg.setAttribute('aria-hidden', 'true');
+    /* an SVG element: style.display, not .hidden — js/draw.js's own object-
+       snap guide learned the hard way that .hidden never reflects to the
+       real attribute on one, so [hidden]{display:none} never matched it */
+    sgSvg.style.display = 'none';
+    sgV = document.createElementNS(SVGNS, 'line');
+    sgH = document.createElementNS(SVGNS, 'line');
+    sgSvg.appendChild(sgV); sgSvg.appendChild(sgH);
+    document.body.appendChild(sgSvg);
+  }
+  function hideSmartGuide() { if (sgSvg) sgSvg.style.display = 'none'; }
+  /** The guide line(s) for a match at PDF x = vx and/or y = hy (either one
+      null, for the axis that found nothing), over it's own stage. box is the
+      mark's (candidate) position, only to pair with vx/hy for the screen
+      conversion — correct wherever the page itself is turned, the same way
+      the object-snap guide already does it from a real point rather than a
+      bare x or y. */
+  function showSmartGuide(it, vx, hy, box) {
+    if (vx == null && hy == null) { hideSmartGuide(); return; }
+    ensureSmartGuide();
+    const stage = $('stage').getBoundingClientRect();
+    const r = it.anno.getBoundingClientRect();
+    sgSvg.style.left = Math.round(stage.left) + 'px';
+    sgSvg.style.top = Math.round(stage.top) + 'px';
+    sgSvg.setAttribute('width', Math.round(stage.width));
+    sgSvg.setAttribute('height', Math.round(stage.height));
+    if (vx != null) {
+      const v = it.vp.convertToViewportPoint(vx, (box.y1 + box.y2) / 2);
+      const cx = r.left + v[0] - stage.left;
+      sgV.setAttribute('x1', cx); sgV.setAttribute('x2', cx);
+      sgV.setAttribute('y1', 0); sgV.setAttribute('y2', Math.round(stage.height));
+      sgV.style.display = '';
+    } else sgV.style.display = 'none';
+    if (hy != null) {
+      const v = it.vp.convertToViewportPoint((box.x1 + box.x2) / 2, hy);
+      const cy = r.top + v[1] - stage.top;
+      sgH.setAttribute('y1', cy); sgH.setAttribute('y2', cy);
+      sgH.setAttribute('x1', 0); sgH.setAttribute('x2', Math.round(stage.width));
+      sgH.style.display = '';
+    } else sgH.style.display = 'none';
+    sgSvg.style.display = '';
+  }
+  function offsetBox(b, mx, my) {
+    return { x1: b.x1 + mx, y1: b.y1 + my, x2: b.x2 + mx, y2: b.y2 + my };
+  }
+  function unionBox(boxes) {
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    boxes.forEach(function (b) {
+      x1 = Math.min(x1, b.x1); y1 = Math.min(y1, b.y1);
+      x2 = Math.max(x2, b.x2); y2 = Math.max(y2, b.y2);
+    });
+    return { x1: x1, y1: y1, x2: x2, y2: y2 };
+  }
+  /** Where box — the dragged mark's (or group's combined) box, already offset
+      to its candidate position — comes within GUIDE_TOL of lining up with
+      another mark on it, on either axis: its left, right or centre against
+      theirs, its top, bottom or middle against theirs. The nudge that lines
+      it up exactly, on whichever axis (axes) found a match, and the PDF-point
+      x/y the guide line for each runs through (null where neither did). */
+  function smartGuide(it, box, skip) {
+    const tol = GUIDE_TOL / Math.max(0.05, S.scale);
+    const mine = { L: box.x1, R: box.x2, Cx: (box.x1 + box.x2) / 2,
+                   T: box.y1, B: box.y2, Cy: (box.y1 + box.y2) / 2 };
+    let bestXD = tol, bestX = null, bestYD = tol, bestY = null;
+    const XK = ['L', 'R', 'Cx'], YK = ['T', 'B', 'Cy'];
+    it.shapes.forEach(function (sh, i) {
+      if (skip[i] || NOT_SELECTABLE[sh.t]) return;
+      const b = markBox(sh);
+      const theirs = { L: b.x1, R: b.x2, Cx: (b.x1 + b.x2) / 2,
+                        T: b.y1, B: b.y2, Cy: (b.y1 + b.y2) / 2 };
+      XK.forEach(function (k) {
+        XK.forEach(function (k2) {
+          const d = Math.abs(mine[k] - theirs[k2]);
+          if (d < bestXD) { bestXD = d; bestX = { from: k, to: theirs[k2] }; }
+        });
+      });
+      YK.forEach(function (k) {
+        YK.forEach(function (k2) {
+          const d = Math.abs(mine[k] - theirs[k2]);
+          if (d < bestYD) { bestYD = d; bestY = { from: k, to: theirs[k2] }; }
+        });
+      });
+    });
+    return {
+      dx: bestX ? bestX.to - mine[bestX.from] : 0,
+      dy: bestY ? bestY.to - mine[bestY.from] : 0,
+      vx: bestX ? bestX.to : null,
+      hy: bestY ? bestY.to : null
+    };
+  }
   /** Move one mark by (mx, my) from its state o — every kind of point it has. */
   function moveShape(s, o, mx, my) {
     if (o.a) s.a = [o.a[0] + mx, o.a[1] + my];
@@ -2902,6 +3005,14 @@
     if (d.mode === 'move') {
       let mx = dx, my = dy;
       if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) my = 0; else mx = 0; }   /* along one axis */
+      const skip = {};
+      if (d.group) d.group.forEach(function (m) { skip[m.i] = 1; }); else skip[d.idx] = 1;
+      const movedBox = d.group
+        ? unionBox(d.group.map(function (m) { return offsetBox(markBox(m.s0), mx, my); }))
+        : offsetBox(markBox(o), mx, my);
+      const guide = smartGuide(d.it, movedBox, skip);
+      mx += guide.dx; my += guide.dy;
+      showSmartGuide(d.it, guide.vx, guide.hy, offsetBox(movedBox, guide.dx, guide.dy));
       if (d.group) {
         d.group.forEach(function (m) {
           const sh = d.it.shapes[m.i];
@@ -2955,6 +3066,7 @@
     dragOn = null;
     if (d.moved) S.draggedAt = Date.now();
     if (EXT.snapHide) EXT.snapHide();
+    hideSmartGuide();
     if (d.moved) { drawShapes(d.it); updateMeta(); }
     syncMarkPop();
     if (!d.moved) toast('Mark selected · drag or the arrow keys to move, corners to resize, ↻ to turn, <b>Delete</b> to remove');
@@ -2964,6 +3076,7 @@
   document.addEventListener('pointercancel', function () {
     const d = dragOn; if (!d) return;
     dragOn = null;
+    hideSmartGuide();
     if (d.moved) { d.it.shapes[d.idx] = d.s0; drawShapes(d.it); }
   });
 
