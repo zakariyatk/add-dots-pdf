@@ -63,12 +63,13 @@ body.acro #ribbon .grp[data-head]::before {
   content: attr(data-head); flex: 0 0 100%; margin: 16px 6px 6px;
   font-size: 11px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase; color: var(--text-dim)
 }
+/* each row centres its icon and name as one box, as every other button does */
 body.acro #ribbon .btn {
-  flex: 1 1 100%; flex-direction: row; justify-content: flex-start; gap: 12px;
+  flex: 1 1 100%; flex-direction: row; justify-content: center; gap: 12px;
   height: 36px; min-height: 36px; min-width: 0; max-width: none; padding: 0 8px; border-radius: 6px
 }
 body.acro #ribbon .btn::after {
-  font-size: 13.5px; line-height: 1.2; color: var(--text); text-align: left;
+  font-size: 13.5px; line-height: 1.2; color: var(--text); text-align: center;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0
 }
 body.acro #ribbon .btn:disabled::after { color: var(--text-dim) }
@@ -117,7 +118,7 @@ body.acro #ribbon #panTool #modeBar .hint {
 }
 body.acro #ribbon #panTool #modeBar .grow { display: none }
 body.acro #ribbon #panTool .btn { flex: none; width: auto; height: 32px; min-height: 32px; padding: 0 8px }
-body.acro #ribbon #panTool #grpToolNow .btn { flex: 1 1 100%; justify-content: flex-start; height: 34px }
+body.acro #ribbon #panTool #grpToolNow .btn { flex: 1 1 100%; height: 34px }
 body.acro #ribbon #panTool select,
 body.acro #ribbon #panTool input:not([type="range"]) { max-width: 100% }
 /* every row of controls (the text tool's, Dimension's Scale and Units, the
