@@ -8,7 +8,8 @@
 import { degrees, rgb, type PDFFont, type PDFPage } from 'pdf-lib';
 import { arrowHead, boxOf, rotPt } from '../geometry';
 import { formatLength, type Scale } from '../measure';
-import type { Mark, Pt } from '../model';
+import { fontIdx, isFileFont } from '../fonts';
+import type { FontFamily, Mark, Pt, StandardFamily } from '../model';
 import { hexRgb } from '../save';
 import { shOp } from '../style';
 import { fillPolygon, paintPts, type FontNeed, type Painter } from './common';
@@ -165,6 +166,58 @@ export interface DimMark extends Mark {
       is pulled clear of what it measures, as a CAD dimension usually is: a
       short extension line then runs from each of a and b out to it. */
   off?: number;
+  /* The look, each optional: unset reads exactly as a dimension always has.
+     The dimension line itself is s.w and s.c, as for any other mark. */
+  /** The whole dimension's size, as a multiple of the usual (1): its
+      arrows, ticks or dots, its reading, and its lines' weight, together. */
+  dz?: number;
+  /** The reading's font: 'helv' | 'times' | 'cour' | 'g:<id>' (unset: Inter). */
+  df?: FontFamily;
+  /** The reading is bold unless this is false (or 0). */
+  db?: boolean | number;
+  /** The reading in italic. */
+  di?: boolean | number;
+  /** The reading's colour (unset: s.c, the lines' colour). */
+  tc?: string;
+}
+
+/** The dimension's size multiple: s.dz, or 1. */
+export function dimScale(s: Pick<DimMark, 'dz'>): number {
+  return s.dz != null && s.dz > 0 ? s.dz : 1;
+}
+
+/** The reading's colour. */
+export function dimTextColor(s: Pick<DimMark, 'c' | 'tc'>): string {
+  return s.tc || s.c;
+}
+
+/** Standard-font names save.ts embeds by (StandardFonts' keys), per fontIdx. */
+const STD_KEYS: Record<StandardFamily, readonly string[]> = {
+  helv: ['Helvetica', 'HelveticaBold', 'HelveticaOblique', 'HelveticaBoldOblique'],
+  times: ['TimesRoman', 'TimesRomanBold', 'TimesRomanItalic', 'TimesRomanBoldItalic'],
+  cour: ['Courier', 'CourierBold', 'CourierOblique', 'CourierBoldOblique'],
+};
+
+/* what a standard PDF font can draw (WinAnsi): Latin-1 and a few more */
+const WIN_ANSI = /^[\x20-\x7e\xa0-\xff€‚ƒ„…†‡ˆ‰Š‹ŒŽ‘’“”•–—˜™š›œžŸ]*$/;
+
+/** A reading set in a standard font that its typed-in text has characters
+    the font cannot draw: it is drawn in the usual Inter instead, on screen
+    and on paper, rather than failing the save. (A measured reading is
+    digits, units, Ø and °, all of which every font has.) */
+export function dimFontFallsBack(s: Pick<DimMark, 'df' | 'label'>): boolean {
+  return !!s.df && !isFileFont(s.df) && s.label != null && !WIN_ANSI.test(s.label);
+}
+
+/** The font a dimension's reading needs embedded, in the form save.ts's
+    fontNeeds take: a standard font's name, or 'g:<id>|<fontIdx>'. With no
+    font set this is DIM_FONT, the bold Inter every reading has used. */
+export function dimFontKey(s: Pick<DimMark, 'df' | 'db' | 'di' | 'label'>): string {
+  const bold = s.db !== false && s.db !== 0;
+  const idx = fontIdx(bold, s.di);
+  const f = dimFontFallsBack(s) ? 'g:inter' : s.df || 'g:inter';
+  if (isFileFont(f)) return f + '|' + idx;
+  return (STD_KEYS[f as StandardFamily] || STD_KEYS.helv)[idx]!;
 }
 
 /** Where a plain dim's own line sits once pulled clear of a-b by s.off: A and
@@ -254,9 +307,10 @@ export function angLabelPt(s: DimMark, g: AngGeom, size: number): Pt {
   return angPt(s, g.start + g.sweep / 2, g.r + 3 + size * 0.75);
 }
 
-/** The reading's size on paper, in points; thin lines keep a readable 10pt. */
-export function dimTextPt(s: Pick<Mark, 'w'>): number {
-  return Math.max(10, Math.min(14, s.w * 4 + 6));
+/** The reading's size on paper, in points; thin lines keep a readable 10pt,
+    and the dimension's size (s.dz) scales it. */
+export function dimTextPt(s: Pick<DimMark, 'w' | 'dz'>): number {
+  return Math.max(10, Math.min(14, s.w * 4 + 6)) * dimScale(s);
 }
 
 /** What a dimension reads, under this scale. */
@@ -273,14 +327,22 @@ export function dimLabel(s: DimMark, scale: Scale): string {
 
 /* ---------------- writing into the PDF ---------------- */
 
+/** An arrowhead's two barbs, grown or shrunk about its tip by z. */
+function scaledHead(h: [Pt, Pt], tip: Pt, z: number): [Pt, Pt] {
+  if (z === 1) return h;
+  const f = (q: Pt): Pt => [tip[0] + (q[0] - tip[0]) * z, tip[1] + (q[1] - tip[1]) * z];
+  return [f(h[0]), f(h[1])];
+}
+
 /** One end of a dimension: P is the end, u points outward along the line. */
 function endPaint(p: PDFPage, P: Pt, u: Pt, s: DimMark): void {
   const col = hexRgb(s.c),
-    th = s.w,
+    z = dimScale(s),
+    th = s.w * z,
     op = shOp(s),
     st = s.ds || 'arrow';
   if (st === 'tick') {
-    const h = 3.5 + th * 1.2;
+    const h = (3.5 + s.w * 1.2) * z;
     const tx = ((u[0] - u[1]) / Math.SQRT2) * h,
       ty = ((u[1] + u[0]) / Math.SQRT2) * h;
     p.drawLine({
@@ -291,9 +353,9 @@ function endPaint(p: PDFPage, P: Pt, u: Pt, s: DimMark): void {
       opacity: op,
     });
   } else if (st === 'dot') {
-    p.drawCircle({ x: P[0], y: P[1], size: 1.6 + th * 0.9, color: col, opacity: op, borderWidth: 0 });
+    p.drawCircle({ x: P[0], y: P[1], size: (1.6 + s.w * 0.9) * z, color: col, opacity: op, borderWidth: 0 });
   } else {
-    arrowHead(P[0] - u[0] * 10, P[1] - u[1] * 10, P[0], P[1], th * 1.1).forEach((q) => {
+    scaledHead(arrowHead(P[0] - u[0] * 10, P[1] - u[1] * 10, P[0], P[1], s.w * 1.1), P, z).forEach((q) => {
       p.drawLine({
         start: { x: q[0], y: q[1] },
         end: { x: P[0], y: P[1] },
@@ -345,8 +407,10 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
   const arc: Painter = (p, s: ArcMark) => paintPts(p, arcPts(s, 64), s);
 
   const dim: Painter = (p, s: DimMark, ctx) => {
-    const col = hexRgb(s.c),
-      th = s.w,
+    /* every size here is the usual one times z, the dimension's size */
+    const z = dimScale(s),
+      col = hexRgb(s.c),
+      th = s.w * z,
       op = shOp(s);
     const st = s.ds || 'arrow';
     const G = dimGeom(s);
@@ -357,13 +421,13 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
        overshoot past the line, as a CAD extension line has them */
     if (Math.abs(G.off) > 0.5) {
       const sign = G.off > 0 ? 1 : -1,
-        gap = 2 * sign,
-        over = 3 * sign;
+        gap = 2 * sign * z,
+        over = 3 * sign * z;
       [s.a, s.b].forEach((pt) => {
         p.drawLine({
           start: { x: pt[0] + G.nx * gap, y: pt[1] + G.ny * gap },
           end: { x: pt[0] + G.nx * (G.off + over), y: pt[1] + G.ny * (G.off + over) },
-          thickness: Math.min(th, 1),
+          thickness: Math.min(s.w, 1) * z,
           color: col,
           opacity: op,
         });
@@ -376,7 +440,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx / len,
       uy = dy / len;
-    const tick = st === 'arrow' ? 4 + th : 6 + th;
+    const tick = (st === 'arrow' ? 4 : 6) * z + th;
     const nx = -uy * tick,
       ny = ux * tick;
     [A, B].forEach((e) => {
@@ -391,7 +455,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
     if (st === 'tick') {
       /* the 45° slash; page space runs y up, so this is the screen's slash
          seen the right way round */
-      const h = 3.5 + th * 1.2;
+      const h = (3.5 + s.w * 1.2) * z;
       const tx = ((ux - uy) / Math.SQRT2) * h,
         ty = ((uy + ux) / Math.SQRT2) * h;
       [A, B].forEach((e) => {
@@ -404,7 +468,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
         });
       });
     } else if (st === 'dot') {
-      const r = 1.6 + th * 0.9;
+      const r = (1.6 + s.w * 0.9) * z;
       [A, B].forEach((e) => {
         p.drawCircle({ x: e.x, y: e.y, size: r, color: col, opacity: op, borderWidth: 0 });
       });
@@ -413,7 +477,11 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
         [B, A],
         [A, B],
       ].forEach((pair) => {
-        const h = arrowHead(pair[1]!.x, pair[1]!.y, pair[0]!.x, pair[0]!.y, th * 1.1);
+        const h = scaledHead(
+          arrowHead(pair[1]!.x, pair[1]!.y, pair[0]!.x, pair[0]!.y, s.w * 1.1),
+          [pair[0]!.x, pair[0]!.y],
+          z,
+        );
         h.forEach((q) => {
           p.drawLine({
             start: { x: q[0], y: q[1] },
@@ -426,9 +494,10 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
       });
     }
 
-    const font = readingFont(ctx);
-    if (!font) return;
     const text = dimLabel(s, getScale());
+    const font = readingFont(ctx, s, text);
+    if (!font) return;
+    const tcol = hexRgb(dimTextColor(s));
     const size = dimTextPt(s);
     const tw = font.widthOfTextAtSize(text, size);
     let ang = (Math.atan2(dy, dx) * 180) / Math.PI;
@@ -442,30 +511,31 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
     /* ticks and dots: the whole reading clear above the line, as on screen
        (its middle half a size up, and a capital's middle is ~0.36 size above
        the baseline) */
-    const lift = st === 'arrow' ? th + 2 : th + 2 + size * 0.14;
+    const lift = st === 'arrow' ? th + 2 * z : th + 2 * z + size * 0.14;
     const ox = mx - (Math.cos(t) * tw) / 2 - Math.sin(t) * lift;
     const oy = my - (Math.sin(t) * tw) / 2 + Math.cos(t) * lift;
 
     /* a pale plate behind it, so the reading survives a busy drawing */
     if (st === 'arrow')
       p.drawRectangle({
-        x: ox - Math.cos(t) * 2 + Math.sin(t) * 1.5,
-        y: oy - Math.sin(t) * 2 - Math.cos(t) * 1.5,
-        width: tw + 4,
-        height: size + 3,
+        x: ox - Math.cos(t) * 2 * z + Math.sin(t) * 1.5 * z,
+        y: oy - Math.sin(t) * 2 * z - Math.cos(t) * 1.5 * z,
+        width: tw + 4 * z,
+        height: size + 3 * z,
         rotate: degrees(ang),
         color: rgb(1, 1, 1),
         opacity: 0.8,
         borderWidth: 0,
       });
-    p.drawText(text, { x: ox, y: oy, size, font, color: col, rotate: degrees(ang) });
+    p.drawText(text, { x: ox, y: oy, size, font, color: tcol, rotate: degrees(ang) });
   };
 
   /* radius and diameter: a leader through the centre, the reading on a short
      landing beside it */
   const radial: Painter = (p, s: DimMark, ctx) => {
-    const col = hexRgb(s.c),
-      th = s.w,
+    const z = dimScale(s),
+      col = hexRgb(s.c),
+      th = s.w * z,
       op = shOp(s),
       G = radGeom(s);
     const from = s.t === 'dimd' ? G.far : s.a,
@@ -480,24 +550,25 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
     endPaint(p, G.near, G.u, s);
     if (s.t === 'dimd') endPaint(p, G.far, [-G.u[0], -G.u[1]], s);
 
-    const font = readingFont(ctx);
-    if (!font) return;
     const text = dimLabel(s, getScale()),
       size = dimTextPt(s);
+    const font = readingFont(ctx, s, text);
+    if (!font) return;
+    const tcol = hexRgb(dimTextColor(s));
     const tw = font.widthOfTextAtSize(text, size);
-    const y = s.b[1] + th + 2;
+    const y = s.b[1] + th + 2 * z;
     if (G.outside) {
       const dir = s.b[0] >= s.a[0] ? 1 : -1;
       p.drawLine({
         start: { x: s.b[0], y: s.b[1] },
-        end: { x: s.b[0] + dir * (tw + 4), y: s.b[1] },
+        end: { x: s.b[0] + dir * (tw + 4 * z), y: s.b[1] },
         thickness: th,
         color: col,
         opacity: op,
       });
-      p.drawText(text, { x: dir > 0 ? s.b[0] + 2 : s.b[0] - 2 - tw, y, size, font, color: col });
+      p.drawText(text, { x: dir > 0 ? s.b[0] + 2 * z : s.b[0] - 2 * z - tw, y, size, font, color: tcol });
     } else {
-      p.drawText(text, { x: s.b[0] - tw / 2, y, size, font, color: col });
+      p.drawText(text, { x: s.b[0] - tw / 2, y, size, font, color: tcol });
     }
   };
 
@@ -505,10 +576,10 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
      sits beyond where the arms were picked */
   const dima: Painter = (p, s: DimMark, ctx) => {
     const col = hexRgb(s.c),
-      th = s.w,
+      th = s.w * dimScale(s),
       op = shOp(s),
       G = angGeom(s);
-    paintPts(p, arcPtsOf(s, G), s);
+    paintPts(p, arcPtsOf(s, G), { ...s, w: th });
     armExtensions(s, G).forEach((seg) => {
       p.drawLine({
         start: { x: seg[0][0], y: seg[0][1] },
@@ -519,13 +590,19 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
       });
     });
     angEnds(s, G).forEach((e) => endPaint(p, e.p, e.u, s));
-    const font = readingFont(ctx);
-    if (!font) return;
     const text = dimLabel(s, getScale()),
       size = dimTextPt(s);
+    const font = readingFont(ctx, s, text);
+    if (!font) return;
     const L = angLabelPt(s, G, size),
       tw = font.widthOfTextAtSize(text, size);
-    p.drawText(text, { x: L[0] - tw / 2, y: L[1] - size * 0.36, size, font, color: col });
+    p.drawText(text, {
+      x: L[0] - tw / 2,
+      y: L[1] - size * 0.36,
+      size,
+      font,
+      color: hexRgb(dimTextColor(s)),
+    });
   };
 
   return { ellipse, cloud, arc, dim, dimr: radial, dimd: radial, dima };
@@ -536,9 +613,30 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
    Standard 14 Helvetica — with 'HelveticaBold' as the fallback save.ts
    reaches for on its own if the file cannot be embedded. */
 export const DIM_FONT = 'g:inter|1';
-const bold: FontNeed = () => DIM_FONT;
-export const drawFontNeeds: Record<string, FontNeed> = { dim: bold, dimr: bold, dimd: bold, dima: bold };
-/** The embedded reading font, however save.ts resolved DIM_FONT. */
-function readingFont(ctx: { fonts: Record<string, PDFFont> }): PDFFont | undefined {
-  return ctx.fonts[DIM_FONT] || ctx.fonts.HelveticaBold;
+/* a reading in a font of its own (s.df, s.db, s.di) asks for that one;
+   with none set, that is DIM_FONT */
+const reading: FontNeed = (s) => dimFontKey(s as DimMark);
+export const drawFontNeeds: Record<string, FontNeed> = {
+  dim: reading,
+  dimr: reading,
+  dimd: reading,
+  dima: reading,
+};
+/** The embedded reading font, however save.ts resolved it. A standard font
+    draws only WinAnsi, so a typed-in reading it cannot draw falls back to
+    whichever other embedded font can, rather than failing the save. */
+function readingFont(ctx: { fonts: Record<string, PDFFont> }, s: DimMark, text: string): PDFFont | undefined {
+  const own = ctx.fonts[dimFontKey(s)];
+  const others = [ctx.fonts[DIM_FONT], ctx.fonts.HelveticaBold];
+  if (own && canDraw(own, text)) return own;
+  for (const f of others) if (f && canDraw(f, text)) return f;
+  return own || others.find(Boolean);
+}
+function canDraw(font: PDFFont, text: string): boolean {
+  try {
+    font.encodeText(text);
+    return true;
+  } catch {
+    return false;
+  }
 }
