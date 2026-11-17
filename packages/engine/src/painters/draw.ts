@@ -168,12 +168,9 @@ export interface DimMark extends Mark {
   off?: number;
   /* The look, each optional: unset reads exactly as a dimension always has.
      The dimension line itself is s.w and s.c, as for any other mark. */
-  /** Terminator (arrow, tick, dot) size, as a multiple of the usual (1). */
+  /** The whole dimension's size, as a multiple of the usual (1): its
+      arrows, ticks or dots, its reading, and its lines' weight, together. */
   dz?: number;
-  /** Extension line thickness, in points (unset: the usual, from s.w). */
-  ew?: number;
-  /** The reading's size on paper, in points (unset: from s.w, see dimTextPt). */
-  tz?: number;
   /** The reading's font: 'helv' | 'times' | 'cour' | 'g:<id>' (unset: Inter). */
   df?: FontFamily;
   /** The reading is bold unless this is false (or 0). */
@@ -184,14 +181,9 @@ export interface DimMark extends Mark {
   tc?: string;
 }
 
-/** The terminator size multiple: s.dz, or 1. */
-export function dimEndScale(s: Pick<DimMark, 'dz'>): number {
+/** The dimension's size multiple: s.dz, or 1. */
+export function dimScale(s: Pick<DimMark, 'dz'>): number {
   return s.dz != null && s.dz > 0 ? s.dz : 1;
-}
-
-/** An extension line's thickness: s.ew when set, else `usual`. */
-export function dimExtW(s: Pick<DimMark, 'ew'>, usual: number): number {
-  return s.ew != null && s.ew > 0 ? s.ew : usual;
 }
 
 /** The reading's colour. */
@@ -315,11 +307,10 @@ export function angLabelPt(s: DimMark, g: AngGeom, size: number): Pt {
   return angPt(s, g.start + g.sweep / 2, g.r + 3 + size * 0.75);
 }
 
-/** The reading's size on paper, in points: s.tz when set; otherwise from the
-    line width, where thin lines keep a readable 10pt. */
-export function dimTextPt(s: Pick<DimMark, 'w' | 'tz'>): number {
-  if (s.tz != null && s.tz > 0) return s.tz;
-  return Math.max(10, Math.min(14, s.w * 4 + 6));
+/** The reading's size on paper, in points; thin lines keep a readable 10pt,
+    and the dimension's size (s.dz) scales it. */
+export function dimTextPt(s: Pick<DimMark, 'w' | 'dz'>): number {
+  return Math.max(10, Math.min(14, s.w * 4 + 6)) * dimScale(s);
 }
 
 /** What a dimension reads, under this scale. */
@@ -346,12 +337,12 @@ function scaledHead(h: [Pt, Pt], tip: Pt, z: number): [Pt, Pt] {
 /** One end of a dimension: P is the end, u points outward along the line. */
 function endPaint(p: PDFPage, P: Pt, u: Pt, s: DimMark): void {
   const col = hexRgb(s.c),
-    th = s.w,
+    z = dimScale(s),
+    th = s.w * z,
     op = shOp(s),
-    st = s.ds || 'arrow',
-    z = dimEndScale(s);
+    st = s.ds || 'arrow';
   if (st === 'tick') {
-    const h = (3.5 + th * 1.2) * z;
+    const h = (3.5 + s.w * 1.2) * z;
     const tx = ((u[0] - u[1]) / Math.SQRT2) * h,
       ty = ((u[1] + u[0]) / Math.SQRT2) * h;
     p.drawLine({
@@ -362,9 +353,9 @@ function endPaint(p: PDFPage, P: Pt, u: Pt, s: DimMark): void {
       opacity: op,
     });
   } else if (st === 'dot') {
-    p.drawCircle({ x: P[0], y: P[1], size: (1.6 + th * 0.9) * z, color: col, opacity: op, borderWidth: 0 });
+    p.drawCircle({ x: P[0], y: P[1], size: (1.6 + s.w * 0.9) * z, color: col, opacity: op, borderWidth: 0 });
   } else {
-    scaledHead(arrowHead(P[0] - u[0] * 10, P[1] - u[1] * 10, P[0], P[1], th * 1.1), P, z).forEach((q) => {
+    scaledHead(arrowHead(P[0] - u[0] * 10, P[1] - u[1] * 10, P[0], P[1], s.w * 1.1), P, z).forEach((q) => {
       p.drawLine({
         start: { x: q[0], y: q[1] },
         end: { x: P[0], y: P[1] },
@@ -416,11 +407,12 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
   const arc: Painter = (p, s: ArcMark) => paintPts(p, arcPts(s, 64), s);
 
   const dim: Painter = (p, s: DimMark, ctx) => {
-    const col = hexRgb(s.c),
-      th = s.w,
+    /* every size here is the usual one times z, the dimension's size */
+    const z = dimScale(s),
+      col = hexRgb(s.c),
+      th = s.w * z,
       op = shOp(s);
-    const st = s.ds || 'arrow',
-      z = dimEndScale(s);
+    const st = s.ds || 'arrow';
     const G = dimGeom(s);
     const A = { x: G.A[0], y: G.A[1] },
       B = { x: G.B[0], y: G.B[1] };
@@ -429,13 +421,13 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
        overshoot past the line, as a CAD extension line has them */
     if (Math.abs(G.off) > 0.5) {
       const sign = G.off > 0 ? 1 : -1,
-        gap = 2 * sign,
-        over = 3 * sign;
+        gap = 2 * sign * z,
+        over = 3 * sign * z;
       [s.a, s.b].forEach((pt) => {
         p.drawLine({
           start: { x: pt[0] + G.nx * gap, y: pt[1] + G.ny * gap },
           end: { x: pt[0] + G.nx * (G.off + over), y: pt[1] + G.ny * (G.off + over) },
-          thickness: dimExtW(s, Math.min(th, 1)),
+          thickness: Math.min(s.w, 1) * z,
           color: col,
           opacity: op,
         });
@@ -448,14 +440,14 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
     const len = Math.hypot(dx, dy) || 1;
     const ux = dx / len,
       uy = dy / len;
-    const tick = st === 'arrow' ? 4 + th : 6 + th;
+    const tick = (st === 'arrow' ? 4 : 6) * z + th;
     const nx = -uy * tick,
       ny = ux * tick;
     [A, B].forEach((e) => {
       p.drawLine({
         start: { x: e.x - nx, y: e.y - ny },
         end: { x: e.x + nx, y: e.y + ny },
-        thickness: dimExtW(s, th),
+        thickness: th,
         color: col,
         opacity: op,
       });
@@ -463,7 +455,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
     if (st === 'tick') {
       /* the 45° slash; page space runs y up, so this is the screen's slash
          seen the right way round */
-      const h = (3.5 + th * 1.2) * z;
+      const h = (3.5 + s.w * 1.2) * z;
       const tx = ((ux - uy) / Math.SQRT2) * h,
         ty = ((uy + ux) / Math.SQRT2) * h;
       [A, B].forEach((e) => {
@@ -476,7 +468,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
         });
       });
     } else if (st === 'dot') {
-      const r = (1.6 + th * 0.9) * z;
+      const r = (1.6 + s.w * 0.9) * z;
       [A, B].forEach((e) => {
         p.drawCircle({ x: e.x, y: e.y, size: r, color: col, opacity: op, borderWidth: 0 });
       });
@@ -486,7 +478,7 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
         [A, B],
       ].forEach((pair) => {
         const h = scaledHead(
-          arrowHead(pair[1]!.x, pair[1]!.y, pair[0]!.x, pair[0]!.y, th * 1.1),
+          arrowHead(pair[1]!.x, pair[1]!.y, pair[0]!.x, pair[0]!.y, s.w * 1.1),
           [pair[0]!.x, pair[0]!.y],
           z,
         );
@@ -519,17 +511,17 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
     /* ticks and dots: the whole reading clear above the line, as on screen
        (its middle half a size up, and a capital's middle is ~0.36 size above
        the baseline) */
-    const lift = st === 'arrow' ? th + 2 : th + 2 + size * 0.14;
+    const lift = st === 'arrow' ? th + 2 * z : th + 2 * z + size * 0.14;
     const ox = mx - (Math.cos(t) * tw) / 2 - Math.sin(t) * lift;
     const oy = my - (Math.sin(t) * tw) / 2 + Math.cos(t) * lift;
 
     /* a pale plate behind it, so the reading survives a busy drawing */
     if (st === 'arrow')
       p.drawRectangle({
-        x: ox - Math.cos(t) * 2 + Math.sin(t) * 1.5,
-        y: oy - Math.sin(t) * 2 - Math.cos(t) * 1.5,
-        width: tw + 4,
-        height: size + 3,
+        x: ox - Math.cos(t) * 2 * z + Math.sin(t) * 1.5 * z,
+        y: oy - Math.sin(t) * 2 * z - Math.cos(t) * 1.5 * z,
+        width: tw + 4 * z,
+        height: size + 3 * z,
         rotate: degrees(ang),
         color: rgb(1, 1, 1),
         opacity: 0.8,
@@ -541,8 +533,9 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
   /* radius and diameter: a leader through the centre, the reading on a short
      landing beside it */
   const radial: Painter = (p, s: DimMark, ctx) => {
-    const col = hexRgb(s.c),
-      th = s.w,
+    const z = dimScale(s),
+      col = hexRgb(s.c),
+      th = s.w * z,
       op = shOp(s),
       G = radGeom(s);
     const from = s.t === 'dimd' ? G.far : s.a,
@@ -563,17 +556,17 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
     if (!font) return;
     const tcol = hexRgb(dimTextColor(s));
     const tw = font.widthOfTextAtSize(text, size);
-    const y = s.b[1] + th + 2;
+    const y = s.b[1] + th + 2 * z;
     if (G.outside) {
       const dir = s.b[0] >= s.a[0] ? 1 : -1;
       p.drawLine({
         start: { x: s.b[0], y: s.b[1] },
-        end: { x: s.b[0] + dir * (tw + 4), y: s.b[1] },
+        end: { x: s.b[0] + dir * (tw + 4 * z), y: s.b[1] },
         thickness: th,
         color: col,
         opacity: op,
       });
-      p.drawText(text, { x: dir > 0 ? s.b[0] + 2 : s.b[0] - 2 - tw, y, size, font, color: tcol });
+      p.drawText(text, { x: dir > 0 ? s.b[0] + 2 * z : s.b[0] - 2 * z - tw, y, size, font, color: tcol });
     } else {
       p.drawText(text, { x: s.b[0] - tw / 2, y, size, font, color: tcol });
     }
@@ -583,15 +576,15 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
      sits beyond where the arms were picked */
   const dima: Painter = (p, s: DimMark, ctx) => {
     const col = hexRgb(s.c),
-      th = s.w,
+      th = s.w * dimScale(s),
       op = shOp(s),
       G = angGeom(s);
-    paintPts(p, arcPtsOf(s, G), s);
+    paintPts(p, arcPtsOf(s, G), { ...s, w: th });
     armExtensions(s, G).forEach((seg) => {
       p.drawLine({
         start: { x: seg[0][0], y: seg[0][1] },
         end: { x: seg[1][0], y: seg[1][1] },
-        thickness: dimExtW(s, th),
+        thickness: th,
         color: col,
         opacity: op,
       });
