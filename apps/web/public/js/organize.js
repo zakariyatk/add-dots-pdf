@@ -607,7 +607,7 @@
         X.download(bytes, S.baseName + ' — pages ' + tag + '.pdf');
         X.toast('Extracted <b>' + sel.length + '</b> page' + (sel.length === 1 ? '' : 's'));
       } catch (e) {
-        X.toast(X.esc(X.saveError(e, 'These pages could not be extracted')));
+        X.toast(X.esc(X.saveError(e, 'These pages could not be extracted')), true);
       } finally {
         if (btn) { btn.disabled = false; btn.innerHTML = label; }
       }

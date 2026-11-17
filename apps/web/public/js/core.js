@@ -547,8 +547,18 @@
   /* ---------------- helpers ---------------- */
   let toastTimer;
   let exBusy = false;          /* a split is running — keep its popover open */
-  function toast(html) {
+  /* Nothing pops up over the working screen while you work: no hints, no
+     "3 marks removed", no "Page cropped". What still shows is what you
+     cannot see for yourself: that something failed, and that a file left
+     the app (saved, exported, sent to a printer). force: always shown,
+     for a caught error whose own wording is not known here. */
+  const TOAST_KEEP = new RegExp(
+    "could not|couldn['’]t|can['’]t|cannot|failed|error|unavailable|denied|" +
+    'too large|not found|no room|no longer|has no |protected|not supported|unsupported|' +
+    '^(saved|exported|extracted|sent) ', 'i');
+  function toast(html, force) {
     const t = $('toast');
+    if (!force && !TOAST_KEEP.test(String(html).replace(/<[^>]*>/g, ''))) return;
     t.innerHTML = html; t.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2400);
@@ -4516,7 +4526,7 @@
         if (stamp) ph.cap = camStamp(when);
         p.L.photos.push(ph); ok++;
       }
-      catch (err) { toast(esc(err.message)); }
+      catch (err) { toast(esc(err.message), true); }
     }
     drawShapes(p.it); renderPins(); updateMeta();
     toast('<b>' + ok + '</b> photo(s) added to pin ' + esc(p.L.n));
@@ -4536,7 +4546,7 @@
     const p = pinSel ? findPin(pinSel) : null;
     if (!f || !p || replaceIdx < 0) return;
     try { p.L.photos[replaceIdx] = await shrink(f, 1500, 0.72); renderPins(); toast('Photo replaced'); }
-    catch (err) { toast(esc(err.message)); }
+    catch (err) { toast(esc(err.message), true); }
     replaceIdx = -1;
   });
   const UNIT_END = /[a-z°"']$/i;   /* a size that already names its own unit
@@ -5000,7 +5010,7 @@
   async function pmSetImage(src, keepView) {
     let im;
     try { im = await loadImg(src); }
-    catch (err) { toast(esc(err.message)); return false; }
+    catch (err) { toast(esc(err.message), true); return false; }
     PM.img = im; PM.src = src;
     $('pmimg').src = src;
     pmFit();
@@ -5577,7 +5587,7 @@
     $('pmHeadTitle').textContent = (L.ref || 'Location ' + L.n) + (ph.cap ? '  ·  ' + ph.cap : '');
     const src = ph.orig || ph.src;
     try { PM.img = await loadImg(src); }
-    catch (err) { toast(esc(err.message)); return; }
+    catch (err) { toast(esc(err.message), true); return; }
     PM.src = src;
     $('pmimg').src = src;
     $('pm').hidden = false;
@@ -6135,7 +6145,7 @@
       download(await buildPdf(S.items, null, { photos: true }, 'blob'), name);
       toast('Exported <b>' + esc(name) + '</b>');
     } catch (err) {
-      toast(esc(saveError(err, 'The report could not be built')));
+      toast(esc(saveError(err, 'The report could not be built')), true);
     } finally {
       btn.disabled = false; btn.textContent = 'Export report';
     }
@@ -7610,7 +7620,7 @@
       S.baseCount = S.items.length;
       clearRecovery();
     } catch (e) {
-      toast(esc(saveError(e)));
+      toast(esc(saveError(e)), true);
     } finally {
       saving = false;
       $('btnSave').disabled = false; $('btnSave').textContent = was;
@@ -7629,7 +7639,7 @@
       const blob = await buildPdf(S.items, null, { photos: livePins().length > 0, append: true, annots: keepComments() }, 'blob');
       await EXT.shareFile(blob, name);
     } catch (e) {
-      toast(esc(saveError(e, 'The document could not be prepared for sharing')));
+      toast(esc(saveError(e, 'The document could not be prepared for sharing')), true);
     }
   }
 
@@ -7648,7 +7658,7 @@
     try {
       printFrame(await buildPdf(S.items, null, { photos: false, annots: false }, 'blob'));
     } catch (e) {
-      toast(esc(saveError(e, 'The document could not be prepared for printing')));
+      toast(esc(saveError(e, 'The document could not be prepared for printing')), true);
     }
   }
 
