@@ -16,7 +16,11 @@
      not grow every box laid out on "normal" */
   body{margin:0;font-family:var(--sans);line-height:1.15;background:var(--stage);color:var(--text);overflow:hidden;
        -webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;overscroll-behavior:none}
-  button{font-family:inherit;color:inherit;touch-action:manipulation}
+  /* a button that lays its label out as a flex (or grid) box centres the
+     whole box, icon or colour chip and text together, not only the text
+     inside it; a button that wants its label at the left (a menu row, a
+     list in a side panel) says so with its own justify-content */
+  button{font-family:inherit;color:inherit;touch-action:manipulation;align-items:center;justify-content:center}
   input,select,textarea{font-family:inherit}
   :focus-visible{outline:2px solid var(--marker);outline-offset:2px}
   /* the page area takes focus when a PDF opens (the arrow keys scroll it at
@@ -132,7 +136,7 @@
        border:1px solid var(--line);border-radius:10px;box-shadow:0 16px 40px rgba(0,0,0,.5);padding:8px}
   .pop[hidden]{display:none}
   .pop .row{display:flex;gap:8px;align-items:center}
-  .pop button.item{display:flex;width:100%;align-items:center;gap:9px;text-align:left;background:none;
+  .pop button.item{display:flex;width:100%;align-items:center;justify-content:flex-start;gap:9px;text-align:left;background:none;
                    border:none;border-radius:7px;padding:9px 10px;font-size:13px;cursor:pointer}
   .pop button.item:hover{background:var(--chrome-2)}
   .pop button.item small{display:block;color:var(--text-dim);font-size:11px;margin-top:2px}
@@ -297,7 +301,7 @@
   .pgmenu{min-width:240px}
   .pgmenu:focus{outline:none}
   body.pgmenu-open #markPop,body.pgmenu-open #toolChip{display:none}
-  .pgmenu button{display:flex;align-items:center;gap:10px;flex:none}
+  .pgmenu button{display:flex;align-items:center;justify-content:flex-start;gap:10px;flex:none}
   .pgmenu button:focus-visible{outline:2px solid #7B5CFF;outline-offset:-2px}
   .pgmenu button:focus{background:var(--chrome-2)}
   .pgmenu button[disabled]{opacity:.45;cursor:default;background:none}
@@ -982,7 +986,7 @@
   .hnav .brand{padding:0 8px 18px;gap:10px}
   .hnav .brand .label{display:inline;font-size:12px}
   .hnav nav{display:flex;flex-direction:column;gap:2px}
-  .hnav nav button{display:flex;align-items:center;gap:11px;height:38px;padding:0 12px;border-radius:8px;
+  .hnav nav button{display:flex;align-items:center;justify-content:flex-start;gap:11px;height:38px;padding:0 12px;border-radius:8px;
                    background:none;border:none;font-size:13.5px;cursor:pointer;text-align:left;color:var(--text-dim)}
   .hnav nav button:hover{background:var(--chrome-2);color:var(--text)}
   .hnav nav button.on{background:var(--chrome-2);color:var(--text);box-shadow:inset 3px 0 0 var(--marker)}
@@ -1040,7 +1044,7 @@
   #recoverList .rwhat{flex:1;min-width:0;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   #recoverList .btn{height:30px;padding:0 12px}
   .tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:12px}
-  .tcard{display:flex;gap:13px;align-items:flex-start;text-align:left;padding:15px;border-radius:12px;cursor:pointer;
+  .tcard{display:flex;gap:13px;align-items:flex-start;justify-content:flex-start;text-align:left;padding:15px;border-radius:12px;cursor:pointer;
          background:var(--chrome);border:1px solid var(--line);transition:border-color .12s,transform .12s,background .12s}
   .tcard:hover{border-color:#777777;background:var(--chrome-2);transform:translateY(-1px)}
   .tcard .ic{flex:none;width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;
