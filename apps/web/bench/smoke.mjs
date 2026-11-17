@@ -2046,10 +2046,11 @@ try {
     await page.mouse.up();
     await page.waitForTimeout(1500);
     const zb = await page.evaluate(() => ({ scale: window.ADDPDF.S.scale, tool: window.ADDPDF.S.tool }));
-    /* about 8.7 times for a 120 × 80 box, or as far as zoom goes (6) */
+    /* about 8.7 times for a 120 × 80 box, or as far as zoom goes */
+    const zmax = await page.evaluate(() => window.ADDPDF.ZOOM_MAX);
     check(
       'Drag zoom: a dragged box zooms in on it, with no mark drawn',
-      zb.scale > Math.min(z0 * 2.5, 5.9) && (await marks()) === m0,
+      zb.scale > Math.min(z0 * 2.5, zmax * 0.98) && (await marks()) === m0,
       { z0, ...zb },
     );
     await page.evaluate(() => {

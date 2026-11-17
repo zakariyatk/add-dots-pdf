@@ -547,8 +547,18 @@
   /* ---------------- helpers ---------------- */
   let toastTimer;
   let exBusy = false;          /* a split is running — keep its popover open */
-  function toast(html) {
+  /* Nothing pops up over the working screen while you work: no hints, no
+     "3 marks removed", no "Page cropped". What still shows is what you
+     cannot see for yourself: that something failed, and that a file left
+     the app (saved, exported, sent to a printer). force: always shown,
+     for a caught error whose own wording is not known here. */
+  const TOAST_KEEP = new RegExp(
+    "could not|couldn['’]t|can['’]t|cannot|failed|error|unavailable|denied|" +
+    'too large|not found|no room|no longer|has no |protected|not supported|unsupported|' +
+    '^(saved|exported|extracted|sent) ', 'i');
+  function toast(html, force) {
     const t = $('toast');
+    if (!force && !TOAST_KEEP.test(String(html).replace(/<[^>]*>/g, ''))) return;
     t.innerHTML = html; t.classList.add('show');
     clearTimeout(toastTimer);
     toastTimer = setTimeout(function () { t.classList.remove('show'); }, 2400);
@@ -1383,13 +1393,34 @@
     stage.scrollTop += (r.top + a.v * r.height) - a.cy;
   }
 
-  const ZOOM_MIN = 0.2, ZOOM_MAX = 6;
+  /* How far in it zooms. 6400% on a desktop: past the bitmap caps the detail
+     layer draws only what is on screen, so the cost does not grow with the
+     zoom. 1600% on a phone or in low-memory mode, whose bitmaps are capped
+     tighter. And never so far that the pages stacked end to end pass what a
+     browser will lay out (about 33.5 million CSS pixels in Chromium and
+     WebKit, 17.9 million in Firefox): past that the pages at the end land on
+     top of one another, so a long document stops short of the device cap. */
+  const ZOOM_MIN = 0.2;
+  const ZOOM_DEVICE_MAX = COARSE || MEM.low ? 16 : 64;
+  const LAYOUT_PX_MAX = (/Firefox\//.test(navigator.userAgent) ? 17.8e6 : 33.5e6) * 0.95;
+  function zoomMax() {
+    let h = 0, est = 0;
+    for (let i = 0; i < S.items.length; i++) {
+      const b = S.items[i].base;
+      if (b) h += b.c ? b.c.height : b.h;
+      else h += est || (est = estSize(S.items[i]).h);
+    }
+    return h ? Math.max(1, Math.min(ZOOM_DEVICE_MAX, LAYOUT_PX_MAX / h)) : ZOOM_DEVICE_MAX;
+  }
+  /* A notch, a click or a key past 400% goes further than one below it, so
+     reaching 6400% takes a few more steps than 600% did, not twice as many. */
+  function zoomStep(k) { return glideTarget() >= 4 ? Math.pow(k, 1.6) : k; }
   /* held: an anchor taken before the zoom began (a glide's), kept rather
      than measured afresh, so a spot that slid while the page was still
      centred is put back under the pointer once there is room to scroll */
   function zoomTo(next, cx, cy, held) {
     if (!S.items.length) return;
-    next = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+    next = Math.max(ZOOM_MIN, Math.min(zoomMax(), next));
     if (Math.abs(next - S.scale) < 0.0005) return;
     if (S.editing) closeEditor(true);
     S.fit = null;
@@ -1425,7 +1456,7 @@
   const glide = { target: 0, x: 0, y: 0, raf: 0, last: 0, anchor: null };
   function zoomGlide(next, cx, cy) {
     if (!S.items.length) return;
-    glide.target = Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, next));
+    glide.target = Math.max(ZOOM_MIN, Math.min(zoomMax(), next));
     if (cx == null) {
       const r = stage.getBoundingClientRect();
       cx = r.left + r.width / 2; cy = r.top + r.height / 2;
@@ -3207,7 +3238,6 @@
     }
     if (d.moved) { drawShapes(d.it); updateMeta(); }
     syncMarkPop();
-    if (!d.moved) toast('Mark selected · drag or the arrow keys to move, corners to resize, ↻ to turn, <b>Delete</b> to remove');
   }
   document.addEventListener('pointermove', dragMove);
   document.addEventListener('pointerup', dragEnd);
@@ -4020,10 +4050,8 @@
     });
     setGroup(it, grouped);
     redrawAll();
-    if (S.sel) {
-      syncMarkPop();
-      if (picked.length > 1) toast('<b>' + picked.length + ' marks</b> selected · drag one to move them all, <b>Delete</b> to remove');
-    } else hideMarkPop();
+    if (S.sel) syncMarkPop();
+    else hideMarkPop();
   });
   document.addEventListener('pointercancel', function () { marquee = null; mqBox.hidden = true; });
 
@@ -4301,7 +4329,7 @@
     selectPin(it, it.shapes.length - 1);
     updateMeta();
     showPinPanel(true);
-    toast('Pin <b>' + esc(L.n) + '</b> added · fill in the reference and add photos · <b>+ Add pin</b> for the next one');
+    toast('Pin <b>' + esc(L.n) + '</b> added');
   }
 
   /* dragging a pin that is already there — a second finger abandons the move */
@@ -4352,7 +4380,7 @@
     if (S.sel && S.sel.it === p.it) S.sel = null;
     if (pinSel === id) pinSel = null;
     drawShapes(p.it); updateMeta(); renderPins();
-    toast('Pin removed · <b>Ctrl+Z</b> to undo');
+    toast('Pin removed');
   }
 
   /* sidebar list + editor */
@@ -4498,7 +4526,7 @@
         if (stamp) ph.cap = camStamp(when);
         p.L.photos.push(ph); ok++;
       }
-      catch (err) { toast(esc(err.message)); }
+      catch (err) { toast(esc(err.message), true); }
     }
     drawShapes(p.it); renderPins(); updateMeta();
     toast('<b>' + ok + '</b> photo(s) added to pin ' + esc(p.L.n));
@@ -4518,7 +4546,7 @@
     const p = pinSel ? findPin(pinSel) : null;
     if (!f || !p || replaceIdx < 0) return;
     try { p.L.photos[replaceIdx] = await shrink(f, 1500, 0.72); renderPins(); toast('Photo replaced'); }
-    catch (err) { toast(esc(err.message)); }
+    catch (err) { toast(esc(err.message), true); }
     replaceIdx = -1;
   });
   const UNIT_END = /[a-z°"']$/i;   /* a size that already names its own unit
@@ -4982,7 +5010,7 @@
   async function pmSetImage(src, keepView) {
     let im;
     try { im = await loadImg(src); }
-    catch (err) { toast(esc(err.message)); return false; }
+    catch (err) { toast(esc(err.message), true); return false; }
     PM.img = im; PM.src = src;
     $('pmimg').src = src;
     pmFit();
@@ -5559,7 +5587,7 @@
     $('pmHeadTitle').textContent = (L.ref || 'Location ' + L.n) + (ph.cap ? '  ·  ' + ph.cap : '');
     const src = ph.orig || ph.src;
     try { PM.img = await loadImg(src); }
-    catch (err) { toast(esc(err.message)); return; }
+    catch (err) { toast(esc(err.message), true); return; }
     PM.src = src;
     $('pmimg').src = src;
     $('pm').hidden = false;
@@ -6115,9 +6143,9 @@
     try {
       const name = S.baseName + '-pins.pdf';
       download(await buildPdf(S.items, null, { photos: true }, 'blob'), name);
-      toast('Exported <b>' + esc(name) + '</b> · pins link to their photo pages');
+      toast('Exported <b>' + esc(name) + '</b>');
     } catch (err) {
-      toast(esc(saveError(err, 'The report could not be built')));
+      toast(esc(saveError(err, 'The report could not be built')), true);
     } finally {
       btn.disabled = false; btn.textContent = 'Export report';
     }
@@ -6488,7 +6516,7 @@
   let pendingProject = null;
   function stashProject(d, pool, name) {
     pendingProject = { d: d, pool: pool, name: name };
-    toast('Report <b>' + esc(name) + '</b> is ready · now choose the PDF drawing it belongs to');
+    toast('Report <b>' + esc(name) + '</b> is ready');
   }
   function flushProject() {
     const p = pendingProject;
@@ -7121,11 +7149,11 @@
         const nw = (v[2] - dr) - nx, nh = (v[3] - dt) - ny;
         if (nw > 20 && nh > 20) { x.crop = { x: nx, y: ny, w: nw, h: nh }; x.thumbDone = false; }
       });
-      toast('Cropped every page · <b>Ctrl+Z</b> to undo');
+      toast('Cropped every page');
     } else {
       it.crop = rect;
       it.thumbDone = false;
-      toast('Page cropped · Shift-drag crops all pages');
+      toast('Page cropped');
     }
     S.items.forEach(function (x) { x.box.classList.toggle('cropped', !!x.crop); });
     relayout().then(function () { drawVisibleThumbs(); updateMeta(); });
@@ -7150,7 +7178,7 @@
     if (S.query) invalidateSearch();
     syncAll().then(function () {
       setCurrent(Math.min(i + 1, S.items.length));
-      toast('Page removed · <b>Ctrl+Z</b> to undo');
+      toast('Page removed');
     });
   }
 
@@ -7592,7 +7620,7 @@
       S.baseCount = S.items.length;
       clearRecovery();
     } catch (e) {
-      toast(esc(saveError(e)));
+      toast(esc(saveError(e)), true);
     } finally {
       saving = false;
       $('btnSave').disabled = false; $('btnSave').textContent = was;
@@ -7611,7 +7639,7 @@
       const blob = await buildPdf(S.items, null, { photos: livePins().length > 0, append: true, annots: keepComments() }, 'blob');
       await EXT.shareFile(blob, name);
     } catch (e) {
-      toast(esc(saveError(e, 'The document could not be prepared for sharing')));
+      toast(esc(saveError(e, 'The document could not be prepared for sharing')), true);
     }
   }
 
@@ -7630,7 +7658,7 @@
     try {
       printFrame(await buildPdf(S.items, null, { photos: false, annots: false }, 'blob'));
     } catch (e) {
-      toast(esc(saveError(e, 'The document could not be prepared for printing')));
+      toast(esc(saveError(e, 'The document could not be prepared for printing')), true);
     }
   }
 
@@ -9229,7 +9257,7 @@
     const parts = [];
     for (let i = 0; i < S.items.length; i++) {
       if (TR.stop) { toast('Stopped — nothing saved'); TR.on = was; return; }
-      toast('Translating page <b>' + (i + 1) + '</b> of ' + S.items.length + ' · Esc stops');
+      toast('Translating page <b>' + (i + 1) + '</b> of ' + S.items.length);
       const it = S.items[i];
       try { await translatePage(it, true); } catch (e) {}
       const body = (it.trBlocks || []).map(function (b, k) {
@@ -9531,7 +9559,7 @@
   });
 
   /* ---------------- wiring ---------------- */
-  function setZoom(m) { zoomGlide(glideTarget() * m); }
+  function setZoom(m) { zoomGlide(glideTarget() * zoomStep(m)); }
   $('btnIn').addEventListener('click', function () { setZoom(1.2); });
   $('btnOut').addEventListener('click', function () { setZoom(1 / 1.2); });
   $('btnFitW').addEventListener('click', function () { S.fit = 'width'; relayout(); });
@@ -9800,11 +9828,11 @@
     if (t === 'text' || t === 'crop') setTool(t);
     else if (t === 'mark') setTool('rect');
     else if (t === 'pin') { setTool('pin'); showPinPanel(); }
-    else if (t === 'organize') { setRail(true); switchTab('pages'); toast('Use the arrows on each thumbnail to reorder · <b>Add</b> inserts pages'); }
+    else if (t === 'organize') { setRail(true); switchTab('pages'); }
     else if (t === 'extract') openPop('extractPop', $('btnExtract'));
     else if (t === 'jpg') openPop('jpgPop', $('btnJpg'));
     else if (t === 'translate') openPop('trPop', $('btnTr'));
-    else if (t === 'merge') toast('Merged · use <b>Add</b> to join more PDFs');
+    else if (t === 'merge') toast('Merged');
     else if (t === 'sign' && $('btnSign')) $('btnSign').click();
   }
 
@@ -10158,7 +10186,7 @@
     let dy = e.deltaY;
     if (e.deltaMode === 1) dy *= 33; else if (e.deltaMode === 2) dy *= 600;
     const k = Math.exp(-dy * 0.0022);
-    zoomGlide(glideTarget() * Math.max(0.8, Math.min(1.25, k)), e.clientX, e.clientY);
+    zoomGlide(glideTarget() * zoomStep(Math.max(0.8, Math.min(1.25, k))), e.clientX, e.clientY);
   }, { passive: false });
 
   /* ---------------- pinch to zoom ---------------- */
@@ -10549,7 +10577,7 @@
     printSystem: printSystem, printFrame: printFrame,
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
     stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE,
-    ZOOM_MIN: ZOOM_MIN, ZOOM_MAX: ZOOM_MAX,
+    ZOOM_MIN: ZOOM_MIN,
     /* the document put away (its tab closed): back to the home screen */
     closeDocument: function () { hardReset(); updateMeta(); showHome(); },
     hasDoc: function () { return !!S.items.length; },
@@ -10571,5 +10599,7 @@
     /* its work lives elsewhere now: nothing here to offer back after a crash */
     forgetSession: function () { return clearRecovery(); }
   });
+  /* read afresh each time: it depends on the document open */
+  Object.defineProperty(EXT, 'ZOOM_MAX', { get: zoomMax, configurable: true });
   EXT.emit('ready');
 })();

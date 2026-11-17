@@ -502,7 +502,7 @@
           (boxes ? boxes + ' line' + (boxes === 1 ? ' is' : 's are') + ' now text to edit: double-click one. ' : '') +
           (pages ? 'Find searches it now; Save to keep it in the PDF.' : '');
         $('ocrCopy').hidden = !lastText.trim();
-        X.toast(pages ? 'Text read on <b>' + pages + '</b> page' + (pages === 1 ? '' : 's') + ' · Save to keep it in the PDF'
+        X.toast(pages ? 'Text read on <b>' + pages + '</b> page' + (pages === 1 ? '' : 's')
                       : 'Nothing to read');
       } catch (e) {
         console.error('[ocr]', e);

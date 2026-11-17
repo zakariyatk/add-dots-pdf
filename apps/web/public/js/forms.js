@@ -645,7 +645,6 @@
       if (!it || !it.page) { X.toast('Open a page first'); return; }
       sigHand = { img: img, kind: sigKind };
       X.setTool('sigplace');
-      X.toast('Click where the signature goes, or drag to size it');
     }
 
     $('btnSign').addEventListener('click', function () {
@@ -808,7 +807,7 @@
           X.drawThumb(it);
         });
         X.updateMeta();
-        X.toast(n ? 'Signature added to <b>' + n + '</b> more page' + (n === 1 ? '' : 's') + ' · <b>Ctrl+Z</b> to undo'
+        X.toast(n ? 'Signature added to <b>' + n + '</b> more page' + (n === 1 ? '' : 's')
                   : 'Every page already has it');
       });
     })();
