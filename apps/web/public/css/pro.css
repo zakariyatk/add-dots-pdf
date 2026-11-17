@@ -964,11 +964,14 @@ body.rdrag { user-select: none; -webkit-user-select: none }
 .markpop .mpext { display: flex; align-items: center; gap: 8px; flex: none }
 .markpop .mpext[hidden] { display: none }
 .markpop .mpscale select { max-width: 78px }
+/* the scale row wraps rather than run past a narrow side panel */
+.markpop .mpscale { flex-wrap: wrap; row-gap: 6px; min-width: 0; max-width: 100% }
 /* a dimension's look (draw.js): its own row under the scale */
 .markpop .mpext:has(.mpdim) { flex: 1 1 100%; min-width: 0; max-width: 100% }
 .markpop .mpdim { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; max-width: 100% }
 .markpop .mplook { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0; max-width: 100% }
-.markpop .mplook input { width: 46px }
+.markpop .mplook input { width: 58px }
+#dlZ { width: 58px }
 .markpop .mplook [hidden] { display: none }
 
 /* Pan and Select head every ribbon tab. On a phone the dock already opens
