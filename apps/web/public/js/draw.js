@@ -340,10 +340,203 @@
       X.setTool('dim');
       startCalibration();
     });
+    /* --- the look of a dimension: terminator size, extension line
+       thickness, and the reading's size, font, bold/italic and colour. The
+       dimension line's own thickness and colour are the mark's Width and
+       Colour, as for any line. Every field is optional on the mark (DimMark
+       in painters/draw.ts): unset reads exactly as a dimension always has.
+       The same controls sit on the ribbon, as what the next dimension takes,
+       and on the properties popover, for the selected one. */
+    const END_SIZES = [0.5, 0.75, 1, 1.5, 2, 3];
+    const look = { dz: 1, ew: 0, tz: 0, df: '', db: true, di: false, tc: '' };
+    function lookOf(sh) {
+      return {
+        dz: E.dimEndScale(sh), ew: sh.ew > 0 ? sh.ew : 0, tz: sh.tz > 0 ? sh.tz : 0,
+        df: sh.df || '', db: sh.db !== false && sh.db !== 0, di: !!sh.di, tc: sh.tc || ''
+      };
+    }
+    /* writes a look onto a mark, leaving out whatever is at its usual */
+    function putLook(sh, L) {
+      ['dz', 'ew', 'tz', 'df', 'db', 'di', 'tc'].forEach(function (k) { delete sh[k]; });
+      if (L.dz !== 1) sh.dz = L.dz;
+      if (L.ew > 0) sh.ew = L.ew;
+      if (L.tz > 0) sh.tz = L.tz;
+      if (L.df) sh.df = L.df;
+      if (!L.db) sh.db = false;
+      if (L.di) sh.di = true;
+      if (L.tc) sh.tc = L.tc;
+    }
+    /* what a new dimension takes from the ribbon */
+    function applyLook(sh) {
+      if (dimStyle !== 'arrow') sh.ds = dimStyle;
+      putLook(sh, look);
+    }
+    function fontOpts() {
+      const GF = window.ADDDOTS_FONTS;
+      return '<option value="">Default</option>' + (GF ? GF.options()
+        : '<option value="helv">Helvetica</option><option value="times">Times</option>' +
+          '<option value="cour">Courier</option>');
+    }
+    function lookHtml(p, chipCls) {
+      return '<span class="anno-lbl">Ends</span>' +
+        '<select id="' + p + 'Z" aria-label="Arrow size">' + END_SIZES.map(function (v) {
+          return '<option value="' + v + '">' + Math.round(v * 100) + '%</option>';
+        }).join('') + '</select>' +
+        '<span class="anno-lbl" id="' + p + 'ExtL">Ext. line</span>' +
+        '<input type="number" id="' + p + 'Ew" min="0.1" max="20" step="0.1" placeholder="Auto" ' +
+        'aria-label="Extension line thickness, in points">' +
+        '<span class="anno-lbl">Text</span>' +
+        '<input type="number" id="' + p + 'Tz" min="4" max="144" step="0.5" placeholder="Auto" ' +
+        'aria-label="Dimension text size, in points">' +
+        '<select id="' + p + 'Df" aria-label="Dimension text font">' + fontOpts() + '</select>' +
+        '<button type="button" class="tg b" id="' + p + 'Db" title="Bold">B</button>' +
+        '<button type="button" class="tg i" id="' + p + 'Di" title="Italic">I</button>' +
+        '<button type="button" class="' + chipCls + '" id="' + p + 'Tc" title="Text colour">' +
+        '<i></i><span>Text colour</span><b>▾</b></button>';
+    }
+    /* by id, on the page or on the popover's controls before it is shown */
+    function lk(id) { return $(id) || (mpLook && mpLook.querySelector('#' + id)); }
+    function showLook(p, L, lineColor, t) {
+      lk(p + 'Z').value = String(L.dz);
+      if (END_SIZES.indexOf(L.dz) < 0) {          /* a value set elsewhere still shows */
+        const o = document.createElement('option');
+        o.value = String(L.dz); o.textContent = Math.round(L.dz * 100) + '%';
+        lk(p + 'Z').appendChild(o); lk(p + 'Z').value = o.value;
+      }
+      if (document.activeElement !== lk(p + 'Ew')) lk(p + 'Ew').value = L.ew ? String(L.ew) : '';
+      if (document.activeElement !== lk(p + 'Tz')) lk(p + 'Tz').value = L.tz ? String(L.tz) : '';
+      lk(p + 'Df').value = L.df;
+      lk(p + 'Db').classList.toggle('on', L.db);
+      lk(p + 'Di').classList.toggle('on', L.di);
+      lk(p + 'Tc').querySelector('i').style.background = L.tc || lineColor;
+      /* a radius or diameter has no extension lines to thicken */
+      const noExt = t === 'dimr' || t === 'dimd';
+      lk(p + 'ExtL').hidden = noExt; lk(p + 'Ew').hidden = noExt;
+    }
+    /* reads one control's change into a look; false if it was not one of them */
+    function readLook(p, el, L) {
+      const id = el.id;
+      if (id === p + 'Z') L.dz = parseFloat(el.value) || 1;
+      else if (id === p + 'Ew') {
+        const v = parseFloat(el.value);
+        L.ew = v > 0 ? Math.min(20, v) : 0;
+      } else if (id === p + 'Tz') {
+        const v = parseFloat(el.value);
+        L.tz = v > 0 ? Math.max(4, Math.min(144, v)) : 0;
+      } else if (id === p + 'Df') L.df = el.value;
+      else if (id === p + 'Db') L.db = !L.db;
+      else if (id === p + 'Di') L.di = !L.di;
+      else return false;
+      return true;
+    }
+
+    /* the text colour: the shared palette (core's buildPalette), with
+       "Same as lines" first, the way Fill offers "No fill" */
+    const tcPop = document.createElement('div');
+    tcPop.className = 'swpop palette'; tcPop.id = 'dimTcPop'; tcPop.hidden = true;
+    document.body.appendChild(tcPop);
+    let tcFor = null;
+    function openTc(anchor, cur, pick) {
+      if (tcFor === anchor && !tcPop.hidden) { closeTc(); return; }
+      tcFor = anchor;
+      tcPop.innerHTML = '';
+      const same = document.createElement('button');
+      same.type = 'button'; same.className = 'pnofill' + (cur ? '' : ' on');
+      same.title = 'Same as the lines'; same.setAttribute('aria-label', 'Same as the lines');
+      same.addEventListener('click', function (e) { e.stopPropagation(); pick(''); closeTc(); });
+      tcPop.appendChild(same);
+      X.buildPalette(tcPop, cur, function (c) { pick(c); closeTc(); });
+      tcPop.hidden = false;
+      const r = anchor.getBoundingClientRect(), w = tcPop.offsetWidth, h = tcPop.offsetHeight;
+      tcPop.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.left)) + 'px';
+      let top = r.bottom + 6;
+      if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 6);
+      tcPop.style.top = top + 'px';
+    }
+    function closeTc() { tcFor = null; tcPop.hidden = true; }
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('#dimTcPop') && !e.target.closest('#dlTc, #mpDlTc')) closeTc();
+    });
+
+    /* on the ribbon: what the next dimension takes */
+    const dimLookCtl = ctl('dimLookCtl', lookHtml('dl', 'swmore'));
+    function syncRibbonLook() { showLook('dl', look, S.color, S.tool); }
+    dimLookCtl.addEventListener('change', function (e) {
+      if (readLook('dl', e.target, look)) syncRibbonLook();
+    });
+    dimLookCtl.addEventListener('click', function (e) {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.id === 'dlTc') {
+        openTc(b, look.tc, function (c) { look.tc = c; syncRibbonLook(); });
+        return;
+      }
+      if (readLook('dl', b, look)) syncRibbonLook();
+    });
+
+    /* on the popover: the selected dimension, and every one grouped with it */
+    const mpLook = document.createElement('div');
+    mpLook.className = 'txctl mplook';
+    mpLook.innerHTML = lookHtml('mpDl', 'cbtn');
+    function selDim() {
+      const sh = S.sel && S.sel.it.shapes[S.sel.i];
+      return sh && ALL_DIMS[sh.t] ? sh : null;
+    }
+    /* change applies fn to a copy of the selected dimension's look and puts
+       that one field onto each selected dimension, keeping their others */
+    function editLook(fn) {
+      const sh = selDim(); if (!sh) return;
+      const L = lookOf(sh); fn(L);
+      const before = lookOf(sh);
+      const changed = Object.keys(L).filter(function (k) { return L[k] !== before[k]; });
+      if (!changed.length) { syncPopLook(sh); return; }
+      X.snapshot();
+      X.selList().forEach(function (i) {
+        const m = S.sel.it.shapes[i];
+        if (!m || !ALL_DIMS[m.t]) return;
+        const ml = lookOf(m);
+        changed.forEach(function (k) { ml[k] = L[k]; });
+        putLook(m, ml);
+      });
+      /* and the next one follows it, as the end style does */
+      changed.forEach(function (k) { look[k] = L[k]; });
+      X.drawShapes(S.sel.it); X.drawThumb(S.sel.it); X.updateMeta();
+      syncPopLook(sh);
+    }
+    function syncPopLook(sh) { showLook('mpDl', lookOf(sh), sh.c, sh.t); }
+    mpLook.addEventListener('change', function (e) {
+      const el = e.target;
+      editLook(function (L) { readLook('mpDl', el, L); });
+    });
+    mpLook.addEventListener('click', function (e) {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.id === 'mpDlTc') {
+        const sh = selDim(); if (!sh) return;
+        openTc(b, sh.tc || '', function (c) { editLook(function (L) { L.tc = c; }); });
+        return;
+      }
+      editLook(function (L) { readLook('mpDl', b, L); });
+    });
+    ['mpDlEw', 'mpDlTz', 'dlEw', 'dlTz'].forEach(function (id) {
+      lk(id).addEventListener('keydown', function (e) {
+        e.stopPropagation();
+        if (e.key === 'Enter' || e.key === 'Escape') this.blur();
+      });
+    });
+
+    const mpDim = document.createElement('div');
+    mpDim.className = 'mpdim';
+    mpDim.appendChild(mpScale);
+    mpDim.appendChild(mpLook);
+
     /* core shows this whenever a dim is the selected mark */
     X.markPop.dim = {
-      el: mpScale,
-      sync: function (sh) { noteScale(); $('mpDimStyle').value = (sh && sh.ds) || 'arrow'; }
+      el: mpDim,
+      sync: function (sh) {
+        noteScale(); $('mpDimStyle').value = (sh && sh.ds) || 'arrow';
+        if (sh) syncPopLook(sh);
+      }
     };
     X.markPop.dimr = X.markPop.dim;
     X.markPop.dimd = X.markPop.dim;
@@ -353,6 +546,9 @@
       arcCtl.hidden = t !== 'arc';
       cloudCtl.hidden = t !== 'cloud';
       dimCtl.hidden = !/^dim[crda]?$/.test(t);
+      dimLookCtl.hidden = dimCtl.hidden;
+      if (!dimLookCtl.hidden) syncRibbonLook();
+      closeTc();
       filletCtl.hidden = t !== 'fillet';
       if (t !== 'fillet') fpick = null;
     });
@@ -488,6 +684,8 @@
       const sw = Math.max(0.6, s.w * S.scale);
       const st = s.ds || 'arrow';
       const k = S.scale;                          /* points to screen pixels */
+      const z = E.dimEndScale(s);                 /* terminator size, s.dz */
+      const ew = s.ew > 0 ? Math.max(0.6, s.ew * k) : 0;   /* extension lines, s.ew */
 
       function solid(el) {
         const e2 = stroked(el, s, idx, it);
@@ -522,7 +720,7 @@
           el.setAttribute('x1', p1[0]); el.setAttribute('y1', p1[1]);
           el.setAttribute('x2', p2[0]); el.setAttribute('y2', p2[1]);
           const e2 = solid(el);
-          e2.style.strokeWidth = Math.max(0.6, Math.min(sw, k));
+          e2.style.strokeWidth = ew || Math.max(0.6, Math.min(sw, k));
           g.appendChild(e2);
         });
       }
@@ -545,12 +743,14 @@
         const t = document.createElementNS(SVGNS, 'line');
         t.setAttribute('x1', end[0] - nx); t.setAttribute('y1', end[1] - ny);
         t.setAttribute('x2', end[0] + nx); t.setAttribute('y2', end[1] + ny);
-        g.appendChild(st === 'arrow' ? stroked(t, s, idx, it) : solid(t));
+        const bar = st === 'arrow' ? stroked(t, s, idx, it) : solid(t);
+        if (ew) bar.style.strokeWidth = ew;
+        g.appendChild(bar);
       });
 
       if (st === 'tick') {
         /* architectural ticks: a heavier 45° slash through each end */
-        const h = (3.5 + s.w * 1.2) * k;
+        const h = (3.5 + s.w * 1.2) * k * z;
         const tx = (ux + uy) / Math.SQRT2 * h, ty = (uy - ux) / Math.SQRT2 * h;
         [a, b].forEach(function (end) {
           const t = document.createElementNS(SVGNS, 'line');
@@ -562,7 +762,7 @@
           g.appendChild(el);
         });
       } else if (st === 'dot') {
-        const r = (1.6 + s.w * 0.9) * k;
+        const r = (1.6 + s.w * 0.9) * k * z;
         [a, b].forEach(function (end) {
           const c = document.createElementNS(SVGNS, 'circle');
           c.setAttribute('cx', end[0]); c.setAttribute('cy', end[1]); c.setAttribute('r', r);
@@ -577,7 +777,7 @@
              zoomed: the helper's minimum is in the units it is given */
           const tip = pair[0];
           const h = X.arrowHead(pair[1][0], pair[1][1], tip[0], tip[1], s.w * 1.1).map(function (q) {
-            return [tip[0] + (q[0] - tip[0]) * k, tip[1] + (q[1] - tip[1]) * k];
+            return [tip[0] + (q[0] - tip[0]) * k * z, tip[1] + (q[1] - tip[1]) * k * z];
           });
           const p = document.createElementNS(SVGNS, 'polyline');
           p.setAttribute('points',
@@ -602,7 +802,7 @@
         const up = [Math.sin(t0), -Math.cos(t0)];
         const base = (s.w + 2) * k;
         const px = mx + up[0] * (base + size * 0.5), py = my + up[1] * (base + size * 0.5);
-        const pw = textPx(text, size) + 4 * k, ph = size + 3 * k;
+        const pw = textPx(text, size, s) + 4 * k, ph = size + 3 * k;
         const pad = document.createElementNS(SVGNS, 'rect');
         pad.setAttribute('x', px - pw / 2); pad.setAttribute('y', py - ph / 2);
         pad.setAttribute('width', pw); pad.setAttribute('height', ph);
@@ -625,10 +825,7 @@
       t.setAttribute('dominant-baseline', 'central');
       t.setAttribute('transform', 'rotate(' + ang + ' ' + mx + ' ' + my + ')');
       t.textContent = text;
-      t.style.fill = s.c;
-      t.style.fontFamily = DIM_FONT;
-      t.style.fontWeight = '600';
-      t.style.fontSize = size + 'px';
+      readingStyle(t, s, size);
       g.appendChild(grab(t));
       return g;
     };
@@ -638,6 +835,34 @@
        so the reading is crisp and consistent wherever the PDF is opened
        (packages/engine/src/painters/draw.ts embeds the matching file). */
     const DIM_FONT = '"ADG Inter", Helvetica, Arial, sans-serif';
+    const STD_CSS = {
+      helv: 'Helvetica, Arial, sans-serif',
+      times: '"Times New Roman", Times, serif',
+      cour: '"Courier New", Courier, monospace'
+    };
+    /* A reading's own font (s.df, s.db, s.di — the same families the Text
+       tool has), as CSS: with none set, the semibold Inter it always had. */
+    function readingFont(s) {
+      const GF = window.ADDDOTS_FONTS;
+      /* a standard font that cannot draw the typed reading gives way to
+         Inter, as the saved PDF does (E.dimFontFallsBack) */
+      const df = s.df && !E.dimFontFallsBack(s) ? s.df : '';
+      const fam = !df ? DIM_FONT : STD_CSS[df] || (GF && GF.css(df)) || DIM_FONT;
+      const bold = s.db !== false && s.db !== 0;
+      return {
+        family: fam,
+        weight: bold ? (df ? '700' : '600') : '400',
+        style: s.di ? 'italic' : 'normal'
+      };
+    }
+    function readingStyle(t, s, size) {
+      const f = readingFont(s);
+      t.style.fill = E.dimTextColor(s);
+      t.style.fontFamily = f.family;
+      t.style.fontWeight = f.weight;
+      t.style.fontStyle = f.style;
+      t.style.fontSize = size + 'px';
+    }
 
     /** The reading's size on paper, in points — shared by screen and PDF. */
     function dimTextPt(s) { return E.dimTextPt(s); }
@@ -721,7 +946,7 @@
       if (e && e.shiftKey) s.b = X.constrainPt(t, a, b);
       if (t === 'arc') s.bulge = (e && e.altKey) ? -bulge : bulge;
       if (t === 'cloud') s.arc = scallop;
-      if (t === 'dim' && dimStyle !== 'arrow') s.ds = dimStyle;
+      if (t === 'dim') applyLook(s);
       return s;
     }
 
@@ -1078,8 +1303,9 @@
     const ALL_DIMS = { dim: 1, dimr: 1, dimd: 1, dima: 1 };
 
     const measureCtx = document.createElement('canvas').getContext('2d');
-    function textPx(str, px) {
-      measureCtx.font = '600 ' + px + 'px ' + DIM_FONT;
+    function textPx(str, px, s) {
+      const f = readingFont(s || {});
+      measureCtx.font = (f.style === 'italic' ? 'italic ' : '') + f.weight + ' ' + px + 'px ' + f.family;
       return measureCtx.measureText(str).width;
     }
     function unitOf(p, q) {
@@ -1090,10 +1316,10 @@
     /* One end of a dimension on screen: p is the end, u points outward along
        the line. Honours the dimension's style — arrow, tick or dot. */
     function endMark(g, p, u, s, idx, it) {
-      const k = S.scale, sw = Math.max(0.6, s.w * k), st = s.ds || 'arrow';
+      const k = S.scale, sw = Math.max(0.6, s.w * k), st = s.ds || 'arrow', z = E.dimEndScale(s);
       let el;
       if (st === 'tick') {
-        const h = (3.5 + s.w * 1.2) * k;
+        const h = (3.5 + s.w * 1.2) * k * z;
         const tx = (u[0] + u[1]) / Math.SQRT2 * h, ty = (u[1] - u[0]) / Math.SQRT2 * h;
         el = document.createElementNS(SVGNS, 'line');
         el.setAttribute('x1', p[0] - tx); el.setAttribute('y1', p[1] - ty);
@@ -1103,11 +1329,13 @@
       } else if (st === 'dot') {
         el = document.createElementNS(SVGNS, 'circle');
         el.setAttribute('cx', p[0]); el.setAttribute('cy', p[1]);
-        el.setAttribute('r', (1.6 + s.w * 0.9) * k);
+        el.setAttribute('r', (1.6 + s.w * 0.9) * k * z);
         el = stroked(el, s, idx, it);
         el.style.fill = s.c; el.style.fillOpacity = X.shOp(s);
       } else {
-        const h = X.arrowHead(p[0] - u[0] * 10, p[1] - u[1] * 10, p[0], p[1], sw * 1.1);
+        const h = X.arrowHead(p[0] - u[0] * 10, p[1] - u[1] * 10, p[0], p[1], sw * 1.1).map(function (q) {
+          return z === 1 ? q : [p[0] + (q[0] - p[0]) * z, p[1] + (q[1] - p[1]) * z];
+        });
         el = document.createElementNS(SVGNS, 'polyline');
         el.setAttribute('points', h[0][0] + ',' + h[0][1] + ' ' + p[0] + ',' + p[1] + ' ' + h[1][0] + ',' + h[1][1]);
         el = stroked(el, s, idx, it);
@@ -1128,10 +1356,7 @@
       t.setAttribute('text-anchor', anchor);
       if (central) t.setAttribute('dominant-baseline', 'central');
       t.textContent = str;
-      t.style.fill = s.c;
-      t.style.fontFamily = DIM_FONT;
-      t.style.fontWeight = '600';
-      t.style.fontSize = size + 'px';
+      readingStyle(t, s, size);
       t.style.pointerEvents = 'none';
       return t;
     }
@@ -1150,7 +1375,7 @@
 
       const text = dimLabel(s);
       const size = dimTextPt(s) * k;
-      const tw = textPx(text, size);
+      const tw = textPx(text, size, s);
       const lift = (s.w + 2) * k;
       if (G.outside) {
         const dir = bS[0] >= aS[0] ? 1 : -1;
@@ -1179,6 +1404,7 @@
       armExtensions(s, G).forEach(function (seg) {
         const el = stroked(lineEl(P(seg[0]), P(seg[1])), s, idx, it);
         el.style.strokeDasharray = 'none';
+        if (s.ew > 0) el.style.strokeWidth = Math.max(0.6, s.ew * k);
         g.appendChild(el);
       });
       angEnds(s, G).forEach(function (e) {
@@ -2012,7 +2238,7 @@
     function pickedShape(cur) {
       const t = pick.t;
       const base = { t: t, c: S.color, w: S.width };
-      if (dimStyle !== 'arrow') base.ds = dimStyle;
+      applyLook(base);
       if (t === 'dima') {
         const A = pick.arm;
         if (!A) return null;
