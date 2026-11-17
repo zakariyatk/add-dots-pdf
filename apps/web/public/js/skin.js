@@ -45,9 +45,12 @@
     if (dock && dock.parentNode === app) app.insertBefore(bar, dock); else app.appendChild(bar);
 
     /* the slider runs in log steps, so 50% and 200% sit either side of 100% */
-    const lo = Math.log(X.ZOOM_MIN || 0.2), hi = Math.log(X.ZOOM_MAX || 6);
-    const toSlider = function (z) { return Math.round(1000 * (Math.log(z) - lo) / (hi - lo)); };
-    const fromSlider = function (v) { return Math.exp(lo + (hi - lo) * v / 1000); };
+    /* the top end is read each time: it depends on the device and on how
+       long the document is (core.js zoomMax) */
+    const lo = Math.log(X.ZOOM_MIN || 0.2);
+    const hi = function () { return Math.log(X.ZOOM_MAX || 64); };
+    const toSlider = function (z) { return Math.round(1000 * (Math.log(z) - lo) / (hi() - lo)); };
+    const fromSlider = function (v) { return Math.exp(lo + (hi() - lo) * v / 1000); };
 
     function click(id) { const el = $(id); if (el && !el.disabled) el.click(); }
     bar.addEventListener('click', function (e) {

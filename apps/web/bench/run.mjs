@@ -311,7 +311,7 @@ async function measure(browser, file) {
   );
   await dl.delete();
 
-  /* deep zoom: in to the most (600%), then one step back out. Sharp means
+  /* deep zoom: in to the most (6400% on a desktop; 600% before), then one step back out. Sharp means
      the page being read is drawn at this zoom and, where its bitmap is
      capped, its detail layer covers the screen (Stage D2; earlier builds
      only stretch the capped bitmap, so for them it means drawn) */
@@ -326,8 +326,8 @@ async function measure(browser, file) {
     return !!(it.detail && it.detail.isConnected && it.detailKey === it.vp.scale + '/' + it.vp.rotation);
   };
   let dz0 = 0;
-  for (let i = 0; i < 20; i++) {
-    if ((await page.evaluate(() => window.ADDPDF.S.scale)) >= 5.99) break;
+  for (let i = 0; i < 40; i++) {
+    if (await page.evaluate(() => window.ADDPDF.S.scale >= (window.ADDPDF.ZOOM_MAX || 6) * 0.998)) break;
     dz0 = await page.evaluate(() => performance.now());
     await page.click('#btnIn');
   }

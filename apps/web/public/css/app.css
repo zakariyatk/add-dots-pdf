@@ -1373,3 +1373,8 @@
     .appbar .abmenu-t{width:32px;padding:0;justify-content:center}
     .appbar .abw{width:40px}
   }
+
+  /* No how-to text on the working screen: the tool hint in the options bar
+     and the photo-measure tip stay in the page for the code that fills them,
+     but are never shown. */
+  #modeHint,#pmhint{display:none !important}

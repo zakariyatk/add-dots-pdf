@@ -500,7 +500,7 @@
           }
           if (pick && pick.line) liftText(it, pick.line);
           else if (pick && pick.shape) lift(it, pick.shape);
-          else X.toast('Nothing to edit there. Point at text or a shape: it lights up when it can be edited.');
+          else X.toast('Nothing to edit there');
         });
       },
       cancel: function () { down = null; }

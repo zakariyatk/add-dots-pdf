@@ -707,7 +707,7 @@
           it.shapes.push(g);
           X.drawShapes(it); X.drawThumb(it); X.updateMeta();
           if (t === 'dim') {
-            X.toast('<b>' + measure(g) + '</b> \u00b7 double-click it to retype the reading');
+            X.toast('<b>' + measure(g) + '</b>');
           }
         }
       };
@@ -789,7 +789,7 @@
             X.snapshot();
             it.shapes.push(g);
             X.drawShapes(it); X.drawThumb(it); X.updateMeta();
-            X.toast('<b>' + measure(g) + '</b> · double-click it to retype the reading');
+            X.toast('<b>' + measure(g) + '</b>');
             return;
           }
           if (!drag || drag.it !== it) return;
@@ -2051,7 +2051,7 @@
       trackClear();              /* this reading is done; a tracked point is not the next one's */
       $('modeHint').innerHTML = X.hints[t];
       X.drawShapes(it); X.drawThumb(it); X.updateMeta();
-      X.toast('<b>' + X.esc(dimLabel(g)) + '</b> · double-click it to retype the reading');
+      X.toast('<b>' + X.esc(dimLabel(g)) + '</b>');
     }
 
     function pickTool(t) {

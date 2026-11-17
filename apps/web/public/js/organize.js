@@ -101,8 +101,7 @@
       await X.syncAll();
       X.toast('<b>' + added + '</b> page' + (added === 1 ? '' : 's') + ' ' +
         (pickMode === 'append' ? 'appended' : 'inserted') +
-        (failed ? ' · ' + failed + ' file' + (failed === 1 ? '' : 's') + ' could not be opened' : '') +
-        ' · <b>Ctrl+Z</b> to undo');
+        (failed ? ' · ' + failed + ' file' + (failed === 1 ? '' : 's') + ' could not be opened' : ''));
     });
 
     async function duplicatePage() {
@@ -116,7 +115,7 @@
       X.invalidateSearch();
       await X.syncAll();
       X.goTo(i + 2);
-      X.toast('Page duplicated · <b>Ctrl+Z</b> to undo');
+      X.toast('Page duplicated');
     }
 
     /* ---------------- split ---------------- */
@@ -302,7 +301,7 @@
       X.invalidateSearch();
       await X.syncAll();
       X.goTo(to + 1);
-      X.toast('Page moved to <b>' + (to + 1) + '</b> · <b>Ctrl+Z</b> to undo');
+      X.toast('Page moved to <b>' + (to + 1) + '</b>');
       if (!org.hidden) paintOrganize();
     }
 
@@ -321,7 +320,7 @@
       X.invalidateSearch();
       await X.syncAll();
       X.goTo(at + 1);
-      X.toast(moving.length + ' pages moved to <b>' + (at + 1) + '</b> · <b>Ctrl+Z</b> to undo');
+      X.toast(moving.length + ' pages moved to <b>' + (at + 1) + '</b>');
       repaint();
     }
 
@@ -574,7 +573,7 @@
       X.invalidateSearch();
       await X.syncAll();
       repaint();
-      X.toast(sel.length + ' page' + (sel.length === 1 ? '' : 's') + ' removed · <b>Ctrl+Z</b> to undo');
+      X.toast(sel.length + ' page' + (sel.length === 1 ? '' : 's') + ' removed');
     }
     $('orgDel').addEventListener('click', removeSelected);
 

@@ -175,7 +175,7 @@
       if (!it) { X.toast('Open a PDF first'); return; }
       const box = centeredBox(it, iw / ih, center);
       placeShape(it, { t: 'image', id: uid('img'), url: url, iw: iw, ih: ih, a: box[0], b: box[1], c: '#1C1F24', w: 0 });
-      X.toast(center ? 'Image placed' : 'Image placed — drag it into position, or crop it from the properties panel');
+      X.toast('Image placed');
     }
     function armImage(url, iw, ih) {
       armPlacement('insimg', 'Click where the image should go', function (it, c) { placeImage(url, iw, ih, it, c); });
@@ -443,7 +443,7 @@
         t: 'video', id: uid('vid'), url: poster || '', iw: iw || 0, ih: ih || 0,
         src: src, a: box[0], b: box[1], c: '#1C1F24', w: 0
       });
-      X.toast(center ? 'Video placed' : 'Video placed — click it to play, drag to reposition');
+      X.toast('Video placed');
     }
     function armVideo(poster, iw, ih, src) {
       armPlacement('insvid', 'Click where the video should go', function (it, c) { placeVideo(poster, iw, ih, src, it, c); });
@@ -578,7 +578,7 @@
         a = [cx - w / 2, cy - h / 2]; b = [cx + w / 2, cy + h / 2];
       }
       placeShape(it, { t: 'link', id: uid('lnk'), url: url, style: style, label: label || '', a: a, b: b, c: LINK_COLOR });
-      X.toast(center ? 'Link placed' : 'Link placed — drag it where it belongs');
+      X.toast('Link placed');
     }
     function armLink(url, style, label) {
       armPlacement('inslink', 'Click where the link should go', function (it, c) { placeLink(url, style, label, it, c); });
@@ -745,7 +745,7 @@
         t: 'table', id: uid('tbl'), rows: rows, cols: cols, cells: blankCells(rows, cols),
         a: [x, y], b: [x + w, y + h], c: TABLE_LINE, w: 1
       });
-      X.toast(center ? 'Table placed' : 'Table placed — click it to type into cells');
+      X.toast('Table placed');
     }
     function armTable(rows, cols) {
       armPlacement('instable', 'Click where the table should go', function (it, c) { placeTable(rows, cols, it, c); });

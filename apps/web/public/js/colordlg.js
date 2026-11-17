@@ -80,7 +80,6 @@
 
   /* the next click on the page gives a colour; Esc gives none */
   function pickFromPage(done) {
-    X.toast('Click a colour on the page · <b>Esc</b> cancels');
     document.body.classList.add('cdpicking');
     function stop(hex) {
       window.removeEventListener('pointerdown', down, true);

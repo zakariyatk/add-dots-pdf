@@ -211,7 +211,6 @@
         imgStamps = imgStamps.slice(0, IMG_MAX);
         stampImg = imgStamps[0].id;
         saveImgStamps(); paintImgStamps();
-        X.toast('Stamp ready — click a page to place it');
       });
     });
 
@@ -937,7 +936,7 @@
         openOn.it.shapes.splice(openOn.idx, 1);
         const it = openOn.it; openOn = null; pop.hidden = true;
         X.drawShapes(it); X.drawThumb(it); X.updateMeta(); renderComments();
-        X.toast('Comment removed · <b>Ctrl+Z</b> to undo');
+        X.toast('Comment removed');
       });
       const go = function () {
         const v = pop.querySelector('#ctReply').value.trim();
