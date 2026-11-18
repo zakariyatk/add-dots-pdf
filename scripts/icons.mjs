@@ -1,5 +1,5 @@
-/* Every icon of the app, drawn from the Add Dots PDF logo: a page with AD
-   and three dots on a black square.
+/* Every icon of the app, drawn from the Add Dots PDF logo: a page outline
+   with AD, a purple fold and a purple dot, on a black square.
 
      node scripts/icons.mjs
 
@@ -27,9 +27,15 @@ const FOLD = 'M57.8 19.2L74 35.4H62a4.2 4.2 0 0 1-4.2-4.2z';
 const AD =
   '<path d="M36.3 58.8L41.7 52.2L43.9 58.8z" fill="#7357FF"/>' +
   '<path d="M45.8 61.4H33.6L42 47.4L51.1 63.8H58.8A9 9 0 0 0 58.8 45.8H49.9" fill="none" stroke="#000" stroke-width="4.6"/>';
+/* The logo itself: the line icon. A page drawn in one white outline, its
+   folded corner in purple, AD in the same line, and one purple dot. */
 const LOGO =
-  `<path d="${PAGE}" fill="#fff"/><path d="${FOLD}" fill="#7357FF"/>${AD}` +
-  '<g fill="#7357FF"><circle cx="40.7" cy="73" r="3.3"/><circle cx="49.9" cy="73" r="3.3"/><circle cx="59" cy="73" r="3.3"/></g>';
+  '<g fill="none" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">' +
+  '<path d="M33 21.5H55L71.5 38V75a4.5 4.5 0 0 1-4.5 4.5H33a4.5 4.5 0 0 1-4.5-4.5V26a4.5 4.5 0 0 1 4.5-4.5z" stroke="#fff"/>' +
+  '<path d="M55 21.5V38H71.5" stroke="#7357FF"/>' +
+  '<path d="M35.5 67L44 48.5L52.5 67" stroke="#fff"/>' +
+  '<path d="M52.5 48.5H55a9.25 9.25 0 0 1 0 18.5H52.5" stroke="#fff"/></g>' +
+  '<circle cx="44" cy="61.5" r="3" fill="#7357FF"/>';
 const BLACK = '#000';
 
 /* The icon Windows shows on .pdf files the app opens: the page alone, outlined
