@@ -135,7 +135,9 @@ class Opened {
   openPlan(p, keep) {
     this.check(p);
     const size = fs.statSync(p).size;
-    const mb = Number(process.env.ADDDOTS_RANGE_MB) || 150;
+    /* 0 is a size too (the tests: every file read a part at a time) */
+    const env = process.env.ADDDOTS_RANGE_MB;
+    const mb = env !== undefined && env !== '' && Number.isFinite(Number(env)) ? Number(env) : 150;
     const ranges = !!keep || size > mb * 1024 * 1024;
     let id = null;
     if (ranges) {

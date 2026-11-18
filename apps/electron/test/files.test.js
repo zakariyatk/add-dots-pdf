@@ -82,5 +82,14 @@ test('only handed-over paths are read, each queue taken once', () => {
   o.closeRange(plan.id);
   assert.throws(() => o.range(plan.id, 0, 4), /not open/);
   assert.deepEqual(o.openPlan(a, false), { size: 8, ranges: false, id: null });
+  /* ADDDOTS_RANGE_MB=0: every file is big */
+  process.env.ADDDOTS_RANGE_MB = '0';
+  try {
+    const big = o.openPlan(a, false);
+    assert.ok(big.ranges && big.id, 'a size of 0 is taken, not the 150 MB default');
+    o.closeRange(big.id);
+  } finally {
+    delete process.env.ADDDOTS_RANGE_MB;
+  }
   fs.rmSync(dir, { recursive: true });
 });

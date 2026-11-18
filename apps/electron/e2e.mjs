@@ -67,7 +67,12 @@ const firstPages = (await PDFDocument.load(readFileSync(A), { ignoreEncryption: 
 const B = join(dir, 'second.pdf');
 await makePdf(B, 5, 'Second');
 
-const env = { ...process.env, ADDDOTS_SAVE_TO: saveTo };
+/* a profile of its own: apart from any copy of the app already open */
+const env = {
+  ...process.env,
+  ADDDOTS_SAVE_TO: saveTo,
+  ADDDOTS_USER_DATA: mkdtempSync(join(tmpdir(), 'adddots-profile-')),
+};
 delete env.ADDDOTS_DEV_URL;
 
 let app = null;

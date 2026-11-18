@@ -63,6 +63,10 @@ let saveDir = null;
 
 /* ---------------- one app, however many times it is started ---------------- */
 
+/* the end-to-end test runs in a profile of its own, apart from any copy of
+   the app already open (the single-instance lock goes with the profile) */
+if (process.env.ADDDOTS_USER_DATA) app.setPath('userData', process.env.ADDDOTS_USER_DATA);
+
 if (!app.requestSingleInstanceLock({ argv: process.argv, cwd: process.cwd() })) {
   app.quit();
 } else {
