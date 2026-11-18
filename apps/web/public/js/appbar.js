@@ -3,7 +3,7 @@
    The strip along the top of the window, as Acrobat has it: Menu, Home and
    Create on the left; help, what is new and the other Add Dots apps on the
    right. In the Windows app it is the window's title bar as well: the
-   window has no frame of its own (tauri.conf.json, decorations off), so the
+   window has no frame of its own (apps/electron, frame: false), so the
    strip is where the window is dragged from, and it carries minimise,
    maximise and close.
 
@@ -21,7 +21,7 @@
   if (/[?&]tab=\d+/.test(location.search) && window.parent !== window) return;
   if (window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()) return;
 
-  const T = window.__TAURI__;
+  const T = window.ADDDOTS_HOST;
   const win = T && T.window && T.window.getCurrentWindow ? T.window.getCurrentWindow() : null;
   /* which build this is (js/build.js): read when asked, as build.js loads
      after this file */
@@ -62,7 +62,7 @@
   const LOGO = '<svg viewBox="0 0 100 100" aria-hidden="true"><rect width="100" height="100" rx="20" fill="#000"/><path d="M33 18.5H54V31a7 7 0 0 0 7 7H74.5V75a7.5 7.5 0 0 1-7.5 7.5H33a7.5 7.5 0 0 1-7.5-7.5V26a7.5 7.5 0 0 1 7.5-7.5z" fill="#fff"/><path d="M57.8 19.2L74 35.4H62a4.2 4.2 0 0 1-4.2-4.2z" fill="#7357FF"/><path d="M36.3 58.8L41.7 52.2L43.9 58.8z" fill="#7357FF"/><path d="M45.8 61.4H33.6L42 47.4L51.1 63.8H58.8A9 9 0 0 0 58.8 45.8H49.9" fill="none" stroke="#000" stroke-width="4.6"/><g fill="#7357FF"><circle cx="40.7" cy="73" r="3.3"/><circle cx="49.9" cy="73" r="3.3"/><circle cx="59" cy="73" r="3.3"/></g></svg>';
 
   /* the other Add Dots apps, as on www.adddots.com; `site` is the name the
-     Windows app opens in the browser (src-tauri open_site) */
+     Windows app opens in the browser (apps/electron open_site) */
   /* the Option Builder mark: an "A" with rising candles and a violet trend
      arrow, as in that app's public/favicon.svg */
   const LOGO_OB = '<svg viewBox="162 157 928 935" aria-hidden="true"><rect x="162" y="157" width="928" height="935" rx="220" fill="#000"/><g fill="#fff"><path d="M578,322 C600,285 658,285 680,322 L790,527 L706,612 L626,472 L520,655 C440,738 360,805 286,866 C276,873 266,866 272,856 Z"/><path d="M276,903 L382,816 L382,918 C382,926 376,932 368,932 L286,932 C266,932 262,914 276,903 Z"/><rect x="410" y="793" width="55" height="140" rx="9"/><rect x="573" y="679" width="55" height="156" rx="9"/><path d="M828,606 L982,888 C996,912 984,932 958,932 L842,932 C822,932 808,924 800,910 L724,768 C712,744 716,722 732,704 Z"/></g><g fill="#7B61FF" stroke="#000" stroke-width="14" stroke-linejoin="round" paint-order="stroke"><rect x="488" y="739" width="63" height="138" rx="9" stroke="none"/><path d="M482,710 L604,584 C610,578 618,578 624,584 L692,648 L832,516 L852,540 L702,704 C694,712 684,712 678,704 L606,622 Z"/><path d="M806,488 L900,458 C910,455 916,462 913,472 L894,560 C891,570 882,572 876,566 Z"/></g></svg>';
@@ -164,13 +164,9 @@
         '<button type="button" class="abw" id="abMax" title="Maximise" aria-label="Maximise">' + ICON.wmax + '</button>' +
         '<button type="button" class="abw abwx" id="abClose" title="Close" aria-label="Close">' + ICON.wclose + '</button>' +
       '</span>');
-    /* the window is dragged by the strip, and a double click maximises it */
-    bar.setAttribute('data-tauri-drag-region', '');
-    bar.querySelector('.abgrow').setAttribute('data-tauri-drag-region', '');
-    bar.querySelector('.ablogo').setAttribute('data-tauri-drag-region', '');
-    document.body.classList.add('appbar-win');
-    /* Electron (apps/electron) drags by CSS instead (app.css shell-electron) */
-    if (T.adddots && T.adddots.shell === 'electron') document.body.classList.add('shell-electron');
+    /* the window is dragged by the strip, and a double click maximises it
+       (app.css shell-electron: a CSS drag region) */
+    document.body.classList.add('appbar-win', 'shell-electron');
   }
   document.body.insertBefore(bar, document.body.firstChild);
   document.body.classList.add('has-appbar');
@@ -387,7 +383,7 @@
   /* ---------------- What is new ---------------- */
 
   /* the version in use: in the Windows app the Store's number (1.0.N) or
-     the setup's (src-tauri app_version); on the website, the build */
+     the setup's (apps/electron app_version); on the website, the build */
   let ver = null;
   function version() {
     if (!ver) {

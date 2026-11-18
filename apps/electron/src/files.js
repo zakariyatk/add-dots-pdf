@@ -1,6 +1,5 @@
 /* What the desktop side does with files, apart from Electron so it can be
-   tested in plain Node (test/files.test.js). The same rules as the Tauri
-   app's src-tauri/src/lib.rs. */
+   tested in plain Node (test/files.test.js). */
 'use strict';
 
 const fs = require('node:fs');

@@ -1,5 +1,5 @@
 /* Add Dots PDF on the desktop, in Electron: the web app (apps/web/dist) in
-   a window. The Electron counterpart of apps/desktop/src-tauri/src/lib.rs.
+   a window.
 
    What the desktop side adds to the web app:
    - PDFs handed over by the system: a double-click in Explorer (or Finder,
@@ -16,7 +16,7 @@
 
    Security: context isolation on, Node off, the renderer sandboxed. The page
    is served from app://adddots (a scheme of this app's own) with the same
-   Content Security Policy as the Tauri app; it reaches this side only
+   Content Security Policy (csp.json); it reaches this side only
    through preload.js, by command name, and every command checks what it is
    given here. Navigation away from the app and new windows are refused;
    https links open in the system browser. */
@@ -134,8 +134,10 @@ const TYPES = {
   '.xml': 'application/xml',
 };
 
-/* The Tauri app's policy (tauri.conf.json), with the page's inline scripts
-   allowed by their hashes, as Tauri adds them. */
+/* The window's policy (csp.json, which the web app's smoke test also runs
+   every page under: apps/web/vite.config.ts ADDDOTS_CSP), with the page's
+   inline scripts allowed by their hashes. */
+const CSP = require('./csp.json');
 function csp(html) {
   const hashes = [];
   const re = /<script(\s[^>]*)?>([\s\S]*?)<\/script>/gi;
@@ -144,21 +146,13 @@ function csp(html) {
     if (m[1] && /\ssrc\s*=/.test(m[1])) continue;
     hashes.push("'sha256-" + crypto.createHash('sha256').update(m[2], 'utf8').digest('base64') + "'");
   }
-  return [
-    "default-src 'self'",
-    "script-src 'self' 'wasm-unsafe-eval' https://pdf.adddots.com https://staging.adddots.com " +
-      hashes.join(' '),
-    "worker-src 'self' blob:",
-    "style-src 'self' 'unsafe-inline'",
-    "img-src 'self' data: blob: https:",
-    "font-src 'self' data: blob:",
-    "media-src 'self' data: blob:",
-    "connect-src 'self' https: data: blob:",
-    "frame-src 'self' blob:",
-    "object-src 'none'",
-    "base-uri 'self'",
-    "form-action 'none'",
-  ].join('; ');
+  return (
+    Object.entries(CSP)
+      /* the app's own origin too, for the update check's sandboxed frame
+       (latest-frame.html), where 'self' matches nothing */
+      .map(([k, v]) => k + ' ' + (k === 'script-src' ? [v, APP_ORIGIN, ...hashes].join(' ') : v))
+      .join('; ')
+  );
 }
 
 async function serve(request) {
@@ -289,8 +283,6 @@ function num(v, name) {
   return Math.floor(v);
 }
 
-const NOT_HERE = 'not in the Electron app';
-
 const COMMANDS = {
   launch_files: () => opened.take('pending'),
   combine_files: () => opened.take('combine'),
@@ -345,41 +337,13 @@ const COMMANDS = {
     if (process.platform !== 'win32') throw new Error('the Microsoft Store is on Windows only');
     return shell.openExternal(STORE_PAGE).then(() => null);
   },
+  /* the Store package's version is package.json's, 1.0.N (CI sets N) */
   app_version: () => app.getVersion(),
-  /* not a Store install: js/update.js compares with the website instead */
-  store_update: () => null,
-  store_install: () => 'nothing',
-
-  /* PDFium, Windows printing and Windows OCR are the Tauri app's native
-     code: here pages are drawn by pdf.js, printing goes through the system
-     print dialog and text is read by Tesseract, as on the website */
-  pdf_native_status: () => {
-    throw new Error('PDFium is ' + NOT_HERE);
-  },
-  pdf_open: () => {
-    throw new Error(NOT_HERE);
-  },
-  pdf_open_path: () => {
-    throw new Error(NOT_HERE);
-  },
-  pdf_render: () => {
-    throw new Error(NOT_HERE);
-  },
-  pdf_trim: () => null,
-  pdf_close: () => null,
-  pdf_cancel: () => null,
-  print_printers: () => ({ list: [], default: null }),
-  print_caps: () => {
-    throw new Error(NOT_HERE);
-  },
-  print_properties: () => null,
-  print_send: () => {
-    throw new Error(NOT_HERE);
-  },
-  ocr_status: () => ({ languages: [], max: 0 }),
-  ocr_page: () => {
-    throw new Error(NOT_HERE);
-  },
+  /* The Microsoft Store package (process.windowsStore) is updated by the
+     Store itself: no update notice in the app (false, js/update.js). The
+     setup .exe is not a Store install (null): it compares with the website
+     and points to the Store page. */
+  store_update: () => (process.windowsStore ? false : null),
 
   perf_native: () => ({ now: process.memoryUsage().rss, peak: process.resourceUsage().maxRSS * 1024 }),
 };

@@ -1,5 +1,4 @@
-/* The desktop side's file rules (src/files.js), in plain Node: the same
-   cases as the Tauri app's tests in src-tauri/src/lib.rs. */
+/* The desktop side's file rules (src/files.js), in plain Node. */
 'use strict';
 
 const test = require('node:test');

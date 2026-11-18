@@ -25,7 +25,7 @@
   X.on('ready', function () {
     const $ = X.$;
     /* tests of this in a browser set window.ADDDOTS_TABS, as js/tabs.js does */
-    if (!window.__TAURI__ && !window.ADDDOTS_TABS) return;
+    if (!window.ADDDOTS_HOST && !window.ADDDOTS_TABS) return;
 
     const grp = $('grpWindows'), btn = $('btnWinLayout'), lbl = $('winLbl'), pop = $('winPop'), grid = $('winGrid');
     if (!grp || !btn || !lbl || !pop || !grid) return;

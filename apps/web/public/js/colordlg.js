@@ -16,7 +16,7 @@
   /* WebView2 (the Windows app) defines window.EyeDropper but its .open()
      never resolves there — it needs the full browser's screen compositor,
      which an embedded WebView2 control doesn't get. Read off the page instead. */
-  const DESKTOP = !!window.__TAURI__;
+  const DESKTOP = !!window.ADDDOTS_HOST;
 
   const CUSTOM_KEY = 'adpdf.customColors';
   const BASIC = [

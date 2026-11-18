@@ -1,11 +1,11 @@
-/* The desktop app (apps/desktop, Tauri): PDFs handed over by the system.
+/* The desktop app (apps/electron): PDFs handed over by the system.
 
    Double-clicking a PDF in Explorer starts the app with its path, or hands
    the path to the window already open. This asks for the paths the app was
    started with, listens for later ones, reads each file's bytes from the
    desktop side and opens them the way the file picker does: with a
    document open, in a tab of its own (js/tabs.js). In a browser there is no
-   window.__TAURI__ and this does nothing.
+   window.ADDDOTS_HOST and this does nothing.
 
    A tab is a frame of the window's page. It saves through the window's own
    connection to the desktop side (its bytes copied into the window's realm
@@ -15,9 +15,9 @@
   'use strict';
 
   var inTab = window.parent !== window;
-  var T = window.__TAURI__, U8 = Uint8Array;
+  var T = window.ADDDOTS_HOST, U8 = Uint8Array;
   if (inTab) {
-    try { T = window.parent.__TAURI__; U8 = window.parent.Uint8Array; } catch (e) { T = null; }
+    try { T = window.parent.ADDDOTS_HOST; U8 = window.parent.Uint8Array; } catch (e) { T = null; }
   }
   if (!T || !T.core) return;
   var api = window.ADDPDF;
@@ -93,11 +93,10 @@
   api.openStore = function () { return T.core.invoke('open_store'); };
   /* an Add Dots page, by name, in the browser (the top bar's links) */
   api.openSite = function (name) { return T.core.invoke('open_site', { name: name }); };
-  /* whether the Store has a newer version: true, false, or null when this
-     is not the Store's install (the setup .exe) */
+  /* false in the Microsoft Store package, which the Store updates itself
+     (no notice in the app); null in the setup .exe, which compares with
+     the website (js/update.js) */
   api.storeUpdate = function () { return T.core.invoke('store_update'); };
-  /* installs it from the app: 'completed', 'canceled', 'nothing' or 'failed' */
-  api.storeInstall = function () { return T.core.invoke('store_install'); };
 
   api.saveFile = function (data, name, type) {
     return toBytes(data).then(function (body) {
@@ -169,7 +168,7 @@
     });
   }
   /* ---- Explorer's "Combine files in Add Dots PDF" ----
-     Explorer starts the app once for each PDF picked (src-tauri is_combine),
+     Explorer starts the app once for each PDF picked (apps/electron files.js isCombine),
      so they arrive one by one: they are gathered until none has come for a
      moment, then listed in order, as Acrobat's Combine Files does, to be
      moved up or down or left out, and combined into one document (a tab of

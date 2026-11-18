@@ -34,6 +34,20 @@ nsis:
   allowToChangeInstallationDirectory: true
   include: build/installer.nsh
   shortcutName: Add Dots PDF
+# The Microsoft Store package: npm run electron:build:store. The manifest,
+# with the product's Store identity, is build/AppxManifest.xml; the tile and
+# logo images are build/appx/. Its version is package.json's (1.0.N, CI sets
+# N to the run number), as 1.0.N.0: the Store wants the last number 0.
+appx:
+  customManifestPath: AppxManifest.xml
+  identityName: ADDDOTS.ADDDOTSPDF
+  publisher: CN=B4571263-B820-4F66-B107-5B0CC5616541
+  publisherDisplayName: ADD DOTS
+  applicationId: App
+  displayName: Add Dots PDF
+  backgroundColor: transparent
+  languages: [en-US]
+  artifactName: ADD-DOTS-PDF-${version}.0.msix
 mac:
   icon: build/icon.icns
   category: public.app-category.productivity

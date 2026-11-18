@@ -90,7 +90,7 @@ const SPLASH = '#F4F5F7'; /* the splash screens' grey, as before */
 
 /* [file, width, height, svg, alpha] */
 const W = 'apps/web/public/assets/icons/',
-  D = 'apps/desktop/',
+  D = 'apps/electron/build/',
   A = 'apps/mobile/android/app/src/main/res/';
 const I = 'apps/mobile/ios/App/App/Assets.xcassets/';
 const jobs = [
@@ -101,30 +101,28 @@ const jobs = [
   [W + 'apple-touch-icon-180.png', 180, 180, square(1), false],
   /* Google Play's store icon: a full square, no alpha — Play rounds the corners itself */
   ['design/store/google-play/icon-512.png', 512, 512, square(1), false],
-  [D + 'src-tauri/icons/32x32.png', 32, 32, rounded, true],
-  [D + 'src-tauri/icons/128x128.png', 128, 128, rounded, true],
-  [D + 'src-tauri/icons/128x128@2x.png', 256, 256, rounded, true],
-  [D + 'src-tauri/icons/icon.png', 512, 512, rounded, true],
-  [D + 'msix/Assets/StoreLogo.png', 50, 50, rounded, true],
-  [D + 'msix/Assets/Square44x44Logo.png', 44, 44, rounded, true],
+  /* the desktop app (apps/electron): its window and Linux icon */
+  [D + 'icon.png', 512, 512, rounded, true],
+  [D + 'appx/StoreLogo.png', 50, 50, rounded, true],
+  [D + 'appx/Square44x44Logo.png', 44, 44, rounded, true],
   ...[16, 24, 32, 48, 256].map((n) => [
-    D + `msix/Assets/Square44x44Logo.targetsize-${n}_altform-unplated.png`,
+    D + `appx/Square44x44Logo.targetsize-${n}_altform-unplated.png`,
     n,
     n,
     rounded,
     true,
   ]),
-  /* the Store package's .pdf icon (msix/AppxManifest.xml) */
-  [D + 'msix/Assets/PdfFile.png', 44, 44, pdfFile, true],
+  /* the Store package's .pdf icon (build/AppxManifest.xml) */
+  [D + 'appx/PdfFile.png', 44, 44, pdfFile, true],
   ...[16, 24, 32, 48, 256].map((n) => [
-    D + `msix/Assets/PdfFile.targetsize-${n}_altform-unplated.png`,
+    D + `appx/PdfFile.targetsize-${n}_altform-unplated.png`,
     n,
     n,
     pdfFileAt(n),
     true,
   ]),
-  [D + 'msix/Assets/Square150x150Logo.png', 150, 150, tile(150, 150), true],
-  [D + 'msix/Assets/Wide310x150Logo.png', 310, 150, tile(310, 150), true],
+  [D + 'appx/Square150x150Logo.png', 150, 150, tile(150, 150), true],
+  [D + 'appx/Wide310x150Logo.png', 310, 150, tile(310, 150), true],
   [I + 'AppIcon.appiconset/AppIcon-512@2x.png', 1024, 1024, square(1), false],
   ...['splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png'].map((f) => [
     I + 'Splash.imageset/' + f,
@@ -280,11 +278,11 @@ for (const [file, w, h, text, alpha] of jobs) {
 
 const icoSizes = [16, 24, 32, 48, 64, 128, 256];
 const icoFile = ico(await Promise.all(icoSizes.map(async (n) => [n, await pngOf(n, n, rounded, true)])));
-writeFileSync(join(root, D + 'src-tauri/icons/icon.ico'), icoFile);
-/* the setup .exe's .pdf icon (src-tauri/installer.nsh), with Explorer's in-between sizes */
+writeFileSync(join(root, D + 'icon.ico'), icoFile);
+/* the setup .exe's .pdf icon (electron-builder.yml fileAssociations), with Explorer's in-between sizes */
 const pdfSizes = [16, 20, 24, 32, 40, 48, 64, 96, 128, 256];
 const pdfIco = ico(await Promise.all(pdfSizes.map(async (n) => [n, await pngOf(n, n, pdfFileAt(n), true)])));
-writeFileSync(join(root, D + 'src-tauri/icons/pdf-file.ico'), pdfIco);
+writeFileSync(join(root, D + 'pdf-file.ico'), pdfIco);
 const icnsTypes = [
   ['ic11', 32],
   ['ic12', 64],
@@ -293,11 +291,13 @@ const icnsTypes = [
   ['ic09', 512],
   ['ic10', 1024],
 ];
-writeFileSync(
-  join(root, D + 'src-tauri/icons/icon.icns'),
-  icns(await Promise.all(icnsTypes.map(async ([t, n]) => [t, await pngOf(n, n, rounded, true)]))),
+const icnsFile = icns(
+  await Promise.all(icnsTypes.map(async ([t, n]) => [t, await pngOf(n, n, rounded, true)])),
 );
-console.log('ico, icns  ', D + 'src-tauri/icons/');
+writeFileSync(join(root, D + 'icon.icns'), icnsFile);
+/* macOS's .pdf document icon: the app's own */
+writeFileSync(join(root, D + 'pdf-file.icns'), icnsFile);
+console.log('ico, icns  ', D);
 
 /* the website's own source icon and the tab icon */
 writeFileSync(

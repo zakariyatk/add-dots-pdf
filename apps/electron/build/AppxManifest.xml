@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The Microsoft Store package (MSIX) for Add Dots PDF. msix/pack.ps1 fills
-     in the version and packs it around the app built by `tauri build`.
-     Identity, Publisher and PublisherDisplayName are the ones Partner Center
-     gave the product (Product management > Product identity); the Store
-     signs the package itself, so they must match exactly. -->
+<!-- The Microsoft Store package (MSIX) for Add Dots PDF, built by
+     `npm run electron:build:store` (electron-builder's appx target, which
+     fills in the ${...} values: the version, from package.json's, and the
+     .exe). The identity is fixed here, not taken from electron-builder.yml:
+     Identity Name, Publisher and PublisherDisplayName are the ones Partner
+     Center gave the product (Product management > Product identity) and the
+     Store signs the package itself, so they must match exactly, for it to
+     update the same listing (9PGHPBRMLQMS). The tile and logo images are
+     build/appx/, put in the package's assets\ folder. -->
 <Package
   xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
   xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
@@ -15,13 +19,13 @@
   <Identity
     Name="ADDDOTS.ADDDOTSPDF"
     Publisher="CN=B4571263-B820-4F66-B107-5B0CC5616541"
-    Version="{VERSION}"
+    Version="${version}"
     ProcessorArchitecture="x64" />
 
   <Properties>
     <DisplayName>Add Dots PDF</DisplayName>
     <PublisherDisplayName>ADD DOTS</PublisherDisplayName>
-    <Logo>Assets\StoreLogo.png</Logo>
+    <Logo>assets\StoreLogo.png</Logo>
   </Properties>
 
   <Dependencies>
@@ -33,24 +37,24 @@
   </Resources>
 
   <Applications>
-    <Application Id="App" Executable="{EXE}" EntryPoint="Windows.FullTrustApplication">
+    <Application Id="App" Executable="${executable}" EntryPoint="Windows.FullTrustApplication">
       <uap:VisualElements
         DisplayName="Add Dots PDF"
         Description="Read, edit and mark up PDFs"
         BackgroundColor="transparent"
-        Square150x150Logo="Assets\Square150x150Logo.png"
-        Square44x44Logo="Assets\Square44x44Logo.png">
-        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" />
+        Square150x150Logo="assets\Square150x150Logo.png"
+        Square44x44Logo="assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="assets\Wide310x150Logo.png" />
       </uap:VisualElements>
       <Extensions>
         <!-- opens PDFs from Explorer, as the setup .exe's install does; and
              "Combine files in Add Dots PDF" on PDFs picked there, as
              Acrobat has it: Explorer starts it once for each file picked,
-             and the app (one window, single instance) gathers them -->
+             and the app (single instance) gathers them -->
         <uap3:Extension Category="windows.fileTypeAssociation">
           <uap3:FileTypeAssociation Name="pdf">
             <uap:DisplayName>PDF document</uap:DisplayName>
-            <uap:Logo>Assets\PdfFile.png</uap:Logo>
+            <uap:Logo>assets\PdfFile.png</uap:Logo>
             <uap:SupportedFileTypes>
               <uap:FileType ContentType="application/pdf">.pdf</uap:FileType>
             </uap:SupportedFileTypes>
@@ -64,7 +68,7 @@
   </Applications>
 
   <Capabilities>
-    <!-- a desktop (Win32) app: the Tauri window runs as a normal program -->
+    <!-- a desktop (Win32) app: the Electron window runs as a normal program -->
     <rescap:Capability Name="runFullTrust" />
   </Capabilities>
 </Package>

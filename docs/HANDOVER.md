@@ -19,7 +19,7 @@ measured results of each phase.
 | 2     | Memory: PDFium reads from disk, render worker started only when needed                  | PR #46 |
 | 3     | Big files (over 150 MB) read from disk by byte ranges                                   | PR #47 |
 | 4     | Edit Object's work in the save worker; DXF conversion no longer freezes                 | PR #47 |
-| 5     | OCR by Windows' own reader (`src-tauri/src/ocr.rs`), Tesseract fallback                 | PR #48 |
+| 5     | OCR by Windows' own reader (Tauri app, since removed), Tesseract fallback               | PR #48 |
 | 6     | High-DPI (pages up to 3x, redrawn when the density changes)                             | PR #48 |
 | 6     | Right-click page menu (`js/pagemenu.js`)                                                | PR #49 |
 | 6     | Two pages side by side; dark-interface pass; icon audit (ribbon at 24px)                | PR #50 |
@@ -100,18 +100,17 @@ Checks, as CI runs them:
 ```sh
 npm run lint && npm run format:check && npm run typecheck && npm test
 npm run smoke -w @adddots/web                # Chrome smoke test, 186 checks
-ADDDOTS_CSP=1 npm run smoke -w @adddots/web  # again, under the Windows app's CSP
-cd apps/desktop/src-tauri && cargo test      # Rust side
+ADDDOTS_CSP=1 npm run smoke -w @adddots/web  # again, under the desktop app's CSP
 ```
 
-The Windows app (needs Rust and the PDFium DLL):
+The desktop app (Electron, `apps/electron`; see its README):
 
 ```sh
-cd apps/desktop
-node scripts/get-pdfium.mjs                  # downloads pdfium.dll (checked by sha256)
-npx tauri build --no-bundle                  # release build
-node e2e.mjs                                 # end to end; APP=<path to the exe> for another build
-ADDDOTS_RANGE_MB=0 node e2e.mjs              # again, every file read by byte ranges
+npm run electron:dev -w @adddots/electron         # the app over Vite
+npm run electron:build -w @adddots/electron       # setup .exe (NSIS)
+npm run electron:build:store -w @adddots/electron # Microsoft Store package (MSIX)
+npm run e2e -w @adddots/electron                  # end to end; APP=<path to the exe> for another build
+ADDDOTS_RANGE_MB=0 npm run e2e -w @adddots/electron  # again, every file read by byte ranges
 ```
 
 Benchmarks: `apps/web/bench/longtasks.mjs` (page-thread freezes during
