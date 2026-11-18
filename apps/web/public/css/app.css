@@ -74,6 +74,9 @@
         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28vw;
         /* basis 0 keeps the file name from forcing the toolbar onto a second row */
         flex:3 1 0;min-width:0;text-align:right}
+  /* the window title bar already names the document, so the ribbon copy is hidden;
+     the phone more-sheet still shows it (.sheet .meta below) */
+  .bar .meta{display:none}
   .meta b{color:var(--text);font-weight:600}
   .meta .dirty{color:var(--marker-ink)}
   .pager{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:12px}
