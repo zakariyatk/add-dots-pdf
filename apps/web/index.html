@@ -438,7 +438,12 @@
 <div class="sheet" id="moreSheet" role="dialog" aria-label="More options" aria-modal="true" hidden="">
   <div class="grab"></div>
   <h2>Document</h2>
-  <div id="moreBody"></div>
+  <div id="moreBody">
+    <!-- phones: the top bar has Save; the choices before saving are here -->
+    <div class="grp" id="moreFile">
+      <button class="btn" id="moreSaveAs" type="button" data-label="Save as…" aria-haspopup="dialog"><svg viewBox="0 0 24 24"><path d="M5 3h11l4 4v5"></path><path d="M5 3a2 2 0 0 0-1 2v14a2 2 0 0 0 2 2h6"></path><rect x="8" y="3" width="7" height="5"></rect><path d="M15 21l5-5-2-2-5 5v2z"></path></svg></button>
+    </div>
+  </div>
   <button class="btn" id="moreClose" style="width:100%;height:44px;margin-top:4px;border-color:var(--line)">Close</button>
 </div>
 
