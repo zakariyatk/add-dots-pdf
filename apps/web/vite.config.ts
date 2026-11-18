@@ -75,15 +75,16 @@ function buildInfo(): Plugin {
   };
 }
 
-/* Preview only, with ADDDOTS_CSP=1: every page served with the Windows app's
-   content security policy (apps/desktop/src-tauri/tauri.conf.json), so the
-   smoke test can use every tool under it. The app's own origin is named for
-   the update check's sandboxed frame, where 'self' matches nothing; and, as
-   Tauri does when it builds the app, the hashes of the pages' inline scripts. */
+/* Preview only, with ADDDOTS_CSP=1: every page served with the desktop app's
+   content security policy (apps/electron/src/csp.json), so the smoke test
+   can use every tool under it. The app's own origin is named for the update
+   check's sandboxed frame, where 'self' matches nothing; and, as the desktop
+   app does when it serves a page, the hashes of the pages' inline scripts. */
 function desktopCsp(): string | undefined {
   if (!process.env.ADDDOTS_CSP) return undefined;
-  const conf = JSON.parse(readFileSync(join(here, '../desktop/src-tauri/tauri.conf.json'), 'utf8'));
-  const csp: Record<string, string> = conf.app.security.csp;
+  const csp: Record<string, string> = JSON.parse(
+    readFileSync(join(here, '../electron/src/csp.json'), 'utf8'),
+  );
   const dist = join(here, 'dist');
   const hashes = readdirSync(dist)
     .filter((f) => f.endsWith('.html'))

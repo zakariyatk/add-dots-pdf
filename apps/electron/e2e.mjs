@@ -1,5 +1,5 @@
 /* The Electron app, end to end, driven the way a person uses it from
-   Explorer (the same checks as apps/desktop/e2e.mjs where they apply):
+   Explorer:
 
      npm run e2e -w @adddots/electron                 # unpackaged, over apps/web/dist
      APP=release/win-unpacked/"Add Dots PDF.exe" npm run e2e -w @adddots/electron
@@ -121,7 +121,11 @@ try {
   }
 
   const shell = await run(async () => ({
-    bridge: !!(window.__TAURI__ && window.__TAURI__.adddots && window.__TAURI__.adddots.shell === 'electron'),
+    bridge: !!(
+      window.ADDDOTS_HOST &&
+      window.ADDDOTS_HOST.adddots &&
+      window.ADDDOTS_HOST.adddots.shell === 'electron'
+    ),
     node: typeof require !== 'undefined' || typeof process !== 'undefined',
     engine: !!window.ADDPDFEngine,
     /* app:// cannot have one at all: asking throws */
@@ -141,14 +145,14 @@ try {
 
   const refused = await run(
     (p) =>
-      window.__TAURI__.core.invoke('read_file', { path: p }).then(
+      window.ADDDOTS_HOST.core.invoke('read_file', { path: p }).then(
         () => 'read',
         (e) => 'refused: ' + e,
       ),
     process.platform === 'win32' ? 'C:\\Windows\\win.ini' : '/etc/hostname',
   );
   const unknown = await run(() =>
-    window.__TAURI__.core.invoke('fs_write', {}).then(
+    window.ADDDOTS_HOST.core.invoke('fs_write', {}).then(
       () => 'ran',
       (e) => 'refused: ' + e,
     ),
@@ -161,14 +165,37 @@ try {
 
   /* the content security policy is in force: an inline script added to the
      page does not run (Playwright's own evaluate is exempt) */
-  const policy = await run(() => {
+  const policy = await run(async () => {
     const s = document.createElement('script');
     s.textContent = 'window.__inlineRan = true;';
     document.head.appendChild(s);
     s.remove();
-    return { inline: window.__inlineRan === true };
+    /* the update check's sandboxed frame still runs and answers: a site
+       that refuses at once (a closed port), so nothing, quickly */
+    const cfg = window.ADDDOTS_CONFIG;
+    const site = cfg.shareServer;
+    cfg.shareServer = 'http://127.0.0.1:9/';
+    const t = Date.now();
+    const latest = window.ADDPDF.latestBuild ? await window.ADDPDF.latestBuild() : 'missing';
+    cfg.shareServer = site;
+    return { inline: window.__inlineRan === true, answered: latest === null && Date.now() - t < 20000 };
   });
-  check('the window has a content security policy', policy.inline === false, policy);
+  check(
+    'the window has a content security policy, and the update check still answers',
+    policy.inline === false && policy.answered,
+    policy,
+  );
+  const updates = await run(() =>
+    window.ADDDOTS_HOST.core.invoke('store_update').then(
+      (v) => v,
+      (e) => 'error: ' + e,
+    ),
+  );
+  check(
+    'outside the Store package, updates are compared with the website (store_update null)',
+    updates === null,
+    updates,
+  );
 
   /* ---- Print: the system print dialog, as on the website ----
      There is no native printing here (js/print.js stands aside): the PDF made

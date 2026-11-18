@@ -1,5 +1,12 @@
 # The Windows app: architecture, bottlenecks and the performance plan
 
+> **History.** This was written for the Tauri app (`apps/desktop`), which
+> has since been replaced by the Electron app (`apps/electron`). PDFium
+> drawing, the native Print dialog and Windows' own OCR went with it: the
+> Electron app draws with pdf.js, prints through the system dialog and
+> reads text with Tesseract, as the website does. The measurements below
+> are of the Tauri app.
+
 This is the analysis the Windows performance work starts from, and the plan
 it follows. It is updated as each phase lands, with the measurements before
 and after.

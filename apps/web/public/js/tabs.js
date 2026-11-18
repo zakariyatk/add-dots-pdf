@@ -41,9 +41,9 @@
   /* the phone app keeps one document at a time */
   const IN_PHONE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
   /* the Windows app (its window's, or the one this frame is in) */
-  let desk = !!window.__TAURI__;
-  try { if (!desk && window.parent !== window) desk = !!window.parent.__TAURI__; } catch (e) { /* not the app's */ }
-  const off = function () { return !!window.ADDDOTS_NO_TABS || IN_PHONE || !(desk || window.__TAURI__ || window.ADDDOTS_TABS); };
+  let desk = !!window.ADDDOTS_HOST;
+  try { if (!desk && window.parent !== window) desk = !!window.parent.ADDDOTS_HOST; } catch (e) { /* not the app's */ }
+  const off = function () { return !!window.ADDDOTS_NO_TABS || IN_PHONE || !(desk || window.ADDDOTS_HOST || window.ADDDOTS_TABS); };
 
   /* ================= inside a tab ================= */
 
@@ -133,7 +133,7 @@
 
     /* The Windows app only: what the website and the phone apps have stays
        as it was (a strip of tabs from the second document on) */
-    const DESK = !!window.__TAURI__;
+    const DESK = !!window.ADDDOTS_HOST;
 
     /* In the Windows app the tabs sit in the title bar (js/appbar.js), after
        Create, as in Acrobat. Elsewhere they are a strip of their own. */

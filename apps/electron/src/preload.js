@@ -1,12 +1,10 @@
 /* The page's only way to the desktop side, with context isolation on and
    Node off in the page.
 
-   The web app (apps/web/public/js) was written against the Tauri app and
-   reaches the desktop through a small part of Tauri's global API:
-   `__TAURI__.core.invoke(command, args | bytes, { headers })`, the window's
-   own controls (its top bar is the title bar) and two events. This gives
-   the page that same part, so one build of the web app serves both desktop
-   apps; nothing else of Electron or Node reaches the page.
+   The web app (apps/web/public/js, desktop.js and a few others) reaches the
+   desktop through window.ADDDOTS_HOST: `core.invoke(command, args | bytes,
+   { headers })`, the window's own controls (its top bar is the title bar)
+   and two events. Nothing else of Electron or Node reaches the page.
 
    Every command goes to the main process by name (main.js COMMANDS), which
    checks the name, its arguments and who is asking. */
@@ -27,21 +25,7 @@ const COMMANDS = new Set([
   'open_site',
   'store_update',
   'app_version',
-  'store_install',
   'new_window',
-  'pdf_native_status',
-  'pdf_open',
-  'pdf_open_path',
-  'pdf_trim',
-  'pdf_close',
-  'pdf_render',
-  'pdf_cancel',
-  'print_printers',
-  'print_caps',
-  'print_properties',
-  'print_send',
-  'ocr_status',
-  'ocr_page',
   'perf_native',
 ]);
 const EVENTS = new Set(['open-files', 'combine-files']);
@@ -55,7 +39,7 @@ function plainHeaders(h) {
   return out;
 }
 
-/* bytes back as an ArrayBuffer, as Tauri hands a raw response */
+/* bytes back as an ArrayBuffer */
 function unwrap(r) {
   if (!r || !r.ok) return Promise.reject(r ? r.error : 'no answer');
   const v = r.value;
@@ -79,7 +63,7 @@ function invoke(cmd, args, opts) {
   return ipcRenderer.invoke('adddots:invoke', cmd, payload).then(unwrap);
 }
 
-/* Tauri's listen(): resolves to a function that stops listening */
+/* listen(): resolves to a function that stops listening */
 function listen(name, fn) {
   if (!EVENTS.has(name) || typeof fn !== 'function') return Promise.reject('not an event of this app');
   const handler = (_e, got, payload) => {
@@ -108,11 +92,11 @@ const currentWindow = {
   },
 };
 
-contextBridge.exposeInMainWorld('__TAURI__', {
+contextBridge.exposeInMainWorld('ADDDOTS_HOST', {
   core: { invoke },
   event: { listen },
   window: { getCurrentWindow: () => currentWindow },
   webviewWindow: { getCurrentWebviewWindow: () => ({ listen }) },
   /* what this desktop app can and cannot do, for the few places that differ */
-  adddots: { shell: 'electron', nativePrint: false },
+  adddots: { shell: 'electron' },
 });

@@ -10,6 +10,7 @@
     "electron:dev": "node scripts/dev.mjs",
     "electron:start": "npx turbo run build --filter=@adddots/web... && electron .",
     "electron:build": "npx turbo run build --filter=@adddots/web... && electron-builder --win nsis",
+    "electron:build:store": "npx turbo run build --filter=@adddots/web... && electron-builder --win appx",
     "electron:build:mac": "npx turbo run build --filter=@adddots/web... && electron-builder --mac",
     "electron:build:linux": "npx turbo run build --filter=@adddots/web... && electron-builder --linux",
     "e2e": "node e2e.mjs",

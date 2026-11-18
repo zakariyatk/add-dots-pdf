@@ -28,7 +28,7 @@ does nothing outside the app.
   API, and the links handed out open there, in any browser. The server must
   allow the apps' origins (`cors_origins` in `legacy/api/config.php`:
   `https://localhost` for Android, `capacitor://localhost` for iOS,
-  `http://tauri.localhost` for Windows).
+  `app://adddots` for the Windows app).
 
 ## Commands
 

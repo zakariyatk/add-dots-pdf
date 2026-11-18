@@ -1318,7 +1318,7 @@
   /* the last icon keeps a little room from the edge (and the window's controls) */
   .appbar #abApps{margin-right:6px}
   .appbar .abwin{display:flex;align-self:stretch;margin-left:2px}
-  /* Electron (apps/electron): the strip drags the window, as Tauri's data-tauri-drag-region does */
+  /* the desktop app (apps/electron): the strip drags the window */
   body.shell-electron .appbar{-webkit-app-region:drag}
   body.shell-electron .appbar *{-webkit-app-region:no-drag}
   body.shell-electron .appbar .abgrow,body.shell-electron .appbar .ablogo,body.shell-electron .appbar .ablogo *{-webkit-app-region:drag}
