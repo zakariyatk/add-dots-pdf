@@ -4,8 +4,8 @@
      node scripts/icons.mjs
 
    Writes the website's icons and tab icon, the Windows app's (.ico, .png,
-   .icns, the Store's tiles and the .pdf file icon), and the Android and iOS
-   apps' icons and splash screens. The logo is drawn here (LOGO below); change it here and
+   .icns, the Store's tiles and the .pdf file icon), and the Android
+   app's icons and splash screens. The logo is drawn here (LOGO below); change it here and
    run this again. Chromium draws each size (playwright-core, as the e2e
    tests use it); the PNGs are written here, without an alpha channel where
    the old ones had none (Apple turns down an app icon with one). */
@@ -98,7 +98,6 @@ const SPLASH = '#F4F5F7'; /* the splash screens' grey, as before */
 const W = 'apps/web/public/assets/icons/',
   D = 'apps/electron/build/',
   A = 'apps/mobile/android/app/src/main/res/';
-const I = 'apps/mobile/ios/App/App/Assets.xcassets/';
 const jobs = [
   [W + 'icon-192.png', 192, 192, rounded, true],
   [W + 'icon-512.png', 512, 512, rounded, true],
@@ -129,14 +128,6 @@ const jobs = [
   ]),
   [D + 'appx/Square150x150Logo.png', 150, 150, tile(150, 150), true],
   [D + 'appx/Wide310x150Logo.png', 310, 150, tile(310, 150), true],
-  [I + 'AppIcon.appiconset/AppIcon-512@2x.png', 1024, 1024, square(1), false],
-  ...['splash-2732x2732.png', 'splash-2732x2732-1.png', 'splash-2732x2732-2.png'].map((f) => [
-    I + 'Splash.imageset/' + f,
-    2732,
-    2732,
-    centred(2732, 2732, 600, SPLASH),
-    false,
-  ]),
 ];
 for (const [dpi, n] of [
   ['mdpi', 48],
