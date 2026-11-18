@@ -171,7 +171,9 @@ body.acro .qrail.dragging, body.acro .qrail.dragging .qgrip { cursor: grabbing }
 body.acro .qrail .btn {
   width: 40px; height: 40px; min-width: 40px; padding: 0; justify-content: center; border-radius: 8px
 }
-body.acro .qrail .btn svg { width: 22px; height: 22px }
+/* 24px with a one-device-pixel line, snapped to the pixel grid as the
+   ribbon's are (toolbar.js snapIcons): at 22px their lines fell between pixels */
+body.acro .qrail .btn svg { width: 24px; height: 24px; stroke-width: var(--ico-stroke, 1); flex: none }
 /* the page's colour on the accent: white on blue, dark on white in the dark interface */
 body.acro .qrail .btn.on { background: var(--btn, var(--marker)); color: var(--chrome) }
 body.acro .qrail .btn.on svg { stroke: currentColor }
@@ -198,7 +200,7 @@ body.acro .srail {
 body.acro .srail > .btn {
   width: 40px; height: 40px; min-width: 40px; padding: 0; justify-content: center; border-radius: 8px
 }
-body.acro .srail > .btn svg { width: 22px; height: 22px }
+body.acro .srail > .btn svg { width: 24px; height: 24px; stroke-width: var(--ico-stroke, 1); flex: none }
 body.acro .srail > .btn.on { background: var(--chrome-2); color: var(--marker-ink) }
 body.acro .srail .sgrow { flex: 1 0 12px }
 body.acro[data-skin="wps"] .srail .statusbar {

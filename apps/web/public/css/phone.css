@@ -46,9 +46,9 @@ body[data-phone][data-ui="dark"]{
   .ph-title.sm{font-size:19px}
   .ph-sub{margin:4px 0 0;font-size:14px;color:var(--text-dim)}
   .ph-merge > .ph-sub{margin:0 20px 12px}
-  .ph-round{width:44px;height:44px;flex:none;border:0;border-radius:22px;background:var(--chrome-2);
+  .ph-round{width:44px;height:44px;flex:none;border:0;border-radius:12px;background:var(--chrome-2);
     display:grid;place-items:center}
-  .ph-icon{width:44px;height:44px;flex:none;border:0;border-radius:22px;background:transparent;
+  .ph-icon{width:44px;height:44px;flex:none;border:0;border-radius:12px;background:transparent;
     display:grid;place-items:center}
   .ph-icon:disabled{opacity:.3;cursor:default}
   .ph-link{border:0;background:none;font-size:14px;font-weight:700;color:var(--ph-ink)!important;padding:8px 0}
@@ -103,7 +103,7 @@ body[data-phone][data-ui="dark"]{
   .ph-file{display:flex;align-items:center}
   .ph-filego{flex:1;min-width:0;display:flex;align-items:center;gap:14px;border:0;background:none;
     padding:10px 4px 10px 20px;text-align:left}
-  .ph-x{width:44px;height:44px;margin-right:8px;flex:none;border:0;border-radius:22px;background:none;
+  .ph-x{width:44px;height:44px;margin-right:8px;flex:none;border:0;border-radius:12px;background:none;
     color:var(--text-dim)!important;display:grid;place-items:center}
   /* the Add Dots PDF file icon (assets/icons/pdf-file.svg) */
   .ph-doc{width:52px;height:52px;flex:none;margin:0 -5px;background:url(../assets/icons/pdf-file.svg) center/contain no-repeat}
@@ -159,7 +159,7 @@ body[data-phone][data-ui="dark"]{
     background:var(--chrome-2);border-top:1px solid var(--line)}
   .ph-tab{border:0;background:none;display:flex;flex-direction:column;align-items:center;gap:4px;
     font-size:12px;color:var(--text-dim)!important}
-  .ph-tab .pill{width:56px;height:30px;border-radius:15px;display:grid;place-items:center}
+  .ph-tab .pill{width:56px;height:30px;border-radius:8px;display:grid;place-items:center}
   .ph-tab.on{color:var(--ph-ink)!important;font-weight:700}
   .ph-tab.on .pill{background:var(--ph-pill)}
 
@@ -202,8 +202,8 @@ body[data-phone][data-ui="dark"]{
   body[data-phone] .ph-find{display:inline-flex}
   body[data-phone] #btnRail,body[data-phone] .bar .pager,body[data-phone] #btnPrev,body[data-phone] #btnNext,
   body[data-phone] .bar .grow{display:none}
-  body[data-phone] #btnHome{border-radius:22px}
-  body[data-phone] #btnSave{height:40px;border-radius:20px;padding:0 18px;font-weight:700}
+  body[data-phone] #btnHome{border-radius:12px}
+  body[data-phone] #btnSave{height:40px;border-radius:10px;padding:0 18px;font-weight:700}
 
   body[data-phone] .ph-page{display:grid;place-items:center;position:fixed;right:0;top:calc(88px + env(safe-area-inset-top));
     z-index:9;height:34px;padding:0 12px;border-radius:17px 0 0 17px;background:var(--text);color:var(--chrome);
@@ -214,7 +214,7 @@ body[data-phone][data-ui="dark"]{
   body[data-phone] .dock{flex:none;background:var(--chrome-2);box-shadow:none;padding:6px 4px;
     padding-bottom:calc(6px + env(safe-area-inset-bottom))}
   body[data-phone] .dock .btn{height:50px;gap:3px;border:0;background:none;color:var(--text)}
-  body[data-phone] .dock .btn svg{width:20px;height:20px;padding:3px 13px;box-sizing:content-box;border-radius:13px}
+  body[data-phone] .dock .btn svg{width:20px;height:20px;padding:3px 13px;box-sizing:content-box;border-radius:8px}
   body[data-phone] .dock .btn::after{font-family:var(--sans);font-size:11px;letter-spacing:0}
   body[data-phone] .dock .btn.on{background:none;color:var(--ph-ink)}
   body[data-phone] .dock .btn.on svg{background:var(--ph-pill)}
@@ -228,7 +228,7 @@ body[data-phone][data-ui="dark"]{
      16px so iOS does not zoom in on a select */
   body[data-phone] .modebar .anno-lbl{display:none}
   body[data-phone] .modebar :is(.swmore,.wdrop,.txctl select){height:44px;margin:0;border:1px solid var(--line);
-    border-radius:22px;background-color:var(--chrome-2);color:var(--text);font:600 16px/1 var(--sans)}
+    border-radius:12px;background-color:var(--chrome-2);color:var(--text);font:600 16px/1 var(--sans)}
   body[data-phone] .modebar :is(.swmore,.wdrop){gap:8px;padding:0 12px 0 9px}
   body[data-phone] .modebar .swmore i{width:26px;height:26px;border-radius:50%;border:2px solid var(--chrome);
     box-shadow:0 0 0 1px var(--line)}
@@ -249,7 +249,7 @@ body[data-phone][data-ui="dark"]{
   body[data-phone] .pop .btn{height:52px;border-radius:16px;font-size:15px}
   body[data-phone] .pop .btn.primary{font-weight:700}
   body[data-phone] .pop button.item{border-radius:16px;padding:14px;font-size:15px}
-  body[data-phone] .pop .chip{height:36px;border-radius:18px;padding:0 14px}
+  body[data-phone] .pop .chip{height:36px;border-radius:10px;padding:0 14px}
   body[data-phone] .toast{border-radius:14px}
 
   /* dialogs (signature, document tools) rise from the bottom like the other sheets */
@@ -262,7 +262,7 @@ body[data-phone][data-ui="dark"]{
   body[data-phone] .orgview > header{padding:calc(10px + env(safe-area-inset-top)) 12px 10px 16px;background:var(--chrome)}
   body[data-phone] .orgview > header b{font-size:17px}
   body[data-phone] .orgview > header .sep{display:none}
-  body[data-phone] #orgDone{height:40px;border-radius:20px;padding:0 18px;font-weight:700}
+  body[data-phone] #orgDone{height:40px;border-radius:10px;padding:0 18px;font-weight:700}
   body[data-phone] .orggrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;padding:12px 16px 24px;background:var(--chrome-2)}
   body[data-phone] .orgcell.picked .orgshell{border-color:var(--btn);box-shadow:0 0 0 3px var(--btn)}
   body[data-phone] .ph-orgbar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));flex:none;

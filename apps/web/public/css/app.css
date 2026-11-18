@@ -59,18 +59,12 @@
   .btn:hover:not(:disabled){background:var(--chrome-2);border-color:var(--line)}
   .btn:disabled{opacity:.3;cursor:default}
   .btn.on{background:var(--chrome-2);border-color:var(--line);color:var(--marker-ink)}
-  /* Segoe UI's bold weight reserves more space above a capital letter than
-     below it (its own ascent/descent split, not this button's box), so
-     centering the label by the book still reads as sitting a touch high;
-     a couple of points more padding above than below nudges it to match
-     what the eye sees as centre, without moving the pill's own box */
-  .btn.primary{background:var(--btn,var(--marker));color:#050505;font-weight:650;padding-top:2px}
+  /* the label sits in the true centre, level with the plain button beside it */
+  .btn.primary{background:var(--btn,var(--marker));color:#050505;font-weight:650}
   .btn.primary:hover:not(:disabled){background:#DDDDDD;border-color:transparent}
   .btn svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
-  /* same optical correction as .btn.primary's, applied to the label instead
-     of the button's own padding since a .lbl sits beside an icon that does
-     not need it */
-  .btn .lbl{display:inline-block;transform:translateY(1px)}
+  /* centred on the icon beside it, no nudge */
+  .btn .lbl{display:inline-block}
   .sep{width:1px;height:20px;background:var(--line);margin:0 3px;flex:none}
   .meta{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--text-dim);
         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28vw;
@@ -88,7 +82,8 @@
   .tabs{display:flex;align-items:center;gap:1px;flex:none}
   .tabs .tab{height:30px;padding:0 15px;background:none;border:none;border-radius:0;cursor:pointer;
              position:relative;white-space:nowrap;font-size:13.5px;color:var(--text-dim);
-             /* the same optical correction as .btn.primary below, for the same reason */
+             /* Segoe UI's capitals sit a touch high in their line box; a
+                little more padding above lines the tab names up by eye */
              padding-top:2px}
   .tabs .tab:hover{color:var(--text)}
   .tabs .tab.on{color:var(--marker-ink);font-weight:650}
@@ -148,7 +143,7 @@
   .pop.wide{min-width:288px}
   .pop .pdiv{height:1px;background:var(--line);margin:9px 2px}
   .pop .chips{display:flex;flex-wrap:wrap;gap:5px;margin:8px 0 2px}
-  .pop .chip{height:26px;padding:0 10px;border-radius:13px;background:var(--chrome-2);
+  .pop .chip{height:26px;padding:0 10px;border-radius:7px;background:var(--chrome-2);
              border:1px solid var(--line);color:var(--text-dim);font-size:11.5px;cursor:pointer}
   .pop .chip:hover:not([disabled]){border-color:var(--marker);color:var(--marker-ink)}
   .pop .chip[disabled]{opacity:.38;cursor:default}
@@ -219,7 +214,9 @@
   .pickbar .btn.del:hover{color:var(--danger);border-color:var(--danger)}
   .pickbar .grow{flex:1}
   /* Insert Blank Page, laid out as WPS does: a dialog in the middle (enhance.js) */
-  .pop.blankdlg{left:50%!important;top:50%!important;transform:translate(-50%,-50%);
+  /* centred by layout, not by translate(-50%): half a dialog's height is often
+     half a pixel, and a box moved by half a pixel draws its text and icons soft */
+  .pop.blankdlg{inset:0!important;margin:auto;height:fit-content;
                 width:min(520px,calc(100vw - 24px));max-width:none;max-height:calc(100vh - 24px);overflow:auto;
                 padding:0 0 14px;box-shadow:0 18px 60px rgba(0,0,0,.35)}
   .blankdlg .bdhead{display:flex;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);font-size:14px}
@@ -672,7 +669,7 @@
   #lb{position:fixed;inset:0;z-index:40;background:#000;display:flex;flex-direction:column;font-family:var(--sans)}
   #lb[hidden]{display:none}
   #lbtop{display:flex;align-items:center;gap:10px;flex:none;padding:calc(6px + env(safe-area-inset-top)) 16px 6px 6px}
-  #lbclose{flex:none;width:44px;height:44px;display:grid;place-items:center;padding:0;border:0;border-radius:22px;
+  #lbclose{flex:none;width:44px;height:44px;display:grid;place-items:center;padding:0;border:0;border-radius:10px;
            background:none;color:#fff;cursor:pointer}
   #lbclose:hover,#lbclose:active{background:rgba(255,255,255,.14)}
   #lbclose svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
@@ -703,7 +700,7 @@
   @media (max-width:760px), (pointer:coarse){
     #lb .nav{display:none}
     #lbmain{padding:0}
-    #lbclose{width:48px;height:48px;border-radius:24px}
+    #lbclose{width:48px;height:48px;border-radius:10px}
   }
 
   #vidPlay{position:fixed;inset:0;z-index:40;background:rgba(5,5,5,.96);display:flex;align-items:center;justify-content:center}
@@ -720,7 +717,7 @@
   #camtitle{font-weight:650;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   #cammeta{font-family:var(--mono);font-size:11px;color:var(--text-dim);
            white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #camdone{flex:none;height:38px;padding:0 20px;border-radius:19px;font-size:14px}
+  #camdone{flex:none;height:38px;padding:0 20px;border-radius:8px;font-size:14px}
   #cammain{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:0 8px}
   #camvid{max-width:100%;max-height:100%;border-radius:3px;background:#000;object-fit:contain}
   #camvid.mir{transform:scaleX(-1)}
@@ -731,11 +728,11 @@
   @keyframes camflash{from{opacity:.85}to{opacity:0}}
   /* stamp choices, and the preview of the stamp laid over the live picture */
   #camstamp{display:flex;align-items:center;gap:8px;flex:none;padding:8px 14px 0;flex-wrap:wrap;justify-content:center}
-  #camstamp .chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:17px;
+  #camstamp .chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:8px;
                   border:1px solid var(--line);background:transparent;color:var(--text-dim);font:inherit;font-size:12.5px;cursor:pointer}
   #camstamp .chip svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
   #camstamp .chip.on{background:rgba(255,211,77,.16);border-color:#FFD34D;color:#FFD34D}
-  #camStText{flex:1 1 180px;max-width:360px;height:34px;padding:0 12px;border-radius:17px;border:1px solid var(--line);
+  #camStText{flex:1 1 180px;max-width:360px;height:34px;padding:0 12px;border-radius:8px;border:1px solid var(--line);
              background:var(--chrome-2);color:var(--text);font:inherit;font-size:13px}
   #camStText:focus{outline:none;border-color:#FFD34D}
   #camstampview{position:absolute;z-index:2;pointer-events:none;text-align:right;line-height:1.3;font-weight:600;
@@ -745,7 +742,7 @@
   #camstampview div{overflow:hidden;text-overflow:ellipsis}
   #camstampview .d{color:#FFD34D}
   @media (max-width:760px), (pointer:coarse){
-    #camstamp .chip,#camStText{height:42px;border-radius:21px;font-size:14px}
+    #camstamp .chip,#camStText{height:42px;border-radius:10px;font-size:14px}
     #camStText{font-size:16px}          /* 16px keeps iOS from zooming the page on focus */
   }
   #camstrip{display:flex;gap:6px;padding:10px 16px 2px;overflow-x:auto;justify-content:center;flex:none}
@@ -779,7 +776,7 @@
   #pmimg{display:block;width:100%;height:100%;border-radius:2px;user-select:none;-webkit-user-drag:none}
   #pmtools .sep{flex:none;width:1px;align-self:stretch;margin:4px 3px;background:var(--line)}
   #pmbar .btn:disabled{opacity:.38;cursor:default}
-  #pmcrop{position:absolute;z-index:3;left:50%;top:14px;transform:translateX(-50%);display:flex;align-items:center;
+  #pmcrop{position:absolute;z-index:3;left:0;right:0;margin:0 auto;width:max-content;max-width:calc(100% - 24px);top:14px;display:flex;align-items:center;
           gap:8px;padding:6px 8px 6px 14px;border-radius:10px;background:rgba(20,20,20,.94);color:#fff;
           font-size:12.5px;box-shadow:0 6px 24px rgba(0,0,0,.5);white-space:nowrap}
   #pmcrop[hidden]{display:none}
@@ -801,7 +798,7 @@
   #pmzoom .btn{height:26px;min-width:26px;padding:0 7px;border-color:var(--line);font-size:12px}
   #pmzoom .lvl{font-family:var(--mono);font-size:11px;color:var(--text-dim);min-width:40px;text-align:center}
   /* shown when a tool is picked, then it fades so it never sits over the photo */
-  #pmhint{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);font-size:11.5px;
+  #pmhint{position:absolute;left:0;right:0;margin:0 auto;bottom:14px;font-size:11.5px;
           color:var(--text-dim);background:rgba(5,5,5,.85);padding:5px 12px;border-radius:14px;pointer-events:none;
           max-width:calc(100% - 24px);width:max-content;text-align:center;transition:opacity .4s}
   #pmhint.gone{opacity:0}
@@ -896,7 +893,7 @@
     #cambar .side{height:70px;min-width:76px;font-size:10.5px}
     #cambar .side svg{width:25px;height:25px}
     #camshot{width:76px;height:76px}
-    #camdone{height:44px;padding:0 22px;border-radius:22px}
+    #camdone{height:44px;padding:0 22px;border-radius:10px}
     #camstrip img{height:56px}
   }
   /* the camera on its side: shutter, switch and measure in a column on the
@@ -1093,7 +1090,7 @@
     .rrow .x{opacity:1}
   }
 
-  .toast{position:absolute;left:50%;bottom:22px;transform:translateX(-50%);background:var(--chrome);
+  .toast{position:absolute;left:0;right:0;margin:0 auto;width:max-content;max-width:calc(100% - 24px);bottom:22px;background:var(--chrome);
          border:1px solid var(--line);border-radius:8px;padding:9px 15px;font-family:var(--mono);font-size:11.5px;
          color:var(--text);opacity:0;transition:opacity .18s;pointer-events:none;z-index:25;white-space:nowrap}
   .toast.show{opacity:1}

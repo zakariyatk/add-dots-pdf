@@ -222,7 +222,8 @@
     }
     function putRail(x, y) {
       const p = keepIn(x, y);
-      rail.style.left = p[0] + 'px'; rail.style.top = p[1] + 'px';
+      /* whole pixels, so its icons stay on the pixel grid */
+      rail.style.left = Math.round(p[0]) + 'px'; rail.style.top = Math.round(p[1]) + 'px';
       return p;
     }
     function placeRail() {
@@ -254,6 +255,7 @@
         try { localStorage.setItem(QPOS, JSON.stringify([parseFloat(rail.style.left), parseFloat(rail.style.top)])); }
         catch (err) { /* not kept */ }
         placeRail();
+        if (X.toolbar) X.toolbar.snapIcons();
       }
       grip.addEventListener('pointermove', move);
       grip.addEventListener('pointerup', up);
@@ -264,6 +266,7 @@
       try { localStorage.removeItem(QPOS); } catch (e) { /* nothing kept */ }
       rail.style.top = '';
       placeRail();
+      if (X.toolbar) X.toolbar.snapIcons();
     }
     grip.addEventListener('dblclick', railHome);
     qhome.addEventListener('click', railHome);

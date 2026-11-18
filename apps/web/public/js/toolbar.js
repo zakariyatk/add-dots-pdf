@@ -262,7 +262,9 @@
       /* an odd number of device pixels is crisp centred on a pixel's middle,
          an even number on a pixel's edge */
       const want = devW % 2 ? 0.5 : 0;
-      const svgs = document.querySelectorAll('#ribbon .rpan:not([hidden]) .btn > svg');
+      const svgs = document.querySelectorAll(
+        '#ribbon .rpan:not([hidden]) .btn > svg, .qrail .btn > svg, .srail > .btn > svg'
+      );
       Array.prototype.forEach.call(svgs, function (svg) { svg.style.transform = ''; });
       Array.prototype.forEach.call(svgs, function (svg) {
         const r = svg.getBoundingClientRect();

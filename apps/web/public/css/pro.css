@@ -1037,7 +1037,7 @@ body.bk-on { overflow: hidden }
 }
 
 .ttsbar {
-  position: fixed; left: 50%; bottom: 22px; transform: translateX(-50%); z-index: 97;
+  position: fixed; left: 0; right: 0; margin: 0 auto; width: max-content; bottom: 22px; z-index: 97;
   display: flex; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 999px;
   background: var(--chrome-2); color: var(--text); border: 1px solid var(--line);
   box-shadow: 0 10px 30px rgba(0,0,0,.35); max-width: calc(100vw - 24px);
