@@ -9576,6 +9576,7 @@
     $('openPanel').hidden = false;
     $('hMain').scrollTop = 0;
     navOn('hTop');
+    $('hFind').value = ''; filterTools();
     renderRecent();
   }
   /* The home screen covers the app: what is under it is out of reach of the
@@ -9639,6 +9640,47 @@
     }
     if (t === 'merge') toast('Select two or more PDFs — they are joined into one, in order');
     pickNew(t);
+  });
+
+  /* the search box over the tool list: filters it as you type, Enter runs
+     the first tool left, Ctrl+K (Cmd+K) jumps to it from anywhere on Home */
+  const TOOL_WORDS = {
+    text: 'type write words font', mark: 'comment annotate draw arrow box line highlight note',
+    pin: 'pins photo camera site report viewer', merge: 'combine join add append',
+    organize: 'reorder rotate delete remove insert move pages', extract: 'split separate pages save',
+    jpg: 'image png picture photo export convert', crop: 'trim margin cut', translate: 'language'
+  };
+  function filterTools() {
+    const q = $('hFind').value.trim().toLowerCase();
+    let shown = 0;
+    Array.prototype.forEach.call($('toolGrid').querySelectorAll('.tcard'), function (c) {
+      const hay = (c.textContent + ' ' + c.dataset.tool + ' ' + (TOOL_WORDS[c.dataset.tool] || '')).toLowerCase();
+      const ok = !q || q.split(/\s+/).every(function (w) { return hay.indexOf(w) >= 0; });
+      c.hidden = !ok;
+      c.classList.remove('sel');
+      if (ok && !shown && q) c.classList.add('sel');
+      if (ok) shown++;
+    });
+    $('toolNone').hidden = shown > 0;
+  }
+  $('hFind').addEventListener('input', filterTools);
+  $('hFind').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') {
+      const c = $('toolGrid').querySelector('.tcard:not([hidden])');
+      if (c) { e.preventDefault(); c.click(); }
+    } else if (e.key === 'Escape' && this.value) {
+      e.preventDefault(); e.stopPropagation();
+      this.value = ''; filterTools();
+    } else if (e.key === 'ArrowDown') {
+      const c = $('toolGrid').querySelector('.tcard:not([hidden])');
+      if (c) { e.preventDefault(); c.focus(); }
+    }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (!homeShown() || !(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.key.toLowerCase() !== 'k') return;
+    e.preventDefault();
+    $('hFind').focus();
+    $('hFind').select();
   });
 
   $('hResume').addEventListener('click', hideHome);
@@ -9711,7 +9753,7 @@
     return d.toLocaleDateString([], { day: 'numeric', month: 'short', year: 'numeric' });
   }
 
-  function refreshHello() { $('hHello').textContent = recentRecs.length ? 'Welcome back' : 'Welcome to Add Dots PDF'; }
+  function refreshHello() { $('hHello').textContent = 'What do you need to do?'; }
 
   let recentToken = 0, recentRecs = [];
   async function renderRecent() {

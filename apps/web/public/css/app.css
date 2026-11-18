@@ -74,6 +74,9 @@
         white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:28vw;
         /* basis 0 keeps the file name from forcing the toolbar onto a second row */
         flex:3 1 0;min-width:0;text-align:right}
+  /* the window title bar already names the document, so this copy is hidden
+     everywhere: in the ribbon and in the phone more-sheet */
+  .meta,.sheet .meta{display:none}
   .meta b{color:var(--text);font-weight:600}
   .meta .dirty{color:var(--marker-ink)}
   .pager{display:flex;align-items:center;gap:4px;font-family:var(--mono);font-size:12px}
@@ -1094,6 +1097,70 @@
     .rrow .x{opacity:1}
   }
 
+  /* ---------- home: the command-bar layout ----------
+     A slim top bar (logo, sections, theme), one centred column: the heading,
+     a search box over the tool list, then a strip to open a file. */
+  .home .hbody{flex-direction:column}
+  .home .hnav{width:auto;flex-direction:row;align-items:center;gap:6px;border-right:none;
+              border-bottom:1px solid var(--line);padding:10px max(24px,calc((100% - 1120px) / 2))}
+  .home .hnav .brand{padding:0 14px 0 0;gap:10px}
+  .home .hlogo{width:30px;height:30px;border-radius:7px;flex:none}
+  .home .hnav nav{flex-direction:row;gap:2px}
+  .home .hnav nav button{height:40px;gap:8px;padding:0 12px}
+  .home .hnav nav button.on{box-shadow:none}
+  .home .hnav nav svg{width:16px;height:16px}
+  .home .hnav .getwin{margin:0;padding:6px 10px}
+  .home .hnav .getwin span{font-size:0}
+  .home .hnav .getwin b{margin:0}
+  .home .hmain{padding:56px 24px 64px}
+  .home .hwrap{max-width:760px}
+  .home .htop{margin-bottom:26px}
+  .home .htop h1{font-size:34px;font-weight:700;letter-spacing:-.02em;line-height:1.15}
+  .home .htop p{font-size:15px;margin-top:8px}
+  .hcmd{background:var(--chrome);border:1px solid var(--line);border-radius:16px;overflow:hidden;
+        margin-bottom:22px;box-shadow:0 1px 2px rgba(0,0,0,.08),0 12px 32px rgba(0,0,0,.16)}
+  .hfind{display:flex;align-items:center;gap:12px;height:60px;padding:0 18px;border-bottom:1px solid var(--line);cursor:text}
+  .hfind:focus-within{box-shadow:inset 0 -2px 0 var(--marker)}
+  .hfind svg{width:20px;height:20px;flex:none;fill:none;stroke:var(--text-dim);stroke-width:1.8;stroke-linecap:round}
+  .hfind input{flex:1;min-width:0;height:100%;border:0;outline:0;background:transparent;color:var(--text);
+               font:400 17px var(--sans);padding:0}
+  .hfind input::placeholder{color:var(--text-dim)}
+  .hfind input::-webkit-search-cancel-button{display:none}
+  .hfind kbd{flex:none;font:500 11.5px var(--mono);color:var(--text-dim);padding:3px 7px;border:1px solid var(--line);border-radius:6px}
+  .hcmd .tgrid{display:flex;flex-direction:column;gap:0;padding:6px}
+  .hcmd .tcard{flex-direction:row;align-items:center;gap:14px;min-height:48px;padding:7px 12px;border:0;
+               border-radius:10px;background:none;transform:none}
+  .hcmd .tcard[hidden]{display:none}
+  .hcmd .tcard:hover,.hcmd .tcard:focus-visible,.hcmd .tcard.sel{background:var(--chrome-2);transform:none;box-shadow:none}
+  .hcmd .tcard:focus-visible{outline:2px solid var(--marker);outline-offset:-2px}
+  .hcmd .tcard .ic{width:32px;height:32px;border-radius:8px}
+  .hcmd .tcard .ic svg{width:18px;height:18px}
+  .hcmd .tcard > span:last-child{flex:1;min-width:0;display:flex;align-items:baseline;gap:12px}
+  .hcmd .tcard b{flex:none;margin:0;font-size:14px;font-weight:600}
+  .hcmd .tcard small{display:block;flex:1;min-width:0;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .hcmd .tcard::after{content:"";flex:none;width:7px;height:7px;margin-right:4px;border:solid var(--text-dim);
+                      border-width:2px 2px 0 0;transform:rotate(45deg)}
+  .tnone{margin:0;padding:22px 16px;text-align:center;font-size:13px;color:var(--text-dim)}
+  .home .hdrop{gap:18px;padding:18px 20px;border-radius:16px;align-items:center}
+  .home .hdrop .art{width:52px;height:52px;border-radius:12px}
+  .home .hdrop h2{font-size:15px;font-weight:600;margin:0 0 3px}
+  .home .hdrop p{margin:0 0 12px;font-size:13px}
+  .home .hdrop .pick{height:44px}
+  body[data-ui="light"] .hcmd{box-shadow:0 1px 2px rgba(20,20,30,.04),0 12px 32px rgba(20,20,30,.07)}
+  body[data-ui="light"] .hcmd .tcard:hover,body[data-ui="light"] .hcmd .tcard:focus-visible,
+  body[data-ui="light"] .hcmd .tcard.sel{background:#F3F2FA;border-color:transparent;box-shadow:none}
+  @media (max-width:900px){
+    .home .hnav{display:flex;padding:8px 16px}
+    .home .hnav nav,.home .hnav .getwin{display:none}
+    .home .hmain{padding:32px 18px 40px}
+  }
+  @media (max-width:760px){
+    .home .htop h1{font-size:26px}
+    .hcmd .tcard small{display:none}
+    .home .hdrop{flex-direction:row;text-align:left;flex-wrap:wrap}
+    .home .hdrop .acts{justify-content:flex-start}
+  }
+
   .toast{position:absolute;left:0;right:0;margin:0 auto;width:max-content;max-width:calc(100% - 24px);bottom:22px;background:var(--chrome);
          border:1px solid var(--line);border-radius:8px;padding:9px 15px;font-family:var(--mono);font-size:11.5px;
          color:var(--text);opacity:0;transition:opacity .18s;pointer-events:none;z-index:25;white-space:nowrap}
@@ -1122,8 +1189,6 @@
   .sheet .grab{width:38px;height:4px;border-radius:3px;background:var(--line);margin:6px auto 12px}
   .sheet h2{margin:0 0 12px;font-family:var(--mono);font-size:10.5px;letter-spacing:.16em;
             text-transform:uppercase;color:var(--text-dim);font-weight:600}
-  .sheet .meta{max-width:none;white-space:normal;font-size:11.5px;line-height:1.6;
-               display:block;margin-bottom:14px;text-align:left}
   .sheet .grp{flex-wrap:wrap;gap:8px;width:100%;margin-bottom:10px}
   .sheet .grp .btn{height:46px;flex:1 1 calc(50% - 4px);min-width:calc(50% - 4px);
                    justify-content:flex-start;padding:0 14px;font-size:14px;
@@ -1333,10 +1398,10 @@
   .appbar .abwx:hover{background:#C42B1C;color:#fff}
   .appbar .abwx:active{background:#C94F4F;color:#fff}
   .appbar .abwx svg{shape-rendering:auto}
-  /* always on top (js/appbar.js): a pin beside Minimise, filled while it is on */
-  .appbar .abpin svg{width:15px;height:15px;stroke-width:1.7;shape-rendering:auto;transform:rotate(45deg);transition:transform .15s}
+  /* always on top (js/appbar.js): an upright pin beside Minimise, filled while it is on */
+  .appbar .abpin svg{width:15px;height:15px;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;shape-rendering:auto}
   .appbar .abpin.on{color:var(--btn,var(--marker))}
-  .appbar .abpin.on svg{fill:currentColor;transform:none}
+  .appbar .abpin.on svg{fill:currentColor}
   body.win-blur .appbar{color:var(--text-dim)}
   /* the drop-downs */
   .abpop{position:fixed;z-index:310;min-width:220px;max-width:calc(100vw - 16px);padding:6px;border-radius:8px;
