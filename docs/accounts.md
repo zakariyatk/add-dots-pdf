@@ -212,6 +212,6 @@ PDF. The other checks run with sign-in not required.
   secure storage (Keychain, Keystore) if needed.
 - Google and Apple inside the Windows and phone apps: an app link
   (`com.adddots.pdf://auth`, or a universal link on `pdf.adddots.com`) that
-  the provider's page returns to, with the Capacitor App plugin and Tauri's
-  deep-link plugin handing the session to the app.
+  the provider's page returns to, with the Capacitor App plugin and Electron's
+  protocol handler handing the session to the app.
 - Microsoft sign-in, the same way, if wanted.

@@ -2356,87 +2356,6 @@ try {
         /atrium/.test(saved2) && /Inspection/.test(saved2),
         saved2.slice(0, 120),
       );
-
-      /* the Windows app: Windows' own reader (ocr_page), stood in for here.
-         It has English, takes pictures up to 1000 px, and finds one word at
-         a tenth of the way across and down; then it fails, and Tesseract
-         reads instead */
-      const runOcr = async () => {
-        await page.evaluate(() => window.ADDPDF.openOcr());
-        await page.evaluate(() => {
-          document.getElementById('ocrNote').textContent = '';
-          document.getElementById('ocrEdit').checked = false;
-        });
-        await page.click('#ocrGo');
-        await page
-          .waitForFunction(
-            () => /read on|could not/.test(document.getElementById('ocrNote').textContent),
-            null,
-            { timeout: 120000 },
-          )
-          .catch(() => {});
-        await page.click('#ocrCancel');
-        return page.evaluate(() => {
-          const X = window.ADDPDF;
-          const s = X.S.items[0].shapes.find((x) => x.t === 'ocr');
-          return { by: X.ocrBy, words: s ? s.words : [], asked: window.__ocrAsked };
-        });
-      };
-      await page.evaluate(() => {
-        window.__ocrAsked = [];
-        window.__TAURI__ = {
-          core: {
-            invoke: async (cmd, body, opts) => {
-              if (cmd === 'ocr_status') return { languages: ['ar-SA', 'en-GB', 'en-US'], max: 1000 };
-              if (cmd !== 'ocr_page') return null;
-              const hd = opts.headers;
-              const w = +hd['x-w'],
-                h = +hd['x-h'];
-              window.__ocrAsked.push({ w, h, lang: hd['x-lang'], bytes: body.length });
-              if (window.__ocrFail) throw new Error('no reader');
-              return [{ text: 'Native', x: w * 0.1, y: h * 0.1, w: w * 0.2, h: h * 0.02, line: 0 }];
-            },
-          },
-        };
-      });
-      const win = await runOcr();
-      const wd = win.words[0] || [];
-      const asked = win.asked[0] || {};
-      check(
-        "in the Windows app, Windows' own reader reads, in pictures it takes, and its words land on the page",
-        win.by === 'windows' &&
-          asked.lang === 'en-US' &&
-          Math.max(asked.w, asked.h) <= 1000 &&
-          asked.bytes === asked.w * asked.h * 4 &&
-          wd[5] === 'Native' &&
-          Math.abs(wd[0] - 59.5) < 1.5 &&
-          Math.abs(wd[1] - 842 * 0.88) < 1.5 &&
-          Math.abs(wd[2] - 178.5) < 1.5,
-        { by: win.by, asked, word: wd },
-      );
-      /* English and Arabic: both asked of Windows at once, in one picture */
-      await page.evaluate(() => {
-        window.__ocrAsked = [];
-        document.getElementById('ocrLang').value = 'eng+ara';
-      });
-      const both = await runOcr();
-      await page.evaluate(() => (document.getElementById('ocrLang').value = 'eng'));
-      check(
-        "English and Arabic: Windows' reader reads it, both languages asked at once",
-        both.by === 'windows' &&
-          both.asked.length === 1 &&
-          both.asked[0].lang === 'en-US,ar-SA' &&
-          (both.words[0] || [])[5] === 'Native',
-        { by: both.by, asked: both.asked, word: both.words[0] },
-      );
-      await page.evaluate(() => (window.__ocrFail = true));
-      const back = await runOcr();
-      check(
-        "when Windows' reader fails, Tesseract reads instead",
-        back.by === 'tesseract' && back.words.some((w) => /Inspection/.test(w[5])),
-        { by: back.by, words: back.words.map((w) => w[5]).join(' ') },
-      );
-      await page.evaluate(() => delete window.__TAURI__);
     }
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
@@ -2574,7 +2493,7 @@ try {
   /* ---- Print: the document made into a PDF, shown in a frame by the
      browser's PDF viewer, and that frame printed: a website has no Print
      dialog of its own, only the browser's (CI runs Chrome, which has one;
-     the Windows app's own dialog is checked in apps/desktop/e2e.mjs) ---- */
+     the desktop app does the same, checked in apps/electron/e2e.mjs) ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
     await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
@@ -3680,7 +3599,7 @@ try {
     });
     await uctx.addInitScript(() => {
       /* the Windows app, its desktop side answered here */
-      window.__TAURI__ = {
+      window.ADDDOTS_HOST = {
         core: {
           invoke: async (cmd) => {
             if (cmd === 'open_store') window.__store = true;
@@ -3813,7 +3732,7 @@ try {
   /* ---- the Windows app's tabs, with the desktop side stood in for ----
      A PDF handed over with one open gets a tab; a tab moved to a window of
      its own takes its marks along, still editable; a tab saves through the
-     window's connection, as bytes. (apps/desktop/e2e.mjs drives the real
+     window's connection, as bytes. (apps/electron/e2e.mjs drives the real
      app; this runs where it cannot.) */
   {
     const two = await (async () => {
@@ -3840,14 +3759,14 @@ try {
       window.ADDDOTS_TABS = true;
       if (window.top !== window) return;
       /* pending: what the desktop side has been handed and no page has
-         taken yet; launch_files takes it, each path once, as src-tauri does */
+         taken yet; launch_files takes it, each path once, as apps/electron does */
       const st = (window.__STUB = {
         calls: [],
         listeners: {},
         pending: /handoff=/.test(location.search) ? [] : ['C:/docs/a.pdf'],
       });
       const files = { 'C:/docs/a.pdf': A, 'C:/docs/b.pdf': B };
-      window.__TAURI__ = {
+      window.ADDDOTS_HOST = {
         core: {
           invoke: async (cmd, args, opts) => {
             st.calls.push({ cmd, bytes: args instanceof Uint8Array, len: args && args.length });
@@ -3889,7 +3808,7 @@ try {
       .waitForFunction(() => window.ADDPDF && window.ADDPDF.S.items.length === 3, null, { timeout: 20000 })
       .catch(() => {});
     await page.evaluate(() => {
-      /* a second start of the app hands b.pdf over, as src-tauri does: kept, then announced */
+      /* a second start of the app hands b.pdf over, as apps/electron does: kept, then announced */
       window.__STUB.pending.push('C:/docs/b.pdf');
       window.__STUB.listeners['open-files']({ payload: ['C:/docs/b.pdf'] });
     });
@@ -4365,7 +4284,7 @@ try {
       .catch(() => {});
     const seen = await page.evaluate(() => {
       const X = window.ADDPDF;
-      const out = { tauri: !!window.__TAURI__ };
+      const out = { desktop: !!window.ADDDOTS_HOST };
       out.badges = ['tEditObj', 'tEditText', 'tEditShape', 'btnToWord', 'btnToCad', 'btnOcr'].filter((id) => {
         const b = document.getElementById(id);
         return !b || /winonly|Windows app/.test(b.className + ' ' + b.title);
@@ -4385,7 +4304,7 @@ try {
     const tool = await page.evaluate(() => window.ADDPDF.S.tool);
     check(
       'website: Edit Object, Convert and OCR open here, with no Windows badge or Store card',
-      !seen.tauri &&
+      !seen.desktop &&
         seen.badges.length === 0 &&
         seen.convert &&
         seen.ocr &&

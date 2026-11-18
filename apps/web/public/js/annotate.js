@@ -15,7 +15,7 @@
 
   /* window.EyeDropper exists in the Windows app's WebView2 but its .open()
      never resolves there (see js/colordlg.js), so this app treats it as absent. */
-  const HAS_EYEDROPPER = !!window.EyeDropper && !window.__TAURI__;
+  const HAS_EYEDROPPER = !!window.EyeDropper && !window.ADDDOTS_HOST;
 
   X.on('ready', function () {
     const S = X.S, $ = X.$, SVGNS = X.SVGNS, PDFLib = X.PDFLib;

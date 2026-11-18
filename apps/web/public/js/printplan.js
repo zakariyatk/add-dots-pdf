@@ -1,10 +1,10 @@
 /* Add Dots PDF — where each page goes on the paper
    ------------------------------------------------
-   The Print dialog (js/print.js) asks this for its sheets: which pages are
-   printed, on how many sheets of paper, and where on each sheet each page
-   is drawn, how big and which way round. Nothing here draws: the preview
-   draws from the plan, the Windows app prints from it (src-tauri/src/print.rs)
-   and a browser prints a PDF laid out from it.
+   Plans the sheets of a print job: which pages are printed, on how many
+   sheets of paper, and where on each sheet each page is drawn, how big and
+   which way round. Nothing here draws. Kept for an app Print dialog (the
+   desktop app prints through the system's dialog for now; its own dialog,
+   which planned with this, went with the Tauri app).
 
    Everything is in PDF points (1/72 inch), from the sheet's top left corner,
    y running down. A page's size is as it is shown: its own turn (r) applied.

@@ -12,8 +12,8 @@
 
   const X = window.ADDPDF;
   if (!X) { console.error('[perf] core bridge missing'); return; }
-  let T = window.__TAURI__;
-  try { if (!T && window.parent !== window) T = window.parent.__TAURI__; } catch (e) { /* not the app's */ }
+  let T = window.ADDDOTS_HOST;
+  try { if (!T && window.parent !== window) T = window.parent.ADDDOTS_HOST; } catch (e) { /* not the app's */ }
 
   let box = null, timer = 0;
   const mb = function (b) { return b == null ? '–' : (b / 1048576).toFixed(0) + ' MB'; };
@@ -40,7 +40,6 @@
     const m = performance.memory;
     out.push(['Page JS memory', m ? mb(m.usedJSHeapSize) + ' of ' + mb(m.jsHeapSizeLimit) : 'not reported here']);
     if (T) out.push(['App (native) memory', native ? mb(native.now) + ' · peak ' + mb(native.peak) : '–']);
-    out.push(['Native drawing', p.native || 'off']);
     out.push(['Low-memory mode', p.lowMemory ? 'on' : 'off']);
     return out;
   }

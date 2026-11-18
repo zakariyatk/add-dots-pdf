@@ -8,10 +8,10 @@
    - On the website the service worker fetches a new version by itself
      (js/pwa.js). With no document open the page simply reloads into it; with
      one open, the bell lights up and the reload is one click away there.
-   - The Windows app from the Microsoft Store asks the Store itself whether
-     it has a newer version (src-tauri/src/store.rs), and installs it from
-     the app. The website is no guide there: a build reaches the Store only
-     once it is submitted and certified, days after the website has it.
+   - The Windows app from the Microsoft Store is updated by the Store
+     itself, so it shows no notice (apps/electron store_update says false).
+     The website is no guide there: a build reaches the Store only once it
+     is submitted and certified, days after the website has it.
    - The setup .exe and the phone apps carry every file and do not change on
      their own. They load latest.js from the website, which names the build
      the website has; when that is newer than this one, the bell lights up,
@@ -27,7 +27,7 @@
   if (!X) { console.error('[update] core bridge missing'); return; }
 
   const BUILD = window.ADDDOTS_BUILD || null;
-  const IN_DESKTOP = !!window.__TAURI__;
+  const IN_DESKTOP = !!window.ADDDOTS_HOST;
   /* a document tab is a frame of the window, which tells of updates itself */
   const IN_FRAME = window.parent !== window;
   const IN_PHONE = !!(window.Capacitor && window.Capacitor.isNativePlatform &&
@@ -116,19 +116,6 @@
   }
   function openSite() { window.open(site(), '_blank'); }
 
-  function installFromStore() {
-    if (!window.confirm('Add Dots PDF closes to install the update. ' +
-                        'Save your PDFs first. Install the update now?')) return;
-    X.storeInstall().then(function (r) {
-      if (r === 'failed') {
-        X.toast('The Microsoft Store could not install the update; opening its page');
-        X.openStore().catch(function () {});
-      } else if (r === 'nothing') {
-        X.toast('Add Dots PDF is up to date');
-      }
-    }, openStorePage);
-  }
-
   /* Asked by What is new (js/appbar.js), as a browser's About page asks:
      resolves to { state: 'latest' } or { state: 'update', run } (run takes
      the update the way its own button does), or { state: 'unknown' } when
@@ -139,7 +126,7 @@
         ? X.storeUpdate().catch(function () { return false; })
         : Promise.resolve(null);
       return store.then(function (has) {
-        if (has === true) return { state: 'update', run: installFromStore };
+        if (has === true) return { state: 'update', run: openStorePage };
         if (has === false) return { state: 'latest' };
         if (!BUILD) return { state: 'unknown' };
         return fetchLatest().then(function (v) {

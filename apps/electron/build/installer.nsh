@@ -1,8 +1,8 @@
 ; The setup .exe's install (electron-builder.yml, nsis.include): "Combine
 ; files in Add Dots PDF..." on PDFs picked in Explorer, as Acrobat has it.
 ; Explorer runs the verb once for each file picked, each with --combine; the
-; app is a single instance and gathers them (src/main.js). The same as the
-; Tauri app's src-tauri/installer.nsh. Per user, as the install is.
+; app is a single instance and gathers them (src/main.js). The Store package
+; declares the same verb in build/AppxManifest.xml. Per user, as the install is.
 
 !define ADDDOTS_COMBINE_KEY "Software\Classes\SystemFileAssociations\.pdf\shell\AddDotsCombine"
 

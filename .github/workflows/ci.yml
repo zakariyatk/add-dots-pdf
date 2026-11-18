@@ -13,14 +13,13 @@ jobs:
   # Which apps a pull request touches. The Windows, Android and iOS builds take
   # minutes each, so on a pull request each runs only when its own folder
   # changed; the web checks and the smoke test (which also runs every page
-  # under the Windows app's security policy) always run. A push to main builds
+  # under the desktop app's security policy) always run. A push to main builds
   # every app, so nothing reaches a release unbuilt. A change to this file or
   # to the dependencies builds every app too.
   changes:
     name: Which apps changed
     runs-on: ubuntu-latest
     outputs:
-      desktop: ${{ steps.diff.outputs.desktop }}
       electron: ${{ steps.diff.outputs.electron }}
       android: ${{ steps.diff.outputs.android }}
       ios: ${{ steps.diff.outputs.ios }}
@@ -33,7 +32,7 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ "${{ github.event_name }}" != pull_request ]; then
-            printf 'desktop=true\nelectron=true\nandroid=true\nios=true\n' >> "$GITHUB_OUTPUT"
+            printf 'electron=true\nandroid=true\nios=true\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files=$(git diff --name-only "$BASE"...HEAD)
@@ -41,7 +40,6 @@ jobs:
           all='^(\.github/workflows/ci\.yml|package\.json|package-lock\.json)$'
           has() { echo "$files" | grep -Eq "$1|$all" && echo true || echo false; }
           {
-            echo "desktop=$(has '^apps/desktop/')"
             echo "electron=$(has '^apps/electron/')"
             echo "android=$(has '^apps/mobile/(android/|[^/]+$)')"
             echo "ios=$(has '^apps/mobile/(ios/|[^/]+$)')"
@@ -89,178 +87,13 @@ jobs:
       - run: npm run smoke -w @adddots/web
         env:
           BENCH_CHANNEL: chrome
-      # again, every page under the Windows app's content security policy
-      # (tauri.conf.json), so a tool it would block fails here first
-      - name: Smoke test under the Windows app's content security policy
+      # again, every page under the desktop app's content security policy
+      # (apps/electron/src/csp.json), so a tool it would block fails here first
+      - name: Smoke test under the desktop app's content security policy
         run: npm run smoke -w @adddots/web
         env:
           BENCH_CHANNEL: chrome
           ADDDOTS_CSP: '1'
-
-  desktop:
-    name: Windows app (Tauri)
-    needs: changes
-    if: needs.changes.outputs.desktop == 'true'
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-          cache: npm
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: apps/desktop/src-tauri
-      - run: npm ci
-      # PDFium, which the app draws pages with (pinned, checked by sha256)
-      - run: node apps/desktop/scripts/get-pdfium.mjs
-      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
-      # builds the web app first (beforeBuildCommand), then the installers
-      - run: npx tauri build
-        working-directory: apps/desktop
-      # the setup .exe as a reader runs it: it must not ask for an
-      # administrator (asInvoker, like WPS), and it installs for this user
-      # only, under %LOCALAPPDATA%, never Program Files
-      - name: Install from the setup .exe
-        shell: pwsh
-        run: |
-          $setup = Get-ChildItem apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
-          if (-not $setup) { throw 'no setup .exe was built' }
-          $text = [Text.Encoding]::ASCII.GetString([IO.File]::ReadAllBytes($setup.FullName))
-          if ($text -notmatch 'requestedExecutionLevel level="asInvoker"') { throw "$($setup.Name) asks Windows for an administrator: its manifest is not asInvoker" }
-          "ok  $($setup.Name) runs as the user (asInvoker)"
-          $p = Start-Process $setup.FullName -ArgumentList '/S' -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "the installer exited with $($p.ExitCode)" }
-          # where it went, as Windows records it: this user's list of
-          # installed programs (HKCU), not the computer's (HKLM)
-          $keys = 'Software\Microsoft\Windows\CurrentVersion\Uninstall\*'
-          $mine = Get-ItemProperty "HKCU:\$keys" -ErrorAction SilentlyContinue | Where-Object DisplayName -like 'Add Dots PDF*'
-          $all = Get-ItemProperty "HKLM:\$keys", "HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*" -ErrorAction SilentlyContinue | Where-Object DisplayName -like 'Add Dots PDF*'
-          if ($all) { throw 'installed for the whole computer (HKLM): that needs an administrator' }
-          if (-not $mine) { throw 'not in this user''s installed programs' }
-          $dir = ($mine | Select-Object -First 1).InstallLocation
-          if (-not $dir) { $dir = Split-Path ((($mine | Select-Object -First 1).UninstallString) -replace '"', '') }
-          $dir = $dir.Trim('"')
-          if (-not $dir.StartsWith($env:LOCALAPPDATA)) { throw "installed at $dir, not under this user's %LOCALAPPDATA%" }
-          $app = Get-ChildItem $dir -Filter *.exe | Where-Object Name -notlike 'uninstall*' | Select-Object -First 1
-          if (-not $app) { Get-ChildItem $dir; throw "no app in $dir" }
-          "ok  installed for this user: $($app.FullName)"
-          # "Combine files in Add Dots PDF..." on PDFs in Explorer (installer.nsh)
-          $verb = 'HKCU:\Software\Classes\SystemFileAssociations\.pdf\shell\AddDotsCombine'
-          $cmd = (Get-ItemProperty "$verb\command" -ErrorAction SilentlyContinue).'(default)'
-          if (-not $cmd -or $cmd -notlike "*$($app.Name)*--combine*%1*") { throw "no Combine verb in Explorer: '$cmd'" }
-          "ok  Explorer's Combine verb: $cmd"
-          "INSTALLED_APP=$($app.FullName)" >> $env:GITHUB_ENV
-          "INSTALLED_DIR=$dir" >> $env:GITHUB_ENV
-      # Windows' own text reader (src-tauri/src/ocr.rs) needs the English OCR
-      # component, which a server image may not carry; a reader's Windows
-      # has it with its display language. The runner image already has this
-      # one, so it costs seconds.
-      - name: English for Windows' text reader
-        shell: pwsh
-        run: |
-          $n = 'Language.OCR~~~en-US~0.0.1.0'
-          $c = Get-WindowsCapability -Online -Name $n
-          "OCR en-US: $($c.State)"
-          if ($c.State -ne 'Installed') { Add-WindowsCapability -Online -Name $n | Out-Null }
-          (Get-WindowsCapability -Online -Name $n).State
-      # Arabic, for English and Arabic read together, is not on the image, so
-      # every run that wants it downloads it from Windows Update — about
-      # twelve minutes, more than half this job. On a push to main that is
-      # worth paying, the same bargain this workflow already strikes by only
-      # building each app when its own folder changed; on a pull request it is
-      # not, and apps/desktop/e2e.mjs passes over the Arabic check when the
-      # language is not there.
-      - name: Arabic for Windows' text reader
-        if: github.event_name != 'pull_request'
-        shell: pwsh
-        run: |
-          $n = 'Language.OCR~~~ar-SA~0.0.1.0'
-          $c = Get-WindowsCapability -Online -Name $n
-          "OCR ar-SA: $($c.State)"
-          if ($c.State -ne 'Installed') { Add-WindowsCapability -Online -Name $n | Out-Null }
-          (Get-WindowsCapability -Online -Name $n).State
-      # the installed app driven end to end: Playwright over WebView2's
-      # DevTools port
-      - run: node e2e.mjs
-        working-directory: apps/desktop
-        env:
-          APP: ${{ env.INSTALLED_APP }}
-      # again with every file treated as big (over 150 MB): opened, drawn
-      # and saved while read a part at a time from disk
-      - run: node e2e.mjs
-        working-directory: apps/desktop
-        env:
-          APP: ${{ env.INSTALLED_APP }}
-          ADDDOTS_RANGE_MB: '0'
-      - name: Uninstall
-        shell: pwsh
-        run: |
-          $un = Join-Path $env:INSTALLED_DIR 'uninstall.exe'
-          $p = Start-Process $un -ArgumentList '/S' -Wait -PassThru
-          if ($p.ExitCode -ne 0) { throw "the uninstaller exited with $($p.ExitCode)" }
-          # the silent uninstaller hands off to a copy of itself: give it a moment
-          for ($i = 0; $i -lt 30 -and (Test-Path $env:INSTALLED_APP); $i++) { Start-Sleep 1 }
-          if (Test-Path $env:INSTALLED_APP) { throw 'the app is still there after uninstalling' }
-          if (Test-Path 'HKCU:\Software\Classes\SystemFileAssociations\.pdf\shell\AddDotsCombine') { throw 'the Combine verb is still in Explorer after uninstalling' }
-          'ok  uninstalled'
-      # the Microsoft Store package (apps/desktop/msix): the same app, as an
-      # MSIX with the identity Partner Center gave it. Its version climbs
-      # with every run, as each Store submission needs a higher one.
-      - name: Pack the Store package (MSIX)
-        shell: pwsh
-        run: |
-          $v = "1.0.${{ github.run_number }}.0"
-          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/msix" | Out-Null
-          pwsh apps/desktop/msix/pack.ps1 -Version $v -Out "$env:RUNNER_TEMP/msix/ADD-DOTS-PDF-$v.msix"
-      # installed as the Store would (signed here with a throwaway certificate
-      # for the Publisher name, which the Store replaces with its own), started
-      # from the Start menu entry, then removed
-      - name: Install and start the MSIX
-        shell: powershell
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $msix = Get-ChildItem "$env:RUNNER_TEMP/msix/*.msix" | Select-Object -First 1
-          $test = Join-Path $env:RUNNER_TEMP 'test-signed.msix'
-          Copy-Item $msix.FullName $test
-          $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=B4571263-B820-4F66-B107-5B0CC5616541' `
-            -KeyUsage DigitalSignature -CertStoreLocation 'Cert:\CurrentUser\My' `
-            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
-          $pw = ConvertTo-SecureString -String 'test' -Force -AsPlainText
-          Export-PfxCertificate -Cert $cert -FilePath "$env:RUNNER_TEMP/test.pfx" -Password $pw | Out-Null
-          Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP/test.cer" | Out-Null
-          Import-Certificate -FilePath "$env:RUNNER_TEMP/test.cer" -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
-          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
-          & $signtool.FullName sign /fd SHA256 /f "$env:RUNNER_TEMP/test.pfx" /p test $test
-          if ($LASTEXITCODE) { throw "signtool failed ($LASTEXITCODE)" }
-          Add-AppxPackage -Path $test
-          $pkg = Get-AppxPackage -Name 'ADDDOTS.ADDDOTSPDF'
-          if (-not $pkg) { throw 'the MSIX did not install' }
-          "ok  installed $($pkg.PackageFullName)"
-          if (-not (Test-Path (Join-Path $pkg.InstallLocation 'adddots-pdf.exe'))) { throw 'the app is not in the package' }
-          if (-not (Test-Path (Join-Path $pkg.InstallLocation 'pdfium.dll'))) { throw 'PDFium is not in the package' }
-          Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!App"
-          $p = $null
-          for ($i = 0; $i -lt 30 -and -not $p; $i++) { Start-Sleep 1; $p = Get-Process adddots-pdf -ErrorAction SilentlyContinue }
-          if (-not $p) { throw 'the packaged app did not start' }
-          'ok  the packaged app starts'
-          $p | Stop-Process -Force
-          Remove-AppxPackage -Package $pkg.PackageFullName
-          'ok  removed'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-store-msix
-          path: ${{ runner.temp }}/msix/*.msix
-          retention-days: 30
-      # the unsigned test installer: Windows SmartScreen warns before running
-      # it. One setup .exe for this user, no administrator (no .msi: an MSI
-      # installs for the whole computer and asks for one)
-      - uses: actions/upload-artifact@v4
-        with:
-          name: windows-installer
-          path: apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
-          retention-days: 14
 
   electron:
     name: Windows app (Electron)
@@ -286,10 +119,68 @@ jobs:
       - run: npm run e2e -w @adddots/electron
         env:
           ADDDOTS_RANGE_MB: '0'
+      # the Microsoft Store package (build/AppxManifest.xml: the product's
+      # Store identity), version 1.0.N.0 with N this run's number, which only
+      # grows, as the Store needs each package newer than the last. The
+      # Microsoft Store workflow (store.yml) submits it from the artifact.
+      - name: Build the Store package (MSIX)
+        shell: pwsh
+        working-directory: apps/electron
+        run: |
+          $v = "1.0.${{ github.run_number }}"
+          npx electron-builder --win appx "-c.extraMetadata.version=$v"
+          if ($LASTEXITCODE) { throw "electron-builder appx failed ($LASTEXITCODE)" }
+          New-Item -ItemType Directory -Force -Path "$env:RUNNER_TEMP/msix" | Out-Null
+          Move-Item "release/ADD-DOTS-PDF-$v.0.msix" "$env:RUNNER_TEMP/msix/"
+          "ok  ADD-DOTS-PDF-$v.0.msix"
+      # installed as the Store would (signed here with a throwaway certificate
+      # for the Publisher name, which the Store replaces with its own), started
+      # from the Start menu entry, then removed
+      - name: Install and start the MSIX
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $msix = Get-ChildItem "$env:RUNNER_TEMP/msix/*.msix" | Select-Object -First 1
+          $test = Join-Path $env:RUNNER_TEMP 'test-signed.msix'
+          Copy-Item $msix.FullName $test
+          $cert = New-SelfSignedCertificate -Type Custom -Subject 'CN=B4571263-B820-4F66-B107-5B0CC5616541' `
+            -KeyUsage DigitalSignature -CertStoreLocation 'Cert:\CurrentUser\My' `
+            -TextExtension @('2.5.29.37={text}1.3.6.1.5.5.7.3.3', '2.5.29.19={text}')
+          $pw = ConvertTo-SecureString -String 'test' -Force -AsPlainText
+          Export-PfxCertificate -Cert $cert -FilePath "$env:RUNNER_TEMP/test.pfx" -Password $pw | Out-Null
+          Export-Certificate -Cert $cert -FilePath "$env:RUNNER_TEMP/test.cer" | Out-Null
+          Import-Certificate -FilePath "$env:RUNNER_TEMP/test.cer" -CertStoreLocation 'Cert:\LocalMachine\TrustedPeople' | Out-Null
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin\*\x64\signtool.exe" | Sort-Object FullName | Select-Object -Last 1
+          & $signtool.FullName sign /fd SHA256 /f "$env:RUNNER_TEMP/test.pfx" /p test $test
+          if ($LASTEXITCODE) { throw "signtool failed ($LASTEXITCODE)" }
+          Add-AppxPackage -Path $test
+          $pkg = Get-AppxPackage -Name 'ADDDOTS.ADDDOTSPDF'
+          if (-not $pkg) { throw 'the MSIX did not install' }
+          "ok  installed $($pkg.PackageFullName)"
+          if ($pkg.Publisher -ne 'CN=B4571263-B820-4F66-B107-5B0CC5616541') { throw "publisher is $($pkg.Publisher)" }
+          if (-not (Test-Path (Join-Path $pkg.InstallLocation 'app\Add Dots PDF.exe'))) { throw 'the app is not in the package' }
+          if (-not (Test-Path (Join-Path $pkg.InstallLocation 'app\resources\web\index.html'))) { throw 'the web app is not in the package' }
+          Start-Process "shell:AppsFolder\$($pkg.PackageFamilyName)!App"
+          $p = $null
+          for ($i = 0; $i -lt 30 -and -not $p; $i++) {
+            Start-Sleep 1
+            $p = Get-Process 'Add Dots PDF' -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 }
+          }
+          if (-not $p) { throw 'the packaged app did not open a window' }
+          'ok  the packaged app starts'
+          Get-Process 'Add Dots PDF' -ErrorAction SilentlyContinue | Stop-Process -Force
+          Start-Sleep 2
+          Remove-AppxPackage -Package $pkg.PackageFullName
+          'ok  removed'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-store-msix
+          path: ${{ runner.temp }}/msix/*.msix
+          retention-days: 30
       # the unsigned test installer: SmartScreen warns before running it
       - uses: actions/upload-artifact@v4
         with:
-          name: windows-installer-electron
+          name: windows-installer
           path: apps/electron/release/*-setup.exe
           retention-days: 14
 

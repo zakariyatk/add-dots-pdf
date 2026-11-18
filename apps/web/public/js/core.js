@@ -100,14 +100,8 @@
       }
     } catch (e) { stop('could not be made: ' + e.message); }
     }
-    let lazy = false;
-    try {
-      let T = window.__TAURI__;
-      if (!T && window.parent !== window) T = window.parent.__TAURI__;
-      lazy = !!(T && T.core) && localStorage.getItem('adpdf.native') !== 'off';
-    } catch (e) { lazy = false; }
-    api.lazy = lazy;
-    if (!lazy) api.start();
+    api.lazy = false;
+    api.start();
 
     /* opens (or, with a password now known, reopens) these bytes in the
        worker; given the file they were read from, the worker reads that
@@ -179,115 +173,6 @@
     return api;
   })();
 
-  /* ---- in the Windows app: pages drawn natively, by PDFium ----
-     The desktop side (apps/desktop src-tauri/src/pdfium.rs) draws a page at
-     a matrix into a bitmap and hands back its pixels; it is native code, so
-     a heavy CAD sheet takes a fraction of pdf.js's time. RW.render goes there
-     first, and to the worker as before for what it cannot draw: a page with
-     form fields (the app draws its fields over pdf.js's picture), a file it
-     cannot open, or no PDFium at all. localStorage adpdf.native = 'off'
-     turns it off, to compare. A document tab asks through its window. */
-  const NR = (function () {
-    let T = window.__TAURI__, U8 = Uint8Array;
-    try {
-      if (!T && window.parent !== window && window.parent.__TAURI__) { T = window.parent.__TAURI__; U8 = window.parent.Uint8Array; }
-    } catch (e) { T = null; }
-    /* outside the Windows app it draws nothing, and says so */
-    const api = { state: 'off', why: '', drawn: 0, ms: 0,
-      usable: function () { return false; }, close: function () {} };
-    let off = false;
-    try { off = localStorage.getItem('adpdf.native') === 'off'; } catch (e) { /* on */ }
-    if (!T || !T.core || off) { api.why = off ? 'turned off' : 'not the Windows app'; return api; }
-    api.state = 'wait';
-    api.ready = T.core.invoke('pdf_native_status').then(function (where) { api.state = 'on'; api.where = where; return true; },
-      function (e) {
-        api.state = 'off'; api.why = String(e);
-        /* no PDFium: the render worker draws, as on the website */
-        if (RW.lazy) RW.start();
-        return false;
-      });
-    const keys = new WeakMap();                  /* a source (srcKey) -> {key, opened} */
-    const no = new Set();                        /* 'key:num' it would not draw */
-    let nextKey = 0, rid = 0;
-    const Z = typeof DecompressionStream === 'function';
-    function docOf(src) {
-      let d = keys.get(srcKey(src));
-      if (!d) {
-        d = { key: ++nextKey };
-        const headers = { 'x-key': String(d.key) };
-        if (src.password) headers['x-password'] = encodeURIComponent(src.password);
-        const fromBytes = function () {
-          if (!src.bytes) return Promise.reject(new Error('read as needed: no bytes here'));
-          return T.core.invoke('pdf_open', new U8(src.bytes), { headers: headers });
-        };
-        /* from its file on disk when it has one: read as needed, no copy of
-           it in the app; from its bytes if that fails (moved, changed) */
-        d.opened = src.path
-          ? T.core.invoke('pdf_open_path', { key: d.key, path: src.path, password: src.password || null })
-            .catch(fromBytes)
-          : fromBytes();
-        d.opened.catch(function () { d.failed = true; });
-        keys.set(srcKey(src), d);
-      }
-      return d;
-    }
-    function mul(m, n) {
-      return [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3],
-        m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
-    }
-    function inv(m) {
-      const d = m[0] * m[3] - m[1] * m[2];
-      return [m[3] / d, -m[1] / d, -m[2] / d, m[0] / d, (m[2] * m[5] - m[3] * m[4]) / d, (m[1] * m[4] - m[0] * m[5]) / d];
-    }
-    /* can it draw this page? (it says so only once it has loaded) */
-    api.usable = function (it) {
-      if (api.state !== 'on' || api.paused || !it.src || !srcKey(it.src) || !it.page) return false;
-      const d = keys.get(srcKey(it.src));
-      return !(d && d.failed) && !no.has((d ? d.key : 0) + ':' + it.num);
-    };
-    api.render = function (it, v, w, h, transform) {
-      const d = docOf(it.src), id = ++rid;
-      /* from the page as PDFium lays it out (pdf.js's at 100%, turned as the
-         file says) to the viewport and the request's transform */
-      const base = it.page.getViewport({ scale: 1, rotation: it.page.rotate }).transform;
-      const m = mul(transform || [1, 0, 0, 1, 0, 0], mul(v.transform, inv(base)));
-      let dead = false;
-      const t0 = performance.now();
-      const task = {
-        engine: 'native',
-        promise: d.opened.then(function () {
-          if (dead) throw cancelled();
-          return T.core.invoke('pdf_render', { rid: id, key: d.key, page: it.num - 1, m: m, w: w, h: h, z: Z });
-        }).then(function (buf) {
-          if (dead) throw cancelled();
-          /* compressed on the way over (see pdf_render): unpacked natively */
-          return Z ? new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('deflate'))).arrayBuffer() : buf;
-        }).then(function (buf) {
-          if (dead) throw cancelled();
-          api.drawn++; api.ms += performance.now() - t0;
-          return createImageBitmap(new ImageData(new Uint8ClampedArray(buf), w, h));
-        }, function (e) {
-          if (dead || /cancelled/.test(String(e))) throw cancelled();
-          /* not this page, not this file: the worker draws it, now and from now on */
-          if (/form fields|no page|could not load page/.test(String(e))) no.add(d.key + ':' + it.num);
-          const er = new Error(String(e)); er.name = 'NativeRenderError';
-          throw er;
-        }),
-        cancel: function () { dead = true; T.core.invoke('pdf_cancel', { rid: id }).catch(function () {}); }
-      };
-      return task;
-    };
-    function cancelled() { const e = new Error('cancelled'); e.name = 'RenderingCancelledException'; return e; }
-    /* memory running short: PDFium lets go of the pages it keeps loaded */
-    api.trim = function () { T.core.invoke('pdf_trim').catch(function () {}); };
-    api.close = function (bytes) {
-      const d = bytes && keys.get(bytes);
-      if (!d) return;
-      keys.delete(bytes);
-      d.opened.then(function () { T.core.invoke('pdf_close', { key: d.key }).catch(function () {}); }, function () {});
-    };
-    return api;
-  })();
   /* ---- in the Windows app: a big file read from disk as it is needed ----
      A file over 150 MB handed over by Explorer is not read whole (js/desktop.js
      sends what stands in for it, adddotsRange): the desktop side keeps it open
@@ -298,7 +183,7 @@
      as opened is what is read, so saving over it changes nothing here. */
   const RANGED = (function () {
     let T = null;
-    try { T = window.__TAURI__ || (window.parent !== window ? window.parent.__TAURI__ : null); } catch (e) { T = null; }
+    try { T = window.ADDDOTS_HOST || (window.parent !== window ? window.parent.ADDDOTS_HOST : null); } catch (e) { T = null; }
     const mine = new Set(), CHUNK = 32 * 1048576;
     function read(id, offset, len) {
       /* in a tab the answer is its window's ArrayBuffer, which pdf.js does
@@ -370,108 +255,6 @@
      (read, parsed, first page drawn, ms from the start), and drawings by
      engine: [count, ms, megapixels]. */
   const PERF = { open: null, drawn: {} };
-  function perfDrawn(engine, w, h, t0) {
-    const d = PERF.drawn[engine] || (PERF.drawn[engine] = [0, 0, 0]);
-    d[0]++; d[1] += performance.now() - t0; d[2] += w * h / 1e6;
-  }
-  /* RW, with the native one in front of the worker, where it is faster.
-     Which is faster depends on the file and the computer: PDFium draws a
-     CAD sheet in a fraction of pdf.js's time, but every picture it draws
-     has to be handed over to the page, and pdf.js keeps what it has parsed
-     of a page for the next drawing. So each document times both, as time per
-     megapixel: the first drawings alternate, then the faster one draws,
-     and every twentieth goes to the other to see whether that has changed. */
-  const PICK = new WeakMap();                    /* a source (srcKey) -> timings */
-  function pickFor(it) {
-    let p = PICK.get(srcKey(it.src));
-    if (!p) PICK.set(srcKey(it.src), (p = { native: [0, 0], worker: [0, 0], n: 0 }));
-    return p;
-  }
-  /* PDFium draws a document until it proves slow for it: only then is the
-     render worker asked (and opens the file, two more copies of it) */
-  const NATIVE_FAST_ENOUGH = 250;                /* ms per megapixel */
-  function useNative(p) {
-    const a = p.native, b = p.worker;
-    if (!b[1]) return a[1] < 2 || a[0] / a[1] <= NATIVE_FAST_ENOUGH;
-    if (a[1] < 2 || b[1] < 2) return a[1] <= b[1];          /* still finding out */
-    const fast = a[0] / a[1] <= b[0] / b[1];
-    return p.n % 20 === 19 ? !fast : fast;
-  }
-  function timed(p, engine, w, h, t0) {
-    /* thumbnails do not count: on a tiny picture the fixed cost of a drawing
-       is all there is, and every engine looks slow per megapixel */
-    if (w * h < 250000) return;
-    const mp = w * h / 1e6, per = (performance.now() - t0) / mp;
-    const s = p[engine];
-    /* recent drawings count most: the average of the last ten or so */
-    if (s[1] >= 10) { s[0] *= 0.9; s[1] *= 0.9; }
-    s[0] += per; s[1] += 1;
-  }
-  NR.timings = function (bytes) { return PICK.get(bytes) || null; };
-  (function () {
-    const usable = RW.usable, render = RW.render, close = RW.close;
-    function failed(message) {
-      const e = new Error(message); e.name = 'RenderWorkerError';
-      return { engine: null, promise: Promise.reject(e), cancel: function () {} };
-    }
-    /* the worker, started now if it was waiting to be needed (Windows) */
-    function wantWorker() { if (RW.lazy && RW.state === 'off') RW.start(); }
-    RW.usable = function (it) {
-      /* PDFium still starting (Windows): its drawings wait for it */
-      return NR.usable(it) || usable(it) || (NR.state === 'wait' && !!it.page);
-    };
-    RW.render = function (it, v, w, h, transform, drop, intent, fast) {
-      if (NR.state === 'wait') {
-        let inner = null, dead = false;
-        const task = {
-          engine: null,
-          promise: NR.ready.then(function () {
-            if (dead) { const e = new Error('cancelled'); e.name = 'RenderingCancelledException'; throw e; }
-            inner = RW.render(it, v, w, h, transform, drop, intent, fast);
-            return inner.promise.then(function (b) { task.engine = inner.engine; return b; });
-          }),
-          cancel: function () { dead = true; if (inner) inner.cancel(); }
-        };
-        return task;
-      }
-      if (!NR.usable(it)) {
-        /* no PDFium, or a page it leaves to pdf.js (form fields) */
-        if (!usable(it)) { wantWorker(); return failed('drawn on the page meanwhile'); }
-        return render(it, v, w, h, transform, drop, intent, fast);
-      }
-      const p = pickFor(it);
-      let native = true;
-      if (usable(it)) native = useNative(p);
-      else if (p.native[1] >= 2 && p.native[0] / p.native[1] > NATIVE_FAST_ENOUGH) wantWorker();
-      p.n++;
-      const t0 = performance.now();
-      if (!native) {
-        const t = render(it, v, w, h, transform, drop, intent, fast);
-        t.promise.then(function () {
-          timed(p, 'worker', w, h, t0);
-          perfDrawn(t.engine === 'pdfium' ? 'pdfium (wasm)' : 'pdf.js worker', w, h, t0);
-        }, function () {});
-        return t;
-      }
-      const nt = NR.render(it, v, w, h, transform);
-      nt.promise.then(function () { timed(p, 'native', w, h, t0); perfDrawn('PDFium native', w, h, t0); }, function () {});
-      let wt = null;
-      const task = {
-        engine: 'native',
-        promise: nt.promise.catch(function (e) {
-          if (!e || e.name !== 'NativeRenderError') throw e;
-          /* the worker, as before; or, without it, this thread (RenderWorkerError) */
-          if (!usable(it)) { wantWorker(); const er = new Error(e.message); er.name = 'RenderWorkerError'; throw er; }
-          wt = render(it, v, w, h, transform, drop, intent, fast);
-          task.engine = null;
-          return wt.promise.then(function (b) { task.engine = wt.engine; return b; });
-        }),
-        cancel: function () { nt.cancel(); if (wt) wt.cancel(); }
-      };
-      return task;
-    };
-    RW.close = function (bytes) { NR.close(bytes); close(bytes); };
-  })();
 
   const stage = $('stage'), rail = $('rail');
   /* what one page canvas is allowed to cost: a side a mobile GPU will still
@@ -731,13 +514,13 @@
     PERF.open.read = performance.now() - t0;
     /* in the Windows app PDFium draws the pages: the render worker opens the
        file only when a page needs it (RW.render), not two more copies now */
-    if (NR.state === 'off' && !ranged) RW.open(bytes, null, file);
+    if (!ranged) RW.open(bytes, null, file);
     try { doc = await loadWithPassword(ranged ? RANGED.params(file) : bytes); }
     catch (e) {
       if (ranged) RANGED.close(file.adddotsRange); else RW.close(bytes);
       showError('This file could not be opened. It may be damaged or not a real PDF.'); return false;
     }
-    if (lastPassword && NR.state === 'off' && !ranged) RW.open(bytes, lastPassword, file);
+    if (lastPassword && !ranged) RW.open(bytes, lastPassword, file);
     if (PERF.open && PERF.open.t0 === t0) PERF.open.parsed = performance.now() - t0;
 
     hardReset();
@@ -7386,7 +7169,7 @@
           EXT.savedBy = 'worker'; EXT.appended = !!r.appended;
           /* in the Windows app a big file's copy in the save worker is let go
              once saved; the next save reads it again (from the file, cheaply) */
-          if (window.__TAURI__ && !cache) {
+          if (window.ADDDOTS_HOST && !cache) {
             const used = {};
             items.forEach(function (it) { if (it.src) used[it.src.id] = it.src; });
             const srcs = Object.keys(used).map(function (k) { return used[k]; });
@@ -9960,7 +9743,7 @@
     if (!r.blob) { toast('That file was too large to keep here — select it again'); pickNew(); return; }
     const file = new File([r.blob], r.name, { type: 'application/pdf' });
     /* in the Windows app, with a document open: in a tab of its own, as a file picked is */
-    if (window.__TAURI__ && inNewTab()) { EXT.tabs.openFiles([file]); return; }
+    if (window.ADDDOTS_HOST && inNewTab()) { EXT.tabs.openFiles([file]); return; }
     if (!okToReplace()) return;
     await openFile(file);
   }
@@ -10474,7 +10257,6 @@
   function setPressed(on) {
     if (on === MEM.pressed) return null;
     MEM.pressed = on;
-    if (on && NR.trim) NR.trim();
     return on ? relieveMemory() : null;
   }
   if (performance.memory) {
@@ -10515,27 +10297,16 @@
     drawPageInto: drawPageInto, pagePreview: pagePreview, showBtn: showBtn,
     thumbsPause: thumbsPause, thumbsResume: thumbsResume,
     /* 'on' when pages are drawn in the render worker, 'wait' while it starts, 'off' */
-    renderWorker: function () { return RW.lazy && RW.state === 'off' && NR.state !== 'off' ? 'idle' : RW.state; },
+    renderWorker: function () { return RW.state; },
     /* the screen density pages are drawn at (dprNow): for the tests */
     drawDpr: function () { return DPR; },
-    /* in the Windows app: whether PDFium draws the pages, and how many it has */
     /* for the performance panel */
     perf: function () {
       return {
         open: PERF.open, drawn: PERF.drawn, pages: S.items.length,
         drawnNow: LIVE.size, thumbsNow: TLIVE.size, sources: S.sources.length,
         bytes: S.sources.reduce(function (n, s) { return n + (s.bytes ? s.bytes.length : 0); }, 0),
-        lowMemory: MEM.tight(), native: NR.state
-      };
-    },
-    nativeRender: function (pause) {
-      if (pause !== undefined) NR.paused = !!pause;      /* to compare it with the worker */
-      const it = S.items[S.current - 1], t = it && it.src && NR.timings(srcKey(it.src));
-      const per = function (x) { return x && x[1] ? Math.round(x[0] / x[1]) : null; };
-      return {
-        state: NR.state, why: NR.why, drawn: NR.drawn, ms: Math.round(NR.ms), paused: !!NR.paused,
-        /* this document: ms per megapixel, each way */
-        msPerMP: t ? { native: per(t.native), worker: per(t.worker) } : null
+        lowMemory: MEM.tight()
       };
     },
     /* 'nested': pdf.js's own worker inside the render worker; 'same-thread':
