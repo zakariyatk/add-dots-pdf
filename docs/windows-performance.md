@@ -23,7 +23,7 @@ packages/engine   PDF engine in TypeScript (no UI): page model, marks,
                   Built into public/js/engine.js for the scripts above.
 apps/desktop      the Windows app: apps/web in a Tauri 2 window, plus a
                   small Rust side (src-tauri/src/lib.rs, pdfium.rs).
-apps/mobile       Android / iOS: apps/web in Capacitor.
+apps/mobile       Android: apps/web in Capacitor.
 legacy/api        PHP share-link API; Supabase for accounts.
 ```
 

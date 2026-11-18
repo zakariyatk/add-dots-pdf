@@ -1,8 +1,8 @@
-# Add Dots PDF for Android and iOS
+# Add Dots PDF for Android
 
 The web app (`apps/web/dist`) in a Capacitor 8 shell. On Android the app runs
 in the system WebView, which is Chromium, the engine the web app's smoke test
-runs in. On iOS it runs in WKWebView, the Safari engine (WebKit).
+runs in.
 
 ## What the phone app adds
 
@@ -27,8 +27,7 @@ does nothing outside the app.
   (`shareServer`, https://pdf.adddots.com/): the document is uploaded to its
   API, and the links handed out open there, in any browser. The server must
   allow the apps' origins (`cors_origins` in `legacy/api/config.php`:
-  `https://localhost` for Android, `capacitor://localhost` for iOS,
-  `app://adddots` for the Windows app).
+  `https://localhost` for Android, `app://adddots` for the Windows app).
 
 ## Commands
 
@@ -82,33 +81,3 @@ without them are unsigned, and debug builds do not use them at all.
   last; the version name is 1.0.<run number> unless one is given.
 - Play App Signing keeps the key the app is signed with for users; ours is
   only the upload key, which Google can reset if it is ever lost.
-
-## iOS
-
-The same web app and the same page code (`js/mobile.js`): the app's plugin
-has a Swift twin with the same name and methods, in
-`ios/App/App/SceneDelegate.swift` (kept in a file the Xcode project already
-lists, so the project file needs no hand edits).
-
-- **"Open in Add Dots PDF"** from Files, Mail and other apps: the app is
-  registered for PDFs (`Info.plist`, `CFBundleDocumentTypes`); iOS hands it a
-  copy of the file, read once by the page (`launchFile`) or announced to it
-  (`openFile`).
-- **Save** goes to iOS's own "Save to Files" picker; cancelling it keeps the
-  document unsaved.
-
-```bash
-npx turbo run build --filter=@adddots/web...
-cd apps/mobile && npx cap sync ios
-npx cap open ios        # on a Mac: opens the project in Xcode, Run
-```
-
-CI (`macos-latest`) checks the web app in WebKit (`apps/web/bench/webkit.mjs`:
-a PDF opens and is drawn, its text read, Save), builds the app for the iOS
-simulator, installs and starts it there (still running after 20 s, with a
-screenshot), and uploads the build as `ios-simulator-app`.
-
-Not yet: a test that drives the app's pages inside the iOS simulator (WKWebView
-cannot be attached to from Linux or Playwright; that needs Safari's Web
-Inspector or an XCUITest target), and a build for a real iPhone, which needs
-an Apple developer account to sign it (TestFlight, then the App Store).

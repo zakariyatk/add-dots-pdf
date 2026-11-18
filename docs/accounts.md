@@ -1,6 +1,6 @@
 # Accounts (Stage I): Sign In / Sign Up with Supabase Auth
 
-One Add Dots account on the web, Windows, Android and iOS. An account is
+One Add Dots account on the web, Windows and Android. An account is
 free, with every tool. **Saving asks for one**: everyone can open and edit
 PDFs with every tool, and saving a file asks to sign in or create a free
 account first, as Acrobat online does. Documents still stay on the device.
