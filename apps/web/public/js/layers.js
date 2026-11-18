@@ -186,13 +186,7 @@
           (sel.list.length > 1 ? ' marks moved into it' : ' mark moved into it')
         : '<b>' + X.esc(L.name) + '</b> added — everything you draw now lands in it');
     });
-    $('layRename').addEventListener('click', function () {
-      const L = layerOf(focusLayer);
-      const name = window.prompt('Rename this layer', L.name);
-      if (!name || !name.trim()) return;
-      L.name = name.trim().slice(0, 60);
-      render();
-    });
+    $('layRename').addEventListener('click', function () { renameInPlace(focusLayer); });
     $('layMerge').addEventListener('click', function () {
       const source = layerOf(focusLayer);
       const others = ensureLayers().filter(function (l) { return l.id !== source.id; });
@@ -296,7 +290,9 @@
     }
 
     let lastSig = null;
+    let renaming = null;                 /* the layer whose name is being typed */
     function render() {
+      if (renaming) return;              /* a redraw would take the field away mid-word */
       const it = S.items[S.current - 1];
       lastSig = sigOf(it);
       const host = $('layList');
@@ -381,6 +377,8 @@
         return;
       }
       if (!isMark) {                       /* a layer's own row: make it active */
+        if (e.target.closest('.layname')) return;
+        if (focusLayer === row.dataset.lay) return;
         focusLayer = row.dataset.lay;
         render();
         return;
@@ -388,6 +386,58 @@
       if (act && !act.disabled) { doAction(it, +row.dataset.idx, act.dataset.act); return; }
       select(it, +row.dataset.idx);
     });
+
+    /* Rename: a double-click on a layer's row, or the Rename button, puts its
+       name in a field on the row. Enter or a click elsewhere keeps the new
+       name; Esc keeps the old one. */
+    host.addEventListener('dblclick', function (e) {
+      let t = e.target;
+      if (!t.isConnected) t = document.elementFromPoint(e.clientX, e.clientY) || t;
+      const row = t.closest && t.closest('.layhead');
+      if (!row || !host.contains(row) || t.closest('[data-act]')) return;
+      e.preventDefault();
+      renameInPlace(row.dataset.lay);
+    });
+    function renameInPlace(id) {
+      if (renaming) return;
+      const L = layerOf(id);
+      if (!L) return;
+      if (focusLayer !== L.id || !host.querySelector('.layhead[data-lay="' + L.id + '"]')) {
+        focusLayer = L.id;
+        render();
+      }
+      const row = host.querySelector('.layhead[data-lay="' + L.id + '"]');
+      const lab = row && row.querySelector('.laylabel');
+      if (!lab) return;
+      const field = document.createElement('input');
+      field.className = 'layname';
+      field.value = L.name;
+      field.maxLength = 60;
+      field.setAttribute('aria-label', 'Layer name');
+      lab.replaceWith(field);
+      renaming = L.id;
+      let done = false;
+      function finish(keep) {
+        if (done) return;
+        done = true;
+        renaming = null;
+        const name = field.value.trim().slice(0, 60);
+        if (keep && name && name !== L.name) {
+          L.name = name;
+          X.updateMeta();
+        }
+        render();
+      }
+      field.addEventListener('keydown', function (e) {
+        e.stopPropagation();               /* the app's own shortcuts stay out of the typing */
+        if (e.key === 'Enter') { e.preventDefault(); finish(true); }
+        else if (e.key === 'Escape') { e.preventDefault(); finish(false); }
+      });
+      field.addEventListener('blur', function () { finish(true); });
+      field.addEventListener('dblclick', function (e) { e.stopPropagation(); });
+      field.focus();
+      field.select();
+    }
 
     function toggleLayer(id) {
       const L = layerOf(id);
