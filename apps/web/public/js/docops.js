@@ -607,7 +607,7 @@
 
     /* ---------------- print ---------------- */
 
-    /* the Print dialog (js/print.js), as Ctrl+P and the quick-access button */
+    /* Print, as Ctrl+P and the quick-access button */
     function doPrint() {
       if (!S.items.length) { X.toast('Open a PDF first'); return; }
       return X.print();

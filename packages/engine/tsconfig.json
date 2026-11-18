@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     /* for the tests and the build config; src/ itself uses no Node APIs, so the
-       engine runs the same in the browser, Tauri and the Expo WebView */
+       engine runs the same in the browser, Electron and the Expo WebView */
     "types": ["node"]
   },
   "include": ["src/**/*.ts", "test/**/*.ts", "vite.config.ts"]

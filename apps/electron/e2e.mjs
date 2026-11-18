@@ -198,8 +198,7 @@ try {
   );
 
   /* ---- Print: the system print dialog, as on the website ----
-     There is no native printing here (js/print.js stands aside): the PDF made
-     for printing is shown in Chromium's PDF viewer in a frame, and that frame
+     The PDF made for printing is shown in Chromium's PDF viewer in a frame, and that frame
      is printed. print() is swapped for a stand-in as the frame loads. */
   const printed = await run(async () => {
     const got = { called: false, pdf: null, dialog: !!document.getElementById('printModal') };

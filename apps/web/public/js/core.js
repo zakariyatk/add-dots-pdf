@@ -7426,9 +7426,8 @@
     }
   }
 
-  /* Print: the Print dialog (js/print.js), when it is there. */
+  /* Print: the system's print dialog, in the browser and the desktop app */
   function printDoc() {
-    if (EXT.printDialog) return EXT.printDialog.open();
     return printSystem();
   }
 
@@ -10344,7 +10343,7 @@
     setCover: setCover, pairStart: pairStart, setThumbMarks: setThumbMarks,
     /* for the page menu (js/pagemenu.js) */
     fitPage: function () { S.fit = 'page'; relayout(); }, print: function () { return printDoc(); },
-    /* the system's print dialog, and a PDF printed with it (js/print.js) */
+    /* the system's print dialog, and a PDF printed with it */
     printSystem: printSystem, printFrame: printFrame,
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
     stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE,
