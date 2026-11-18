@@ -1563,6 +1563,12 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
 .layrow.layhead { padding-right: 6px }
 .layrow.layhead.active { background: var(--chrome-2) }
 .layrow.layhead .laylabel { font-weight: 600 }
+.layrow.layhead .laylabel { cursor: text }
+/* a layer's name, being renamed in place (js/layers.js) */
+.layname { flex: 1; min-width: 0; height: 24px; margin: 0; padding: 0 6px; font: inherit; font-weight: 600;
+  color: var(--text); background: var(--chrome); border: 1px solid var(--btn, var(--marker)); border-radius: 5px; outline: 0 }
+/* the count and pencil make room for the name while it is typed */
+.layhead:has(.layname) :is(.laynum, .laypen) { display: none }
 .laytwist {
   flex: none; display: grid; place-items: center; width: 18px; height: 22px; padding: 0;
   border: none; background: transparent; color: var(--text-dim); cursor: pointer;
