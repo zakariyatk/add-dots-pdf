@@ -22,6 +22,11 @@ body[data-ui="light"] {
   --marker-ink: #6141EA;          /* the violet as text: 5:1 on every grey here */
   --danger: #D7373F;
   --accent-ink: #FFFFFF;          /* text on a violet fill */
+  --on-bg: #E5E7EB;               /* pressed tool / tab: grey tile */
+  --on-ink: #6141EA;              /* its icon and label: 5.4:1 on --on-bg */
+  --pri-bg: #E5E7EB;              /* main actions (Save, Select files) */
+  --pri-bg-hover: #D7DAE0;
+  --pri-ink: #111827;             /* 13:1 on --pri-bg */
   --hover: rgba(0, 0, 0, .045);
   --shadow-pop: 0 10px 30px rgba(15, 23, 42, .14), 0 2px 6px rgba(15, 23, 42, .08);
   color-scheme: light;
@@ -32,6 +37,7 @@ body[data-ui="light"] {
 body[data-ui="light"] :is(#pm, #cam, #lb) {
   --chrome: #050505; --chrome-2: #181818; --stage: #111111; --line: #333333;
   --text: #E4E4E4; --text-dim: #8D8D8D; --marker: #FFFFFF; --marker-ink: #FFFFFF; --danger: #E27C68;
+  --on-bg: #2E2E2E; --on-ink: #B7A6FF; --pri-bg: #2E2E2E; --pri-bg-hover: #3A3A3A; --pri-ink: #F2F2F2;
   color: var(--text);
   color-scheme: dark;
 }
@@ -40,14 +46,14 @@ body[data-ui="light"] :is(#pm, #cam, #lb) {
 body[data-ui="light"] .bar,
 body[data-ui="light"] .ribbon { box-shadow: 0 1px 0 rgba(0, 0, 0, .02) }
 body[data-ui="light"] .btn:hover:not(:disabled) { background: var(--hover); border-color: transparent }
-body[data-ui="light"] .btn.on { background: #EFEBFF; border-color: #D6CCFF; color: var(--marker-ink) }
-body[data-ui="light"] .btn.primary { background: var(--btn); color: var(--accent-ink); border-color: transparent }
-body[data-ui="light"] .btn.primary:hover:not(:disabled) { background: var(--btn-hover); border-color: transparent }
-body[data-ui="light"] .ribbon .btn.on::after { color: var(--marker-ink) }
+body[data-ui="light"] .btn.on { background: var(--on-bg); border-color: transparent; color: var(--on-ink) }
+body[data-ui="light"] .btn.primary { background: var(--pri-bg); color: var(--pri-ink); border-color: transparent }
+body[data-ui="light"] .btn.primary:hover:not(:disabled) { background: var(--pri-bg-hover); border-color: transparent }
+body[data-ui="light"] .ribbon .btn.on::after { color: var(--on-ink) }
 body[data-ui="light"] .admark { color: #1F2328; border-color: #9AA0A6 }
 body[data-ui="light"] a.admark:hover { border-color: #1F2328 }
 body[data-ui="light"] #btnHome { background: #FFFFFF }
-body[data-ui="light"] #btnHome:hover:not(:disabled) { background: var(--btn); color: var(--accent-ink) }
+body[data-ui="light"] #btnHome:hover:not(:disabled) { background: var(--pri-bg-hover); color: var(--pri-ink) }
 body[data-ui="light"] .pager input,
 body[data-ui="light"] .search-in,
 body[data-ui="light"] .pop input,
@@ -85,9 +91,10 @@ body[data-ui="light"] .page { box-shadow: 0 1px 3px rgba(0, 0, 0, .16), 0 6px 18
 
 /* ---- open file / home screen ---- */
 body[data-ui="light"] :is(.drop h1, .htop h1, .hdrop h2, .hsec h3) { color: var(--text) }
-body[data-ui="light"] :is(.pick, .hdrop .art .dot) { color: var(--accent-ink) }
-body[data-ui="light"] .pick { background: var(--btn) }
-body[data-ui="light"] .pick:hover { background: var(--btn-hover) }
+body[data-ui="light"] .hdrop .art .dot { color: var(--accent-ink) }
+body[data-ui="light"] .pick { color: var(--pri-ink) }
+body[data-ui="light"] .pick { background: var(--pri-bg) }
+body[data-ui="light"] .pick:hover { background: var(--pri-bg-hover) }
 body[data-ui="light"] .home { background: #F4F5F7 }
 body[data-ui="light"] .hnav { background: #FFFFFF }
 body[data-ui="light"] .hnav .safe svg { stroke: #7A808A }
