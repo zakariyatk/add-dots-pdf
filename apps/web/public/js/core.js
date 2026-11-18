@@ -9329,7 +9329,8 @@
       closeEditor(true);
     }
     if (e.target.closest('.pop') || e.target.closest('#btnAdd') ||
-        e.target.closest('#btnSave') || e.target.closest('#btnSaveAs') || e.target.closest('#btnTr') ||
+        e.target.closest('#btnSave') || e.target.closest('#btnSaveAs') || e.target.closest('#moreSaveAs') ||
+        e.target.closest('#btnTr') ||
         e.target.closest('#btnExtract') || e.target.closest('#btnJpg') ||
         e.target.closest('#pinExpGo')) return;
     if (e.target.closest('[data-a="add"]')) return;
@@ -9432,6 +9433,8 @@
     if (!S.items.length) return;
     $('savePop').hidden ? openPop('savePop', $('btnSaveAs')) : closePops();
   });
+  /* phones: Save as… from the More sheet, which shuts as the popover opens */
+  $('moreSaveAs').addEventListener('click', function () { $('btnSaveAs').click(); });
   $('btnQOpen').addEventListener('click', function () { pickNew(); });
   $('btnQPrint').addEventListener('click', printDoc);
   $('saveCancel').addEventListener('click', closePops);

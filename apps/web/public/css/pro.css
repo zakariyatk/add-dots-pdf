@@ -640,8 +640,9 @@ body.rdrag { user-select: none; -webkit-user-select: none }
   }
   .dock .tsep { height: 30px; margin: 0 4px }
 
-  /* a hint that there is more to the side */
-  .dock { position: relative }
+  /* a hint that there is more to the side. In flow at the foot of the app's
+     column, so it must not shrink: a long document squeezed it to a sliver */
+  .dock { position: relative; flex: none }
   .dock[data-crowded="yes"]::after {
     content: ''; position: sticky; right: 0; flex: none;
     width: 18px; height: 48px; margin-left: -18px; pointer-events: none;
@@ -1720,3 +1721,65 @@ body[data-tool="editobj"] .capture { cursor: pointer }
 .perfbox .pfrows div { display: flex; justify-content: space-between; gap: 12px }
 .perfbox .pfrows span { color: var(--text-dim) }
 .perfbox .pfrows b { font-family: var(--mono); font-weight: 500; text-align: right }
+
+/* ---------------------------------------------------------------
+   Phone browsers (the web app at phone width)
+   --------------------------------------------------------------- */
+
+/* The phone app (body[data-phone], css/phone.css) has its own top bar and
+   document menu, so all of this leaves it alone. Every target is at least
+   44px, the size of a fingertip. */
+@media (max-width: 760px) {
+  /* the top bar: Home, Undo and the page box, then Save and More together at
+     the right. Save as… moves into the More sheet, where it has a full-size
+     row instead of an 18px arrow */
+  body:not([data-phone]) .bar { gap: 6px }
+  body:not([data-phone]) .bar .btn { min-width: 44px; height: 44px }
+  body:not([data-phone]) .bar .grp.quick { display: contents }
+  body:not([data-phone]) .bar .grp.quick .btn { width: 44px; min-width: 44px }
+  body:not([data-phone]) .bar .grp.quick .btn.qmore { display: none }
+  body:not([data-phone]) #btnQSave { display: inline-flex; order: 1; border-color: transparent;
+    background: var(--btn, var(--marker)); color: var(--accent-ink, #fff) }
+  body:not([data-phone]) #btnMore { order: 2 }
+  body:not([data-phone]) .pager input { width: 48px; height: 44px; text-align: center; border-radius: 10px }
+  body:not([data-phone]) .pager span { font-size: 13px; white-space: nowrap }
+
+  /* the dock sits in the page's column now, so the stage needs no room kept
+     clear under it */
+  body:not([data-phone]) .stage { padding-bottom: calc(24px + env(safe-area-inset-bottom)) }
+
+  /* the More sheet: two columns of 48px rows, and a Save as… row at the top */
+  body:not([data-phone]) .sheet .grp .btn {
+    flex: 1 1 calc(50% - 4px); min-width: calc(50% - 4px); height: 48px;
+    padding: 0 12px; gap: 10px; font-size: 14px
+  }
+  body:not([data-phone]) .sheet .grp .btn::after {
+    min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap
+  }
+  body:not([data-phone]) .sheet .grp .btn svg { flex: none }
+  body:not([data-phone]) .sheet .tsep { display: none }
+  body:not([data-phone]) .sheet .zoomval { font-size: 13px }
+  body:not([data-phone]) #moreFile .btn { flex-basis: 100% }
+  /* the phone app has Save a copy in its own document menu */
+  body[data-phone] #moreFile { display: none }
+
+  /* a tool's options above the page */
+  body:not([data-phone]) .modebar { gap: 8px; align-items: center }
+  body:not([data-phone]) .modebar .sw,
+  body:not([data-phone]) .anno-sw .sw { width: 40px; height: 40px }
+  body:not([data-phone]) .modebar :is(.swmore, .wdrop, select) { min-height: 44px }
+  body:not([data-phone]) .modebar .btn { min-height: 44px }
+
+  /* the side panel: wider, so Find has room to type, and finger-size buttons */
+  body:not([data-phone]) .rail { width: min(90vw, 360px) }
+  body:not([data-phone]) #railClose { width: 44px; min-width: 44px; height: 44px }
+  body:not([data-phone]) .rail-tabs .btn { height: 44px }
+  body:not([data-phone]) .search-wrap .search-in { height: 44px }
+  body:not([data-phone]) .search-wrap .findstep { width: 44px; height: 44px }
+  body:not([data-phone]) .thumb .tools { gap: 6px }
+  body:not([data-phone]) .thumb .tools button { width: 40px; height: 40px }
+  body:not([data-phone]) .thumb .tools svg { width: 16px; height: 16px }
+
+  /* the start screen */
+  body:not([data-phone]) #hUi { min-height: 44px }
+}
