@@ -6,7 +6,7 @@
    bottom with the page and the zoom (js/skin.js). The layout and every
    button stay where they are: this is colour, shape and spacing only.
    Active tools and main buttons are in Add Dots violet (#6A4BF0 for fills): a solid tile with a
-   white icon for the tool in hand, a violet pill for the main action.
+   white icon for the tool in hand, a solid rounded rectangle for the main action.
    --------------------------------------------------------------- */
 
 body[data-ui="light"][data-skin="wps"] {
@@ -117,10 +117,11 @@ body[data-ui="light"][data-skin="wps"] #panTool .markpop .btn.on {
   background: var(--btn); border-color: var(--btn); color: #FFFFFF;
 }
 
-/* ---- main actions: a violet pill with white, bold text (Save, Done, Save PDF…) ---- */
+/* ---- main actions: a solid rounded rectangle with white, bold text (Save, Done, Create…),
+   the same 7px corners as every other button, never a pill ---- */
 body[data-ui="light"][data-skin="wps"] .btn.primary {
   background: var(--btn); border-color: transparent; color: #FFFFFF; font-weight: 700;
-  border-radius: 999px; padding-left: 16px; padding-right: 16px;
+  border-radius: 7px; padding-left: 16px; padding-right: 16px;
 }
 body[data-ui="light"][data-skin="wps"] .btn.primary:hover:not(:disabled) {
   background: var(--btn-hover); filter: none;
