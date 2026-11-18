@@ -1398,10 +1398,10 @@
   .appbar .abwx:hover{background:#C42B1C;color:#fff}
   .appbar .abwx:active{background:#C94F4F;color:#fff}
   .appbar .abwx svg{shape-rendering:auto}
-  /* always on top (js/appbar.js): a pin beside Minimise, filled while it is on */
-  .appbar .abpin svg{width:15px;height:15px;stroke-width:1.7;shape-rendering:auto;transform:rotate(45deg);transition:transform .15s}
+  /* always on top (js/appbar.js): an upright pin beside Minimise, filled while it is on */
+  .appbar .abpin svg{width:15px;height:15px;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;shape-rendering:auto}
   .appbar .abpin.on{color:var(--btn,var(--marker))}
-  .appbar .abpin.on svg{fill:currentColor;transform:none}
+  .appbar .abpin.on svg{fill:currentColor}
   body.win-blur .appbar{color:var(--text-dim)}
   /* the drop-downs */
   .abpop{position:fixed;z-index:310;min-width:220px;max-width:calc(100vw - 16px);padding:6px;border-radius:8px;

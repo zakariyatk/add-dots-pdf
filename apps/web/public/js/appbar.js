@@ -46,7 +46,8 @@
     saveas: ic('<path d="M5 3h11l4 4v5"/><path d="M4 5v14a2 2 0 0 0 2 2h5"/><rect x="8" y="3" width="7" height="5"/><path d="M14 21l1-3 5-5 2 2-5 5z"/>'),
     print: ic('<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><rect x="7" y="14" width="10" height="7"/>'),
     ui: ic('<circle cx="12" cy="12" r="9"/><path d="M12 3a9 9 0 0 0 0 18z" fill="currentColor" stroke="none"/>'),
-    pin: ic('<path d="M9 4h6v5.5l3 3V15H4v-2.5l3-3z"/><line x1="12" y1="15" x2="12" y2="21"/>'),
+    /* an upright pushpin: cap, body, needle — outlined, filled while on (css/app.css) */
+    pin: ic('<path d="M8.5 3.5h7"/><path d="M10 3.5v5l-3 3.5v2h10v-2l-3-3.5v-5z"/><path d="M12 14v6.5"/>'),
     close: ic('<line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/>'),
     link: ic('<path d="M14 4h6v6"/><line x1="20" y1="4" x2="11" y2="13"/><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>'),
     news: ic('<path d="M12 3l2.6 5.6 6 .7-4.5 4.1 1.2 6L12 16.4 6.7 19.4l1.2-6L3.4 9.3l6-.7z"/>'),
