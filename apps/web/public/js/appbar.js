@@ -92,7 +92,21 @@
   function toggleAlwaysOnTop() {
     alwaysOnTop = !alwaysOnTop;
     set(AOT, alwaysOnTop ? '1' : '0');
-    win.setAlwaysOnTop(alwaysOnTop).catch(function () { if (X.toast) X.toast('Could not change Always on top'); });
+    paintPin();
+    win.setAlwaysOnTop(alwaysOnTop).catch(function () {
+      alwaysOnTop = !alwaysOnTop;
+      set(AOT, alwaysOnTop ? '1' : '0');
+      paintPin();
+      if (X.toast) X.toast('Could not change Always on top');
+    });
+  }
+  /* the pin beside Minimise shows whether the window stays on top */
+  function paintPin() {
+    const b = document.getElementById('abPin');
+    if (!b) return;
+    b.classList.toggle('on', alwaysOnTop);
+    b.setAttribute('aria-pressed', alwaysOnTop ? 'true' : 'false');
+    b.title = alwaysOnTop ? 'Stop keeping on top' : 'Keep on top of other windows';
   }
 
   /* ---------------- the document in view ---------------- */
@@ -160,6 +174,7 @@
   if (win) {
     bar.insertAdjacentHTML('beforeend',
       '<span class="abwin">' +
+        '<button type="button" class="abw abpin" id="abPin" aria-label="Always on top" aria-pressed="false">' + ICON.pin + '</button>' +
         '<button type="button" class="abw" id="abMin" title="Minimise" aria-label="Minimise">' + ICON.wmin + '</button>' +
         '<button type="button" class="abw" id="abMax" title="Maximise" aria-label="Maximise">' + ICON.wmax + '</button>' +
         '<button type="button" class="abw abwx" id="abClose" title="Close" aria-label="Close">' + ICON.wclose + '</button>' +
@@ -465,6 +480,8 @@
     $b('abMin').addEventListener('click', function () { win.minimize(); });
     $b('abMax').addEventListener('click', function () { win.toggleMaximize(); });
     $b('abClose').addEventListener('click', function () { win.close(); });
+    $b('abPin').addEventListener('click', toggleAlwaysOnTop);
+    paintPin();
     if (alwaysOnTop) win.setAlwaysOnTop(true).catch(function () {});
     const paintMax = function () {
       win.isMaximized().then(function (m) {
