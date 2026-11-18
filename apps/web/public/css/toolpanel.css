@@ -72,8 +72,17 @@ body.acro #ribbon .btn::after {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin: 0
 }
 body.acro #ribbon .btn:disabled::after { color: var(--text-dim) }
-body.acro #ribbon .btn.on { background: var(--chrome-2) }
-body.acro #ribbon .btn.on::after { color: var(--marker-ink) }
+body.acro #ribbon .btn.on { background: var(--on-bg); color: var(--on-ink) }
+body.acro #ribbon .btn.on::after { color: var(--on-ink) }
+/* no coloured or grey outlines in the list: the tool in hand is the grey tile,
+   the row under the pointer a fainter grey, and the keyboard's ring only shows
+   on :focus-visible (app.css) */
+body.acro #ribbon .btn, body.acro #ribbon .btn:hover:not(:disabled), body.acro #ribbon .btn.on {
+  border-color: transparent; box-shadow: none
+}
+body.acro #ribbon .btn:hover:not(:disabled):not(.on) { background: var(--hover, rgba(255, 255, 255, .06)) }
+body.acro #ribbon .btn.on:hover:not(:disabled) { background: var(--on-bg) }
+body.acro #ribbon .btn:focus:not(:focus-visible) { outline: none }
 body.acro #ribbon .btn .lbl { display: none }
 body.acro #ribbon #btnTheme::after { content: attr(data-label) }
 /* a colour arrow sits beside its tool, not on a row of its own */
@@ -174,8 +183,8 @@ body.acro .qrail .btn {
 /* 24px with a one-device-pixel line, snapped to the pixel grid as the
    ribbon's are (toolbar.js snapIcons): at 22px their lines fell between pixels */
 body.acro .qrail .btn svg { width: 24px; height: 24px; stroke-width: var(--ico-stroke, 1); flex: none }
-/* the page's colour on the accent: white on blue, dark on white in the dark interface */
-body.acro .qrail .btn.on { background: var(--btn, var(--marker)); color: var(--chrome) }
+/* the tool in hand: a grey tile with a violet icon, the way Acrobat shows it */
+body.acro .qrail .btn.on { background: var(--on-bg); color: var(--on-ink) }
 body.acro .qrail .btn.on svg { stroke: currentColor }
 
 /* ---------- the page, and the sidebar on its right ---------- */
@@ -201,7 +210,7 @@ body.acro .srail > .btn {
   width: 40px; height: 40px; min-width: 40px; padding: 0; justify-content: center; border-radius: 8px
 }
 body.acro .srail > .btn svg { width: 24px; height: 24px; stroke-width: var(--ico-stroke, 1); flex: none }
-body.acro .srail > .btn.on { background: var(--chrome-2); color: var(--marker-ink) }
+body.acro .srail > .btn.on { background: var(--on-bg); color: var(--on-ink) }
 body.acro .srail .sgrow { flex: 1 0 12px }
 body.acro[data-skin="wps"] .srail .statusbar {
   display: flex; flex-direction: column; align-items: center; gap: 2px; position: static;
