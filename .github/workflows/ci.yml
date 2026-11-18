@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       desktop: ${{ steps.diff.outputs.desktop }}
+      electron: ${{ steps.diff.outputs.electron }}
       android: ${{ steps.diff.outputs.android }}
       ios: ${{ steps.diff.outputs.ios }}
     steps:
@@ -32,7 +33,7 @@ jobs:
           BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           if [ "${{ github.event_name }}" != pull_request ]; then
-            printf 'desktop=true\nandroid=true\nios=true\n' >> "$GITHUB_OUTPUT"
+            printf 'desktop=true\nelectron=true\nandroid=true\nios=true\n' >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files=$(git diff --name-only "$BASE"...HEAD)
@@ -41,6 +42,7 @@ jobs:
           has() { echo "$files" | grep -Eq "$1|$all" && echo true || echo false; }
           {
             echo "desktop=$(has '^apps/desktop/')"
+            echo "electron=$(has '^apps/electron/')"
             echo "android=$(has '^apps/mobile/(android/|[^/]+$)')"
             echo "ios=$(has '^apps/mobile/(ios/|[^/]+$)')"
           } | tee -a "$GITHUB_OUTPUT"
@@ -258,6 +260,37 @@ jobs:
         with:
           name: windows-installer
           path: apps/desktop/src-tauri/target/release/bundle/nsis/*-setup.exe
+          retention-days: 14
+
+  electron:
+    name: Windows app (Electron)
+    needs: changes
+    if: needs.changes.outputs.electron == 'true'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      # builds the web app first, then the setup .exe (electron-builder, NSIS)
+      - run: npm run electron:build -w @adddots/electron
+      # the app over apps/web/dist, started as Explorer starts it
+      - run: npm run e2e -w @adddots/electron
+      # the packaged app, as the installer puts it on disk
+      - run: npm run e2e -w @adddots/electron
+        env:
+          APP: release/win-unpacked/Add Dots PDF.exe
+      # a file over 150 MB is read a part at a time: every file is, here
+      - run: npm run e2e -w @adddots/electron
+        env:
+          ADDDOTS_RANGE_MB: '0'
+      # the unsigned test installer: SmartScreen warns before running it
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer-electron
+          path: apps/electron/release/*-setup.exe
           retention-days: 14
 
   android:

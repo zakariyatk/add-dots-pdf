@@ -12,6 +12,7 @@ This repo is being rebuilt in phases. The plan is in `C:\Users\zak\.claude\plans
 ```
 apps/web            the editor, served by Vite (v1 code under public/, unchanged)
 apps/desktop        the Windows app: apps/web in a Tauri window (see its README)
+apps/electron       the desktop app in Electron (Windows, macOS, Linux), beside the Tauri one (see its README)
 apps/mobile         the Android (later iOS) app: apps/web in Capacitor (see its README)
 packages/engine     PDF engine in TypeScript, no UI; filled in during Phase 1
 legacy/api          PHP/MySQL share-link API; replaced by Supabase in Phase 7
@@ -28,6 +29,14 @@ npm test             # all tests
 npm run typecheck
 npm run lint
 npm run build        # apps/web/dist, deployable as a static site
+```
+
+The desktop app in Electron (`apps/electron`):
+
+```bash
+npm run electron:dev -w @adddots/electron     # the app over Vite, with reload
+npm run electron:build -w @adddots/electron   # Windows installer: apps/electron/release/*-setup.exe
+npm run e2e -w @adddots/electron              # end-to-end test of the app
 ```
 
 Requires Node 20 or newer. The PHP tests need PHP 8.2: `php legacy/api/tests/unit.php`.

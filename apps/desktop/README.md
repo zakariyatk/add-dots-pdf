@@ -5,6 +5,9 @@ That is the way to install it: the Store signs the app, so there is no
 SmartScreen warning, and it updates itself. The setup `.exe` below is for
 testing.
 
+An Electron build of the same app, for Windows, macOS and Linux, is in
+`apps/electron` (see its README for what it does and does not carry over).
+
 The web app (`apps/web/dist`) in a Tauri 2 window. On Windows the window is
 Edge WebView2, which is Chromium, the engine the web app's smoke test runs in.
 The installer is about 10 MB and puts the app in the Start menu, opening PDFs

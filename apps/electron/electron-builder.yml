@@ -1,0 +1,61 @@
+# Packaging (npm run electron:build, electron:build:mac, electron:build:linux).
+# The installers land in apps/electron/release/.
+appId: com.adddots.pdf.electron
+productName: Add Dots PDF
+copyright: Add Dots
+directories:
+  output: release
+  buildResources: build
+files:
+  - src/**
+  - package.json
+  - build/icon.*
+extraResources:
+  # the web app, served to the window from app://adddots (src/main.js)
+  - from: ../web/dist
+    to: web
+asar: true
+fileAssociations:
+  - ext: pdf
+    name: PDF document
+    description: PDF document
+    mimeType: application/pdf
+    role: Editor
+    icon: pdf-file
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+  artifactName: Add-Dots-PDF-${version}-setup.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  include: build/installer.nsh
+  shortcutName: Add Dots PDF
+mac:
+  icon: build/icon.icns
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [x64, arm64]
+    - target: zip
+      arch: [x64, arm64]
+linux:
+  icon: build/icon.png
+  category: Office
+  synopsis: Read, edit and mark up PDFs
+  target: [AppImage, deb]
+  maintainer: Add Dots
+# Electron's fuses, flipped in the packaged binary: it cannot be run as plain
+# Node, takes no NODE_OPTIONS, loads the app only from its asar, and checks
+# that asar against the hash built into the .exe. --inspect stays on: the
+# end-to-end test drives the packaged app through it (e2e.mjs, APP=...).
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: true
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
