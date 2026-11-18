@@ -5,6 +5,7 @@ apps/web/index.html
 legacy/
 design/
 dist/
+apps/electron/release/
 .turbo/
 package-lock.json
 

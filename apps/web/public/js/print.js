@@ -21,6 +21,8 @@
     let T = window.__TAURI__;
     try { if (!T && window.parent !== window) T = window.parent.__TAURI__; } catch (e) { T = null; }
     if (!T || !T.core) return;               /* a browser: its own print dialog */
+    /* the Electron app (apps/electron) has no native printing: the system's */
+    if (T.adddots && T.adddots.nativePrint === false) return;
 
     const S = X.S, $ = X.$;
     const KEEP = 'adddots.print';

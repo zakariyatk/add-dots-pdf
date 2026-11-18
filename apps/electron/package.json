@@ -1,0 +1,24 @@
+{
+  "name": "@adddots/electron",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Add Dots PDF for Windows, macOS and Linux: the web app in an Electron window",
+  "author": "Add Dots",
+  "homepage": "https://pdf.adddots.com",
+  "main": "src/main.js",
+  "scripts": {
+    "electron:dev": "node scripts/dev.mjs",
+    "electron:start": "npx turbo run build --filter=@adddots/web... && electron .",
+    "electron:build": "npx turbo run build --filter=@adddots/web... && electron-builder --win nsis",
+    "electron:build:mac": "npx turbo run build --filter=@adddots/web... && electron-builder --mac",
+    "electron:build:linux": "npx turbo run build --filter=@adddots/web... && electron-builder --linux",
+    "e2e": "node e2e.mjs",
+    "test": "node --test test/*.test.js"
+  },
+  "devDependencies": {
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0",
+    "pdf-lib": "1.17.1",
+    "playwright-core": "1.56.1"
+  }
+}

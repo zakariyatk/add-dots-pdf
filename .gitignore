@@ -33,6 +33,9 @@ apps/web/bench/.corpus/
 apps/desktop/src-tauri/target/
 apps/desktop/src-tauri/gen/
 
+# the Electron app's installers and unpacked builds (electron-builder)
+apps/electron/release/
+
 # PDFium for the Windows app, fetched by apps/desktop/scripts/get-pdfium.mjs
 apps/desktop/src-tauri/pdfium/
 

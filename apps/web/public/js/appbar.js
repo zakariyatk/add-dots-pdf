@@ -169,6 +169,8 @@
     bar.querySelector('.abgrow').setAttribute('data-tauri-drag-region', '');
     bar.querySelector('.ablogo').setAttribute('data-tauri-drag-region', '');
     document.body.classList.add('appbar-win');
+    /* Electron (apps/electron) drags by CSS instead (app.css shell-electron) */
+    if (T.adddots && T.adddots.shell === 'electron') document.body.classList.add('shell-electron');
   }
   document.body.insertBefore(bar, document.body.firstChild);
   document.body.classList.add('has-appbar');
