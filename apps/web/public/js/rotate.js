@@ -68,9 +68,16 @@
 
     function rot(p, c, deg) { return E.rotPt(p, c, deg); }
     /** Mark s, from its state o before the drag, turned by deg about c. */
+    /* a mark of points keeps the angle it was turned to (s.fr), so its box
+       and grips stay turned with it afterwards (core.js frameCorners) */
+    function frame(s, o, deg) {
+      const fr = ((((o.fr || 0) + deg) % 360) + 360) % 360;
+      if (fr < 1e-6 || fr > 360 - 1e-6) delete s.fr; else s.fr = Math.round(fr * 1e6) / 1e6;
+    }
     function turnMark(s, o, c, deg) {
       if (o.pts && !o.a) {                                   /* a path, ink, Continuous Line */
         s.pts = o.pts.map(function (p) { return rot(p, c, deg); });
+        if (!o.quads) frame(s, o, deg);
         return;
       }
       if (o.quads || UPRIGHT[o.t]) {                         /* carried round, upright */
@@ -84,6 +91,7 @@
         if (o.a) s.a = rot(o.a, c, deg);
         if (Array.isArray(o.b)) s.b = rot(o.b, c, deg);
         if (o.m) s.m = rot(o.m, c, deg);
+        frame(s, o, deg);
         return;
       }
       /* a box, a circle, a picture, text: round the pivot, and its own angle on */

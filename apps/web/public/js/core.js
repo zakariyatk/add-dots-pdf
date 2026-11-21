@@ -2846,7 +2846,42 @@
   }
   /* scale a mark's points from the corner opposite the one pulled (ci: 0 top-
      left … 3 bottom-left of its box, in PDF space); Shift keeps the shape */
+  /* A mark made of points (a line, a path, a Continuous Line) remembers the
+     angle it was last turned to (s.fr), as Illustrator keeps a turned
+     object's box turned: its box, its grips and their pulls then run along
+     that angle, not the page's. inFrame works out a scale in that frame:
+     the points turned back level about the box's middle, scaled, and
+     turned again. */
+  function frameOf(o) { return o && o.fr && !o.quads && (o.pts && !o.a || twoPoint(o)) ? o.fr : 0; }
+  function frameMid(o) { const b = markBox(o); return [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2]; }
+  function turnPts(o, c, deg) {
+    const t = Object.assign({}, o);
+    if (o.a) t.a = rotPt(o.a, c, deg);
+    if (isPt(o.b)) t.b = rotPt(o.b, c, deg);
+    if (o.m) t.m = rotPt(o.m, c, deg);
+    if (o.pts && !o.a) t.pts = o.pts.map(function (q) { return rotPt(q, c, deg); });
+    return t;
+  }
+  function inFrame(s, o, p, fn) {
+    const fr = frameOf(o);
+    if (!fr) { fn(s, o, p); return; }
+    const c = frameMid(o), lev = turnPts(o, c, -fr);
+    lev.fr = 0;
+    const out = Object.assign({}, lev);
+    fn(out, lev, rotPt(p, c, -fr));
+    const back = turnPts(out, c, fr);
+    ['a', 'b', 'm', 'pts'].forEach(function (k) { if (o[k] != null && back[k] != null) s[k] = back[k]; });
+  }
+  /** a point mark's box in its own frame, as four PDF corners (top-left …
+      bottom-left of the frame), in the order the grips use */
+  function frameCorners(s) {
+    const fr = frameOf(s);
+    if (!fr) { const b = markBox(s); return [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]]; }
+    const c = frameMid(s), b = markBox(turnPts(s, c, -fr));
+    return [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]].map(function (q) { return rotPt(q, c, fr); });
+  }
   function scaleMark(s, o, ci, p, uniform) {
+    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleMark(s2, o2, ci, p2, uniform); }); return; }
     const b = markBox(o);
     const C = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
     const pull = C[ci], fix = C[(ci + 2) % 4];
@@ -2859,6 +2894,7 @@
   /* A side's grip stretches one way only, the far side staying put. Sides
      go round as the corners do: 0 the one at y1, 1 at x2, 2 at y2, 3 at x1. */
   function scaleSide(s, o, side, p) {
+    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleSide(s2, o2, side, p2); }); return; }
     const b = markBox(o);
     if (side === 0 || side === 2) {
       const pull = side === 0 ? b.y1 : b.y2, f = side === 0 ? b.y2 : b.y1, h = pull - f;
@@ -3013,6 +3049,11 @@
     s.b = [c1[0] + w / 2, c1[1] + h / 2];
   }
 
+  /* the angle a point mark's box keeps after a turn: where it was, plus this one */
+  function setFrame(s, o, delta) {
+    const fr = ((((o.fr || 0) + delta) % 360) + 360) % 360;
+    if (fr < 1e-6 || fr > 360 - 1e-6) delete s.fr; else s.fr = Math.round(fr * 1e6) / 1e6;
+  }
   function turnShape(s, o, d, p, snap) {
     const c = rotCenter(o);
     let delta = Math.atan2(p[1] - c[1], p[0] - c[0]) * 180 / Math.PI - d.a0;
@@ -3020,6 +3061,7 @@
       /* a mark made of points (a path, ink, a Continuous Line) turns them all */
       if (snap) delta = Math.round(delta / 15) * 15;
       s.pts = o.pts.map(function (q) { return rotPt(q, c, delta); });
+      setFrame(s, o, delta);
       d.turned = delta;
       return;
     }
@@ -3027,6 +3069,7 @@
       if (snap) delta = Math.round(delta / 15) * 15;
       s.a = rotPt(o.a, c, delta);
       s.b = rotPt(o.b, c, delta);
+      setFrame(s, o, delta);
       d.turned = delta;
     } else {
       let deg = (o.r || 0) + delta;
@@ -3692,8 +3735,49 @@
     });
   }
 
+  /* The resize pointer for a grip pulling along screen angle deg: a two-
+     headed arrow turned to that angle (to the nearest 15°), so on a turned
+     mark it points the way the grip actually pulls, as Illustrator's does.
+     At 24 and 48 pixels, sharp on any screen; made once per angle. */
+  const SIZE_CUR = {};
+  function sizeCursor(deg) {
+    const a = ((Math.round(deg / 15) * 15) % 180 + 180) % 180;
+    if (SIZE_CUR[a]) return SIZE_CUR[a];
+    const d = 'M4.5 12h15M4.5 12l3.4-3.4M4.5 12l3.4 3.4M19.5 12l-3.4-3.4M19.5 12l-3.4 3.4';
+    const body = "<g transform='rotate(" + a + " 12 12)'>" +
+      "<path d='" + d + "' stroke='white' stroke-width='3.3' stroke-linecap='round' stroke-linejoin='round' fill='none'/>" +
+      "<path d='" + d + "' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/></g>";
+    const url = function (px) {
+      return 'url("data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='" + px +
+        "' height='" + px + "' viewBox='0 0 24 24' shape-rendering='geometricPrecision'>" + body + '</svg>') + '")';
+    };
+    const fall = a < 22.5 || a >= 157.5 ? 'ew-resize' : a < 67.5 ? 'nwse-resize' : a < 112.5 ? 'ns-resize' : 'nesw-resize';
+    return (SIZE_CUR[a] = 'image-set(' + url(24) + ' 1x, ' + url(48) + ' 2x) 12 12, ' + fall);
+  }
+  /* each resize grip of g wears the arrow for its own pull: out from the
+     middle of the grips, through it */
+  function aimSizeCursors(g) {
+    const ks = Array.prototype.filter.call(g.querySelectorAll('rect.kn'), function (k) {
+      return /^(nwse|nesw|ns|ew)$/.test(k.dataset.cur || '');
+    });
+    if (ks.length < 2) return;
+    const at = ks.map(function (k) { return [+k.getAttribute('x') + 3.5, +k.getAttribute('y') + 3.5]; });
+    const cx = at.reduce(function (n, p) { return n + p[0]; }, 0) / at.length;
+    const cy = at.reduce(function (n, p) { return n + p[1]; }, 0) / at.length;
+    ks.forEach(function (k, i) {
+      const dx = at[i][0] - cx, dy = at[i][1] - cy;
+      if (Math.hypot(dx, dy) < 0.5) return;
+      k.style.cursor = sizeCursor(Math.atan2(dy, dx) * 180 / Math.PI);
+    });
+  }
+
   /* the grab points drawn on the selected mark */
   function handlesEl(it, s, vp, idx) {
+    const g = handlesBare(it, s, vp, idx);
+    aimSizeCursors(g);
+    return g;
+  }
+  function handlesBare(it, s, vp, idx) {
     const g = document.createElementNS(SVGNS, 'g');
     g.setAttribute('class', 'hnd');
     /* As Acrobat draws them: a round grip at each corner, a pill on each
@@ -3786,21 +3870,29 @@
     if (byPoints) kind = 'bbox';
 
     if (kind === 'bbox' || kind === 'point') {
-      /* a box round it; 'bbox' corners scale it, a 'point' mark only moves */
-      const b = markBox(s);
-      const q = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]]
-        .map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+      /* a box round it, turned with the mark if it was turned (frameCorners);
+         'bbox' corners scale it, a 'point' mark only moves */
+      const q = (kind === 'bbox' ? frameCorners(s) : (function () {
+        const b = markBox(s);
+        return [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
+      })()).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
       let qx1 = Infinity, qy1 = Infinity, qx2 = -Infinity, qy2 = -Infinity;
       q.forEach(function (v) {
         qx1 = Math.min(qx1, v[0]); qy1 = Math.min(qy1, v[1]);
         qx2 = Math.max(qx2, v[0]); qy2 = Math.max(qy2, v[1]);
       });
-      const pad = kind === 'point' ? 4 : 2;
-      const out = document.createElementNS(SVGNS, 'rect');
+      const pad = kind === 'point' ? 4 : 0;
+      let out;
+      if (pad) {
+        out = document.createElementNS(SVGNS, 'rect');
+        out.setAttribute('x', qx1 - pad); out.setAttribute('y', qy1 - pad);
+        out.setAttribute('width', Math.max(4, qx2 - qx1 + pad * 2));
+        out.setAttribute('height', Math.max(4, qy2 - qy1 + pad * 2));
+      } else {
+        out = document.createElementNS(SVGNS, 'polygon');
+        out.setAttribute('points', vpts(q));
+      }
       out.setAttribute('class', 'halo');
-      out.setAttribute('x', qx1 - pad); out.setAttribute('y', qy1 - pad);
-      out.setAttribute('width', Math.max(4, qx2 - qx1 + pad * 2));
-      out.setAttribute('height', Math.max(4, qy2 - qy1 + pad * 2));
       g.appendChild(out);
       /* a mark made of points (a path, ink, a Pen path) turns by its points */
       const turns = (s.pts && !s.a && !s.quads) || (byPoints && (EXT.handleKind[s.t] || s.t) !== 'ends');
