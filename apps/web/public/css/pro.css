@@ -1079,6 +1079,38 @@ body.props-in-ribbon #modeBar > * { flex: none }
 .rprops .markpop .txctl:not([hidden]) { display: flex; flex-wrap: wrap; gap: 6px }
 .rprops #mpExt, .rprops #mpExt > div, .rprops #mpExt .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
 .rprops #mpExt[hidden] { display: none }
+/* the tool in hand's options, at the top of the Properties panel (js/toolprops.js):
+   the same controls the left panel used to hold, laid down the panel */
+.rtool { padding: 6px 12px 12px; border-bottom: 1px solid var(--line) }
+.rtool[hidden] { display: none }
+#railProps .rtool #modeBar {
+  position: static; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  min-height: 0 !important; padding: 0; background: none; border: 0; box-shadow: none; overflow: visible;
+}
+#railProps .rtool #modeBar:not(.show) { display: none }
+#railProps .rtool #modeBar > * { flex: none; max-width: 100% }
+#railProps .rtool #modeBar .btn {
+  height: 32px; min-height: 32px; width: auto; min-width: 0; max-width: none;
+  flex-direction: row; padding: 0 10px; gap: 6px; border-radius: 7px;
+}
+#railProps .rtool #modeBar .btn::after { content: none }
+#railProps .rtool #modeBar .hint {
+  flex: 0 0 100%; order: 90; max-width: none; min-width: 0; font-size: 12px; line-height: 1.45;
+  display: block; -webkit-line-clamp: unset; overflow: visible; white-space: normal; color: var(--text-dim)
+}
+#railProps .rtool #modeBar .grow, #railProps .rtool #modeBar #modeDone { display: none }
+#railProps .rtool #modeBar select, #railProps .rtool #modeBar input:not([type="range"]) { max-width: 100% }
+/* each row of controls (the text tool's, Dimension's Scale and Units, the others') wraps in the panel */
+#railProps .rtool #modeBar .txctl, #railProps .rtool #modeBar .swatches, #railProps .rtool #modeBar .widths {
+  flex-wrap: wrap; row-gap: 6px; column-gap: 6px; max-width: 100%
+}
+#railProps .rtool #modeBar .txctl:not([hidden]) { display: flex; align-items: center; flex: 0 0 100%; min-width: 0 }
+#railProps .rtool #modeBar .txctl select { flex: 1 1 64px; min-width: 0 }
+#railProps .rtool #modeBar .txctl .anno-lbl { flex: none }
+/* Colour and Line width share their row, end to end */
+#railProps .rtool #modeBar .swatches:not([style*="none"]), #railProps .rtool #modeBar .widths:not([style*="none"]) { flex: 1 1 0; min-width: 0 }
+#railProps .rtool #modeBar .swatches > button, #railProps .rtool #modeBar .widths > button { flex: 1 1 auto; justify-content: space-between }
+
 .props-empty { margin: 14px 12px; font-size: 12.5px; color: var(--text-dim) }
 .props-empty[hidden], .rprops[hidden] { display: none }
 .rprops-sub { border-top: 1px solid var(--line); margin-top: 6px }

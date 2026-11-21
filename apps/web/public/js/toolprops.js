@@ -83,16 +83,24 @@
     ppanel.className = 'rail-body'; ppanel.id = 'railProps'; ppanel.hidden = true;
     ppanel.innerHTML =
       '<div class="laybar"><b>Properties</b><span class="laycount" id="propsName"></span></div>' +
-      '<p class="props-empty" id="propsEmpty">Select an object on the page to edit it here.</p>' +
+      '<div class="rtool" id="propsTool" hidden></div>' +
+      '<p class="props-empty" id="propsEmpty">Select an object on the page to edit it here, or pick a tool to set how it draws.</p>' +
       '<div class="rprops" id="propsHost"></div>';
     if (railHost) railHost.appendChild(ppanel);
     const propsHost = ppanel.querySelector('#propsHost');
+    /* the tool in hand's own options (core's #modeBar) go here too, not into
+       a tab that would take the left panel over while drawing */
+    const toolSec = ppanel.querySelector('#propsTool');
     /* the same, under the Layers tree */
     const layHost = document.createElement('div');
     layHost.className = 'rprops rprops-sub'; layHost.id = 'propsInLayers'; layHost.hidden = true;
     layHost.innerHTML = '<div class="rprops-h">Properties<span id="propsNameL"></span></div>';
     if ($('railLayers')) $('railLayers').appendChild(layHost);
 
+    /* what the rail showed before Properties came forward for a mark: put
+       back when the mark is let go, as the Drawing Tool tab gave the ribbon
+       back — unless another panel was picked in between */
+    let before = null;                          /* {open, tab} */
     function railBodies() { return railHost ? Array.prototype.slice.call(railHost.querySelectorAll(':scope > .rail-body')) : []; }
     function showProps() {
       if (!S.items.length || !railHost) return;
@@ -111,9 +119,10 @@
     function propsSpot() { return layersShowing() ? layHost : propsHost; }
     function paintProps() {
       const on = pop && !pop.hidden;
-      const name = ($('mpTitle') && $('mpTitle').textContent) || '';
-      $('propsEmpty').hidden = on && pop.parentNode === propsHost;
-      $('propsName').textContent = on ? name : '';
+      const tool = !toolSec.hidden;
+      const name = tool ? (badge.dataset.label || '') : ($('mpTitle') && $('mpTitle').textContent) || '';
+      $('propsEmpty').hidden = tool || (on && pop.parentNode === propsHost);
+      $('propsName').textContent = tool || on ? name : '';
       $('propsNameL').textContent = on ? ' · ' + name : '';
       layHost.hidden = !(on && pop.parentNode === layHost);
     }
@@ -143,7 +152,7 @@
         if (bar.parentNode !== home.parent) home.parent.insertBefore(bar, home.next);
         if (pop && pop.parentNode !== popHome.parent) popHome.parent.insertBefore(pop, popHome.next);
       } else {
-        if (bar.parentNode !== holder) holder.appendChild(bar);
+        if (bar.parentNode !== toolSec) toolSec.appendChild(bar);
         const spot = propsSpot();
         if (pop && pop.parentNode !== spot) spot.appendChild(pop);
       }
@@ -172,41 +181,40 @@
       const markLive = !phone && !toolLive && pop &&
         (!pop.hidden || (mode === 'mark' && !!selectedMark()));
 
-      if (!toolLive) {
-        const was = !tab.hidden;
-        tab.hidden = true;
-        if (was && activeTab() === 'ribTool') X.setRibbon(fromTab);
-        /* a mark picked out: its properties on the right, the panel opened
-           for it the moment it is picked (not on every click after, so a
-           rail closed by hand stays closed) */
-        if (markLive && mode !== 'mark' && !layersShowing()) showProps();
-        mode = markLive ? 'mark' : null;
-        place();
-        paintProps();
-        return;
-      }
-      paintProps();
-
-      holder.hidden = !toolLive;
-      markHolder.hidden = true;
-      if (toolLive) {
-        mode = 'tool';
-        const b = toolButton(S.tool);
-        const label = (b && (b.dataset.label || b.getAttribute('aria-label'))) || 'Tool';
-        setBadge(b, label, label + ' — back to its tab to pick another tool');
-        tab.textContent = 'Drawing Tool';
-      } else {
-        mode = 'mark';
-        const s = selectedMark();
-        const name = ($('mpTitle') && $('mpTitle').textContent) || 'Mark';
-        setBadge(s ? toolButton(s.t) : null, name, 'Editing this ' + name.toLowerCase() +
-          ' — back to the tab you were on');
-        tab.textContent = 'Drawing Tool';
-      }
+      /* the Drawing Tool tab is not used on a desktop any more: both kinds
+         of properties are on the right (the phone keeps them docked) */
+      const was = !tab.hidden;
+      tab.hidden = true;
+      if (was && activeTab() === 'ribTool') X.setRibbon(fromTab);
       const cur = activeTab();
       if (cur && cur !== 'ribTool') fromTab = cur;
-      tab.hidden = false;
-      if (cur !== 'ribTool') X.setRibbon('ribTool');
+
+      toolSec.hidden = !toolLive;
+      if (toolLive) {
+        const b = toolButton(S.tool);
+        const label = (b && (b.dataset.label || b.getAttribute('aria-label'))) || 'Tool';
+        setBadge(b, label, label);
+      }
+      const now = toolLive ? 'tool' : markLive ? 'mark' : null;
+      /* Properties comes forward when a tool is picked up or a mark picked out
+         — once, at that moment, so a rail closed by hand stays closed — and
+         what the rail showed before is given back when there is nothing to
+         show (unless another panel was picked in between) */
+      if (now && !mode && !(now === 'mark' && layersShowing()) && (!railOpen() || ppanel.hidden)) {
+        const on = document.querySelector('.rail-tabs .btn.on');
+        before = { open: railOpen(), tab: on && on !== ptab ? on : null };
+        showProps();
+      } else if (!now && mode && before) {
+        const bk = before;
+        before = null;
+        if (railOpen() && !ppanel.hidden) {
+          if (!bk.open) X.setRail(false);
+          else if (bk.tab) bk.tab.click();
+        }
+      }
+      mode = now;
+      place();
+      paintProps();
     }
 
     /* No Done, Cancel or Delete bar beside the work: as in Acrobat and
@@ -219,6 +227,10 @@
     if (pop && window.MutationObserver) {
       new MutationObserver(sync)
         .observe(pop, { attributes: true, attributeFilter: ['hidden'] });
+    }
+    /* the name over the Properties panel follows the mark picked out */
+    if ($('mpTitle') && window.MutationObserver) {
+      new MutationObserver(paintProps).observe($('mpTitle'), { childList: true, characterData: true, subtree: true });
     }
     /* and a click on empty page, or Delete, clears the selection */
     document.addEventListener('pointerup', function () {

@@ -2915,7 +2915,10 @@
     S.sel = { it: it, i: idx };
     try { it.anno.setPointerCapture(e.pointerId); } catch (err) { /* mouse works without it */ }
     if (fresh) redrawAll(); else drawShapes(it);
-    hideMarkPop();                               /* it comes back when the drag ends */
+    /* floating over the page it would be in the way of the drag, so it comes
+       back when the drag ends; docked in the Properties panel on the right
+       (js/toolprops.js) it covers nothing and stays, showing what is dragged */
+    if (markPopDocked()) syncMarkPop(); else hideMarkPop();
   }
 
   /* ratio: keep the box's own proportions (a signature or a picture), the
@@ -3137,7 +3140,7 @@
     markup: 'Markup', ink: 'Ink', note: 'Note', stamp: 'Stamp', sig: 'Signature',
     redact: 'Redaction', wm: 'Watermark', hf: 'Header / footer', bates: 'Bates',
     image: 'Image', video: 'Video', link: 'Link', table: 'Table', leader: 'Leader',
-    vpath: 'Shape'
+    vpath: 'Shape', poly: 'Continuous Line'
   };
   let mpBuilt = false;
 
@@ -3378,9 +3381,13 @@
     if (v) s.r = v; else delete s.r;
   }
 
+  function markPopDocked() {
+    const p = $('markPop');
+    return !!(p && p.closest && p.closest('.rprops'));
+  }
   function syncMarkPop() {
     const pop = $('markPop'), s = selShape();
-    if (!s || dragOn) { pop.hidden = true; closeSwatches(); return; }
+    if (!s || (dragOn && !markPopDocked())) { pop.hidden = true; closeSwatches(); return; }
     buildMarkPop();
     const isText = s.t === 'text';
     /* a shape off the page fills too — a Continuous Line only once it is
