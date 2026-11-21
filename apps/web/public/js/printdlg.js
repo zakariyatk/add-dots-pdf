@@ -218,7 +218,7 @@
               '<input type="range" id="prSlider" min="1" max="1" value="1" aria-label="Sheet">' +
               '<button type="button" class="wdbtn prstep" id="prNext" aria-label="Next sheet">›</button>' +
             '</div>' +
-            '<div class="prcount" id="prCount">Page 1 of 1</div>' +
+            '<div class="prcount" id="prCount"></div>' +
             '<p class="wderr prerr" id="prErr" role="alert" hidden></p>' +
           '</div>' +
         '</div>' +
