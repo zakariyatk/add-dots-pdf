@@ -37,7 +37,7 @@
        as Illustrator's Direct Selection and Add / Delete Anchor Point (js/vertex.js) */
     const TOOLS_GROUPS = [
       { ids: ['tToolsPan', 'tToolsMove', 'tToolsSelect'] },
-      { ids: ['tVxDirect'] },
+      { ids: ['tVxDirect', 'tRotate'] },
       /* the Pen (js/pen.js) with its two anchor-point tools, as Illustrator groups them */
       { ids: ['tPen', 'tVxAdd', 'tVxDel'] }
     ];
@@ -137,7 +137,9 @@
        together; as in other editors, only the one that was picked shows as
        pressed: Move while move-mode is on, Select otherwise. */
     function paintMove() {
-      const sel = X.S.tool === 'select', mv = document.body.classList.contains('move-mode');
+      /* the Rotate tool (js/rotate.js) is Select underneath too: neither lit then */
+      const sel = X.S.tool === 'select' && !document.body.classList.contains('rotate-mode'),
+        mv = document.body.classList.contains('move-mode');
       document.querySelectorAll('#tSelect, [data-tool-btn="select"]').forEach(function (el) {
         const isMove = el.dataset.move === '1';
         el.classList.toggle('on', sel && (isMove ? mv : !mv));

@@ -450,7 +450,7 @@
      Marks they invent are ordinary entries in it.shapes, so undo, save, the
      JPG export and the thumbnails all keep working with no extra wiring. */
   const EXT = window.ADDPDF || (window.ADDPDF = {
-    shapeRenderers: {}, handleKind: {}, keepRatio: {},
+    shapeRenderers: {}, handleKind: {}, keepRatio: {}, afterDraw: [],
     markPop: {},                 /* mark type -> {el, sync}: extra controls on the properties popover */
     /* before a save: promises to wait for (forms reading the file's values) */
     beforeSave: [],
@@ -2260,7 +2260,11 @@
       it.anno.appendChild(el);
     });
     if (ghost) it.anno.appendChild(shapeEl(it, ghost, vp, -1));
-    if (!ghost && S.tool === 'select' && S.sel && S.sel.it === it) {
+    /* the text being typed into has its editor's own frame round it, as in
+       Illustrator: no selection box or grips of the mark's as well (they
+       would only frame the first letters, its text being hidden meanwhile) */
+    const typing = S.editing && S.editing.it === it && S.editing.idx >= 0 && S.sel && S.sel.i === S.editing.idx;
+    if (!ghost && !typing && S.tool === 'select' && S.sel && S.sel.it === it) {
       const list = selList();
       if (list.length > 1) {
         /* a group: one frame round the whole thing first, as its own drag
@@ -2278,11 +2282,14 @@
           ux1 = Math.min(ux1, b.x); uy1 = Math.min(uy1, b.y);
           ux2 = Math.max(ux2, b.x + b.width); uy2 = Math.max(uy2, b.y + b.height);
         });
+        /* the members' own elements, read before anything is added in
+           front of them and shifts the indexes */
+        const members = list.map(function (i) { return { i: i, el: it.anno.children[i] }; });
         if (ux2 > ux1) {
           const frame = document.createElementNS(SVGNS, 'rect');
-          frame.setAttribute('class', 'halo multi-frame');
-          frame.setAttribute('x', ux1 - 3); frame.setAttribute('y', uy1 - 3);
-          frame.setAttribute('width', ux2 - ux1 + 6); frame.setAttribute('height', uy2 - uy1 + 6);
+          frame.setAttribute('class', 'multi-frame');
+          frame.setAttribute('x', ux1); frame.setAttribute('y', uy1);
+          frame.setAttribute('width', ux2 - ux1); frame.setAttribute('height', uy2 - uy1);
           frame.addEventListener('pointerdown', function (e) { beginDrag(it, S.sel.i, e, 'move'); });
           /* under every mark (first child, SVG's own paint order), so one
              still catches its own click first — Ctrl+click to drop it out
@@ -2290,17 +2297,41 @@
              the gap between members, where nothing else is there to */
           it.anno.insertBefore(frame, it.anno.firstChild);
         }
-        list.forEach(function (i) {
-          const el = it.anno.children[i];
-          if (!el || !el.getBBox) return;
+        /* As Illustrator shows a selection of several objects: each one's
+           own outline traced in blue with a dot at its centre, and one
+           bounding box round them all with eight square grips that scale
+           the whole selection together. */
+        const over = document.createElementNS(SVGNS, 'g');
+        over.setAttribute('class', 'msel');
+        members.forEach(function (m) {
+          const el = m.el, sh = it.shapes[m.i];
+          if (!el || !el.getBBox || !sh) return;
           let b;
           try { b = el.getBBox(); } catch (e) { return; }
-          const h = document.createElementNS(SVGNS, 'rect');
-          h.setAttribute('class', 'halo multi');
-          h.setAttribute('x', b.x - 3); h.setAttribute('y', b.y - 3);
-          h.setAttribute('width', b.width + 6); h.setAttribute('height', b.height + 6);
-          it.anno.appendChild(h);
+          /* a drawn line or shape: its own path, in blue; text, a picture
+             or anything else without a line to trace: the box round it */
+          const traced = sh.t !== 'text' && !el.querySelector('foreignObject, image, text');
+          if (traced) {
+            const c = el.cloneNode(true);
+            c.removeAttribute('id');
+            c.setAttribute('class', 'mtrace');
+            c.style.display = '';
+            over.appendChild(c);
+          } else {
+            const r = document.createElementNS(SVGNS, 'rect');
+            r.setAttribute('class', 'mtrace-box');
+            r.setAttribute('x', b.x); r.setAttribute('y', b.y);
+            r.setAttribute('width', b.width); r.setAttribute('height', b.height);
+            over.appendChild(r);
+          }
+          const dot = document.createElementNS(SVGNS, 'rect');
+          dot.setAttribute('class', 'mcenter');
+          dot.setAttribute('x', b.x + b.width / 2 - 3); dot.setAttribute('y', b.y + b.height / 2 - 3);
+          dot.setAttribute('width', 6); dot.setAttribute('height', 6);
+          over.appendChild(dot);
         });
+        it.anno.appendChild(over);
+        it.anno.appendChild(groupHandlesEl(it, vp, list));
       } else {
         const sel = it.shapes[S.sel.i];
         if (sel && sel.t !== 'pin') {
@@ -2310,6 +2341,8 @@
         }
       }
     }
+    /* what a module draws over the marks (the Rotate tool's pivot, js/rotate.js) */
+    if (!ghost) EXT.afterDraw.forEach(function (fn) { try { fn(it); } catch (e) { console.error('[afterDraw]', e); } });
   }
 
   function shapeEl(it, s, vp, idx) {
@@ -2482,12 +2515,16 @@
       const w = E.lineWidth(s, li, textWidth);
       const lo = lineOrigin(s, li, w);
       const pt = vp.convertToViewportPoint(lo[0], lo[1]);
+      /* tracking, and justify all: the space after each character but the
+         last, the same the saved PDF puts there (engine charSpacing) */
+      const cs = E.charSpacing(s, li, textWidth);
       /* a piece at a time: part of the text can be bold, coloured or
          underlined on its own, as a selection in Word is */
       let dx = 0;
       E.lineSpans(s, li).forEach(function (sp) {
         const ps = sp.s;
         const pw = textWidth(ps, sp.text);
+        const nch = Array.from(sp.text).length;
         const t = document.createElementNS(SVGNS, 'text');
         t.setAttribute('class', 'tx');
         t.setAttribute('x', pt[0] + dx * S.scale); t.setAttribute('y', pt[1]);
@@ -2499,14 +2536,17 @@
         if (ps.i) t.setAttribute('font-style', 'italic');
         if (ps.u || ps.k) t.style.textDecoration = textDecoLine(ps);
         if (ang) t.setAttribute('transform', 'rotate(' + ang + ',' + pt[0] + ',' + pt[1] + ')');
-        if (pw) { t.setAttribute('textLength', pw * S.scale); t.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
+        if (pw && cs && nch > 1) {
+          /* spaced out: the glyphs keep their shape, the gaps widen */
+          t.setAttribute('textLength', (pw + cs * (nch - 1)) * S.scale); t.setAttribute('lengthAdjust', 'spacing');
+        } else if (pw) { t.setAttribute('textLength', pw * S.scale); t.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
         t.textContent = sp.text;
         g.appendChild(clicker(t));
-        dx += pw || sp.text.length * s.size * 0.5;
+        dx += (pw || sp.text.length * s.size * 0.5) + cs * nch;
       });
     });
 
-    if (selected) {
+    if (selected && !open) {
       const h = document.createElementNS(SVGNS, 'polygon');
       h.setAttribute('class', 'halo');
       h.setAttribute('points', vpts(textQuad(s, vp)));
@@ -2706,6 +2746,21 @@
     const text = E.formatLength(Math.abs(v), sc);
     return (v < -0.005 ? '−' : v > 0.005 ? '+' : '±') + text;
   }
+  function fmtLen(v) {
+    const sc = EXT.saveState && EXT.saveState.scale && EXT.saveState.scale();
+    return E.formatLength(Math.abs(v), sc);
+  }
+  function fmtAngle(v) {
+    let a = ((v % 360) + 360) % 360;
+    if (a > 180) a -= 360;
+    return (Math.round(a * 10) / 10) + '°';
+  }
+  function showHudText(e, text) {
+    ensureMoveHud();
+    moveHud.textContent = text;
+    moveHud.style.transform = 'translate(' + Math.round(e.clientX + 16) + 'px,' + Math.round(e.clientY + 22) + 'px)';
+    moveHud.hidden = false;
+  }
   function showMoveHud(e, mx, my) {
     ensureMoveHud();
     moveHud.textContent = 'x ' + fmtDelta(mx) + '   y ' + fmtDelta(my);
@@ -2795,7 +2850,42 @@
   }
   /* scale a mark's points from the corner opposite the one pulled (ci: 0 top-
      left … 3 bottom-left of its box, in PDF space); Shift keeps the shape */
+  /* A mark made of points (a line, a path, a Continuous Line) remembers the
+     angle it was last turned to (s.fr), as Illustrator keeps a turned
+     object's box turned: its box, its grips and their pulls then run along
+     that angle, not the page's. inFrame works out a scale in that frame:
+     the points turned back level about the box's middle, scaled, and
+     turned again. */
+  function frameOf(o) { return o && o.fr && !o.quads && (o.pts && !o.a || twoPoint(o)) ? o.fr : 0; }
+  function frameMid(o) { const b = markBox(o); return [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2]; }
+  function turnPts(o, c, deg) {
+    const t = Object.assign({}, o);
+    if (o.a) t.a = rotPt(o.a, c, deg);
+    if (isPt(o.b)) t.b = rotPt(o.b, c, deg);
+    if (o.m) t.m = rotPt(o.m, c, deg);
+    if (o.pts && !o.a) t.pts = o.pts.map(function (q) { return rotPt(q, c, deg); });
+    return t;
+  }
+  function inFrame(s, o, p, fn) {
+    const fr = frameOf(o);
+    if (!fr) { fn(s, o, p); return; }
+    const c = frameMid(o), lev = turnPts(o, c, -fr);
+    lev.fr = 0;
+    const out = Object.assign({}, lev);
+    fn(out, lev, rotPt(p, c, -fr));
+    const back = turnPts(out, c, fr);
+    ['a', 'b', 'm', 'pts'].forEach(function (k) { if (o[k] != null && back[k] != null) s[k] = back[k]; });
+  }
+  /** a point mark's box in its own frame, as four PDF corners (top-left …
+      bottom-left of the frame), in the order the grips use */
+  function frameCorners(s) {
+    const fr = frameOf(s);
+    if (!fr) { const b = markBox(s); return [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]]; }
+    const c = frameMid(s), b = markBox(turnPts(s, c, -fr));
+    return [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]].map(function (q) { return rotPt(q, c, fr); });
+  }
   function scaleMark(s, o, ci, p, uniform) {
+    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleMark(s2, o2, ci, p2, uniform); }); return; }
     const b = markBox(o);
     const C = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
     const pull = C[ci], fix = C[(ci + 2) % 4];
@@ -2808,6 +2898,7 @@
   /* A side's grip stretches one way only, the far side staying put. Sides
      go round as the corners do: 0 the one at y1, 1 at x2, 2 at y2, 3 at x1. */
   function scaleSide(s, o, side, p) {
+    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleSide(s2, o2, side, p2); }); return; }
     const b = markBox(o);
     if (side === 0 || side === 2) {
       const pull = side === 0 ? b.y1 : b.y2, f = side === 0 ? b.y2 : b.y1, h = pull - f;
@@ -2902,7 +2993,7 @@
     }
     /* grabbing a member of a group moves the whole group */
     const list = selList();
-    const group = mode === 'move' && list.length > 1 && S.sel.it === it && list.indexOf(idx) >= 0
+    const group = (mode === 'move' || mode === 'gscale' || mode === 'gturn') && list.length > 1 && S.sel.it === it && list.indexOf(idx) >= 0
       ? list.map(function (i) { return { i: i, s0: copyShape(it.shapes[i]) }; }) : null;
     dragOn = {
       it: it, idx: idx, mode: mode, extra: extra, from: at, s0: copyShape(s),
@@ -2962,18 +3053,34 @@
     s.b = [c1[0] + w / 2, c1[1] + h / 2];
   }
 
+  /* the angle a point mark's box keeps after a turn: where it was, plus this one */
+  function setFrame(s, o, delta) {
+    const fr = ((((o.fr || 0) + delta) % 360) + 360) % 360;
+    if (fr < 1e-6 || fr > 360 - 1e-6) delete s.fr; else s.fr = Math.round(fr * 1e6) / 1e6;
+  }
   function turnShape(s, o, d, p, snap) {
     const c = rotCenter(o);
     let delta = Math.atan2(p[1] - c[1], p[0] - c[0]) * 180 / Math.PI - d.a0;
+    if (o.pts && !o.a) {
+      /* a mark made of points (a path, ink, a Continuous Line) turns them all */
+      if (snap) delta = Math.round(delta / 15) * 15;
+      s.pts = o.pts.map(function (q) { return rotPt(q, c, delta); });
+      setFrame(s, o, delta);
+      d.turned = delta;
+      return;
+    }
     if (turnsByEnds(o.t)) {
       if (snap) delta = Math.round(delta / 15) * 15;
       s.a = rotPt(o.a, c, delta);
       s.b = rotPt(o.b, c, delta);
+      setFrame(s, o, delta);
+      d.turned = delta;
     } else {
       let deg = (o.r || 0) + delta;
       if (snap) deg = Math.round(deg / 15) * 15;
       s.r = ((deg % 360) + 360) % 360;
       if (!s.r) delete s.r;
+      d.turned = s.r || 0;                       /* its angle, as the Angle field shows it */
     }
   }
 
@@ -3047,6 +3154,33 @@
       } else {
         moveShape(s, o, mx, my);
       }
+    } else if (d.mode === 'gscale') {
+      if (!d.group) return;
+      const k = d.extra;
+      let sx = k.ax ? (p[0] - k.f[0]) / (k.h[0] - k.f[0]) : 1;
+      let sy = k.ay ? (p[1] - k.f[1]) / (k.h[1] - k.f[1]) : 1;
+      /* never flat: a grip pulled right through the far side flips the
+         selection over, as in Illustrator, but always keeps some size */
+      const keep = function (v) { return Math.abs(v) < 0.02 ? (v < 0 ? -0.02 : 0.02) : v; };
+      sx = keep(sx); sy = keep(sy);
+      if (e.shiftKey && k.corner) {
+        const m = Math.max(Math.abs(sx), Math.abs(sy));
+        sx = sx < 0 ? -m : m; sy = sy < 0 ? -m : m;
+      }
+      scaleGroup(d.it, d.group, k.f, sx, sy);
+    } else if (d.mode === 'gturn') {
+      /* the whole selection turned about the middle of its box, each mark
+         the way it turns (js/rotate.js) */
+      if (!d.group || !EXT.turnMark) return;
+      const c = d.extra.c;
+      if (d.ga0 == null) d.ga0 = Math.atan2(d.from[1] - c[1], d.from[0] - c[0]) * 180 / Math.PI;
+      let deg = Math.atan2(p[1] - c[1], p[0] - c[0]) * 180 / Math.PI - d.ga0;
+      if (e.shiftKey) deg = Math.round(deg / 15) * 15;
+      d.group.forEach(function (m) {
+        const sh = d.it.shapes[m.i];
+        if (sh) EXT.turnMark(sh, m.s0, c, deg);
+      });
+      d.turned = deg;
     } else if ((d.mode === 'pv' || ((d.mode === 'pa' || d.mode === 'pb') && o.t === 'line')) && EXT.vxJoinAt &&
                (d.join = EXT.vxJoinAt(d.it, d.idx, d.mode === 'pv' ? d.extra : d.mode === 'pa' ? 0 : 1, p, o))) {
       /* a point dragged near another point of a line or shape lands on it,
@@ -3091,8 +3225,16 @@
       const d1 = Math.hypot(p[0] - c[0], p[1] - c[1]);
       if (d.d0 > 1) s.size = Math.max(4, Math.min(300, o.size * (d1 / d.d0)));
     }
+    /* by the pointer, as Illustrator shows it: the size while a grip is
+       pulled, the angle while the mark turns */
+    if (d.mode === 'turn' || d.mode === 'gturn') showHudText(e, 'Angle ' + fmtAngle(d.turned || 0));
+    else if (SIZE_MODES[d.mode]) {
+      const vb = d.group ? unionBox(d.group.map(function (m) { return visBox(d.it.shapes[m.i]); })) : visBox(s);
+      showHudText(e, 'W ' + fmtLen(vb.x2 - vb.x1) + '   H ' + fmtLen(vb.y2 - vb.y1));
+    }
     drawShapes(d.it);
   }
+  const SIZE_MODES = { corner: 1, side: 1, bscale: 1, bside: 1, gscale: 1, size: 1 };
 
   function dragEnd(e) {
     const d = dragOn; if (!d) return;
@@ -3125,7 +3267,11 @@
     hideMoveHud();
     hideDistHuds();
     document.body.classList.remove('dragdup');
-    if (d.moved) { d.it.shapes[d.idx] = d.s0; drawShapes(d.it); }
+    if (d.moved) {
+      if (d.group) d.group.forEach(function (m) { d.it.shapes[m.i] = m.s0; });
+      else d.it.shapes[d.idx] = d.s0;
+      drawShapes(d.it);
+    }
   });
 
   /* ---- properties of the selected mark ---- */
@@ -3481,8 +3627,161 @@
   }
   function hideMarkPop() { const p = $('markPop'); if (p) p.hidden = true; closeSwatches(); }
 
+  /** What a mark covers on the page, in PDF points: its points' box, except
+      that text covers its whole footprint (not just its anchor) and a box
+      turned by its own angle covers its turned corners. */
+  function visBox(s) {
+    let P = null;
+    if (s.t === 'text' && s.a) {
+      const r = textRect(s), c = rotCenter(s);
+      P = [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]];
+      if (s.r) P = P.map(function (p) { return rotPt(p, c, s.r); });
+    } else if (s.r && twoPoint(s) && !turnsByEnds(s.t)) {
+      P = rectCorners(s);
+    }
+    if (!P) return markBox(s);
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    P.forEach(function (p) {
+      x1 = Math.min(x1, p[0]); y1 = Math.min(y1, p[1]);
+      x2 = Math.max(x2, p[0]); y2 = Math.max(y2, p[1]);
+    });
+    return { x1: x1, y1: y1, x2: x2, y2: y2 };
+  }
+
+  /** Which way the turn pointer curls, for a zone off a corner whose way out
+      from the middle (on screen) is (dx, dy): 'tl', 'tr', 'br' or 'bl'. */
+  function cornerOf(dx, dy) { return (dy < 0 ? 't' : 'b') + (dx < 0 ? 'l' : 'r'); }
+
+  /* The box round a selection of several marks and its eight square grips,
+     as Illustrator draws them: a corner scales both ways from the corner
+     opposite (Shift keeps the proportions), a side's middle one way from
+     the side opposite. Each grip carries its own point and the fixed one
+     opposite, in PDF points, so a turned page needs nothing special. */
+  function groupHandlesEl(it, vp, list) {
+    const g = document.createElementNS(SVGNS, 'g');
+    g.setAttribute('class', 'gsel');
+    const boxes = list.map(function (i) { return it.shapes[i]; })
+      .filter(function (s) { return s && !NOT_SELECTABLE[s.t]; }).map(visBox);
+    if (!boxes.length) return g;
+    const u = unionBox(boxes);
+    const C = [[u.x1, u.y1], [u.x2, u.y1], [u.x2, u.y2], [u.x1, u.y2]];
+    const mid = function (p, q) { return [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]; };
+    const grips = [];
+    C.forEach(function (p, i) { grips.push({ h: p, f: C[(i + 2) % 4], corner: true }); });
+    C.forEach(function (p, i) {
+      grips.push({ h: mid(p, C[(i + 1) % 4]), f: mid(C[(i + 2) % 4], C[(i + 3) % 4]), corner: false });
+    });
+    const V = C.map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+    const box = document.createElementNS(SVGNS, 'polygon');
+    box.setAttribute('class', 'gbox');
+    box.setAttribute('points', vpts(V));
+    g.appendChild(box);
+    const vc = [(V[0][0] + V[2][0]) / 2, (V[0][1] + V[2][1]) / 2];
+    /* just off each corner the pointer turns, as on one mark: a drag there
+       turns the whole selection about the middle of its box. Drawn first,
+       under the grips. */
+    const mid0 = [(u.x1 + u.x2) / 2, (u.y1 + u.y2) / 2];
+    V.forEach(function (v) {
+      let dx = v[0] - vc[0], dy = v[1] - vc[1];
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len; dy /= len;
+      const z = document.createElementNS(SVGNS, 'circle');
+      z.setAttribute('cx', v[0] + dx * 11); z.setAttribute('cy', v[1] + dy * 11);
+      z.setAttribute('r', 11);
+      z.setAttribute('class', 'rotz');
+      z.dataset.cur = cornerOf(dx, dy);
+      z.addEventListener('pointerdown', function (e) { beginDrag(it, S.sel.i, e, 'gturn', { c: mid0 }); });
+      g.appendChild(z);
+    });
+    grips.forEach(function (k) {
+      const ax = Math.abs(k.h[0] - k.f[0]) > 1e-6, ay = Math.abs(k.h[1] - k.f[1]) > 1e-6;
+      const v = vp.convertToViewportPoint(k.h[0], k.h[1]);
+      if (COARSE) {
+        const pad = document.createElementNS(SVGNS, 'circle');
+        pad.setAttribute('cx', v[0]); pad.setAttribute('cy', v[1]); pad.setAttribute('r', 22);
+        pad.setAttribute('class', 'knpad');
+        pad.addEventListener('pointerdown', function (e) {
+          beginDrag(it, S.sel.i, e, 'gscale', { h: k.h, f: k.f, ax: ax, ay: ay, corner: k.corner });
+        });
+        g.appendChild(pad);
+      }
+      const el = document.createElementNS(SVGNS, 'rect');
+      el.setAttribute('class', 'gkn');
+      el.setAttribute('x', v[0] - 3.5); el.setAttribute('y', v[1] - 3.5);
+      el.setAttribute('width', 7); el.setAttribute('height', 7);
+      const sdx = v[0] - vc[0], sdy = v[1] - vc[1];
+      el.dataset.cur = k.corner ? (sdx * sdy > 0 ? 'nwse' : 'nesw')
+        : (Math.abs(sdx) > Math.abs(sdy) ? 'ew' : 'ns');
+      el.addEventListener('pointerdown', function (e) {
+        beginDrag(it, S.sel.i, e, 'gscale', { h: k.h, f: k.f, ax: ax, ay: ay, corner: k.corner });
+      });
+      g.appendChild(el);
+    });
+    return g;
+  }
+  /* every member of a selection scaled by (sx, sy) about the fixed point f,
+     each from its state before the drag */
+  function scaleGroup(it, group, f, sx, sy) {
+    const fp = function (q) { return [f[0] + (q[0] - f[0]) * sx, f[1] + (q[1] - f[1]) * sy]; };
+    group.forEach(function (m) {
+      const sh = it.shapes[m.i], o = m.s0;
+      if (!sh) return;
+      scaleBy(sh, o, f, sx, sy);
+      if (o.m) sh.m = fp(o.m);
+      if (o.patch) {
+        const a = fp([o.patch.x, o.patch.y]), b = fp([o.patch.x + o.patch.w, o.patch.y + o.patch.h]);
+        sh.patch = Object.assign({}, o.patch, {
+          x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1])
+        });
+      }
+      /* text grows with its box, by the mean of the two ways */
+      if (o.t === 'text' && o.size) sh.size = Math.max(2, Math.min(600, o.size * Math.sqrt(Math.abs(sx * sy))));
+    });
+  }
+
+  /* The resize pointer for a grip pulling along screen angle deg: a two-
+     headed arrow turned to that angle (to the nearest 15°), so on a turned
+     mark it points the way the grip actually pulls, as Illustrator's does.
+     At 24 and 48 pixels, sharp on any screen; made once per angle. */
+  const SIZE_CUR = {};
+  function sizeCursor(deg) {
+    const a = ((Math.round(deg / 15) * 15) % 180 + 180) % 180;
+    if (SIZE_CUR[a]) return SIZE_CUR[a];
+    const d = 'M4.5 12h15M4.5 12l3.4-3.4M4.5 12l3.4 3.4M19.5 12l-3.4-3.4M19.5 12l-3.4 3.4';
+    const body = "<g transform='rotate(" + a + " 12 12)'>" +
+      "<path d='" + d + "' stroke='white' stroke-width='3.3' stroke-linecap='round' stroke-linejoin='round' fill='none'/>" +
+      "<path d='" + d + "' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/></g>";
+    const url = function (px) {
+      return 'url("data:image/svg+xml,' + encodeURIComponent("<svg xmlns='http://www.w3.org/2000/svg' width='" + px +
+        "' height='" + px + "' viewBox='0 0 24 24' shape-rendering='geometricPrecision'>" + body + '</svg>') + '")';
+    };
+    const fall = a < 22.5 || a >= 157.5 ? 'ew-resize' : a < 67.5 ? 'nwse-resize' : a < 112.5 ? 'ns-resize' : 'nesw-resize';
+    return (SIZE_CUR[a] = 'image-set(' + url(24) + ' 1x, ' + url(48) + ' 2x) 12 12, ' + fall);
+  }
+  /* each resize grip of g wears the arrow for its own pull: out from the
+     middle of the grips, through it */
+  function aimSizeCursors(g) {
+    const ks = Array.prototype.filter.call(g.querySelectorAll('rect.kn'), function (k) {
+      return /^(nwse|nesw|ns|ew)$/.test(k.dataset.cur || '');
+    });
+    if (ks.length < 2) return;
+    const at = ks.map(function (k) { return [+k.getAttribute('x') + 3.5, +k.getAttribute('y') + 3.5]; });
+    const cx = at.reduce(function (n, p) { return n + p[0]; }, 0) / at.length;
+    const cy = at.reduce(function (n, p) { return n + p[1]; }, 0) / at.length;
+    ks.forEach(function (k, i) {
+      const dx = at[i][0] - cx, dy = at[i][1] - cy;
+      if (Math.hypot(dx, dy) < 0.5) return;
+      k.style.cursor = sizeCursor(Math.atan2(dy, dx) * 180 / Math.PI);
+    });
+  }
+
   /* the grab points drawn on the selected mark */
   function handlesEl(it, s, vp, idx) {
+    const g = handlesBare(it, s, vp, idx);
+    aimSizeCursors(g);
+    return g;
+  }
+  function handlesBare(it, s, vp, idx) {
     const g = document.createElementNS(SVGNS, 'g');
     g.setAttribute('class', 'hnd');
     /* As Acrobat draws them: a round grip at each corner, a pill on each
@@ -3499,8 +3798,16 @@
     }
     function knob(v, mode, extra, turn) {
       fingerPad(v, mode, extra);
-      const el = document.createElementNS(SVGNS, 'circle');
-      el.setAttribute('cx', v[0]); el.setAttribute('cy', v[1]); el.setAttribute('r', turn ? 9 : 5);
+      /* a small square, as Illustrator draws its grips and anchor points */
+      let el;
+      if (turn) {
+        el = document.createElementNS(SVGNS, 'circle');
+        el.setAttribute('cx', v[0]); el.setAttribute('cy', v[1]); el.setAttribute('r', 9);
+      } else {
+        el = document.createElementNS(SVGNS, 'rect');
+        el.setAttribute('x', v[0] - 3.5); el.setAttribute('y', v[1] - 3.5);
+        el.setAttribute('width', 7); el.setAttribute('height', 7);
+      }
       el.setAttribute('class', 'kn' + (turn ? ' turn' : ''));
       /* which cursor the grip wears: a point to drag, or a size to pull */
       el.dataset.cur = turn ? 'rotate' : (mode === 'pa' || mode === 'pb' || mode === 'pv') ? 'point' : 'nwse';
@@ -3528,50 +3835,72 @@
       const ang = Math.atan2(p1[1] - p0[1], p1[0] - p0[0]) * 180 / Math.PI;
       fingerPad([mx, my], mode, side);
       const el = document.createElementNS(SVGNS, 'rect');
-      el.setAttribute('x', mx - 7); el.setAttribute('y', my - 3.5);
-      el.setAttribute('width', 14); el.setAttribute('height', 7); el.setAttribute('rx', 3.5);
-      el.setAttribute('transform', 'rotate(' + ang.toFixed(2) + ' ' + mx + ' ' + my + ')');
+      el.setAttribute('x', mx - 3.5); el.setAttribute('y', my - 3.5);
+      el.setAttribute('width', 7); el.setAttribute('height', 7);
       el.setAttribute('class', 'kn pill');
       const level = Math.abs(Math.cos(ang * Math.PI / 180)) >= Math.abs(Math.sin(ang * Math.PI / 180));
       el.dataset.cur = level ? 'ns' : 'ew';
       el.addEventListener('pointerdown', function (e) { beginDrag(it, idx, e, mode, side); });
       g.appendChild(el);
     }
-    /* the turn grip sits off the top edge, along its outward normal */
-    function turnGrip(p0, p1) {
-      const mx = (p0[0] + p1[0]) / 2, my = (p0[1] + p1[1]) / 2;
-      let nx = p1[1] - p0[1], ny = -(p1[0] - p0[0]);
-      const len = Math.hypot(nx, ny) || 1;
-      nx = nx / len * 24; ny = ny / len * 24;
-      const stem = document.createElementNS(SVGNS, 'line');
-      stem.setAttribute('class', 'stem');
-      stem.setAttribute('x1', mx); stem.setAttribute('y1', my);
-      stem.setAttribute('x2', mx + nx); stem.setAttribute('y2', my + ny);
-      g.appendChild(stem);
-      knob([mx + nx, my + ny], 'turn', null, true);
+    /* No turn grip of its own: as in Illustrator, the pointer just outside
+       a corner (or a line's end) becomes the turn pointer, and dragging
+       from there turns the mark about its centre. Each zone sits off the
+       corner, away from the middle, so the inside of the mark still moves
+       it and the grip itself still resizes. Drawn first, under the grips. */
+    function turnZones(pts, mid) {
+      pts.forEach(function (v) {
+        let dx = v[0] - mid[0], dy = v[1] - mid[1];
+        const len = Math.hypot(dx, dy) || 1;
+        dx /= len; dy /= len;
+        const z = document.createElementNS(SVGNS, 'circle');
+        z.setAttribute('cx', v[0] + dx * 11); z.setAttribute('cy', v[1] + dy * 11);
+        z.setAttribute('r', 11);
+        z.setAttribute('class', 'rotz');
+        z.dataset.cur = cornerOf(dx, dy);
+        z.addEventListener('pointerdown', function (e) { beginDrag(it, idx, e, 'turn'); });
+        g.appendChild(z);
+      });
     }
 
     /* A module mark says whether it grips like a box or like a chord; every
        mark here is two points either way, so the drag maths is already right. */
-    const kind = EXT.handleKind[s.t] || s.t;
+    let kind = EXT.handleKind[s.t] || s.t;
+    /* As in Illustrator, Select picks out the object, not its points: a line,
+       an arrow, a dimension or a Continuous Line gets the same box with
+       eight grips as anything else, and its own points (its ends, its
+       corners) are Direct Selection's to drag (js/vertex.js) */
+    const byPoints = kind === 'line' || kind === 'arrow' || kind === 'ends' || kind === 'verts';
+    if (byPoints) kind = 'bbox';
 
     if (kind === 'bbox' || kind === 'point') {
-      /* a box round it; 'bbox' corners scale it, a 'point' mark only moves */
-      const b = markBox(s);
-      const q = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]]
-        .map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+      /* a box round it, turned with the mark if it was turned (frameCorners);
+         'bbox' corners scale it, a 'point' mark only moves */
+      const q = (kind === 'bbox' ? frameCorners(s) : (function () {
+        const b = markBox(s);
+        return [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
+      })()).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
       let qx1 = Infinity, qy1 = Infinity, qx2 = -Infinity, qy2 = -Infinity;
       q.forEach(function (v) {
         qx1 = Math.min(qx1, v[0]); qy1 = Math.min(qy1, v[1]);
         qx2 = Math.max(qx2, v[0]); qy2 = Math.max(qy2, v[1]);
       });
-      const pad = kind === 'point' ? 4 : 2;
-      const out = document.createElementNS(SVGNS, 'rect');
+      const pad = kind === 'point' ? 4 : 0;
+      let out;
+      if (pad) {
+        out = document.createElementNS(SVGNS, 'rect');
+        out.setAttribute('x', qx1 - pad); out.setAttribute('y', qy1 - pad);
+        out.setAttribute('width', Math.max(4, qx2 - qx1 + pad * 2));
+        out.setAttribute('height', Math.max(4, qy2 - qy1 + pad * 2));
+      } else {
+        out = document.createElementNS(SVGNS, 'polygon');
+        out.setAttribute('points', vpts(q));
+      }
       out.setAttribute('class', 'halo');
-      out.setAttribute('x', qx1 - pad); out.setAttribute('y', qy1 - pad);
-      out.setAttribute('width', Math.max(4, qx2 - qx1 + pad * 2));
-      out.setAttribute('height', Math.max(4, qy2 - qy1 + pad * 2));
       g.appendChild(out);
+      /* a mark made of points (a path, ink, a Pen path) turns by its points */
+      const turns = (s.pts && !s.a && !s.quads) || (byPoints && (EXT.handleKind[s.t] || s.t) !== 'ends');
+      if (kind === 'bbox' && turns) turnZones(q, [(qx1 + qx2) / 2, (qy1 + qy2) / 2]);
       if (kind === 'bbox') {
         q.forEach(function (v, i) { sideGrip(v, q[(i + 1) % 4], 'bside', i); });
         q.forEach(function (v, i) {
@@ -3587,6 +3916,8 @@
       g.appendChild(out);
       /* each corner pulls along its own diagonal, as it sits on screen */
       const cx = (q[0][0] + q[2][0]) / 2, cy = (q[0][1] + q[2][1]) / 2;
+      /* off each corner, as in Illustrator; a 'box' (a stamp) does not turn */
+      if (kind === 'rect') turnZones(q, [cx, cy]);
       /* a mark that keeps its proportions (a picture) has no sides to pull */
       if (!(EXT.keepRatio[s.t] && EXT.keepRatio[s.t](s))) {
         q.forEach(function (v, i) { sideGrip(v, q[(i + 1) % 4], 'side', i); });
@@ -3594,8 +3925,6 @@
       q.forEach(function (v, i) {
         knob(v, 'corner', i).dataset.cur = (v[0] - cx) * (v[1] - cy) > 0 ? 'nwse' : 'nesw';
       });
-      /* off the top side, as in Acrobat; a 'box' (a stamp) does not turn */
-      if (kind === 'rect') turnGrip(q[3], q[2]);
     } else if (kind === 'line' || kind === 'arrow' || kind === 'ends') {
       const a = vp.convertToViewportPoint(s.a[0], s.a[1]);
       const b = vp.convertToViewportPoint(s.b[0], s.b[1]);
@@ -3604,10 +3933,10 @@
       hl.setAttribute('x1', a[0]); hl.setAttribute('y1', a[1]);
       hl.setAttribute('x2', b[0]); hl.setAttribute('y2', b[1]);
       g.appendChild(hl);
-      knob(a, 'pa'); knob(b, 'pb');
       /* 'ends': two grips and nothing to turn — a radius or an angle is
          defined by where its points are, so rotating it means nothing */
-      if (kind !== 'ends') turnGrip(a, b);
+      if (kind !== 'ends') turnZones([a, b], [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+      knob(a, 'pa'); knob(b, 'pb');
     } else if (kind === 'verts') {
       /* every point of its own line or polygon, each one draggable on its
          own — a Continuous Line adjusts the way a plain Line's two ends do,
@@ -3617,6 +3946,12 @@
       hl.setAttribute('class', 'halo');
       hl.setAttribute('points', vpts(vq));
       g.appendChild(hl);
+      /* the turn pointer off the corners of the box round it */
+      if (vq.length > 1) {
+        let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+        vq.forEach(function (v) { x1 = Math.min(x1, v[0]); y1 = Math.min(y1, v[1]); x2 = Math.max(x2, v[0]); y2 = Math.max(y2, v[1]); });
+        turnZones([[x1, y1], [x2, y1], [x2, y2], [x1, y2]], [(x1 + x2) / 2, (y1 + y2) / 2]);
+      }
       vq.forEach(function (v, i) { knob(v, 'pv', i); });
     } else if (s.t === 'text') {
       const q = textQuad(s, vp);
@@ -3625,10 +3960,10 @@
       g.appendChild(out);
       /* any corner pulled out or in sizes the type */
       const cx = (q[0][0] + q[2][0]) / 2, cy = (q[0][1] + q[2][1]) / 2;
+      turnZones(q, [cx, cy]);                   /* off each corner, as in Illustrator */
       q.forEach(function (v) {
         knob(v, 'size').dataset.cur = (v[0] - cx) * (v[1] - cy) > 0 ? 'nwse' : 'nesw';
       });
-      turnGrip(q[3], q[2]);                     /* off the top side, as in Acrobat */
     }
     return g;
   }
@@ -6718,7 +7053,7 @@
     ta.setAttribute('aria-multiline', 'true');
     ta.style.fontFamily = CSS_FONT[item.f];
     ta.style.fontSize = editPx(item) + 'px';
-    ta.style.textAlign = item.align || 'left';
+    edSpacing(ta, item);
     ta.style.color = item.c;
     ta.style.background = item.bg ? cssRgba(item.bg, item.bgOp == null ? 1 : item.bgOp)
                           : item.patch ? item.patch.c : 'transparent';
@@ -8695,13 +9030,22 @@
     if (v > 0 && v < 400) ed.item.size = v;
     const ta = ed.el;
     ta.style.fontFamily = CSS_FONT[ed.item.f];
-    ta.style.textAlign = ed.item.align || 'left';
+    edSpacing(ta, ed.item);
     if (ed.item.bg) {
       ta.style.background = cssRgba(ed.item.bg, ed.item.bgOp == null ? 1 : ed.item.bgOp);
     } else if (!ed.item.patch) {
       ta.style.background = 'transparent';
     }
     ta.style.fontSize = editPx(ed.item) + 'px';
+  }
+  /* the editor box set out as the text will be: alignment (justify all
+     spreads every line, the last one too), leading and tracking */
+  function edSpacing(ta, item) {
+    const k = E.alignKind(item.align);
+    ta.style.textAlign = k === 'all' ? 'justify' : k;
+    ta.style.textAlignLast = k === 'all' ? 'justify' : '';
+    ta.style.lineHeight = (E.leading(item) / item.size).toFixed(3);
+    ta.style.letterSpacing = item.tr ? (item.tr / 1000) + 'em' : '';
   }
   /* a hex colour at a given opacity, for the one place CSS needs it rather
      than an SVG fillOpacity attribute */
@@ -10508,6 +10852,10 @@
     printSystem: printSystem, printFrame: printFrame,
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
     stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE,
+    /* for Align and Pathfinder (js/arrange.js) */
+    visBox: visBox, moveShape: moveShape, copyShape: copyShape, markBox: markBox,
+    /* for the Rotate tool (js/rotate.js) */
+    turnsByEnds: turnsByEnds, unionBox: unionBox,
     ZOOM_MIN: ZOOM_MIN,
     /* the document put away (its tab closed): back to the home screen */
     closeDocument: function () { hardReset(); updateMeta(); showHome(); },

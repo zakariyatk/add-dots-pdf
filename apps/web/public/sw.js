@@ -68,6 +68,9 @@ const SHELL = [
   'js/skin.js',
   'js/books.js',
   'js/toolprops.js',
+  'js/arrange.js',
+  'js/rotate.js',
+  'js/typepanel.js',
   'js/toolbar.js',
   'js/toolpanel.js',
   'js/appbar.js',
@@ -89,6 +92,7 @@ const SHELL = [
   'js/vendor/pdf.min.js',
   'js/vendor/pdf.worker.min.js',
   'js/vendor/pdf-lib.min.js',
+  'js/vendor/polygon-clipping.umd.min.js',
   /* loaded on the first save that needs the Unicode font (see core.js) */
   'js/vendor/fontkit.umd.min.js',
   'assets/fonts/DejaVuSans.ttf',

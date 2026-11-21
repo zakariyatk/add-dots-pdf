@@ -14,7 +14,9 @@
      making a corner); Alt and drag a point pulls new handles out of it,
      Alt and click turns it into a corner
    • with the Pen tool: a click on a path adds a point there, a click on a
-     point takes it out, and a click on an open end carries the path on
+     point takes it out, and a click on an open end carries the drawing on
+     (a Pen path's, a Line's or a Continuous Line's); while drawing, a click
+     on another drawing's open end joins the two into one path
 
    A path is the 'pen' mark: s.pts runs anchor, out-handle, in-handle,
    anchor… (3n + 1 points), so it moves, scales and turns as one list of
@@ -402,7 +404,41 @@
 
     /* ---------------- the Pen tool: drawing ---------------- */
 
-    let draw = null;                    /* {it, A: anchors, drag, idx (continuing a path)} */
+    let draw = null;                    /* {it, A: anchors, drag, idx (continuing a path), join} */
+
+    /* ---- open ends: carrying a drawing on, and joining two into one ----
+       As in Illustrator, the Pen picks up any open end: a Pen path's, a
+       Line's or a Continuous Line's (not an arrow's, whose end is its
+       head). Clicked with nothing in hand, the drawing carries on from
+       there (a Line or Continuous Line becomes a Pen path to do it, its
+       look kept); clicked while drawing, the path in hand joins onto it
+       and the two become one path. */
+    const JOINABLE = { pen: 1, line: 1, poly: 1 };
+    function swap(a) { const t = a.hin; a.hin = a.hout; a.hout = t; }
+    function openEnds(s) {
+      if (!s || !JOINABLE[s.t] || s.hide || s.locked) return null;
+      if (s.t === 'line') return s.a && s.b ? [s.a, s.b] : null;
+      const P = s.pts;
+      if (!P || P.length < (s.t === 'pen' ? 4 : 2)) return null;
+      if (s.t === 'pen' ? closed(P) : (P.length > 2 && same(P[0], P[P.length - 1]))) return null;
+      return [P[0], P[P.length - 1]];
+    }
+    /** the open end within reach of p (not mark `skip`'s): {idx, end: 0 | 1, p} */
+    function endAt(it, p, skip) {
+      for (let i = it.shapes.length - 1; i >= 0; i--) {
+        if (i === skip) continue;
+        const E2 = openEnds(it.shapes[i]);
+        if (!E2) continue;
+        for (let k = 0; k < 2; k++) if (dist(E2[k], p) <= tol(PX.anchor)) return { idx: i, end: k, p: E2[k] };
+      }
+      return null;
+    }
+    /** a drawing's anchors, the given end first */
+    function anchorsFrom(s, end) {
+      const A = toAnchors(copy(asPen(s)));
+      if (end === 1) A.reverse().forEach(swap);
+      return A;
+    }
 
     function ghostPts(extra) {
       const pts = toPts(draw.A, false);
@@ -433,10 +469,22 @@
         X.snapshot();
         const pts = toPts(d.A, close);
         if (d.idx != null && it.shapes[d.idx]) {
+          /* a Line or Continuous Line carried on is a Pen path now, its look kept */
+          const s0 = it.shapes[d.idx];
+          if (s0.t !== 'pen') {
+            const s1 = Object.assign({}, s0, { t: 'pen' });
+            delete s1.a; delete s1.b; delete s1.r;
+            it.shapes[d.idx] = s1;
+          }
           it.shapes[d.idx].pts = pts;
         } else {
           it.shapes.push({ t: 'pen', pts: pts, c: S.color, w: S.width });
           d.idx = it.shapes.length - 1;
+        }
+        /* the drawing joined onto is part of this path now */
+        if (d.join != null && d.join !== d.idx && it.shapes[d.join]) {
+          it.shapes.splice(d.join, 1);
+          if (d.idx > d.join) d.idx--;
         }
         focus = { it: it, idx: d.idx };
         done(it);
@@ -453,23 +501,33 @@
         if (!draw) {
           /* on a path already there: edit it, or carry an open end on */
           const hit = hitAt(it, raw, focus && focus.it === it ? focus.idx : null);
-          if (hit && hit.kind === 'anchor' && !e.altKey) {
-            const pts = it.shapes[hit.idx].pts;
-            if (!closed(pts) && (hit.i === 0 || hit.i === pts.length - 1)) {
-              const A = toAnchors(pts);
-              if (hit.i === 0) A.reverse().forEach(function (a) { const t = a.hin; a.hin = a.hout; a.hout = t; });
-              draw = { it: it, A: A, idx: hit.idx, drag: null };
-              focus = null;
-              $('modeHint').innerHTML = 'Carrying the path on: click for a corner, drag for a curve. <b>Enter</b> ends it.';
-              paintDraw();
-              return;
-            }
+          /* an open end (a handle of the path in hand comes first) */
+          const end = !e.altKey && !(hit && hit.kind === 'handle') ? endAt(it, raw, null) : null;
+          if (end) {
+            /* carried on from that end: it becomes the last point */
+            const A = anchorsFrom(it.shapes[end.idx], 1 - end.end);
+            draw = { it: it, A: A, idx: end.idx, drag: null, join: null };
+            focus = null;
+            $('modeHint').innerHTML = 'Carrying the drawing on: click for a corner, drag for a curve. Click another open end to join them; <b>Enter</b> ends it.';
+            paintDraw();
+            return;
           }
           if (hit && editDown(it, at, e, { addOnPath: true, deleteAnchor: true })) return;
-          draw = { it: it, A: [], idx: null, drag: null };
+          draw = { it: it, A: [], idx: null, drag: null, join: null };
           $('modeHint').innerHTML = 'Click for a corner, drag for a curve. Click the first point to close; <b>Enter</b> or <b>Esc</b> ends the path.';
         }
         if (draw.it !== it) { finish(false); return; }
+        /* on another drawing's open end: the two join into one path */
+        if (draw.A.length >= 1 && !e.altKey && !(draw.A.length >= 2 && dist(raw, draw.A[0].p) <= tol(PX.close))) {
+          const j = endAt(it, raw, draw.idx);
+          if (j) {
+            draw.A = draw.A.concat(anchorsFrom(it.shapes[j.idx], j.end));
+            draw.join = j.idx;
+            it.capture.style.cursor = '';
+            finish(false);
+            return;
+          }
+        }
         /* on the first point: the path closes there (its handle can still be pulled) */
         if (draw.A.length >= 2 && dist(raw, draw.A[0].p) <= tol(PX.close)) {
           draw.drag = { k: 0, x: e.clientX, y: e.clientY, close: true };
@@ -501,14 +559,17 @@
         }
         if (draw && draw.it === it) {
           const near = draw.A.length >= 2 && dist(raw, draw.A[0].p) <= tol(PX.close);
-          it.capture.style.cursor = near ? 'var(--cur-pen-close)' : '';
-          const snapped = !near && X.snapPt ? X.snapPt(it, raw, e) : null;
-          paintDraw(near ? draw.A[0].p : (snapped || constrain(raw, e)));
+          const join = !near && !e.altKey ? endAt(it, raw, draw.idx) : null;
+          it.capture.style.cursor = near ? 'var(--cur-pen-close)' : join ? 'var(--cur-pen-join)' : '';
+          const snapped = !near && !join && X.snapPt ? X.snapPt(it, raw, e) : null;
+          paintDraw(near ? draw.A[0].p : join ? join.p : (snapped || constrain(raw, e)));
           return;
         }
         /* not drawing: show the points of the path under the pointer */
         const hit = hitAt(it, raw, focus && focus.it === it ? focus.idx : null);
-        it.capture.style.cursor = !hit ? ''
+        const end = !e.altKey && !(hit && hit.kind === 'handle') ? endAt(it, raw, null) : null;
+        it.capture.style.cursor = end ? 'var(--cur-pen-cont)'
+          : !hit ? ''
           : hit.kind === 'path' ? 'var(--cur-pen-add)'
           : hit.kind === 'anchor' && !e.altKey ? 'var(--cur-pen-del)'
           : 'var(--cur-direct-point)';

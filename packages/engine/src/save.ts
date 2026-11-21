@@ -39,6 +39,7 @@ import {
   arrowHead,
   boxOf,
   lineOrigin,
+  charSpacing,
   lineSpans,
   lineWidth,
   rotPt,
@@ -403,7 +404,9 @@ async function compose(
         if (!line) return;
         const lineW = lineWidth(s, li, measureS) || 0;
         const lo = lineOrigin(s, li, lineW, measureS);
-        const enc = pf ? encodePageFont(pf, line) : null;
+        /* tracking or justify all: the space after each character but the last */
+        const cs = charSpacing(s, li, measureS);
+        const enc = pf && !cs ? encodePageFont(pf, line) : null;
         if (pf && enc) {
           const op = shOp(s);
           if (op < 1 && !gsName)
@@ -424,11 +427,40 @@ async function compose(
           /* a piece at a time, each in its own style, along the baseline */
           const t = ((s.r || 0) * Math.PI) / 180;
           let dx = 0;
+          const last = Array.from(line).length;
+          let seen = 0;
           for (const sp of lineSpans(s, li)) {
             const ps = sp.s;
+            const pfont = fontFor(ps);
+            if (cs) {
+              /* spaced out: a character at a time, each followed by the gap */
+              const chars = Array.from(sp.text);
+              const from = dx;
+              chars.forEach((ch) => {
+                const po = [lo[0] + dx * Math.cos(t), lo[1] + dx * Math.sin(t)];
+                if (pfont && ch.trim())
+                  drawLine(
+                    p,
+                    ch,
+                    { font: pfont, fallback: extra.fallback },
+                    {
+                      x: po[0],
+                      y: po[1],
+                      rotate: degrees(s.r || 0),
+                      size: s.size,
+                      color: hexRgb(ps.c),
+                      opacity: shOp(s),
+                    },
+                  );
+                seen++;
+                dx += (measureS(ps, ch) || 0) + (seen < last ? cs : 0);
+              });
+              const p0 = [lo[0] + from * Math.cos(t), lo[1] + from * Math.sin(t)];
+              decorate(p, ps, p0, dx - from);
+              continue;
+            }
             const pw = measureS(ps, sp.text) || 0;
             const po = [lo[0] + dx * Math.cos(t), lo[1] + dx * Math.sin(t)];
-            const pfont = fontFor(ps);
             if (pfont)
               drawLine(
                 p,

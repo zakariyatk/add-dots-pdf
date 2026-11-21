@@ -203,15 +203,17 @@
       return null;
     }
 
-    /* A double-click on the outline of a line, rectangle or Continuous Line
-       puts a point there — the selected mark first, else whichever is nearest.
+    /* With Direct Selection, a double-click on the outline of a line,
+       rectangle or Continuous Line puts a point there — the selected mark first, else whichever is nearest.
        The browser fires no dblclick when the first click's redraw (it selects
        the mark) swaps the element under the pointer, so the second press is
        matched here by itself: close in time and place, as core.js does for
        text. Capture, so that press never also starts a drag. */
     let lastPress = null;
     stage.addEventListener('pointerdown', function (e) {
-      if (S.tool !== 'select' || S.editing || e.button !== 0 || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) {
+      /* points are Direct Selection's: with Select a double-click works on
+         the object as a whole (text opens for typing), not on its points */
+      if (S.tool !== 'vdirect' || S.editing || e.button !== 0 || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) {
         lastPress = null; return;
       }
       const now = Date.now();
