@@ -309,7 +309,7 @@
 
     /* ================= the three tools =================
        As Illustrator has them, on the Draw tab beside Continuous Line:
-       Direct Selection (the white arrow) picks out and drags single points;
+       Direct Selection (the black arrow) picks out and drags single points;
        Add Anchor Point (pen +) clicks a point onto an outline; Delete Anchor
        Point (pen −) clicks one off. Each shows the points of the outline under
        the pointer, so there is always something to aim at. None of them
@@ -578,8 +578,8 @@
         const a = anchorAt(it, p);
         const o = a ? null : outlineAt(it, p);
         hover = a || o ? { it: it, idx: (a || o).idx } : null;
-        /* over a point: the white arrow with its little square, as Illustrator shows it */
-        it.capture.style.cursor = a ? 'var(--cur-arrow-point)' : '';
+        /* over a point: the black arrow with its little square */
+        it.capture.style.cursor = a ? 'var(--cur-direct-point)' : '';
         paint(it);
       },
       up: function (it) {
@@ -686,7 +686,8 @@
         hint: 'Click a <b>point</b> of a line, rectangle or Continuous Line and drag it. A picked ' +
               'point fills in: nudge it with the <b>arrow keys</b> (Shift: ten at a time) or press ' +
               '<b>Delete</b>. Hold <b>Shift</b> while dragging to keep it level, plumb or at 45°.',
-        path: '<path d="M5.5 3.5l13 8-5.8 1.5-3.3 5.3z"/>' },
+        /* solid, the way its pointer is: the Select tool's arrow is the open one */
+        path: '<path d="M5.5 3.5l13 8-5.8 1.5-3.3 5.3z" fill="currentColor"/>' },
       { t: 'vadd', id: 'tVxAdd', label: 'Add Anchor Point', key: null,
         hint: 'Click the outline of a line, rectangle or Continuous Line to put a <b>point</b> there. ' +
               'A line or rectangle becomes a Continuous Line to take it, with the same look.',
