@@ -540,8 +540,9 @@
        A mark's row dropped on a layer's row joins that layer, on top of what
        is already in it; dropped on another mark's row it lands in front of
        that mark, which moves it in the page's own stack (it.shapes) as well —
-       the two orders are the same thing. */
-    let dragIdx = null;
+       the two orders are the same thing. A row that is part of the selection
+       takes every selected mark with it, keeping their order. */
+    let dragIdx = null, dragGroup = null;
 
     function clearOver() {
       Array.prototype.forEach.call(host.children, function (c) { c.classList.remove('over'); });
@@ -550,13 +551,20 @@
       const row = e.target.closest('.mrow[draggable]');
       if (!row) return;
       dragIdx = +row.dataset.idx;
-      row.classList.add('dragging');
+      const it = S.items[S.current - 1];
+      const now = S.sel && it && S.sel.it === it ? X.selList() : [];
+      dragGroup = now.length > 1 && now.indexOf(dragIdx) >= 0
+        ? now.filter(function (i) { return it.shapes[i] && !it.shapes[i].locked; }) : [dragIdx];
+      dragGroup.forEach(function (i) {
+        const r = host.querySelector('.mrow[data-idx="' + i + '"]');
+        if (r) r.classList.add('dragging');
+      });
       try {
         e.dataTransfer.effectAllowed = 'move';
         e.dataTransfer.setData('text/plain', String(dragIdx));
       } catch (err) { /* older engines refuse setData outside a user gesture */ }
     });
-    host.addEventListener('dragend', function () { dragIdx = null; clearOver(); render(); });
+    host.addEventListener('dragend', function () { dragIdx = null; dragGroup = null; clearOver(); render(); });
     host.addEventListener('dragover', function (e) {
       if (dragIdx == null) return;
       const row = e.target.closest('.layrow');
@@ -574,42 +582,53 @@
       const row = e.target.closest('.layrow');
       if (!row) return;
       e.preventDefault();
-      const from = dragIdx;
-      dragIdx = null; clearOver();
-      drop(S.items[S.current - 1], from, row);
+      const group = dragGroup || [dragIdx];
+      dragIdx = null; dragGroup = null; clearOver();
+      drop(S.items[S.current - 1], group, row);
     });
 
-    function drop(it, from, row) {
-      if (!it || !it.shapes[from]) { render(); return; }
-      const s = it.shapes[from];
+    function drop(it, group, row) {
+      group = (group || []).filter(function (i) { return it && it.shapes[i]; });
+      if (!group.length) { render(); return; }
       const L = layerOf(row.dataset.lay);
-      const was = layerIdOf(s);
       let at;
       if (row.dataset.idx !== undefined) {
         const onto = +row.dataset.idx;
-        if (onto === from) { render(); return; }
+        if (group.indexOf(onto) >= 0) { render(); return; }   /* dropped on itself */
         at = onto + 1;                      /* in front of the mark dropped on */
       } else {
         /* a layer's own row, or its empty placeholder: on top of its members */
         let top = -1;
         it.shapes.forEach(function (x, i) {
-          if (!NOT_SELECTABLE[x.t] && layerIdOf(x) === L.id) top = i;
+          if (!NOT_SELECTABLE[x.t] && layerIdOf(x) === L.id && group.indexOf(i) < 0) top = i;
         });
         at = top >= 0 ? top + 1 : it.shapes.length;
       }
-      if (was === L.id && (at === from || at === from + 1)) { render(); return; }
+      const order = group.slice().sort(function (p, q) { return p - q; });
+      const marks = order.map(function (i) { return it.shapes[i]; });
+      const moving = marks.some(function (m) { return layerIdOf(m) !== L.id; });
+      /* already a run in this layer, just where it would land: nothing to do */
+      const run = order[order.length - 1] - order[0] === order.length - 1;
+      if (!moving && run && at >= order[0] && at <= order[order.length - 1] + 1) { render(); return; }
 
       X.snapshot();
-      it.shapes.splice(from, 1);
-      if (from < at) at--;
+      const before = order.filter(function (i) { return i < at; }).length;
+      for (let k = order.length - 1; k >= 0; k--) it.shapes.splice(order[k], 1);
+      at -= before;
       if (at > it.shapes.length) at = it.shapes.length;
-      it.shapes.splice(at, 0, s);
-      if (was !== L.id) { s.layer = L.id; s.hide = !!L.hidden; s.locked = !!L.locked; }
+      Array.prototype.splice.apply(it.shapes, [at, 0].concat(marks));
+      marks.forEach(function (m) {
+        if (layerIdOf(m) !== L.id) { m.layer = L.id; m.hide = !!L.hidden; m.locked = !!L.locked; }
+      });
 
-      if (s.hide) { S.sel = null; S.multi = null; } else { X.setGroup(it, [at]); }
+      const shown = marks.map(function (m, k) { return m.hide ? -1 : at + k; })
+        .filter(function (i) { return i >= 0; });
+      if (shown.length) X.setGroup(it, shown); else { S.sel = null; S.multi = null; }
       X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
       render();
-      if (was !== L.id) X.toast('Moved to <b>' + X.esc(L.name) + '</b>');
+      if (moving) {
+        X.toast((marks.length > 1 ? marks.length + ' marks moved' : 'Moved') + ' to <b>' + X.esc(L.name) + '</b>', true);
+      }
     }
 
     /* ---------------- keeping up with the page ---------------- */
