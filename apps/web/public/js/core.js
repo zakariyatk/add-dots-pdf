@@ -3044,6 +3044,13 @@
       } else {
         moveShape(s, o, mx, my);
       }
+    } else if ((d.mode === 'pv' || ((d.mode === 'pa' || d.mode === 'pb') && o.t === 'line')) && EXT.vxJoinAt &&
+               (d.join = EXT.vxJoinAt(d.it, d.idx, d.mode === 'pv' ? d.extra : d.mode === 'pa' ? 0 : 1, p, o))) {
+      /* a point dragged near another point of a line or shape lands on it,
+         and an open end there joins up on release (js/vertex.js) */
+      if (EXT.snapHide) EXT.snapHide();
+      if (d.mode === 'pv') setVertex(s, o, d.extra, d.join.p);
+      else s[d.mode === 'pa' ? 'a' : 'b'] = [d.join.p[0], d.join.p[1]];
     } else if ((d.mode === 'pa' || d.mode === 'pb') && EXT.snapPt &&
                (d.snapTo = EXT.snapPt(d.it, p, e, { skip: d.idx }))) {
       /* an end dragged onto a snap point lands exactly on it */
@@ -3099,6 +3106,9 @@
     if (d.moved && d.mode === 'move' && e && (e.ctrlKey || e.metaKey)) {
       if (d.group) d.group.forEach(function (m) { d.it.shapes.push(copyShape(m.s0)); });
       else d.it.shapes.push(copyShape(d.s0));
+    }
+    if (d.moved && d.join && EXT.vxJoinEnd) {
+      EXT.vxJoinEnd(d.it, d.idx, d.mode === 'pv' ? d.extra : d.mode === 'pa' ? 0 : 1, d.join, d.s0);
     }
     if (d.moved) { drawShapes(d.it); updateMeta(); }
     syncMarkPop();

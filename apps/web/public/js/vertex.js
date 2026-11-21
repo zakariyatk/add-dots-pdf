@@ -494,6 +494,44 @@
       return 'Joined into one line';
     }
 
+    /* ---- the same with the Select tool: core.js asks, while it drags one
+       point of a line or Continuous Line, whether a point is near enough to
+       land on, and says where it was let go ---- */
+    let ring = null;                       /* {it, p}: the point it would land on */
+    X.vxJoinAt = function (it, idx, i, p, o) {
+      const d = { idx: idx, i: i, openEnd: isOpenEnd(outline(o), i) };
+      const t = joinTarget(it, d, p);
+      ring = t ? { it: it, p: t.p } : null;
+      return t;
+    };
+    X.vxJoinEnd = function (it, idx, i, t, o) {
+      ring = null;
+      const d = { idx: idx, i: i, join: t, openEnd: isOpenEnd(outline(o), i) };
+      if (!d.openEnd) return;
+      if (it.shapes[idx] && it.shapes[idx].t === 'line') toPath(it, idx);
+      const said = joinAfterDrag(it, d);
+      if (!said) return;
+      const now = t.idx !== idx && t.idx < idx ? idx - 1 : idx;
+      X.setGroup(it, [now]);
+      X.drawThumb(it);
+      X.toast(said, true);
+    };
+    /* the ring, drawn after core has redrawn the page for this move */
+    document.addEventListener('pointermove', function () {
+      if (!ring || !ring.it.anno || !ring.it.vp) return;
+      const q = ring.it.vp.convertToViewportPoint(ring.p[0], ring.p[1]);
+      const c = document.createElementNS(NS, 'circle');
+      c.setAttribute('cx', q[0]); c.setAttribute('cy', q[1]); c.setAttribute('r', 7);
+      c.setAttribute('class', 'vxjoin');
+      ring.it.anno.appendChild(c);
+    });
+    document.addEventListener('pointerup', function () {
+      if (!ring) return;
+      const it = ring.it;
+      ring = null;
+      X.drawShapes(it);
+    });
+
     /* ---- Direct Selection ---- */
     X.tools.vdirect = {
       bare: false,
