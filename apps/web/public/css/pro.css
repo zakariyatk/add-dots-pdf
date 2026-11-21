@@ -1576,6 +1576,65 @@ body:not([data-ui="light"]) .pgrid .psq { border-color: rgba(255,255,255,.25) }
 .wdbtn.wdok:hover { background: color-mix(in srgb, var(--wd-accent) 88%, #000) }
 .wdbtn:focus-visible, .wdx:focus-visible { outline: 2px solid var(--text); outline-offset: 1px }
 
+/* the Print dialog (js/printdlg.js), laid out as Acrobat's: settings on the
+   left, the sheet as it will come out on the right */
+.prwrap[hidden] { display: none }
+.prbox { width: min(860px, 100%) !important; max-height: calc(100vh - 24px) }
+.prbox .wdhead { padding-bottom: 4px }
+.prtop {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding: 10px 24px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.prtop .prrow[hidden], .prtop .prchk[hidden] { display: none }
+.prrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px }
+.prrow > span { white-space: nowrap }
+.prwide { min-width: 220px; max-width: 100% }
+#prPaper { min-width: 200px }
+.prnum { width: 76px !important; flex: none }
+.prchk { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; margin-top: 8px }
+.prmain { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; min-height: 0; overflow: auto }
+.prleft { padding: 6px 16px 12px 24px; display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.prset { margin: 0; padding: 8px 12px 12px; border: 1px solid var(--line); border-radius: 6px; min-width: 0 }
+.prset legend { padding: 0 6px; font-size: 13px; font-weight: 600 }
+.prline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 13px }
+.prline label { display: inline-flex; align-items: center; gap: 6px }
+.prrange { width: 150px !important }
+.prmore { margin-top: 8px; font-size: 13px }
+.prmore summary { cursor: pointer; color: var(--text-dim) }
+.prmore .prline { margin-top: 8px }
+.prmodes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 2px 0 10px }
+.prmode {
+  height: 32px; font: inherit; font-size: 13px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--chrome-2); color: var(--text);
+}
+.prmode.on { border-color: var(--btn, #0067C0); background: color-mix(in srgb, var(--btn, #0067C0) 14%, var(--chrome-2)); font-weight: 600 }
+.prpane[hidden] { display: none }
+.prgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 13px }
+.prgrid label { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap }
+.prright { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 18px 12px; border-left: 1px solid var(--line); min-width: 0 }
+.prscale { align-self: flex-start; font-size: 12.5px; color: var(--text-dim) }
+.prsize { font-size: 12.5px; margin-top: 10px }
+.prview { position: relative; width: 100%; height: 300px; display: grid; place-items: center }
+.prview canvas { box-shadow: 0 0 0 1px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .18); background: #FFFFFF }
+.prbusy {
+  position: absolute; inset: auto 0 8px; margin: auto; width: max-content; padding: 4px 10px; border-radius: 4px;
+  font-size: 12px; background: var(--chrome); border: 1px solid var(--line)
+}
+.prbusy[hidden] { display: none }
+.prnav { display: flex; align-items: center; gap: 8px; width: 100% }
+.prnav input[type="range"] { flex: 1; accent-color: var(--btn, #0067C0) }
+.prstep { width: 34px; padding: 0 !important; font-size: 18px; line-height: 1 }
+.prcount { font-size: 12.5px }
+.prerr { text-align: center }
+.prfoot { display: flex !important; align-items: center; gap: 8px }
+.prfoot .wdbtn { min-width: 100px }
+.prnote { flex: 1; font-size: 12.5px; color: var(--text-dim) }
+@media (max-width: 760px) {
+  .prmain { grid-template-columns: 1fr }
+  .prright { border-left: 0; border-top: 1px solid var(--line) }
+  .prgrid { grid-template-columns: 1fr }
+}
+
 /* the Edit colours dialog (js/colordlg.js) */
 body.cdpicking, body.cdpicking * { cursor: crosshair !important }
 .cdwrap { position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .45) }

@@ -7534,6 +7534,8 @@
 
   /* Print: the system's print dialog, in the browser and the desktop app */
   function printDoc() {
+    /* the app's own Print dialog (js/printdlg.js), where it is loaded */
+    if (EXT.openPrintDialog) return EXT.openPrintDialog();
     return printSystem();
   }
 

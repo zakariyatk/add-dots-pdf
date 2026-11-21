@@ -55,6 +55,7 @@ const SHELL = [
   'js/enhance.js',
   'js/docops.js',
   'js/printplan.js',
+  'js/printdlg.js',
   'js/convert.js',
   'js/ocr.js',
   'js/editobj.js',

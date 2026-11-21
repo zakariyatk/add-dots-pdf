@@ -357,7 +357,106 @@ const COMMANDS = {
   store_update: () => (process.windowsStore ? false : null),
 
   perf_native: () => ({ now: process.memoryUsage().rss, peak: process.resourceUsage().maxRSS * 1024 }),
+
+  /* the app's Print dialog (apps/web/public/js/printdlg.js): this computer's
+     printers, and a job's sheets printed on the one chosen */
+  printers: async (_req, win) => {
+    const list = await win.webContents.getPrintersAsync();
+    return list.map((p) => ({
+      name: String(p.name),
+      displayName: String(p.displayName || p.name),
+      isDefault: !!p.isDefault,
+    }));
+  },
+  print_pages: ({ args }) => printPages(args),
 };
+
+/* Each sheet comes as a PNG, at the sheet's own size; they go on the paper
+   edge to edge in a hidden window of their own, which prints them, silently
+   on the printer named (the system's default when none is). With
+   ADDDOTS_PRINT_TO set (the end-to-end test) the job is written there as a
+   PDF instead of printed. */
+const PAPER_NAME = { a3: 'A3', a4: 'A4', a5: 'A5', letter: 'Letter', legal: 'Legal', tabloid: 'Tabloid' };
+async function printPages(args) {
+  const pages = Array.isArray(args.pages) ? args.pages : [];
+  if (!pages.length || pages.length > 5000) throw new Error('nothing to print');
+  if (
+    !pages.every(
+      (p) => p instanceof Uint8Array && p.length > 8 && p[1] === 0x50 && p[2] === 0x4e && p[3] === 0x47,
+    )
+  ) {
+    throw new Error('the sheets are not pictures');
+  }
+  const w = Number(args.w),
+    h = Number(args.h);
+  if (!(w > 10 && w < 20000 && h > 10 && h < 20000)) throw new Error('no sheet size');
+  const copies = Math.max(1, Math.min(999, Math.floor(Number(args.copies) || 1)));
+  const printer = typeof args.printer === 'string' ? args.printer.slice(0, 300) : '';
+  const landscape = w > h;
+  const dir = await fs.promises.mkdtemp(path.join(app.getPath('temp'), 'adddots-print-'));
+  let pw = null;
+  try {
+    const imgs = [];
+    for (let i = 0; i < pages.length; i++) {
+      await fs.promises.writeFile(path.join(dir, 'p' + i + '.png'), pages[i]);
+      imgs.push('<img src="p' + i + '.png">');
+    }
+    const html =
+      '<!doctype html><meta charset="utf-8"><style>' +
+      '@page{size:' +
+      w +
+      'pt ' +
+      h +
+      'pt;margin:0}html,body{margin:0;padding:0;background:#fff}' +
+      'img{display:block;width:' +
+      w +
+      'pt;height:' +
+      h +
+      'pt;break-after:page}img:last-child{break-after:auto}' +
+      '</style>' +
+      imgs.join('');
+    const file = path.join(dir, 'job.html');
+    await fs.promises.writeFile(file, html);
+    pw = new BrowserWindow({
+      show: false,
+      webPreferences: { sandbox: true, contextIsolation: true, javascript: false },
+    });
+    await pw.loadFile(file);
+    const micron = (pt) => Math.round((pt / 72) * 25400);
+    const named = PAPER_NAME[args.paper];
+    const pageSize = named || { width: micron(Math.min(w, h)), height: micron(Math.max(w, h)) };
+    if (process.env.ADDDOTS_PRINT_TO) {
+      const pdf = await pw.webContents.printToPDF({
+        landscape,
+        pageSize,
+        printBackground: true,
+        preferCSSPageSize: true,
+        margins: { top: 0, bottom: 0, left: 0, right: 0 },
+      });
+      writeAtomic(path.join(process.env.ADDDOTS_PRINT_TO, 'printed.pdf'), pdf);
+      return { printed: pages.length, copies, printer, color: args.color !== false };
+    }
+    await new Promise((resolve, reject) => {
+      pw.webContents.print(
+        {
+          silent: true,
+          printBackground: true,
+          deviceName: printer || undefined,
+          copies,
+          color: args.color !== false,
+          landscape,
+          pageSize,
+          margins: { marginType: 'none' },
+        },
+        (ok, why) => (ok ? resolve() : reject(new Error(why || 'not printed'))),
+      );
+    });
+    return { printed: pages.length, copies };
+  } finally {
+    if (pw && !pw.isDestroyed()) pw.destroy();
+    fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
+}
 
 /* asked by the app's own page, in one of its windows */
 function fromApp(e) {

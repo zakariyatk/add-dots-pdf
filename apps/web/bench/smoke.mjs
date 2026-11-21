@@ -2494,17 +2494,18 @@ try {
     await ctx.close();
   }
 
-  /* ---- Print: the document made into a PDF, shown in a frame by the
-     browser's PDF viewer, and that frame printed: a website has no Print
-     dialog of its own, only the browser's (CI runs Chrome, which has one;
-     the desktop app does the same, checked in apps/electron/e2e.mjs) ---- */
+  /* ---- Print: the app's own dialog (js/printdlg.js) — which pages, how
+     they go on the paper, a preview — then, on a website, the sheets made
+     into a PDF and printed from a frame by the browser's own dialog, which
+     asks for the printer (the desktop app prints them itself, checked in
+     apps/electron) ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
     await open(page, join(CORPUS_DIR, 'medium-report-300p.pdf'));
-    const printed = await page.evaluate(async () => {
-      /* the print dialog cannot be answered here: print() is swapped for a
-         stand-in on the frame as it loads, before core calls it 300 ms on */
-      const got = { called: false, pdf: null, viewer: navigator.pdfViewerEnabled };
+    await page.evaluate(() => {
+      /* the browser's print dialog cannot be answered here: print() is
+         swapped for a stand-in on the frame as it loads */
+      window.__printed = { called: false, pdf: null, viewer: navigator.pdfViewerEnabled };
       new MutationObserver((ms, mo) => {
         const f = document.getElementById('printFrame');
         if (!f) return;
@@ -2513,23 +2514,49 @@ try {
           const w = f.contentWindow;
           w.print = () => {
             const d = w.document;
-            got.called = true;
-            got.pdf =
+            window.__printed.called = true;
+            window.__printed.pdf =
               [...d.querySelectorAll('embed')].map((e) => e.type).join() || 'no viewer: ' + d.contentType;
           };
         });
       }).observe(document.body, { childList: true });
-      got.dialog = !!document.getElementById('printModal');
       window.ADDPDF.print();
-      for (let i = 0; i < 150 && !got.called; i++) await new Promise((r) => setTimeout(r, 200));
-      return got;
     });
+    /* the file is still loading its pages: the dialog plans again as they come */
+    await page
+      .waitForFunction(() => document.getElementById('prCount').textContent === 'Page 1 of 300', null, {
+        timeout: 60000,
+      })
+      .catch(() => {});
+    const dlg = await page.evaluate(() => ({
+      open: !document.querySelector('.prwrap').hidden,
+      count: document.getElementById('prCount').textContent,
+      preview: document.getElementById('prCanvas').width > 0,
+    }));
+    await page.click('.prmode[data-mode="multiple"]');
+    await page.selectOption('#prPer', '4');
+    await page.waitForFunction(
+      () => document.getElementById('prCount').textContent === 'Page 1 of 75',
+      null,
+      {
+        timeout: 30000,
+      },
+    );
+    await page.click('#prGo');
+    for (let i = 0; i < 300; i++) {
+      if (await page.evaluate(() => window.__printed.called || !window.__printed.viewer)) break;
+      await page.waitForTimeout(200);
+    }
+    const printed = await page.evaluate(() => window.__printed);
     check(
-      "Print: no dialog of the app's own; the PDF made for printing opens in the browser's PDF viewer, and that frame is printed",
+      "Print opens the app's dialog with a preview; 4 a sheet makes 300 pages 75 sheets, and those go to the browser's print dialog",
       /* a browser with no PDF viewer (Playwright's headless shell, run here
-         without BENCH_CHANNEL) never loads the frame: nothing to check there */
-      !printed.dialog && (!printed.viewer || (printed.called && /application\/pdf/.test(printed.pdf))),
-      printed,
+         without BENCH_CHANNEL) never loads the frame: the dialog is checked there */
+      dlg.open &&
+        dlg.count === 'Page 1 of 300' &&
+        dlg.preview &&
+        (!printed.viewer || (printed.called && /application\/pdf/.test(printed.pdf))),
+      { dlg, printed },
     );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();
