@@ -229,8 +229,19 @@ function createWindow(opts) {
   win.on('unmaximize', resized);
   win.on('resize', resized);
   if (!app.isPackaged) {
+    /* development only: F12 opens DevTools, and Ctrl+R or F5 reloads the
+       page from disk. The window has no menu, which is what gives Electron's
+       usual reload shortcut, so it is wired here. */
     win.webContents.on('before-input-event', (e, input) => {
-      if (input.type === 'keyDown' && input.key === 'F12') win.webContents.toggleDevTools();
+      if (input.type !== 'keyDown') return;
+      if (input.key === 'F12') win.webContents.toggleDevTools();
+      else if (
+        input.key === 'F5' ||
+        ((input.control || input.meta) && !input.alt && input.key.toLowerCase() === 'r')
+      ) {
+        e.preventDefault();
+        win.webContents.reloadIgnoringCache();
+      }
     });
   }
   win.loadURL(pageUrl(o.query));

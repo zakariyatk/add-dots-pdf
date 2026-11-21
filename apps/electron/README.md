@@ -29,8 +29,12 @@ npm run e2e -w @adddots/electron                       # end to end, over apps/w
 `electron:dev` builds the engine, starts Vite on port 5173 (or uses one
 already running) and opens the app on it. Arguments after `--` go to the
 app, so `npm run electron:dev -w @adddots/electron -- C:\path\file.pdf` opens
-a PDF as a double-click in Explorer would. F12 opens DevTools (unpackaged
-only).
+a PDF as a double-click in Explorer would. Saving any file in
+`apps/web/public` or `packages/engine` reloads the window by itself. F12
+opens DevTools and Ctrl+R or F5 reloads (unpackaged only).
+
+`electron:start` runs the built copy (`apps/web/dist`) instead: it never
+reloads, and shows a change only after it is built again.
 
 Everything lands in `apps/electron/release/`. Electron downloads its own
 binary the first time it runs.
