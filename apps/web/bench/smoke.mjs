@@ -2999,9 +2999,9 @@ try {
     await page.click('#qtSelect');
     const down = await state();
     check(
-      'tabs All tools, View, Edit, Draw, Convert, Sign; Edit shows the Page, Insert, Edit and Document tools together',
+      'tabs All tools, View, Edit, Draw, Tools, Convert, Sign; Edit shows the Page, Insert, Edit and Document tools together',
       JSON.stringify(first.tabs) ===
-        JSON.stringify(['All tools', 'View', 'Edit', 'Draw', 'Convert', 'Sign']) &&
+        JSON.stringify(['All tools', 'View', 'Edit', 'Draw', 'Tools', 'Convert', 'Sign']) &&
         first.lit === 'ribView' &&
         JSON.stringify(edit.panels) === JSON.stringify(['panDoc', 'panEdit', 'panInsert', 'panPage']),
       { first, edit },
