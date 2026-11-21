@@ -133,7 +133,7 @@
       return CORE_TOOL[id] || null;
     }
     [
-      ['tSelect', 'Select (V)'], ['tVxDirect', 'Direct Selection (Shift+V)'], ['tPan', 'Pan (H)'], ['tEditMove', 'Move (M)'], ['tNote', 'Comment'],
+      ['tSelect', 'Select (V)'], ['tVxDirect', 'Direct Selection (Shift+V)'], ['tRotate', 'Rotate (R)'], ['tPan', 'Pan (H)'], ['tEditMove', 'Move (M)'], ['tNote', 'Comment'],
       ['tHighlight', 'Highlight text'], ['tInk', 'Draw'], ['tText', 'Add or edit text'],
       ['tDim', 'Measure'], ['btnRulers', 'Rulers (Ctrl+R)']
     ].forEach(function (q) {

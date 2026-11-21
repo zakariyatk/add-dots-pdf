@@ -450,7 +450,7 @@
      Marks they invent are ordinary entries in it.shapes, so undo, save, the
      JPG export and the thumbnails all keep working with no extra wiring. */
   const EXT = window.ADDPDF || (window.ADDPDF = {
-    shapeRenderers: {}, handleKind: {}, keepRatio: {},
+    shapeRenderers: {}, handleKind: {}, keepRatio: {}, afterDraw: [],
     markPop: {},                 /* mark type -> {el, sync}: extra controls on the properties popover */
     /* before a save: promises to wait for (forms reading the file's values) */
     beforeSave: [],
@@ -2278,11 +2278,14 @@
           ux1 = Math.min(ux1, b.x); uy1 = Math.min(uy1, b.y);
           ux2 = Math.max(ux2, b.x + b.width); uy2 = Math.max(uy2, b.y + b.height);
         });
+        /* the members' own elements, read before anything is added in
+           front of them and shifts the indexes */
+        const members = list.map(function (i) { return { i: i, el: it.anno.children[i] }; });
         if (ux2 > ux1) {
           const frame = document.createElementNS(SVGNS, 'rect');
-          frame.setAttribute('class', 'halo multi-frame');
-          frame.setAttribute('x', ux1 - 3); frame.setAttribute('y', uy1 - 3);
-          frame.setAttribute('width', ux2 - ux1 + 6); frame.setAttribute('height', uy2 - uy1 + 6);
+          frame.setAttribute('class', 'multi-frame');
+          frame.setAttribute('x', ux1); frame.setAttribute('y', uy1);
+          frame.setAttribute('width', ux2 - ux1); frame.setAttribute('height', uy2 - uy1);
           frame.addEventListener('pointerdown', function (e) { beginDrag(it, S.sel.i, e, 'move'); });
           /* under every mark (first child, SVG's own paint order), so one
              still catches its own click first — Ctrl+click to drop it out
@@ -2290,17 +2293,41 @@
              the gap between members, where nothing else is there to */
           it.anno.insertBefore(frame, it.anno.firstChild);
         }
-        list.forEach(function (i) {
-          const el = it.anno.children[i];
-          if (!el || !el.getBBox) return;
+        /* As Illustrator shows a selection of several objects: each one's
+           own outline traced in blue with a dot at its centre, and one
+           bounding box round them all with eight square grips that scale
+           the whole selection together. */
+        const over = document.createElementNS(SVGNS, 'g');
+        over.setAttribute('class', 'msel');
+        members.forEach(function (m) {
+          const el = m.el, sh = it.shapes[m.i];
+          if (!el || !el.getBBox || !sh) return;
           let b;
           try { b = el.getBBox(); } catch (e) { return; }
-          const h = document.createElementNS(SVGNS, 'rect');
-          h.setAttribute('class', 'halo multi');
-          h.setAttribute('x', b.x - 3); h.setAttribute('y', b.y - 3);
-          h.setAttribute('width', b.width + 6); h.setAttribute('height', b.height + 6);
-          it.anno.appendChild(h);
+          /* a drawn line or shape: its own path, in blue; text, a picture
+             or anything else without a line to trace: the box round it */
+          const traced = sh.t !== 'text' && !el.querySelector('foreignObject, image, text');
+          if (traced) {
+            const c = el.cloneNode(true);
+            c.removeAttribute('id');
+            c.setAttribute('class', 'mtrace');
+            c.style.display = '';
+            over.appendChild(c);
+          } else {
+            const r = document.createElementNS(SVGNS, 'rect');
+            r.setAttribute('class', 'mtrace-box');
+            r.setAttribute('x', b.x); r.setAttribute('y', b.y);
+            r.setAttribute('width', b.width); r.setAttribute('height', b.height);
+            over.appendChild(r);
+          }
+          const dot = document.createElementNS(SVGNS, 'rect');
+          dot.setAttribute('class', 'mcenter');
+          dot.setAttribute('x', b.x + b.width / 2 - 3); dot.setAttribute('y', b.y + b.height / 2 - 3);
+          dot.setAttribute('width', 6); dot.setAttribute('height', 6);
+          over.appendChild(dot);
         });
+        it.anno.appendChild(over);
+        it.anno.appendChild(groupHandlesEl(it, vp, list));
       } else {
         const sel = it.shapes[S.sel.i];
         if (sel && sel.t !== 'pin') {
@@ -2310,6 +2337,8 @@
         }
       }
     }
+    /* what a module draws over the marks (the Rotate tool's pivot, js/rotate.js) */
+    if (!ghost) EXT.afterDraw.forEach(function (fn) { try { fn(it); } catch (e) { console.error('[afterDraw]', e); } });
   }
 
   function shapeEl(it, s, vp, idx) {
@@ -2902,7 +2931,7 @@
     }
     /* grabbing a member of a group moves the whole group */
     const list = selList();
-    const group = mode === 'move' && list.length > 1 && S.sel.it === it && list.indexOf(idx) >= 0
+    const group = (mode === 'move' || mode === 'gscale') && list.length > 1 && S.sel.it === it && list.indexOf(idx) >= 0
       ? list.map(function (i) { return { i: i, s0: copyShape(it.shapes[i]) }; }) : null;
     dragOn = {
       it: it, idx: idx, mode: mode, extra: extra, from: at, s0: copyShape(s),
@@ -3047,6 +3076,20 @@
       } else {
         moveShape(s, o, mx, my);
       }
+    } else if (d.mode === 'gscale') {
+      if (!d.group) return;
+      const k = d.extra;
+      let sx = k.ax ? (p[0] - k.f[0]) / (k.h[0] - k.f[0]) : 1;
+      let sy = k.ay ? (p[1] - k.f[1]) / (k.h[1] - k.f[1]) : 1;
+      /* never flat: a grip pulled right through the far side flips the
+         selection over, as in Illustrator, but always keeps some size */
+      const keep = function (v) { return Math.abs(v) < 0.02 ? (v < 0 ? -0.02 : 0.02) : v; };
+      sx = keep(sx); sy = keep(sy);
+      if (e.shiftKey && k.corner) {
+        const m = Math.max(Math.abs(sx), Math.abs(sy));
+        sx = sx < 0 ? -m : m; sy = sy < 0 ? -m : m;
+      }
+      scaleGroup(d.it, d.group, k.f, sx, sy);
     } else if ((d.mode === 'pv' || ((d.mode === 'pa' || d.mode === 'pb') && o.t === 'line')) && EXT.vxJoinAt &&
                (d.join = EXT.vxJoinAt(d.it, d.idx, d.mode === 'pv' ? d.extra : d.mode === 'pa' ? 0 : 1, p, o))) {
       /* a point dragged near another point of a line or shape lands on it,
@@ -3125,7 +3168,11 @@
     hideMoveHud();
     hideDistHuds();
     document.body.classList.remove('dragdup');
-    if (d.moved) { d.it.shapes[d.idx] = d.s0; drawShapes(d.it); }
+    if (d.moved) {
+      if (d.group) d.group.forEach(function (m) { d.it.shapes[m.i] = m.s0; });
+      else d.it.shapes[d.idx] = d.s0;
+      drawShapes(d.it);
+    }
   });
 
   /* ---- properties of the selected mark ---- */
@@ -3480,6 +3527,98 @@
     pop.style.top = top + 'px';
   }
   function hideMarkPop() { const p = $('markPop'); if (p) p.hidden = true; closeSwatches(); }
+
+  /** What a mark covers on the page, in PDF points: its points' box, except
+      that text covers its whole footprint (not just its anchor) and a box
+      turned by its own angle covers its turned corners. */
+  function visBox(s) {
+    let P = null;
+    if (s.t === 'text' && s.a) {
+      const r = textRect(s), c = rotCenter(s);
+      P = [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]];
+      if (s.r) P = P.map(function (p) { return rotPt(p, c, s.r); });
+    } else if (s.r && twoPoint(s) && !turnsByEnds(s.t)) {
+      P = rectCorners(s);
+    }
+    if (!P) return markBox(s);
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    P.forEach(function (p) {
+      x1 = Math.min(x1, p[0]); y1 = Math.min(y1, p[1]);
+      x2 = Math.max(x2, p[0]); y2 = Math.max(y2, p[1]);
+    });
+    return { x1: x1, y1: y1, x2: x2, y2: y2 };
+  }
+
+  /* The box round a selection of several marks and its eight square grips,
+     as Illustrator draws them: a corner scales both ways from the corner
+     opposite (Shift keeps the proportions), a side's middle one way from
+     the side opposite. Each grip carries its own point and the fixed one
+     opposite, in PDF points, so a turned page needs nothing special. */
+  function groupHandlesEl(it, vp, list) {
+    const g = document.createElementNS(SVGNS, 'g');
+    g.setAttribute('class', 'gsel');
+    const boxes = list.map(function (i) { return it.shapes[i]; })
+      .filter(function (s) { return s && !NOT_SELECTABLE[s.t]; }).map(visBox);
+    if (!boxes.length) return g;
+    const u = unionBox(boxes);
+    const C = [[u.x1, u.y1], [u.x2, u.y1], [u.x2, u.y2], [u.x1, u.y2]];
+    const mid = function (p, q) { return [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2]; };
+    const grips = [];
+    C.forEach(function (p, i) { grips.push({ h: p, f: C[(i + 2) % 4], corner: true }); });
+    C.forEach(function (p, i) {
+      grips.push({ h: mid(p, C[(i + 1) % 4]), f: mid(C[(i + 2) % 4], C[(i + 3) % 4]), corner: false });
+    });
+    const V = C.map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+    const box = document.createElementNS(SVGNS, 'polygon');
+    box.setAttribute('class', 'gbox');
+    box.setAttribute('points', vpts(V));
+    g.appendChild(box);
+    const vc = [(V[0][0] + V[2][0]) / 2, (V[0][1] + V[2][1]) / 2];
+    grips.forEach(function (k) {
+      const ax = Math.abs(k.h[0] - k.f[0]) > 1e-6, ay = Math.abs(k.h[1] - k.f[1]) > 1e-6;
+      const v = vp.convertToViewportPoint(k.h[0], k.h[1]);
+      if (COARSE) {
+        const pad = document.createElementNS(SVGNS, 'circle');
+        pad.setAttribute('cx', v[0]); pad.setAttribute('cy', v[1]); pad.setAttribute('r', 22);
+        pad.setAttribute('class', 'knpad');
+        pad.addEventListener('pointerdown', function (e) {
+          beginDrag(it, S.sel.i, e, 'gscale', { h: k.h, f: k.f, ax: ax, ay: ay, corner: k.corner });
+        });
+        g.appendChild(pad);
+      }
+      const el = document.createElementNS(SVGNS, 'rect');
+      el.setAttribute('class', 'gkn');
+      el.setAttribute('x', v[0] - 3.5); el.setAttribute('y', v[1] - 3.5);
+      el.setAttribute('width', 7); el.setAttribute('height', 7);
+      const sdx = v[0] - vc[0], sdy = v[1] - vc[1];
+      el.dataset.cur = k.corner ? (sdx * sdy > 0 ? 'nwse' : 'nesw')
+        : (Math.abs(sdx) > Math.abs(sdy) ? 'ew' : 'ns');
+      el.addEventListener('pointerdown', function (e) {
+        beginDrag(it, S.sel.i, e, 'gscale', { h: k.h, f: k.f, ax: ax, ay: ay, corner: k.corner });
+      });
+      g.appendChild(el);
+    });
+    return g;
+  }
+  /* every member of a selection scaled by (sx, sy) about the fixed point f,
+     each from its state before the drag */
+  function scaleGroup(it, group, f, sx, sy) {
+    const fp = function (q) { return [f[0] + (q[0] - f[0]) * sx, f[1] + (q[1] - f[1]) * sy]; };
+    group.forEach(function (m) {
+      const sh = it.shapes[m.i], o = m.s0;
+      if (!sh) return;
+      scaleBy(sh, o, f, sx, sy);
+      if (o.m) sh.m = fp(o.m);
+      if (o.patch) {
+        const a = fp([o.patch.x, o.patch.y]), b = fp([o.patch.x + o.patch.w, o.patch.y + o.patch.h]);
+        sh.patch = Object.assign({}, o.patch, {
+          x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]), w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1])
+        });
+      }
+      /* text grows with its box, by the mean of the two ways */
+      if (o.t === 'text' && o.size) sh.size = Math.max(2, Math.min(600, o.size * Math.sqrt(Math.abs(sx * sy))));
+    });
+  }
 
   /* the grab points drawn on the selected mark */
   function handlesEl(it, s, vp, idx) {
@@ -10508,6 +10647,10 @@
     printSystem: printSystem, printFrame: printFrame,
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
     stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE,
+    /* for Align and Pathfinder (js/arrange.js) */
+    visBox: visBox, moveShape: moveShape, copyShape: copyShape, markBox: markBox,
+    /* for the Rotate tool (js/rotate.js) */
+    turnsByEnds: turnsByEnds, unionBox: unionBox,
     ZOOM_MIN: ZOOM_MIN,
     /* the document put away (its tab closed): back to the home screen */
     closeDocument: function () { hardReset(); updateMeta(); showHome(); },
