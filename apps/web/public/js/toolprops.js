@@ -68,6 +68,51 @@
     markHolder.setAttribute('role', 'group'); markHolder.setAttribute('aria-label', 'Selected mark');
     pan.appendChild(markHolder);
 
+    /* ---------------- the selected mark's properties, on the right ----------------
+       Not in the Drawing Tool tab, which would take the left panel over from
+       whatever tools were open there: a panel of their own in the rail on the
+       right, after Layers, opened by its icon (it never opens by itself). */
+    const railHost = $('railPages') ? $('railPages').parentNode : null;
+    const ptab = document.createElement('button');
+    ptab.className = 'btn'; ptab.id = 'tabProps'; ptab.type = 'button'; ptab.textContent = 'Properties';
+    ptab.title = 'Properties of the selected object';
+    ptab.hidden = true;                         /* reached from the side rail's icon (js/toolpanel.js) */
+    if ($('railClose')) $('railClose').parentNode.insertBefore(ptab, $('railClose'));
+    const ppanel = document.createElement('div');
+    ppanel.className = 'rail-body'; ppanel.id = 'railProps'; ppanel.hidden = true;
+    ppanel.innerHTML =
+      '<div class="laybar"><b>Properties</b><span class="laycount" id="propsName"></span></div>' +
+      '<div class="rtool" id="propsTool" hidden></div>' +
+      '<p class="props-empty" id="propsEmpty">Select an object on the page to edit it here, or pick a tool to set how it draws.</p>' +
+      '<div class="rprops" id="propsHost"></div>';
+    if (railHost) railHost.appendChild(ppanel);
+    const propsHost = ppanel.querySelector('#propsHost');
+    /* the tool in hand's own options (core's #modeBar) go here too, not into
+       a tab that would take the left panel over while drawing */
+    const toolSec = ppanel.querySelector('#propsTool');
+
+    function railBodies() { return railHost ? Array.prototype.slice.call(railHost.querySelectorAll(':scope > .rail-body')) : []; }
+    function showProps() {
+      if (!S.items.length || !railHost) return;
+      X.setRail(true);
+      railBodies().forEach(function (b) { b.hidden = b !== ppanel; });
+      document.querySelectorAll('.rail-tabs .btn').forEach(function (t) { t.classList.toggle('on', t === ptab); });
+    }
+    ptab.addEventListener('click', showProps);
+    document.querySelectorAll('.rail-tabs .btn:not(#railClose)').forEach(function (t) {
+      if (t === ptab) return;
+      t.addEventListener('click', function () { ppanel.hidden = true; ptab.classList.remove('on'); });
+    });
+    function railOpen() { return !!$('rail') && !$('rail').hidden; }
+    function propsSpot() { return propsHost; }
+    function paintProps() {
+      const on = pop && !pop.hidden;
+      const tool = !toolSec.hidden;
+      const name = tool ? (badge.dataset.label || '') : ($('mpTitle') && $('mpTitle').textContent) || '';
+      $('propsEmpty').hidden = tool || (on && pop.parentNode === propsHost);
+      $('propsName').textContent = tool || on ? name : '';
+    }
+
     let fromTab = 'ribDraw';                    /* the tab to go back to */
     let mode = null;                            /* 'tool', 'mark' or null */
 
@@ -93,8 +138,9 @@
         if (bar.parentNode !== home.parent) home.parent.insertBefore(bar, home.next);
         if (pop && pop.parentNode !== popHome.parent) popHome.parent.insertBefore(pop, popHome.next);
       } else {
-        if (bar.parentNode !== holder) holder.appendChild(bar);
-        if (pop && pop.parentNode !== markHolder) markHolder.appendChild(pop);
+        if (bar.parentNode !== toolSec) toolSec.appendChild(bar);
+        const spot = propsSpot();
+        if (pop && pop.parentNode !== spot) spot.appendChild(pop);
       }
       document.body.classList.toggle('props-in-ribbon', !phone);
     }
@@ -121,33 +167,26 @@
       const markLive = !phone && !toolLive && pop &&
         (!pop.hidden || (mode === 'mark' && !!selectedMark()));
 
-      if (!toolLive && !markLive) {
-        const was = !tab.hidden;
-        tab.hidden = true; mode = null;
-        if (was && activeTab() === 'ribTool') X.setRibbon(fromTab);
-        return;
-      }
-
-      holder.hidden = !toolLive;
-      markHolder.hidden = !markLive;
-      if (toolLive) {
-        mode = 'tool';
-        const b = toolButton(S.tool);
-        const label = (b && (b.dataset.label || b.getAttribute('aria-label'))) || 'Tool';
-        setBadge(b, label, label + ' — back to its tab to pick another tool');
-        tab.textContent = 'Drawing Tool';
-      } else {
-        mode = 'mark';
-        const s = selectedMark();
-        const name = ($('mpTitle') && $('mpTitle').textContent) || 'Mark';
-        setBadge(s ? toolButton(s.t) : null, name, 'Editing this ' + name.toLowerCase() +
-          ' — back to the tab you were on');
-        tab.textContent = 'Drawing Tool';
-      }
+      /* the Drawing Tool tab is not used on a desktop any more: both kinds
+         of properties are on the right (the phone keeps them docked) */
+      const was = !tab.hidden;
+      tab.hidden = true;
+      if (was && activeTab() === 'ribTool') X.setRibbon(fromTab);
       const cur = activeTab();
       if (cur && cur !== 'ribTool') fromTab = cur;
-      tab.hidden = false;
-      if (cur !== 'ribTool') X.setRibbon('ribTool');
+
+      toolSec.hidden = !toolLive;
+      if (toolLive) {
+        const b = toolButton(S.tool);
+        const label = (b && (b.dataset.label || b.getAttribute('aria-label'))) || 'Tool';
+        setBadge(b, label, label);
+      }
+      const now = toolLive ? 'tool' : markLive ? 'mark' : null;
+      /* nothing opens the rail by itself: the Properties icon does, and the
+         panel shows whatever is in hand then */
+      mode = now;
+      place();
+      paintProps();
     }
 
     /* No Done, Cancel or Delete bar beside the work: as in Acrobat and
@@ -161,9 +200,18 @@
       new MutationObserver(sync)
         .observe(pop, { attributes: true, attributeFilter: ['hidden'] });
     }
+    /* the name over the Properties panel follows the mark picked out */
+    if ($('mpTitle') && window.MutationObserver) {
+      new MutationObserver(paintProps).observe($('mpTitle'), { childList: true, characterData: true, subtree: true });
+    }
     /* and a click on empty page, or Delete, clears the selection */
     document.addEventListener('pointerup', function () {
       if (mode === 'mark') setTimeout(sync, 0);
+    });
+
+    /* opening Layers or Properties on the right moves the panel to it */
+    document.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('.rail-tabs, #sideRail')) setTimeout(sync, 0);
     });
 
     let resizeTick = 0;

@@ -14,9 +14,11 @@ body.acro #ribTabs #ribAll { order: 0 }
 body.acro #ribTabs #ribView { order: 1 }
 body.acro #ribTabs #ribEdit { order: 2 }
 body.acro #ribTabs #ribDraw { order: 3 }
-body.acro #ribTabs #ribConvert { order: 4 }
-body.acro #ribTabs #ribForm { order: 5 }
-body.acro #ribTabs .tab { order: 6 }
+/* Tools (js/toolbar.js), the point-editing tools, right after Draw */
+body.acro #ribTabs #ribTools { order: 4 }
+body.acro #ribTabs #ribConvert { order: 5 }
+body.acro #ribTabs #ribForm { order: 6 }
+body.acro #ribTabs .tab { order: 7 }
 /* core's own .on follows the panel it last showed; the tab lit here is the
    one whose tools are in the panel */
 body.acro #ribTabs .tab.on { color: var(--text); font-weight: 400 }

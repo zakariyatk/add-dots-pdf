@@ -1050,6 +1050,70 @@ body.props-in-ribbon #modeBar > * { flex: none }
 }
 #btnToolNow { cursor: pointer }
 
+/* the selected object's properties in the rail on the right (js/toolprops.js):
+   their own Properties panel, or under the Layers tree while that is showing.
+   The floating panel's controls, laid out down the panel instead. */
+.rprops .markpop {
+  position: static !important; left: auto !important; top: auto !important;
+  display: flex; flex-direction: row; align-items: center; flex-wrap: wrap; gap: 8px;
+  box-sizing: border-box; width: auto !important; max-width: 100% !important; min-width: 0;
+  min-height: 0; padding: 10px 12px 14px; z-index: auto; overflow: visible;
+  background: transparent !important; border: 0 !important; box-shadow: none !important; border-radius: 0;
+}
+.rprops .markpop > * { min-width: 0; max-width: 100%; flex: 1 1 100% }
+/* bring forward, send back and delete share the last row */
+.rprops .markpop > .mpstack, .rprops .markpop > .del { flex: 0 0 auto }
+.rprops .markpop > .mpstack:first-of-type { margin-top: 4px }
+.rprops .markpop > .del { margin-left: auto }
+.rprops .mpverts .cbtn { width: auto; flex: 1 1 0 }
+.rprops .mpverts-tip { white-space: normal }
+.rprops .markpop .cbtn { width: 100%; box-sizing: border-box }
+.rprops .markpop .cbtn b { margin-left: auto }
+.rprops .markpop .mfield .unit, .rprops .markpop .mfield select { margin-left: auto }
+.rprops .markpop .mang { justify-content: space-between }
+.rprops .markpop[hidden] { display: none }
+.rprops .markpop .mtitle, .rprops .markpop .mdiv { display: none }
+.rprops .markpop .mfield { display: flex; align-items: center; justify-content: space-between; gap: 10px }
+.rprops .markpop .mfield > span:first-child { color: var(--text-dim); font-size: 12px }
+.rprops .markpop .cbtn { justify-content: flex-start }
+.rprops .markpop .txctl:not([hidden]) { display: flex; flex-wrap: wrap; gap: 6px }
+.rprops #mpExt, .rprops #mpExt > div, .rprops #mpExt .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center }
+.rprops #mpExt[hidden] { display: none }
+/* the tool in hand's options, at the top of the Properties panel (js/toolprops.js):
+   the same controls the left panel used to hold, laid down the panel */
+.rtool { padding: 6px 12px 12px; border-bottom: 1px solid var(--line) }
+.rtool[hidden] { display: none }
+#railProps .rtool #modeBar {
+  position: static; display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  min-height: 0 !important; padding: 0; background: none; border: 0; box-shadow: none; overflow: visible;
+}
+#railProps .rtool #modeBar:not(.show) { display: none }
+#railProps .rtool #modeBar > * { flex: none; max-width: 100% }
+#railProps .rtool #modeBar .btn {
+  height: 32px; min-height: 32px; width: auto; min-width: 0; max-width: none;
+  flex-direction: row; padding: 0 10px; gap: 6px; border-radius: 7px;
+}
+#railProps .rtool #modeBar .btn::after { content: none }
+#railProps .rtool #modeBar .hint {
+  flex: 0 0 100%; order: 90; max-width: none; min-width: 0; font-size: 12px; line-height: 1.45;
+  display: block; -webkit-line-clamp: unset; overflow: visible; white-space: normal; color: var(--text-dim)
+}
+#railProps .rtool #modeBar .grow, #railProps .rtool #modeBar #modeDone { display: none }
+#railProps .rtool #modeBar select, #railProps .rtool #modeBar input:not([type="range"]) { max-width: 100% }
+/* each row of controls (the text tool's, Dimension's Scale and Units, the others') wraps in the panel */
+#railProps .rtool #modeBar .txctl, #railProps .rtool #modeBar .swatches, #railProps .rtool #modeBar .widths {
+  flex-wrap: wrap; row-gap: 6px; column-gap: 6px; max-width: 100%
+}
+#railProps .rtool #modeBar .txctl:not([hidden]) { display: flex; align-items: center; flex: 0 0 100%; min-width: 0 }
+#railProps .rtool #modeBar .txctl select { flex: 1 1 64px; min-width: 0 }
+#railProps .rtool #modeBar .txctl .anno-lbl { flex: none }
+/* Colour and Line width share their row, end to end */
+#railProps .rtool #modeBar .swatches:not([style*="none"]), #railProps .rtool #modeBar .widths:not([style*="none"]) { flex: 1 1 0; min-width: 0 }
+#railProps .rtool #modeBar .swatches > button, #railProps .rtool #modeBar .widths > button { flex: 1 1 auto; justify-content: space-between }
+
+.props-empty { margin: 14px 12px; font-size: 12.5px; color: var(--text-dim) }
+.props-empty[hidden], .rprops[hidden] { display: none }
+
 /* the selected mark's panel, laid into the Drawing Tool tab instead of floating */
 body.props-in-ribbon #panTool .markpop {
   position: static !important; left: auto !important; top: auto !important;
@@ -1081,8 +1145,8 @@ body.props-in-ribbon #panTool #mpExt .btn {
 :root {
   --cur-cross: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M12 4.5V9M12 15V19.5M4.5 12H9M15 12H19.5' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M12 4.5V9M12 15V19.5M4.5 12H9M15 12H19.5' stroke='black' stroke-width='1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='12' cy='12' r='.85' fill='black' stroke='white' stroke-width='.8'/%3E%3C/svg%3E") 12 12, crosshair;
   --cur-cross-add: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M12 4.5V9M12 15V19.5M4.5 12H9M15 12H19.5' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M12 4.5V9M12 15V19.5M4.5 12H9M15 12H19.5' stroke='black' stroke-width='1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='12' cy='12' r='.85' fill='black' stroke='white' stroke-width='.8'/%3E%3Cpath d='M18.5 16v6M15.5 19h6' stroke='white' stroke-width='3.4000000000000004' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M18.5 16v6M15.5 19h6' stroke='black' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, copy;
-  --cur-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E") 5 3, default;
-  --cur-arrow-obj: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='16.5' y='17.5' width='5' height='5' fill='black' stroke='white' stroke-width='1'/%3E%3C/svg%3E") 5 3, move;
+  --cur-arrow: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3C/svg%3E") 5 3, default;
+  --cur-arrow-obj: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Crect x='16.5' y='17.5' width='5' height='5' fill='black' stroke='white' stroke-width='1'/%3E%3C/svg%3E") 5 3, move;
   --cur-arrow-point: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Crect x='16.5' y='17.5' width='5' height='5' fill='white' stroke='black' stroke-width='1.1'/%3E%3C/svg%3E") 5 3, pointer;
   --cur-nwse: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M6 6l12 12M6 6v4.5M6 6h4.5M18 18v-4.5M18 18h-4.5' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M6 6l12 12M6 6v4.5M6 6h4.5M18 18v-4.5M18 18h-4.5' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, nwse-resize;
   --cur-nesw: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M18 6L6 18M18 6v4.5M18 6h-4.5M6 18v-4.5M6 18h4.5' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M18 6L6 18M18 6v4.5M18 6h-4.5M6 18v-4.5M6 18h4.5' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, nesw-resize;
@@ -1090,6 +1154,14 @@ body.props-in-ribbon #panTool #mpExt .btn {
   --cur-pencil: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M3.5 20.5l1.2-4.6L15.6 5a2 2 0 0 1 2.8 0l.6.6a2 2 0 0 1 0 2.8L8.1 19.3z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M3.5 20.5l1.2-4.6 3.4 3.4z' fill='black'/%3E%3Cpath d='M14 6.6l3.4 3.4' stroke='black' stroke-width='1.1'/%3E%3C/svg%3E") 4 20, crosshair;
   --cur-type: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Crect x='3.5' y='3.5' width='17' height='17' fill='none' stroke='white' stroke-width='2.4'/%3E%3Crect x='3.5' y='3.5' width='17' height='17' fill='none' stroke='black' stroke-width='1' stroke-dasharray='1.6 1.6'/%3E%3Cpath d='M9.5 7h5M12 7v10M9.5 17h5' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M9.5 7h5M12 7v10M9.5 17h5' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 15, text;
   --cur-crop: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M12 4.5V9M12 15V19.5M4.5 12H9M15 12H19.5' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M12 4.5V9M12 15V19.5M4.5 12H9M15 12H19.5' stroke='black' stroke-width='1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Ccircle cx='12' cy='12' r='.85' fill='black' stroke='white' stroke-width='.8'/%3E%3Cpath d='M16.5 15v5.5h5.5M15 16.5h5.5V22' stroke='white' stroke-width='3.3000000000000003' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3Cpath d='M16.5 15v5.5h5.5M15 16.5h5.5V22' stroke='black' stroke-width='1.1' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E") 12 12, crosshair;
+  /* the point tools (js/vertex.js), as Illustrator draws them: its pen with a
+     plus or a minus, the tip on the point; Direct Selection's black arrow (Select's is the white one) */
+  --cur-pen-add: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M2.5 21.5l2.6-8.2 6.9-6.9 5.6 5.6-6.9 6.9z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M12.6 5.8l2.5-2.5 5.6 5.6-2.5 2.5z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M2.5 21.5l5.6-5.6' stroke='black' stroke-width='1.1' stroke-linecap='round'/%3E%3Ccircle cx='9.2' cy='14.8' r='1.2' fill='black'/%3E%3Cpath d='M19 14.5v6M16 17.5h6' stroke='white' stroke-width='3.4' stroke-linecap='round' fill='none'/%3E%3Cpath d='M19 14.5v6M16 17.5h6' stroke='black' stroke-width='1.3' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 3 21, crosshair;
+  --cur-pen-del: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M2.5 21.5l2.6-8.2 6.9-6.9 5.6 5.6-6.9 6.9z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M12.6 5.8l2.5-2.5 5.6 5.6-2.5 2.5z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M2.5 21.5l5.6-5.6' stroke='black' stroke-width='1.1' stroke-linecap='round'/%3E%3Ccircle cx='9.2' cy='14.8' r='1.2' fill='black'/%3E%3Cpath d='M16 17.5h6' stroke='white' stroke-width='3.4' stroke-linecap='round' fill='none'/%3E%3Cpath d='M16 17.5h6' stroke='black' stroke-width='1.3' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 3 21, crosshair;
+  --cur-pen: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M2.5 21.5l2.6-8.2 6.9-6.9 5.6 5.6-6.9 6.9z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M12.6 5.8l2.5-2.5 5.6 5.6-2.5 2.5z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M2.5 21.5l5.6-5.6' stroke='black' stroke-width='1.1' stroke-linecap='round'/%3E%3Ccircle cx='9.2' cy='14.8' r='1.2' fill='black'/%3E%3C/svg%3E") 3 21, crosshair;
+  --cur-pen-close: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M2.5 21.5l2.6-8.2 6.9-6.9 5.6 5.6-6.9 6.9z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M12.6 5.8l2.5-2.5 5.6 5.6-2.5 2.5z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M2.5 21.5l5.6-5.6' stroke='black' stroke-width='1.1' stroke-linecap='round'/%3E%3Ccircle cx='9.2' cy='14.8' r='1.2' fill='black'/%3E%3Ccircle cx='19' cy='17.5' r='2.6' fill='none' stroke='white' stroke-width='3'/%3E%3Ccircle cx='19' cy='17.5' r='2.6' fill='none' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E") 3 21, crosshair;
+  --cur-direct: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E") 5 3, default;
+  --cur-direct-point: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='16.5' y='17.5' width='5' height='5' fill='white' stroke='black' stroke-width='1.1'/%3E%3C/svg%3E") 5 3, pointer;
   --cur-hand: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M9 11V4.6a1.6 1.6 0 0 1 3.2 0V10M12.2 10V3.8a1.6 1.6 0 0 1 3.2 0V10M15.4 10.4V5.6a1.6 1.6 0 0 1 3.2 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-4.5-2l-3-3.4a1.7 1.7 0 0 1 2.4-2.4L9 15.4V11' fill='white' stroke='black' stroke-width='1.2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, grab;
   --cur-hand-shut: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M7.2 12.2V11a1.6 1.6 0 0 1 3.2 0v-.6a1.6 1.6 0 0 1 3.2 0v.3a1.6 1.6 0 0 1 3.2 0v.5a1.5 1.5 0 0 1 3 0V15a6 6 0 0 1-6 6h-1.4a5.2 5.2 0 0 1-4.1-2l-1.9-2.6a1.6 1.6 0 0 1 2.4-2z' fill='white' stroke='black' stroke-width='1.2' stroke-linejoin='round'/%3E%3Cpath d='M10.4 11v2.2M13.6 10.7v2.3M16.8 11v2.2' stroke='black' stroke-width='1' fill='none'/%3E%3C/svg%3E") 12 12, grabbing;
   /* a side pulled up and down, or across; a mark picked up to move */
@@ -1104,6 +1176,10 @@ body:not([data-tool="select"]) .capture { cursor: var(--cur-cross) }
 body[data-tool="text"] .capture { cursor: var(--cur-type) }
 body[data-tool="ink"] .capture { cursor: var(--cur-pencil) }
 body[data-tool="crop"] .capture { cursor: var(--cur-crop) }
+body[data-tool="vadd"] .capture { cursor: var(--cur-pen-add) }
+body[data-tool="vdel"] .capture { cursor: var(--cur-pen-del) }
+body[data-tool="pen"] .capture { cursor: var(--cur-pen) }
+body[data-tool="vdirect"] .capture { cursor: var(--cur-direct) }
 body[data-tool="pin"] .capture { cursor: var(--cur-pin) }
 body[data-tool="note"] .capture,
 body[data-tool="stamp"] .capture { cursor: var(--cur-cross-add) }
@@ -1149,6 +1225,36 @@ body[data-tool="select"] .anno .picked * { cursor: var(--cur-move) }
 .anno .hnd .halo { fill: none; stroke: #7B5CFF; stroke-width: 1; stroke-dasharray: none; opacity: 1 }
 .anno .hnd .kn { fill: #FFFFFF; stroke: #7B5CFF; stroke-width: 1.3 }
 .anno .hnd .kn:hover { fill: #E4DDFF }
+/* the point picked out for point editing (js/vertex.js): filled in, as
+   Illustrator fills the selected anchor */
+.anno .hnd .kn.vsel { fill: #7B5CFF; stroke: #FFFFFF; stroke-width: 1.5 }
+/* the Points row on a line's, rectangle's or Continuous Line's popover */
+/* the Pen tool's overlay (js/pen.js): the path in hand, its anchors as small
+   diamonds (the one in hand filled), and each direction handle a line out
+   to a dot, as Illustrator draws them */
+.anno .penov { pointer-events: none }
+.anno .penline { fill: none; stroke: #2D8CFF; stroke-width: 1 }
+.anno .penhl { stroke: #2D8CFF; stroke-width: 1 }
+.anno .penh { fill: #2D8CFF; stroke: #FFFFFF; stroke-width: 1 }
+.anno .pena { fill: #FFFFFF; stroke: #2D8CFF; stroke-width: 1.3 }
+.anno .pena.on { fill: #2D8CFF }
+.anno .pena.first { stroke-width: 2 }
+/* on a phone the Tools tab's group rides in the dock beside Draw's, which
+   already leads with Pan, Move and Select */
+#dock #grpPoint [data-tool-btn] { display: none }
+/* the point tools' overlay (js/vertex.js): the outline in hand, its points as
+   small squares, filled when picked out; red on the one about to be taken off */
+.anno .vxov { pointer-events: none }
+.anno .vxpath { fill: none; stroke: #2D8CFF; stroke-width: 1 }
+.anno .vxpt { fill: #FFFFFF; stroke: #2D8CFF; stroke-width: 1.2 }
+.anno .vxpt.on { fill: #2D8CFF }
+.anno .vxpt.kill { fill: #E5484D; stroke: #E5484D }
+.anno .vxjoin { fill: none; stroke: #18A058; stroke-width: 2 }
+.anno .vxadd { fill: #FFFFFF; stroke: #2D8CFF; stroke-width: 1.5 }
+.mpverts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px }
+.mpverts-lbl { font-size: 12px; color: var(--text-dim); margin-right: 2px }
+.mpverts .cbtn:disabled { opacity: .45; cursor: default }
+.mpverts-tip { flex: 1 0 100%; margin: 2px 0 0; font-size: 11.5px; color: var(--text-dim) }
 .anno .hnd .kn.turn { fill: #7B5CFF; stroke: #FFFFFF; stroke-width: 1.5 }
 .anno .hnd .kn.turn:hover { fill: #6A4BF0 }
 .anno .hnd .turnic { fill: none; stroke: #FFFFFF; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; pointer-events: none }
@@ -1237,6 +1343,10 @@ body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
   shape-rendering: crispEdges;
 }
 .snaptrack path { stroke: #E8882A; stroke-width: 2; fill: none }
+/* Parallel: the line whose direction was taken up, drawn over solid, and the
+   guide through the start point that runs the same way */
+.snaptrack line.parref { stroke-width: 3; stroke-dasharray: none; opacity: .55; shape-rendering: auto }
+.snaptrack line.parguide { shape-rendering: auto }
 
 /* Smart guides, while a mark is dragged (core.js): solid, in Illustrator's
    own magenta, through whatever it has just lined up with — distinct from
@@ -1415,6 +1525,129 @@ body:not([data-ui="light"]) .pgrid .psq { border-color: rgba(255,255,255,.25) }
 #pmswatch input[type="color"] { width: 28px; height: 28px; padding: 1px; border: 1px solid var(--line); border-radius: 50%; background: transparent; cursor: pointer }
 #markPop .mpstack svg { fill: none; stroke: currentColor; stroke-width: 1.8 }
 
+/* The app's own dialogs (core.js dialog, ask), laid out as Windows 11's:
+   a title and close button, the content, and a footer band with the main
+   action and Cancel at the right, the main one filled in the accent. */
+.wdwrap {
+  position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; padding: 16px;
+  background: rgba(0, 0, 0, .4); animation: wdfade .12s ease-out;
+}
+.wdbox {
+  --wd-accent: var(--btn, #0067C0);
+  width: min(440px, 100%); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; margin: 0;
+  display: flex; flex-direction: column; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--chrome-2); color: var(--text);
+  box-shadow: 0 32px 64px rgba(0, 0, 0, .28), 0 2px 21px rgba(0, 0, 0, .22);
+  font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  animation: wdpop .16s cubic-bezier(.1, .9, .2, 1);
+}
+@keyframes wdfade { from { opacity: 0 } }
+@keyframes wdpop { from { opacity: 0; transform: scale(1.04) } }
+@media (prefers-reduced-motion: reduce) { .wdwrap, .wdbox { animation: none } }
+.wdhead { display: flex; align-items: flex-start; gap: 12px; padding: 20px 16px 0 24px }
+.wdtitle { flex: 1; margin: 0; font-size: 20px; line-height: 28px; font-weight: 600 }
+.wdx {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px; margin-top: -6px;
+  border: none; border-radius: 4px; background: transparent; color: var(--text-dim); cursor: pointer;
+}
+.wdx:hover { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text) }
+.wdx svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4 }
+.wdbody { padding: 12px 24px 24px }
+.wdmsg { margin: 0 0 14px; white-space: pre-line }
+.wdlabel { display: block; margin: 0 0 6px; font-size: 13px; font-weight: 600 }
+.wdnote { margin: 0 0 16px; font-size: 13px; color: var(--text-dim) }
+.wdnote b { color: var(--text); font-weight: 600 }
+.wdrow { display: flex; gap: 8px }
+.wdin, .wdsel {
+  box-sizing: border-box; height: 34px; padding: 0 10px; font: inherit; color: var(--text);
+  border: 1px solid var(--line); border-bottom-color: color-mix(in srgb, var(--text) 45%, transparent);
+  border-radius: 4px; background: var(--chrome); outline: none;
+}
+.wdin { width: 100%; min-width: 0 }
+.wdrow .wdin { flex: 1 }
+.wdsel { flex: none; width: 96px; cursor: pointer }
+.wdin:focus, .wdsel:focus { border-bottom: 2px solid var(--wd-accent); padding-bottom: 0 }
+.wdin.bad { border-bottom: 2px solid var(--danger) }
+.wderr { margin: 10px 0 0; font-size: 13px; color: var(--danger) }
+.wderr[hidden] { display: none }
+.wdpreview {
+  display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; padding: 10px 12px;
+  border-radius: 4px; font-size: 13px; background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.wdpreview span { color: var(--text-dim) }
+.wdpreview b { font-weight: 600; font-variant-numeric: tabular-nums }
+.wdfoot {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 24px;
+  border-top: 1px solid var(--line); background: var(--chrome);
+}
+.wdbtn {
+  height: 32px; padding: 0 12px; font: inherit; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--chrome-2); color: var(--text);
+}
+.wdbtn:hover { background: color-mix(in srgb, var(--text) 6%, var(--chrome-2)) }
+.wdbtn.wdok { border-color: transparent; background: var(--wd-accent); color: #FFFFFF; font-weight: 600 }
+.wdbtn.wdok:hover { background: color-mix(in srgb, var(--wd-accent) 88%, #000) }
+.wdbtn:focus-visible, .wdx:focus-visible { outline: 2px solid var(--text); outline-offset: 1px }
+
+/* the Print dialog (js/printdlg.js), laid out as Acrobat's: settings on the
+   left, the sheet as it will come out on the right */
+.prwrap[hidden] { display: none }
+.prbox { width: min(860px, 100%) !important; max-height: calc(100vh - 24px) }
+.prbox .wdhead { padding-bottom: 4px }
+.prtop {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px 22px; padding: 10px 24px 12px;
+  border-bottom: 1px solid var(--line);
+}
+.prtop .prrow[hidden], .prtop .prchk[hidden] { display: none }
+.prrow { display: inline-flex; align-items: center; gap: 8px; font-size: 13px }
+.prrow > span { white-space: nowrap }
+.prwide { min-width: 220px; max-width: 100% }
+#prPaper { min-width: 200px }
+.prnum { width: 76px !important; flex: none }
+.prchk { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; margin-top: 8px }
+.prmain { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; min-height: 0; overflow: auto }
+.prleft { padding: 6px 16px 12px 24px; display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.prset { margin: 0; padding: 8px 12px 12px; border: 1px solid var(--line); border-radius: 6px; min-width: 0 }
+.prset legend { padding: 0 6px; font-size: 13px; font-weight: 600 }
+.prline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; font-size: 13px }
+.prline label { display: inline-flex; align-items: center; gap: 6px }
+.prrange { width: 150px !important }
+.prmore { margin-top: 8px; font-size: 13px }
+.prmore summary { cursor: pointer; color: var(--text-dim) }
+.prmore .prline { margin-top: 8px }
+.prmodes { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin: 2px 0 10px }
+.prmode {
+  height: 32px; font: inherit; font-size: 13px; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--chrome-2); color: var(--text);
+}
+.prmode.on { border-color: var(--btn, #0067C0); background: color-mix(in srgb, var(--btn, #0067C0) 14%, var(--chrome-2)); font-weight: 600 }
+.prpane[hidden] { display: none }
+.prgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 16px; font-size: 13px }
+.prgrid label { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap }
+.prright { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 18px 12px; border-left: 1px solid var(--line); min-width: 0 }
+.prscale { align-self: flex-start; font-size: 12.5px; color: var(--text-dim) }
+.prsize { font-size: 12.5px; margin-top: 10px }
+.prview { position: relative; width: 100%; height: 300px; display: grid; place-items: center }
+.prview canvas { box-shadow: 0 0 0 1px rgba(0, 0, 0, .55), 0 2px 8px rgba(0, 0, 0, .18); background: #FFFFFF }
+.prbusy {
+  position: absolute; inset: auto 0 8px; margin: auto; width: max-content; padding: 4px 10px; border-radius: 4px;
+  font-size: 12px; background: var(--chrome); border: 1px solid var(--line)
+}
+.prbusy[hidden] { display: none }
+.prnav { display: flex; align-items: center; gap: 8px; width: 100% }
+.prnav input[type="range"] { flex: 1; accent-color: var(--btn, #0067C0) }
+.prstep { width: 34px; padding: 0 !important; font-size: 18px; line-height: 1 }
+.prcount { font-size: 12.5px }
+.prerr { text-align: center }
+.prfoot { display: flex !important; align-items: center; gap: 8px }
+.prfoot .wdbtn { min-width: 100px }
+.prnote { flex: 1; font-size: 12.5px; color: var(--text-dim) }
+@media (max-width: 760px) {
+  .prmain { grid-template-columns: 1fr }
+  .prright { border-left: 0; border-top: 1px solid var(--line) }
+  .prgrid { grid-template-columns: 1fr }
+}
+
 /* the Edit colours dialog (js/colordlg.js) */
 body.cdpicking, body.cdpicking * { cursor: crosshair !important }
 .cdwrap { position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .45) }
@@ -1487,8 +1720,14 @@ body.cdpicking, body.cdpicking * { cursor: crosshair !important }
   position: relative; display: flex; align-items: center; gap: 7px; padding: 6px 8px 6px 0;
   border-bottom: 1px solid var(--line); cursor: pointer;
 }
-.layrow:hover { background: rgba(255,255,255,.045) }
-.layrow.sel { background: var(--chrome-2) }
+/* hover reads on light and dark alike (a tint of the text colour, not white);
+   the selected mark is tinted in the accent with a bar down its left edge */
+.layrow { transition: background-color .12s ease }
+.layrow:hover { background: color-mix(in srgb, var(--text) 7%, transparent) }
+.layrow.sel { background: color-mix(in srgb, var(--marker) 14%, transparent); box-shadow: inset 3px 0 0 var(--marker) }
+.layrow.sel:hover { background: color-mix(in srgb, var(--marker) 20%, transparent) }
+.layrow.sel .laylabel { font-weight: 600; color: var(--text) }
+.layrow.laynone:hover { background: none }
 .layrow.hid { opacity: .6 }
 /* the column of dots down the left edge: filled shows, hollow hides — one
    per layer and one per mark, so visibility reads as a single column */
@@ -1512,7 +1751,6 @@ body.cdpicking, body.cdpicking * { cursor: crosshair !important }
 .laylock svg { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 1.8 }
 .layrow.locked { cursor: default }
 .layrow.locked .laylabel { color: var(--text-dim) }
-.layrow.mrow.locked .laybtns { opacity: 0 !important; pointer-events: none !important }
 .layswatch {
   flex: none; width: 13px; height: 13px; border-radius: 3px; border: 1px solid rgba(0,0,0,.3);
 }
@@ -1521,23 +1759,6 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
   flex: 1; min-width: 0; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .layrow.hid .laylabel { text-decoration: line-through }
-/* floats over the label's tail rather than squeezing it on every row —
-   only the hovered or selected row needs the room */
-.laybtns {
-  position: absolute; right: 4px; top: 2px; bottom: 2px; display: flex; align-items: center; gap: 2px;
-  padding-left: 10px; border-radius: 6px; background: var(--chrome);
-  box-shadow: -10px 0 8px -4px var(--chrome); opacity: 0; pointer-events: none;
-}
-.layrow:hover .laybtns, .layrow.sel .laybtns { opacity: 1; pointer-events: auto }
-.laybtns button {
-  display: grid; place-items: center; width: 24px; height: 24px; padding: 0;
-  border: none; background: transparent; color: var(--text-dim); cursor: pointer; border-radius: 5px;
-}
-.laybtns button:hover { color: var(--text); background: rgba(255,255,255,.08) }
-.laybtns button:disabled { opacity: .3; cursor: default; background: none !important; color: var(--text-dim) !important }
-.laybtns button svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 1.8 }
-.laybtns button.laydel:hover { color: var(--danger) }
-
 /* --- the tools above the tree, acting on the active layer (js/layers.js) --- */
 .laytools {
   display: flex; align-items: center; gap: 4px; padding: 5px 8px;
@@ -1558,6 +1779,9 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
   border: 1px solid var(--line); font-size: 11.5px; white-space: nowrap;
 }
 .laytools button.laynew svg { width: 14px; height: 14px; flex: none }
+/* the selection's own row: how many are picked, and what to do with them */
+.laytools.laysel { padding-top: 3px; padding-bottom: 3px }
+.laysel-lbl { font-size: 11.5px; color: var(--text-dim); white-space: nowrap }
 
 /* --- a layer's own row in the tree, and the branch under it --- */
 .layrow.layhead { padding-right: 6px }

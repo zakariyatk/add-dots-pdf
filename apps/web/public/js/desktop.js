@@ -98,6 +98,17 @@
      the website (js/update.js) */
   api.storeUpdate = function () { return T.core.invoke('store_update'); };
 
+  /* the Print dialog (js/printdlg.js): the printers this computer has, and
+     its sheets, as pictures, sent straight to the one chosen */
+  api.printers = function () { return T.core.invoke('printers'); };
+  api.printPages = function (job) {
+    var pages = (job.pages || []).map(function (p) { return new U8(p); });   /* into the window's realm */
+    return T.core.invoke('print_pages', {
+      pages: pages, w: job.w, h: job.h, paper: job.paper || '',
+      printer: job.printer || '', copies: job.copies || 1, color: job.color !== false
+    });
+  };
+
   api.saveFile = function (data, name, type) {
     return toBytes(data).then(function (body) {
       return T.core.invoke('save_file', body, {

@@ -351,6 +351,84 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  /** The app's own modal dialog, laid out as Windows 11 lays out one: a
+      title with a close button, the content, and a footer band with the
+      main action and Cancel at the right. In place of window.prompt, which
+      the Windows app (Electron) does not have at all.
+      o: { title, body (HTML), ok, cancel, width,
+           open(box) — wire up the content once it is on screen,
+           value(box) — what OK answers; return { error } to stay open and say why }
+      Resolves to that value, or null when cancelled. Enter is OK, Esc is Cancel. */
+  function dialog(o) {
+    return new Promise(function (resolve) {
+      const was = document.activeElement;
+      const wrap = document.createElement('div');
+      wrap.className = 'wdwrap';
+      wrap.innerHTML =
+        '<form class="wdbox" role="dialog" aria-modal="true" novalidate>' +
+          '<div class="wdhead"><h2 class="wdtitle"></h2>' +
+          '<button type="button" class="wdx" aria-label="Close">' +
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>' +
+          '<div class="wdbody">' + (o.body || '') + '<p class="wderr" role="alert" hidden></p></div>' +
+          '<div class="wdfoot"><button type="submit" class="wdbtn wdok"></button>' +
+          '<button type="button" class="wdbtn wdno"></button></div>' +
+        '</form>';
+      const box = wrap.firstChild;
+      box.querySelector('.wdtitle').textContent = o.title || '';
+      box.querySelector('.wdok').textContent = o.ok || 'OK';
+      box.querySelector('.wdno').textContent = o.cancel || 'Cancel';
+      box.setAttribute('aria-label', o.title || '');
+      if (o.width) box.style.width = 'min(' + o.width + 'px, 100%)';
+      const err = box.querySelector('.wderr');
+      document.body.appendChild(wrap);
+      function done(v) {
+        wrap.remove();
+        if (was && was.focus) try { was.focus(); } catch (e) { /* gone */ }
+        resolve(v);
+      }
+      box.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const v = o.value ? o.value(box) : true;
+        if (v && v.error) {
+          err.textContent = v.error; err.hidden = false;
+          const bad = v.field && box.querySelector(v.field);
+          if (bad) { bad.classList.add('bad'); bad.focus(); if (bad.select) bad.select(); }
+          return;
+        }
+        done(v);
+      });
+      box.addEventListener('input', function (e) {
+        err.hidden = true;
+        if (e.target.classList) e.target.classList.remove('bad');
+      });
+      box.querySelector('.wdno').addEventListener('click', function () { done(null); });
+      box.querySelector('.wdx').addEventListener('click', function () { done(null); });
+      /* the app's own shortcuts stay out of the way while the dialog is up */
+      wrap.addEventListener('keydown', function (e) {
+        e.stopPropagation();
+        if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      });
+      if (o.open) o.open(box);
+      const first = box.querySelector('input, select, textarea') || box.querySelector('.wdok');
+      first.focus();
+      if (first.select) first.select();
+    });
+  }
+
+  /** Ask for a line of text in the app's own dialog. Resolves to the text
+      typed, or null when cancelled. `msg` is plain text; a blank line in it
+      starts a new paragraph. */
+  function ask(msg, value, opts) {
+    opts = opts || {};
+    return dialog({
+      title: opts.title || 'Add Dots PDF',
+      ok: opts.ok,
+      body: '<p class="wdmsg">' + esc(msg || '') + '</p>' +
+        '<input class="wdin" type="text" spellcheck="false" autocomplete="off" value="' +
+        esc(value == null ? '' : String(value)) + '">',
+      value: function (box) { return box.querySelector('.wdin').value; },
+    });
+  }
   function bytesLabel(n) {
     if (n < 1024) return n + ' B';
     if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
@@ -2837,7 +2915,10 @@
     S.sel = { it: it, i: idx };
     try { it.anno.setPointerCapture(e.pointerId); } catch (err) { /* mouse works without it */ }
     if (fresh) redrawAll(); else drawShapes(it);
-    hideMarkPop();                               /* it comes back when the drag ends */
+    /* floating over the page it would be in the way of the drag, so it comes
+       back when the drag ends; docked in the Properties panel on the right
+       (js/toolprops.js) it covers nothing and stays, showing what is dragged */
+    if (markPopDocked()) syncMarkPop(); else hideMarkPop();
   }
 
   /* ratio: keep the box's own proportions (a signature or a picture), the
@@ -2919,6 +3000,9 @@
        value, not its own old one */
     const n = o.pts.length;
     const closed = n > 2 && o.pts[0][0] === o.pts[n - 1][0] && o.pts[0][1] === o.pts[n - 1][1];
+    /* and never written where it lies: the undo snapshot shares that same
+       list, so changing it in place left Undo with nothing to go back to */
+    if (s.pts === o.pts) s.pts = o.pts.map(function (q) { return [q[0], q[1]]; });
     s.pts[i] = [p[0], p[1]];
     if (closed) {
       if (i === 0) s.pts[n - 1] = [p[0], p[1]];
@@ -2963,6 +3047,13 @@
       } else {
         moveShape(s, o, mx, my);
       }
+    } else if ((d.mode === 'pv' || ((d.mode === 'pa' || d.mode === 'pb') && o.t === 'line')) && EXT.vxJoinAt &&
+               (d.join = EXT.vxJoinAt(d.it, d.idx, d.mode === 'pv' ? d.extra : d.mode === 'pa' ? 0 : 1, p, o))) {
+      /* a point dragged near another point of a line or shape lands on it,
+         and an open end there joins up on release (js/vertex.js) */
+      if (EXT.snapHide) EXT.snapHide();
+      if (d.mode === 'pv') setVertex(s, o, d.extra, d.join.p);
+      else s[d.mode === 'pa' ? 'a' : 'b'] = [d.join.p[0], d.join.p[1]];
     } else if ((d.mode === 'pa' || d.mode === 'pb') && EXT.snapPt &&
                (d.snapTo = EXT.snapPt(d.it, p, e, { skip: d.idx }))) {
       /* an end dragged onto a snap point lands exactly on it */
@@ -3019,6 +3110,9 @@
       if (d.group) d.group.forEach(function (m) { d.it.shapes.push(copyShape(m.s0)); });
       else d.it.shapes.push(copyShape(d.s0));
     }
+    if (d.moved && d.join && EXT.vxJoinEnd) {
+      EXT.vxJoinEnd(d.it, d.idx, d.mode === 'pv' ? d.extra : d.mode === 'pa' ? 0 : 1, d.join, d.s0);
+    }
     if (d.moved) { drawShapes(d.it); updateMeta(); }
     syncMarkPop();
   }
@@ -3046,7 +3140,7 @@
     markup: 'Markup', ink: 'Ink', note: 'Note', stamp: 'Stamp', sig: 'Signature',
     redact: 'Redaction', wm: 'Watermark', hf: 'Header / footer', bates: 'Bates',
     image: 'Image', video: 'Video', link: 'Link', table: 'Table', leader: 'Leader',
-    vpath: 'Shape'
+    vpath: 'Shape', poly: 'Continuous Line', pen: 'Pen path'
   };
   let mpBuilt = false;
 
@@ -3287,15 +3381,20 @@
     if (v) s.r = v; else delete s.r;
   }
 
+  function markPopDocked() {
+    const p = $('markPop');
+    return !!(p && p.closest && p.closest('.rprops'));
+  }
   function syncMarkPop() {
     const pop = $('markPop'), s = selShape();
-    if (!s || dragOn) { pop.hidden = true; closeSwatches(); return; }
+    if (!s || (dragOn && !markPopDocked())) { pop.hidden = true; closeSwatches(); return; }
     buildMarkPop();
     const isText = s.t === 'text';
     /* a shape off the page fills too — a Continuous Line only once it is
        snapped shut back onto its own first point */
     const isBox = s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath' ||
-      (s.t === 'poly' && EXT.polyClosed && EXT.polyClosed(s));
+      (s.t === 'poly' && EXT.polyClosed && EXT.polyClosed(s)) ||
+      (s.t === 'pen' && EXT.penClosed && EXT.penClosed(s));
     /* a picture: no line to style (a signature, or a stamp made from one) */
     const isPic = s.t === 'sig' || s.t === 'istamp';
     const count = selList().length;
@@ -3405,6 +3504,12 @@
       el.setAttribute('class', 'kn' + (turn ? ' turn' : ''));
       /* which cursor the grip wears: a point to drag, or a size to pull */
       el.dataset.cur = turn ? 'rotate' : (mode === 'pa' || mode === 'pb' || mode === 'pv') ? 'point' : 'nwse';
+      /* which point it is, for point editing (js/vertex.js), and whether it
+         is the point picked out there */
+      el.dataset.mode = mode;
+      if (extra != null) el.dataset.v = extra;
+      const vs = EXT.vsel;
+      if (mode === 'pv' && vs && vs.it === it && vs.idx === idx && vs.i === extra) el.classList.add('vsel');
       el.addEventListener('pointerdown', function (e) { beginDrag(it, idx, e, mode, extra); });
       g.appendChild(el);
       if (turn) {
@@ -3700,6 +3805,8 @@
      Text being typed is kept and the mark let go of. */
   document.addEventListener('pointerdown', function (e) {
     if ((!S.sel && !S.editing) || !e.target.closest) return;
+    /* the Layers panel works on the marks themselves, so it keeps them */
+    if (e.target.closest('#railLayers, #railProps, #markPop')) return;
     const tab = e.target.closest('[role="tab"]');
     if (!e.target.closest('#rail') && !e.target.closest('#statusBar') && !(tab && tab.id !== 'ribTool')) return;
     /* text being typed is kept, then let go of */
@@ -7428,6 +7535,8 @@
 
   /* Print: the system's print dialog, in the browser and the desktop app */
   function printDoc() {
+    /* the app's own Print dialog (js/printdlg.js), where it is loaded */
+    if (EXT.openPrintDialog) return EXT.openPrintDialog();
     return printSystem();
   }
 
@@ -9273,7 +9382,14 @@
     if (!exBusy || force) $('extractPop').hidden = true;
     if (!jpgBusy || force) $('jpgPop').hidden = true;
     EXT_POPS.forEach(function (x) { const p = $(x.id); if (p) p.hidden = true; });
-    if (inPop && inPop.hidden && popFrom && popFrom.isConnected) popFrom.focus({ preventScroll: true });
+    if (inPop && inPop.hidden) {
+      /* let go of the field in the popover just hidden first: when the button
+         it came from cannot take focus back (on a phone it is hidden), a
+         field left focused keeps the phone's keyboard up, and Android then
+         spends the next Back press on closing that keyboard */
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      if (popFrom && popFrom.isConnected) popFrom.focus({ preventScroll: true });
+    }
   }
 
   /* Popovers a module owns. Registering one is what lets closePops shut it,
@@ -10317,7 +10433,7 @@
   /* ---- hand the feature modules what they need, and nothing more ---- */
   Object.assign(EXT, {
     S: S, SVGNS: SVGNS, COLORS: COLORS, WIDTHS: WIDTHS, FONTS: FONTS,
-    $: $, toast: toast, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
+    $: $, toast: toast, ask: ask, dialog: dialog, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
     snapLine: snapLine, snapBox: snapBox, constrainPt: constrainPt,
     selList: selList, setGroup: setGroup,
     groupSelected: groupSelected, ungroupSelected: ungroupSelected, groupMembers: groupMembers,

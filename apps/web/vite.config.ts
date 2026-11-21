@@ -37,6 +37,31 @@ function goldenRecorder(): Plugin {
   };
 }
 
+/* Dev only. The app is classic scripts and stylesheets in public/, which Vite
+   serves as they are and does not watch: an edit there would need a manual
+   reload. Any change in public/ reloads the page instead, in the browser and
+   in the Windows app (npm run electron:dev). Changes that land together, as
+   when the engine rebuilds js/engine.js and its map, make one reload. */
+function publicReload(): Plugin {
+  return {
+    name: 'adddots-public-reload',
+    apply: 'serve',
+    configureServer(server) {
+      const pub = server.config.publicDir;
+      if (!pub) return;
+      server.watcher.add(pub);
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const changed = (file: string) => {
+        if (!file.startsWith(pub)) return;
+        clearTimeout(timer);
+        timer = setTimeout(() => server.ws.send({ type: 'full-reload', path: '*' }), 150);
+      };
+      server.watcher.on('change', changed);
+      server.watcher.on('add', changed);
+    },
+  };
+}
+
 /* Build only. Which build this is, for the update notices (js/update.js):
    the commit and its time, and the notes in whatsnew.json. Written twice:
    js/build.js, which the app loads (the build it is), and latest.js at the
@@ -108,7 +133,7 @@ function desktopCsp(): string | undefined {
    such as adddots.com/pdfreader/, the same as the service worker expects. */
 export default defineConfig({
   base: './',
-  plugins: [goldenRecorder(), buildInfo()],
+  plugins: [goldenRecorder(), publicReload(), buildInfo()],
   server: { port: 5173, strictPort: true },
   preview: {
     port: 4173,

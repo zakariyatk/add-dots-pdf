@@ -551,25 +551,63 @@
       const pts = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
       if (pts < 2) { X.toast('That line is too short to calibrate from'); return; }
 
-      const answer = window.prompt(
-        'How long is that line in real life?\n\n' +
-        'Type the number and the unit, for example "1200 mm" or "4 ft".', '1200 mm');
-      if (!answer) return;
+      calibrateDialog(pts).then(function (r) {
+        if (!r) return;
+        scale.unit = r.unit;
+        scale.custom = r.value / pts;
+        /* report it back as a drawing scale, which is what it really is */
+        scale.denom = Math.max(1, Math.round((r.value / pts) / UNITS[r.unit].per));
+        noteScale(); redrawDims();
+        X.toast('Calibrated — about <b>1:' + scale.denom + '</b>, reading in ' + r.unit, true);
+      });
+    }
 
-      const m = String(answer).trim().match(/^([\d.,]+)\s*([A-Za-z"']*)$/);
-      if (!m) { X.toast('Could not read that — try something like <b>1200 mm</b>'); return; }
-      const value = parseFloat(m[1].replace(/,/g, ''));
-      if (!isFinite(value) || value <= 0) { X.toast('That is not a length'); return; }
-
-      let unit = String(m[2] || scale.unit).toLowerCase().replace(/[^a-z]/g, '');
-      if (m[2] === '"') unit = 'in';
-      if (!UNITS[unit]) unit = scale.unit;
-      scale.unit = unit;
-      scale.custom = value / pts;
-      /* report it back as a drawing scale, which is what it really is */
-      scale.denom = Math.max(1, Math.round((value / pts) / UNITS[unit].per));
-      noteScale(); redrawDims();
-      X.toast('Calibrated — about <b>1:' + scale.denom + '</b>, reading in ' + unit);
+    /** The real length of a line pts long, asked in the app's own dialog:
+        the number and its unit apart, the scale it comes to shown as it is
+        typed, and a wrong entry said in the dialog rather than after it. */
+    function calibrateDialog(pts) {
+      const paperMm = pts * UNITS.mm.per;
+      const units = Object.keys(UNITS).filter(function (u) { return u !== 'pt'; });
+      const start = units.indexOf(scale.unit) >= 0 ? scale.unit : 'mm';
+      const read = function (box) {
+        const v = parseFloat(String(box.querySelector('#calVal').value).replace(/,/g, '').trim());
+        return { value: v, unit: box.querySelector('#calUnit').value };
+      };
+      return X.dialog({
+        title: 'Calibrate scale',
+        ok: 'Calibrate',
+        width: 420,
+        body:
+          '<p class="wdnote">The line you drew measures <b>' + X.esc(paperMm.toFixed(1)) +
+            ' mm</b> on the page. Enter its real length, and every dimension is measured to match.</p>' +
+          '<label class="wdlabel" for="calVal">Real length</label>' +
+          '<div class="wdrow">' +
+            '<input class="wdin" id="calVal" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="e.g. 1200">' +
+            '<select class="wdsel" id="calUnit" aria-label="Unit">' +
+              units.map(function (u) {
+                return '<option value="' + u + '"' + (u === start ? ' selected' : '') + '>' + UNITS[u].label + '</option>';
+              }).join('') +
+            '</select>' +
+          '</div>' +
+          '<div class="wdpreview"><span>Drawing scale</span><b id="calScale">—</b></div>',
+        open: function (box) {
+          function paint() {
+            const r = read(box);
+            box.querySelector('#calScale').textContent = isFinite(r.value) && r.value > 0
+              ? '1 : ' + Math.max(1, Math.round((r.value / pts) / UNITS[r.unit].per)).toLocaleString()
+              : '—';
+          }
+          box.addEventListener('input', paint);
+          box.addEventListener('change', paint);
+        },
+        value: function (box) {
+          const r = read(box);
+          if (!isFinite(r.value) || r.value <= 0) {
+            return { error: 'Enter the real length as a number, for example 1200.', field: '#calVal' };
+          }
+          return r;
+        },
+      });
     }
 
     /* ---------------- drawing on screen ---------------- */
@@ -649,6 +687,36 @@
       g.appendChild(el);
       return g;
     };
+
+    /* a Pen path (js/pen.js): cubic Bézier segments, s.pts running anchor,
+       out-handle, in-handle, anchor… — the same path the saved PDF draws
+       (engine painters/pen.ts) */
+    function penClosed(s) { return !!(s.pts && E.penClosed(s.pts)); }
+    X.penClosed = penClosed;
+    function penD(pts, vp) {
+      const v = pts.map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+      let d = 'M' + v[0][0] + ' ' + v[0][1];
+      for (let i = 1; i + 2 < v.length; i += 3) {
+        d += 'C' + v[i][0] + ' ' + v[i][1] + ' ' + v[i + 1][0] + ' ' + v[i + 1][1] + ' ' + v[i + 2][0] + ' ' + v[i + 2][1];
+      }
+      return E.penClosed(pts) ? d + 'Z' : d;
+    }
+    X.penD = penD;
+    X.shapeRenderers.pen = function (it, s, vp, idx) {
+      const g = document.createElementNS(SVGNS, 'g');
+      if (!s.pts || s.pts.length < 4) return g;
+      const el = document.createElementNS(SVGNS, 'path');
+      el.setAttribute('d', penD(s.pts, vp));
+      stroked(el, s, idx, it);
+      if (s.fill && penClosed(s)) {
+        el.style.fill = s.fill;
+        el.style.fillOpacity = X.shOp(s);
+        el.style.pointerEvents = 'all';
+      }
+      g.appendChild(el);
+      return g;
+    };
+    X.handleKind.pen = 'bbox';
 
     X.shapeRenderers.dim = function (it, s0, vp, idx) {
       const g = document.createElementNS(SVGNS, 'g');
@@ -1573,19 +1641,26 @@
     const SNAP_TOOLS = { rect: 1, line: 1, arrow: 1, ellipse: 1, cloud: 1, arc: 1,
                          dim: 1, dimc: 1, dimr: 1, dimd: 1, dima: 1, poly: 1 };
     const SNAP_KINDS = [['end', 'Endpoint'], ['mid', 'Midpoint'], ['int', 'Intersection'],
-                        ['near', 'Nearest'], ['mark', 'Points of your marks'], ['guide', 'Guides']];
+                        ['near', 'Nearest'], ['perp', 'Perpendicular'], ['par', 'Parallel'],
+                        ['mark', 'Points of your marks'], ['guide', 'Guides']];
+    /* Perpendicular and Parallel are about the direction of the line in hand,
+       so they only work for tools that draw one from a start point */
+    const DIR_TOOLS = { line: 1, arrow: 1, dim: 1, poly: 1 };
     /* A crossing of two real lines is as much a point as an end is, so it
        ranks with them and the nearer of the two wins; the crossings tracking
        and the rulers invent rank below that, and lying along something below
        that again. */
     const SNAP_RANK = { end: 0, mark: 0, cen: 0, int: 0, gint: 1, tcross: 1, tseg: 1, txg: 1,
-                        mid: 2, guide: 2, ton: 2, near: 3 };
-    const snap = { on: true, kinds: { end: 1, mid: 1, int: 1, near: 1, mark: 1, guide: 1 } };
+                        perp: 1, mid: 2, guide: 2, ton: 2, par: 2, near: 3 };
+    const snap = { on: true, kinds: { end: 1, mid: 1, int: 1, near: 1, perp: 1, par: 1, mark: 1, guide: 1 } };
     try {
       const pref = JSON.parse(localStorage.getItem('adpdf.snap') || 'null');
       if (pref) { snap.on = pref.on !== false; if (pref.kinds) snap.kinds = pref.kinds; }
       /* settings kept before guides could be caught: catch them */
       if (snap.kinds.guide === undefined) snap.kinds.guide = 1;
+      /* and before perpendicular and parallel were there */
+      if (snap.kinds.perp === undefined) snap.kinds.perp = 1;
+      if (snap.kinds.par === undefined) snap.kinds.par = 1;
     } catch (e) { /* defaults */ }
     function saveSnap() {
       try { localStorage.setItem('adpdf.snap', JSON.stringify(snap)); } catch (e) { /* fine */ }
@@ -1655,6 +1730,9 @@
         if (!s.r) {
           out.push([s.a, 'Corner'], [s.b, 'Corner'], [[s.a[0], s.b[1]], 'Corner'], [[s.b[0], s.a[1]], 'Corner']);
         }
+      } else if (t === 'poly' && s.pts && s.pts.length) {
+        /* every point of a Continuous Line, its ends and its corners */
+        s.pts.forEach(function (q) { out.push([q, 'Mark end']); });
       } else if (s.b && (t === 'line' || t === 'arrow' || t === 'dim' || t === 'arc')) {
         out.push([s.a, 'Mark end'], [s.b, 'Mark end'],
                  [[(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2], 'Mark middle']);
@@ -1694,6 +1772,21 @@
         }
       }
 
+      /* the start of the line in hand, for perpendicular and parallel */
+      const dirFrom = DIR_TOOLS[S.tool] && !(opts && opts.skip != null) && opStart && opStart.it === it
+        ? opStart.p : null;
+      const wantDir = !!dirFrom && !!(K.perp || K.par);
+      hoverSeg = null;
+      let hoverD = tol;
+      function under(a, b) {
+        if (!wantDir) return;
+        const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+        if (!l2) return;
+        const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2));
+        const d = Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+        if (d <= hoverD) { hoverD = d; hoverSeg = [a, b]; }
+      }
+
       const grid = gridOf(it);
       const lines = [];
       if (grid) {
@@ -1704,6 +1797,7 @@
             if (K.end) { consider(a, 'end', 'Endpoint'); consider(b, 'end', 'Endpoint'); }
             if (K.mid) consider([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], 'mid', 'Midpoint');
             lines.push(s);
+            under(a, b);
           }
           if (K.near) {
             const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
@@ -1717,7 +1811,7 @@
       /* where two things you drew cross is a point as much as where two of the
          page's own lines do: the marks near the pointer join the list. Only
          the near ones, and capped, because crossing is quadratic. */
-      if (K.int) {
+      if (K.int || wantDir) {
         it.shapes.forEach(function (s, idx) {
           if (opts && opts.skip === idx) return;
           if (lines.length > 80) return;
@@ -1727,8 +1821,18 @@
             const bo = Math.min(g[0][1], g[1][1]) - tol, to = Math.max(g[0][1], g[1][1]) + tol;
             if (p[0] < lo || p[0] > hi || p[1] < bo || p[1] > to) return;
             lines.push(g);
+            under(g[0], g[1]);
           });
         });
+      }
+
+      /* square onto a line near the pointer from where this line began: the
+         foot of the perpendicular, when the pointer is close to it */
+      if (K.perp && dirFrom && TRK) {
+        for (let i = 0; i < lines.length; i++) {
+          const f = TRK.perpFoot(dirFrom, lines[i][0], lines[i][1]);
+          if (f) consider(f.p, 'perp', 'Perpendicular');
+        }
       }
 
       if (K.int && lines.length > 1) {
@@ -1827,6 +1931,8 @@
       mid: '<path d="M9 3.2L15 14.3H3z"/>',
       int: '<path d="M4 4l10 10M14 4L4 14"/>',
       near: '<path d="M4 4h10L4 14h10z"/>',
+      perp: '<path d="M3 14.5h12M6 14.5V3.5"/><path d="M6 10.5h4v4"/>',
+      par: '<path d="M3 11L10 4M8 14l7-7"/>',
       guide: '<path d="M2 9h14" stroke-dasharray="2.5 1.5"/><circle cx="9" cy="9" r="2.6"/>',
       gint: '<path d="M2 9h14M9 2v14" stroke-dasharray="2.5 1.5"/><circle cx="9" cy="9" r="2.6"/>',
       /* tracking: the dashes say the guide is one this point sent out */
@@ -1876,6 +1982,11 @@
     let acqs = [];                         /* [{it, p}] — acquired points, in PDF points */
     let opStart = null;                    /* {it, p} — where the drawing in hand began */
     let dwellAt = null, dwellTimer = 0;
+    /* Parallel: rest on a line while drawing and its direction is taken up;
+       from then on the line in hand is caught running the same way. */
+    let hoverSeg = null;                   /* [a, b] — the straight line under the pointer, from snapFind */
+    let parRef = null;                     /* {it, a, b} — the line to run parallel to, in PDF points */
+    let parAt = null, parTimer = 0;
 
     function tolPx() { return X.isMobile() ? 16 : 15; }
     function samePt(a, b) { return a && b && Math.abs(a[0] - b[0]) < 0.01 && Math.abs(a[1] - b[1]) < 0.01; }
@@ -1889,9 +2000,48 @@
       if (dwellTimer) { clearTimeout(dwellTimer); dwellTimer = 0; }
       dwellAt = null;
     }
+    function parStop() {
+      if (parTimer) { clearTimeout(parTimer); parTimer = 0; }
+      parAt = null;
+    }
+    function sameSeg(a, b) {
+      return a && b && ((samePt(a[0], b[0]) && samePt(a[1], b[1])) || (samePt(a[0], b[1]) && samePt(a[1], b[0])));
+    }
+    /* Resting on the same straight line for DWELL, while a line is being
+       drawn, takes up its direction for Parallel. */
+    function parWatch(it) {
+      const seg = hoverSeg;
+      if (!TRK || !seg || !snap.kinds.par || !opStart || opStart.it !== it) { parStop(); return; }
+      if (parRef && parRef.it === it && sameSeg([parRef.a, parRef.b], seg)) { parStop(); return; }
+      if (parAt && sameSeg(parAt, seg)) return;
+      parStop();
+      parAt = seg;
+      parTimer = setTimeout(function () {
+        parTimer = 0;
+        if (!parAt || !snap.on || !opStart || opStart.it !== it) return;
+        parRef = { it: it, a: [parAt[0][0], parAt[0][1]], b: [parAt[1][0], parAt[1][1]] };
+        parAt = null;
+        trackPaint(it, null);
+      }, DWELL);
+    }
+    /** Running parallel to the line taken up, from where this line began, as a
+        snapFind-shaped hit in PDF points — or null. Worked in screen pixels so
+        the reach is the same at any zoom. */
+    function parFind(it, p, opts) {
+      if (!TRK || !snap.kinds.par || !parRef || parRef.it !== it) return null;
+      if (!opStart || opStart.it !== it || !DIR_TOOLS[S.tool] || (opts && opts.skip != null)) return null;
+      const vp = function (q) { const w = it.vp.convertToViewportPoint(q[0], q[1]); return [w[0], w[1]]; };
+      const hit = TRK.parallel(vp(opStart.p), vp(parRef.a), vp(parRef.b), vp(p), X.isMobile() ? 12 : 11);
+      if (!hit) return null;
+      const q = it.vp.convertToPdfPoint(hit.p[0], hit.p[1]);
+      return { p: [q[0], q[1]], kind: 'par', label: 'Parallel', d: hit.d, r: SNAP_RANK.par };
+    }
+
     /** Give up every acquired point and take the guides off the screen. */
     function trackClear() {
       dwellStop();
+      parStop();
+      parRef = null;
       acqs = [];
       trackPaint(null, null);        /* takes the guides off, start point or not */
     }
@@ -1988,6 +2138,17 @@
     /* one line per guide and one badge per acquired point, kept and reused:
        this is redrawn on every pointer move */
     const trkPool = { line: [], path: [] };
+    /* Parallel's own two: the line taken up, drawn over, and the guide through
+       the start point running the same way. Made first, so the pool's own
+       elements never land on them. */
+    const parRefEl = document.createElementNS(NS, 'line');
+    parRefEl.setAttribute('class', 'parref');
+    const parGuideEl = document.createElementNS(NS, 'line');
+    parGuideEl.setAttribute('class', 'parguide');
+    parRefEl.style.display = 'none';
+    parGuideEl.style.display = 'none';
+    trkSvg.appendChild(parRefEl);
+    trkSvg.appendChild(parGuideEl);
     function trkEl(kind, n) {
       const pool = trkPool[kind];
       while (pool.length <= n) {
@@ -2052,6 +2213,24 @@
           'd', 'M' + (x - 4) + ' ' + y + 'h8M' + x + ' ' + (y - 4) + 'v8');
       });
       trkTrim('path', here.length);
+      /* the line taken up for Parallel, and the guide that runs with it */
+      const par = parRef && parRef.it === it && opStart && opStart.it === it ? parRef : null;
+      if (par) {
+        const pa = toVp(par.a), pb = toVp(par.b), s0 = toVp(opStart.p);
+        parRefEl.setAttribute('x1', pa[0] + dx); parRefEl.setAttribute('y1', pa[1] + dy);
+        parRefEl.setAttribute('x2', pb[0] + dx); parRefEl.setAttribute('y2', pb[1] + dy);
+        parRefEl.style.display = '';
+        const c = TRK.clipLine([s0[0] + dx, s0[1] + dy], [pb[0] - pa[0], pb[1] - pa[1]], W, H);
+        if (c) {
+          parGuideEl.setAttribute('x1', c[0][0]); parGuideEl.setAttribute('y1', c[0][1]);
+          parGuideEl.setAttribute('x2', c[1][0]); parGuideEl.setAttribute('y2', c[1][1]);
+          parGuideEl.style.opacity = hit && hit.kind === 'par' ? 1 : 0.35;
+          parGuideEl.style.display = '';
+        } else parGuideEl.style.display = 'none';
+      } else {
+        parRefEl.style.display = 'none';
+        parGuideEl.style.display = 'none';
+      }
       trkSvg.style.display = '';
     }
     /* the guides are drawn against the window, so anything that moves the page
@@ -2069,7 +2248,9 @@
       /* an ordinary catch of the same rank or better wins: a real endpoint
          beats riding a guide past it */
       if (tr && (!hit || SNAP_RANK[tr.kind] < hit.r)) hit = tr;
-      if (!opts || opts.skip == null) dwellWatch(it, hit);
+      const pr = parFind(it, p, opts);
+      if (pr && (!hit || SNAP_RANK.par < hit.r)) hit = pr;
+      if (!opts || opts.skip == null) { dwellWatch(it, hit); parWatch(it); }
       trackPaint(it, hit);
       if (!hit) { snapHide(); return null; }
       snapShow(it, hit);
@@ -2115,7 +2296,7 @@
 
     /* ---- the switch, in the tool's properties ---- */
     const snapCtl = ctl('snapCtl',
-      '<button class="snapbtn" id="snapOn" title="Object snap (F3) — catch ends, middles, crossings, edges and ruler guides. Hold Ctrl to ignore it for a moment.">' +
+      '<button class="snapbtn" id="snapOn" title="Object snap (F3) — catch ends, middles, crossings, edges, perpendicular and parallel, and ruler guides. Hold Ctrl to ignore it for a moment.">' +
       '<svg viewBox="0 0 18 18"><rect x="3.5" y="3.5" width="11" height="11"/></svg>Snap</button>' +
       '<button class="snapbtn more" id="snapMore" title="Which points to snap to" aria-label="Snap settings">▾</button>');
     const snapPop = document.createElement('div');
@@ -2123,7 +2304,8 @@
     snapPop.innerHTML = '<div class="snappop-h">Snap to</div>' + SNAP_KINDS.map(function (k) {
       return '<label><input type="checkbox" data-k="' + k[0] + '"><span>' + k[1] + '</span></label>';
     }).join('') + '<p class="snappop-note"><b>F3</b> turns snapping on and off · hold <b>Ctrl</b> to ignore it' +
-      '<br>Rest on a point to track from it · <b>Esc</b> lets it go</p>';
+      '<br>Rest on a point to track from it · <b>Esc</b> lets it go' +
+      '<br>While drawing a line, rest on another line to run <b>parallel</b> to it</p>';
     document.body.appendChild(snapPop);
 
     function paintSnap() {
@@ -2166,7 +2348,7 @@
     /* Escape gives up the tracked point. The tools have their own Escape
        handlers for what they are drawing; this only drops the guides. */
     document.addEventListener('keydown', function (e) {
-      if (e.key === 'Escape' && acqs.length) trackClear();
+      if (e.key === 'Escape' && (acqs.length || parRef)) trackClear();
     });
 
     /** Two picked lines to an angle: the corner is where they meet, and each
@@ -2544,14 +2726,14 @@
     function editDim(it, idx) {
       const s = it.shapes[idx];
       if (!s || !ALL_DIMS[s.t]) return;
-      const v = window.prompt(
-        'Reading to show on this dimension.\n' +
+      X.ask('Reading to show on this dimension.\n' +
         'Leave it empty to go back to the measured value.',
-        dimLabel(s));
-      if (v === null) return;
-      X.snapshot();
-      s.label = v.trim() === '' ? null : v.trim();
-      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+        dimLabel(s), { title: 'Dimension text' }).then(function (v) {
+        if (v === null || it.shapes[idx] !== s) return;
+        X.snapshot();
+        s.label = v.trim() === '' ? null : v.trim();
+        X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      });
     }
 
     /* Double-click straight onto a dimension — no need to select it first. */

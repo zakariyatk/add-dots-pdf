@@ -56,6 +56,7 @@ if (!PACKAGED && !existsSync(join(here, '..', 'web', 'dist', 'index.html'))) {
 
 const dir = mkdtempSync(join(tmpdir(), 'adddots-e2e-'));
 const saveTo = mkdtempSync(join(tmpdir(), 'adddots-saved-'));
+const printTo = mkdtempSync(join(tmpdir(), 'adddots-printed-'));
 let A = join(dir, 'first.pdf');
 if (process.env.SAMPLE) {
   A = join(dir, basename(process.env.SAMPLE));
@@ -71,6 +72,7 @@ await makePdf(B, 5, 'Second');
 const env = {
   ...process.env,
   ADDDOTS_SAVE_TO: saveTo,
+  ADDDOTS_PRINT_TO: printTo,
   ADDDOTS_USER_DATA: mkdtempSync(join(tmpdir(), 'adddots-profile-')),
 };
 delete env.ADDDOTS_DEV_URL;
@@ -197,34 +199,50 @@ try {
     updates,
   );
 
-  /* ---- Print: the system print dialog, as on the website ----
-     The PDF made for printing is shown in Chromium's PDF viewer in a frame, and that frame
-     is printed. print() is swapped for a stand-in as the frame loads. */
-  const printed = await run(async () => {
-    const got = { called: false, pdf: null, dialog: !!document.getElementById('printModal') };
-    new MutationObserver((ms, mo) => {
-      const f = document.getElementById('printFrame');
-      if (!f) return;
-      mo.disconnect();
-      f.addEventListener('load', () => {
-        const w = f.contentWindow;
-        w.print = () => {
-          got.called = true;
-          got.pdf =
-            [...w.document.querySelectorAll('embed')].map((e) => e.type).join() || w.document.contentType;
-        };
-      });
-    }).observe(document.body, { childList: true });
-    await window.ADDPDF.print();
-    for (let i = 0; i < 150 && !got.called; i++) await new Promise((r) => setTimeout(r, 200));
-    const m = document.getElementById('printModal');
-    got.dialogShown = !!m && !m.hidden;
-    return got;
+  /* ---- Print: the app's own dialog (js/printdlg.js), with this computer's
+     printers; Print sends the sheets to the desktop side, which prints them
+     (ADDDOTS_PRINT_TO stands in for the printer: the job is written there) ---- */
+  const dlg = await run(async () => {
+    window.ADDPDF.print();
+    for (let i = 0; i < 150; i++) {
+      const ready =
+        !document.querySelector('.prwrap').hidden &&
+        document.getElementById('prBusy').hidden &&
+        / of \d+$/.test(document.getElementById('prCount').textContent);
+      if (ready) break;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return {
+      open: !document.querySelector('.prwrap').hidden,
+      count: document.getElementById('prCount').textContent,
+      printers: [...document.getElementById('prPrinter').options].length,
+      copies: !document.getElementById('prCopies').closest('.prrow').hidden,
+    };
   });
+  await run(() => document.getElementById('prGo').click());
+  let job = null;
+  for (let i = 0; i < 150 && !job; i++) {
+    if (existsSync(join(printTo, 'printed.pdf'))) job = join(printTo, 'printed.pdf');
+    else await sleep(200);
+  }
+  let jobPages = null;
+  if (job) {
+    await sleep(300);
+    jobPages = (await PDFDocument.load(readFileSync(job))).getPageCount();
+  }
+  const after = await run(() => ({
+    closed: document.querySelector('.prwrap').hidden,
+    toast: document.getElementById('toast').textContent,
+  }));
   check(
-    "Print: the PDF made for printing opens in Chromium's PDF viewer, and that frame is printed",
-    printed.called && /application\/pdf/.test(printed.pdf) && !printed.dialogShown,
-    printed,
+    "Print opens the app's dialog with this computer's printers, and Print sends every sheet to the printer",
+    dlg.open &&
+      dlg.count === 'Page 1 of ' + firstPages &&
+      dlg.printers >= 1 &&
+      dlg.copies &&
+      jobPages === firstPages &&
+      after.closed,
+    { dlg, jobPages, after },
   );
 
   /* ---- a second double-click, with the app open ---- */

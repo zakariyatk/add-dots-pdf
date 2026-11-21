@@ -23,3 +23,4 @@ export * from './contenttext';
 export * from './pagefont';
 export * from './painters/vpath';
 export * from './painters/poly';
+export * from './painters/pen';

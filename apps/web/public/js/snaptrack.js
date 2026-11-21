@@ -170,7 +170,65 @@
     return gs.map(function (g) { return same(g, hit.ray) || same(g, hit.ray2); });
   }
 
+  /* ---- perpendicular and parallel ----
+     Both need the point the line in hand started from, `s`. Perpendicular is
+     the foot of the right angle from s onto a line near the pointer: draw to
+     it and the new line meets that one square. Parallel runs the new line
+     the same way as a line you rested on earlier: the pointer is caught along
+     the ray from s in that direction. These work in any units, as long as
+     every argument is in the same ones. */
+
+  /** The foot of the perpendicular from s onto the segment a–b, or null when
+      it falls off the segment's ends or the segment has no length. `t` is
+      how far along a–b the foot lies, 0 at a and 1 at b. */
+  function perpFoot(s, a, b) {
+    var dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+    if (l2 < 1e-12) return null;
+    var t = ((s[0] - a[0]) * dx + (s[1] - a[1]) * dy) / l2;
+    if (t < -1e-6 || t > 1 + 1e-6) return null;
+    var q = [a[0] + t * dx, a[1] + t * dy];
+    /* s already on the line: its foot is s itself, which is no answer */
+    if (Math.hypot(q[0] - s[0], q[1] - s[1]) < 1e-6) return null;
+    return { p: q, t: t };
+  }
+
+  /** Lying along the line through s in the direction of a–b: the pointer
+      keeps how far along it is and is brought square onto the line. Null when
+      it is more than tol off the line, or no further than ALONG from s. */
+  function parallel(s, a, b, p, tol) {
+    var dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy);
+    if (len < 1e-9) return null;
+    var ux = dx / len, uy = dy / len;
+    var vx = p[0] - s[0], vy = p[1] - s[1];
+    var along = vx * ux + vy * uy;
+    var off = Math.abs(vx * uy - vy * ux);
+    if (off > tol || Math.abs(along) <= ALONG) return null;
+    return { p: [s[0] + along * ux, s[1] + along * uy], kind: 'par', label: 'Parallel', d: off };
+  }
+
+  /** The part of the infinite line through s along d that lies inside the
+      box 0..w by 0..h, as [[x1,y1],[x2,y2]], or null when it misses it. */
+  function clipLine(s, d, w, h) {
+    var t0 = -Infinity, t1 = Infinity;
+    var ax = [[d[0], s[0], w], [d[1], s[1], h]];
+    for (var i = 0; i < 2; i++) {
+      var dv = ax[i][0], sv = ax[i][1], hi = ax[i][2];
+      if (Math.abs(dv) < 1e-12) {
+        if (sv < 0 || sv > hi) return null;
+        continue;
+      }
+      var ta = (0 - sv) / dv, tb = (hi - sv) / dv;
+      t0 = Math.max(t0, Math.min(ta, tb));
+      t1 = Math.min(t1, Math.max(ta, tb));
+    }
+    if (!(t0 <= t1) || !isFinite(t0) || !isFinite(t1)) return null;
+    return [[s[0] + t0 * d[0], s[1] + t0 * d[1]], [s[0] + t1 * d[0], s[1] + t1 * d[1]]];
+  }
+
   (typeof window !== 'undefined' ? window : globalThis).ADDPDF_SNAPTRACK = {
+    perpFoot: perpFoot,
+    parallel: parallel,
+    clipLine: clipLine,
     RANK: RANK,
     ALONG: ALONG,
     CROSS_EXTRA: CROSS_EXTRA,
