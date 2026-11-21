@@ -42,6 +42,13 @@ if (!device) {
   process.exit(1);
 }
 const sh = async (cmd) => (await device.shell(cmd)).toString().trim();
+/* whether the soft keyboard is on screen, as the input method service has
+   it (mInputShown); shown is null when the dump does not say */
+async function keyboard() {
+  const dump = await sh('dumpsys input_method').catch((e) => 'refused: ' + e.message);
+  const m = dump.match(/\bmInputShown=(true|false)/);
+  return { shown: m ? m[1] === 'true' : null, ...(m ? {} : { dump: dump.slice(0, 300) }) };
+}
 
 let page = null;
 let reconnects = 0;
@@ -258,6 +265,10 @@ try {
     document.getElementById('btnSaveAs').click();
   });
   await sleep(500);
+  /* on a touchscreen Save as… leaves its file name alone until it is
+     tapped: a keyboard up from it would take the first back press below */
+  const kbOpen = await keyboard();
+  check('Save as… opens without raising the soft keyboard', kbOpen.shown === false, kbOpen);
   await page.evaluate(() => document.getElementById('saveGo').click());
   let listing = '';
   for (let i = 0; i < 60 && !/\.pdf/.test(listing); i++) {
@@ -272,6 +283,15 @@ try {
   }
   const toast = await page.evaluate(() => document.getElementById('toast').textContent);
   check('Save writes a PDF with every page', pages === 5, { savedName, pages, toast });
+  /* the back presses below are each one step: with the soft keyboard up,
+     Android spends the first on putting it away. It is down once Save is
+     done (given a moment to finish going, if it came up at all) */
+  let kb = await keyboard();
+  for (let i = 0; i < 20 && kb.shown !== false; i++) {
+    await sleep(250);
+    kb = await keyboard();
+  }
+  check('after Save the soft keyboard is down', kb.shown === false, kb);
 
   /* the back key, pressed on the device: it closes what is on top, then the
      document goes to the home screen, then the app steps aside and comes

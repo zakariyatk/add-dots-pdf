@@ -823,7 +823,12 @@ try {
 
   /* ---- the phone app's page half (js/mobile.js), with the native side faked ---- */
   {
-    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'allow' });
+    /* a touchscreen, as on a phone: (pointer: coarse) */
+    const ctx = await browser.newContext({
+      viewport: { width: 390, height: 844 },
+      hasTouch: true,
+      serviceWorkers: 'allow',
+    });
     const pdf = await PDFDocument.create();
     for (let i = 0; i < 4; i++) pdf.addPage([595, 842]);
     const b64 = Buffer.from(await pdf.save()).toString('base64');
@@ -883,6 +888,18 @@ try {
       });
     });
     await page.click('#btnSaveAs');
+    /* opened on a touchscreen, Save as… does not put focus in its file
+       name: that raises the soft keyboard, which then takes Android's next
+       back press (tapping the name still opens it) */
+    const opening = await page.evaluate(() => ({
+      coarse: matchMedia('(pointer: coarse)').matches,
+      focus: document.activeElement && (document.activeElement.id || document.activeElement.tagName),
+    }));
+    check(
+      'phone app: Save as… opens without raising the keyboard (focus on Save, not the file name)',
+      opening.coarse && opening.focus === 'saveGo',
+      opening,
+    );
     await page.click('#saveGo');
     await page.waitForFunction(() => window.__saved.length === 1);
     await page.waitForTimeout(300);
@@ -895,18 +912,31 @@ try {
       cancelled.open && cancelled.saved.type === 'application/pdf' && cancelled.saved.bytes > 1000,
       cancelled,
     );
-    await page.evaluate(() => (window.__cancel = false));
-    await page.click('#saveGo');
+    /* the file-name box has focus (on a phone, the soft keyboard is up);
+       Save is pressed without moving it, as Enter in the box does */
+    await page.evaluate(() => {
+      window.__cancel = false;
+      document.getElementById('saveName').focus();
+    });
+    await page.evaluate(() => document.getElementById('saveGo').click());
     await page.waitForFunction(() => window.__saved.length === 2);
     await page.waitForTimeout(300);
     const done = await page.evaluate(() => ({
       closed: document.getElementById('savePop').hidden,
       toast: document.getElementById('toast').textContent,
+      focus: document.activeElement && (document.activeElement.id || document.activeElement.tagName),
     }));
     check(
       'phone app: saved, the popover closes and says where',
       done.closed && /Saved/.test(done.toast),
       done,
+    );
+    /* left in the hidden box, the keyboard stays up and Android's next back
+       press only puts it away */
+    check(
+      'phone app: closing Save as… takes focus out of its file name (the keyboard goes)',
+      !/^(saveName|INPUT|TEXTAREA)$/.test(done.focus || ''),
+      done.focus,
     );
 
     check('no errors on the page', errors.length === 0, errors);

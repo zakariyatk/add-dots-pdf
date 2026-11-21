@@ -9257,10 +9257,21 @@
     const h = p.offsetHeight;
     if (top + h > window.innerHeight - 8) top = Math.max(8, window.innerHeight - 8 - h);
     p.style.top = top + 'px';
-    if (id === 'savePop') { $('saveNote').textContent = summary(); $('saveName').focus(); $('saveName').select(); }
-    else {
-      /* a keyboard user lands on the popover's first control */
-      const first = p.querySelector('button:not([disabled]),input:not([disabled]),select,textarea,[tabindex="0"]');
+    if (id === 'savePop') {
+      $('saveNote').textContent = summary();
+      /* With a keyboard, straight into the file name, ready to type over.
+         On a touchscreen, focusing a text box from code raises the soft
+         keyboard over a popover most people only press Save in; it opens
+         when they tap the name. A keyboard nobody asked for also took the
+         next Android back press (that press only puts the keyboard away),
+         and it could come up after the popover had already closed. */
+      if (COARSE) $('saveGo').focus({ preventScroll: true });
+      else { $('saveName').focus(); $('saveName').select(); }
+    } else {
+      /* a keyboard user lands on the popover's first control; on a
+         touchscreen, never a text box (that would raise the soft keyboard) */
+      const any = 'button:not([disabled]),input:not([disabled]),select,textarea,[tabindex="0"]';
+      const first = p.querySelector(COARSE ? 'button:not([disabled]),[tabindex="0"]' : any);
       if (first) first.focus({ preventScroll: true });
     }
   }
@@ -9273,7 +9284,15 @@
     if (!exBusy || force) $('extractPop').hidden = true;
     if (!jpgBusy || force) $('jpgPop').hidden = true;
     EXT_POPS.forEach(function (x) { const p = $(x.id); if (p) p.hidden = true; });
-    if (inPop && inPop.hidden && popFrom && popFrom.isConnected) popFrom.focus({ preventScroll: true });
+    if (inPop && inPop.hidden) {
+      /* Focus leaves the closed popover, always: blurred first, so a text
+         box in it (Save as…'s file name, after Enter) lets go and a phone's
+         soft keyboard goes away even when the button that opened the
+         popover is not on screen to take focus back. */
+      const had = document.activeElement;
+      if (had && had.blur) had.blur();
+      if (popFrom && popFrom.isConnected && popFrom.getClientRects().length) popFrom.focus({ preventScroll: true });
+    }
   }
 
   /* Popovers a module owns. Registering one is what lets closePops shut it,
