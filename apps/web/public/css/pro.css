@@ -1491,8 +1491,14 @@ body.cdpicking, body.cdpicking * { cursor: crosshair !important }
   position: relative; display: flex; align-items: center; gap: 7px; padding: 6px 8px 6px 0;
   border-bottom: 1px solid var(--line); cursor: pointer;
 }
-.layrow:hover { background: rgba(255,255,255,.045) }
-.layrow.sel { background: var(--chrome-2) }
+/* hover reads on light and dark alike (a tint of the text colour, not white);
+   the selected mark is tinted in the accent with a bar down its left edge */
+.layrow { transition: background-color .12s ease }
+.layrow:hover { background: color-mix(in srgb, var(--text) 7%, transparent) }
+.layrow.sel { background: color-mix(in srgb, var(--marker) 14%, transparent); box-shadow: inset 3px 0 0 var(--marker) }
+.layrow.sel:hover { background: color-mix(in srgb, var(--marker) 20%, transparent) }
+.layrow.sel .laylabel { font-weight: 600; color: var(--text) }
+.layrow.laynone:hover { background: none }
 .layrow.hid { opacity: .6 }
 /* the column of dots down the left edge: filled shows, hollow hides — one
    per layer and one per mark, so visibility reads as a single column */
