@@ -2511,12 +2511,16 @@
       const w = E.lineWidth(s, li, textWidth);
       const lo = lineOrigin(s, li, w);
       const pt = vp.convertToViewportPoint(lo[0], lo[1]);
+      /* tracking, and justify all: the space after each character but the
+         last, the same the saved PDF puts there (engine charSpacing) */
+      const cs = E.charSpacing(s, li, textWidth);
       /* a piece at a time: part of the text can be bold, coloured or
          underlined on its own, as a selection in Word is */
       let dx = 0;
       E.lineSpans(s, li).forEach(function (sp) {
         const ps = sp.s;
         const pw = textWidth(ps, sp.text);
+        const nch = Array.from(sp.text).length;
         const t = document.createElementNS(SVGNS, 'text');
         t.setAttribute('class', 'tx');
         t.setAttribute('x', pt[0] + dx * S.scale); t.setAttribute('y', pt[1]);
@@ -2528,10 +2532,13 @@
         if (ps.i) t.setAttribute('font-style', 'italic');
         if (ps.u || ps.k) t.style.textDecoration = textDecoLine(ps);
         if (ang) t.setAttribute('transform', 'rotate(' + ang + ',' + pt[0] + ',' + pt[1] + ')');
-        if (pw) { t.setAttribute('textLength', pw * S.scale); t.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
+        if (pw && cs && nch > 1) {
+          /* spaced out: the glyphs keep their shape, the gaps widen */
+          t.setAttribute('textLength', (pw + cs * (nch - 1)) * S.scale); t.setAttribute('lengthAdjust', 'spacing');
+        } else if (pw) { t.setAttribute('textLength', pw * S.scale); t.setAttribute('lengthAdjust', 'spacingAndGlyphs'); }
         t.textContent = sp.text;
         g.appendChild(clicker(t));
-        dx += pw || sp.text.length * s.size * 0.5;
+        dx += (pw || sp.text.length * s.size * 0.5) + cs * nch;
       });
     });
 
@@ -3770,7 +3777,13 @@
 
     /* A module mark says whether it grips like a box or like a chord; every
        mark here is two points either way, so the drag maths is already right. */
-    const kind = EXT.handleKind[s.t] || s.t;
+    let kind = EXT.handleKind[s.t] || s.t;
+    /* As in Illustrator, Select picks out the object, not its points: a line,
+       an arrow, a dimension or a Continuous Line gets the same box with
+       eight grips as anything else, and its own points (its ends, its
+       corners) are Direct Selection's to drag (js/vertex.js) */
+    const byPoints = kind === 'line' || kind === 'arrow' || kind === 'ends' || kind === 'verts';
+    if (byPoints) kind = 'bbox';
 
     if (kind === 'bbox' || kind === 'point') {
       /* a box round it; 'bbox' corners scale it, a 'point' mark only moves */
@@ -3790,7 +3803,8 @@
       out.setAttribute('height', Math.max(4, qy2 - qy1 + pad * 2));
       g.appendChild(out);
       /* a mark made of points (a path, ink, a Pen path) turns by its points */
-      if (kind === 'bbox' && s.pts && !s.a && !s.quads) turnZones(q, [(qx1 + qx2) / 2, (qy1 + qy2) / 2]);
+      const turns = (s.pts && !s.a && !s.quads) || (byPoints && (EXT.handleKind[s.t] || s.t) !== 'ends');
+      if (kind === 'bbox' && turns) turnZones(q, [(qx1 + qx2) / 2, (qy1 + qy2) / 2]);
       if (kind === 'bbox') {
         q.forEach(function (v, i) { sideGrip(v, q[(i + 1) % 4], 'bside', i); });
         q.forEach(function (v, i) {
@@ -6943,7 +6957,7 @@
     ta.setAttribute('aria-multiline', 'true');
     ta.style.fontFamily = CSS_FONT[item.f];
     ta.style.fontSize = editPx(item) + 'px';
-    ta.style.textAlign = item.align || 'left';
+    edSpacing(ta, item);
     ta.style.color = item.c;
     ta.style.background = item.bg ? cssRgba(item.bg, item.bgOp == null ? 1 : item.bgOp)
                           : item.patch ? item.patch.c : 'transparent';
@@ -8920,13 +8934,22 @@
     if (v > 0 && v < 400) ed.item.size = v;
     const ta = ed.el;
     ta.style.fontFamily = CSS_FONT[ed.item.f];
-    ta.style.textAlign = ed.item.align || 'left';
+    edSpacing(ta, ed.item);
     if (ed.item.bg) {
       ta.style.background = cssRgba(ed.item.bg, ed.item.bgOp == null ? 1 : ed.item.bgOp);
     } else if (!ed.item.patch) {
       ta.style.background = 'transparent';
     }
     ta.style.fontSize = editPx(ed.item) + 'px';
+  }
+  /* the editor box set out as the text will be: alignment (justify all
+     spreads every line, the last one too), leading and tracking */
+  function edSpacing(ta, item) {
+    const k = E.alignKind(item.align);
+    ta.style.textAlign = k === 'all' ? 'justify' : k;
+    ta.style.textAlignLast = k === 'all' ? 'justify' : '';
+    ta.style.lineHeight = (E.leading(item) / item.size).toFixed(3);
+    ta.style.letterSpacing = item.tr ? (item.tr / 1000) + 'em' : '';
   }
   /* a hex colour at a given opacity, for the one place CSS needs it rather
      than an SVG fillOpacity attribute */

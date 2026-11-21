@@ -56,7 +56,11 @@ export interface Mark extends MarkBase {
 /** A standard PDF font, or 'g:<id>': a Google Font the page supplies (see SaveHooks.fonts). */
 export type StandardFamily = 'helv' | 'times' | 'cour';
 export type FontFamily = StandardFamily | `g:${string}`;
-export type Align = 'left' | 'center' | 'right';
+/** Paragraph alignment, as Illustrator's Paragraph panel has it. On text set
+    one line per paragraph (as every text mark is), the three "justify, last
+    line …" kinds read as left, centre and right, and "justify all" spreads
+    every line across the widest one. */
+export type Align = 'left' | 'center' | 'right' | 'justify' | 'justify-center' | 'justify-right' | 'justify-all';
 
 /** A font of the page, as a table to write text in it again: the characters
     it can draw there, each with its code, and the codes' widths (Edit
@@ -95,6 +99,10 @@ export interface TextMark extends MarkBase {
   u?: boolean;
   k?: boolean;
   align?: Align;
+  /** leading: baseline to baseline, in points; none means auto (120% of the size) */
+  lh?: number | null;
+  /** tracking: extra space after each character, in thousandths of an em */
+  tr?: number | null;
   bg?: string | null;
   bgOp?: number;
   /** Styles of stretches of the text, as Word keeps them: each run covers the

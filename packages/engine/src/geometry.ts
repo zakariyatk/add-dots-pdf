@@ -70,8 +70,43 @@ export function textRect(s: TextMark, measure: MeasureText): Rect {
   lines.forEach((l, li) => {
     wid = Math.max(wid, lineWidth(s, li, measure) || l.length * s.size * 0.5);
   });
-  const hgt = s.size * 1.2 * lines.length;
+  const hgt = s.size * 1.2 + leading(s) * (lines.length - 1);
   return { x: s.a[0], y: s.a[1] - hgt + s.size, w: Math.max(wid, s.size), h: hgt };
+}
+
+/** Leading, baseline to baseline in points: the mark's own, or auto (120%). */
+export function leading(s: Pick<TextMark, 'size' | 'lh'>): number {
+  return s.lh != null && s.lh > 0 ? s.lh : s.size * 1.2;
+}
+/** Tracking in points: the space added after each character but a line's last. */
+export function tracking(s: Pick<TextMark, 'size' | 'tr'>): number {
+  return s.tr ? (s.tr / 1000) * s.size : 0;
+}
+/** How many characters line `li` has (a surrogate pair counting once). */
+function charCount(s: TextMark, li: number): number {
+  return Array.from(String(s.text).split('\n')[li] ?? '').length;
+}
+/** Where a line sits across the box: an alignment's left, centre or right,
+    or 'all' for justify all. */
+export function alignKind(a: TextMark['align']): 'left' | 'center' | 'right' | 'all' {
+  if (a === 'center' || a === 'justify-center') return 'center';
+  if (a === 'right' || a === 'justify-right') return 'right';
+  if (a === 'justify-all') return 'all';
+  return 'left';
+}
+/** The space after each character of line `li` but its last, in points:
+    tracking, plus with justify all what spreads the line across the box. */
+export function charSpacing(s: TextMark, li: number, measure: MeasureText): number {
+  let cs = tracking(s);
+  if (alignKind(s.align) === 'all') {
+    const n = charCount(s, li);
+    if (n > 1) {
+      const W = textRect(s, measure).w,
+        lw = lineWidth(s, li, measure) || 0;
+      if (W > lw) cs += (W - lw) / (n - 1);
+    }
+  }
+  return cs;
 }
 
 /** Line `li` of a text mark in pieces of one style each: the mark with a
@@ -114,26 +149,32 @@ const sameStyle = (p: StyleRun | null, q: StyleRun | null) =>
 /** The width of line `li`, its pieces measured each in its own style; null
     while fonts are not ready. */
 export function lineWidth(s: TextMark, li: number, measure: MeasureText): number | null {
-  if (!s.runs || !s.runs.length) return measure(s, String(s.text).split('\n')[li] ?? '');
+  /* tracking widens the line by its gaps, one after each character but the last */
+  const tw = s.tr ? tracking(s) * Math.max(0, charCount(s, li) - 1) : 0;
+  if (!s.runs || !s.runs.length) {
+    const w0 = measure(s, String(s.text).split('\n')[li] ?? '');
+    return w0 == null ? null : w0 + tw;
+  }
   let w = 0;
   for (const p of lineSpans(s, li)) {
     const pw = measure(p.s, p.text);
     if (pw == null) return null;
     w += pw;
   }
-  return w;
+  return w + tw;
 }
 
 /** Baseline origin of line `li` of a text mark, turned with the rest.
     `lineWidth` is that one line's own width, needed to offset centre- and
     right-aligned lines off the box's left edge, which is s.a[0] itself. */
 export function lineOrigin(s: TextMark, li: number, lineWidth: number, measure: MeasureText): Pt {
-  const d = li * s.size * 1.2;
+  const d = li * leading(s);
   let dx = 0;
-  if (s.align === 'center' || s.align === 'right') {
+  const k = alignKind(s.align);
+  if (k === 'center' || k === 'right') {
     const W = textRect(s, measure).w,
       lw = lineWidth || 0;
-    dx = s.align === 'center' ? (W - lw) / 2 : W - lw;
+    dx = k === 'center' ? (W - lw) / 2 : W - lw;
   }
   const base: Pt = [s.a[0] + dx, s.a[1] - d];
   if (!s.r) return base;

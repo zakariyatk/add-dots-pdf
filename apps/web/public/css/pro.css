@@ -2083,3 +2083,60 @@ body.rotate-mode .anno .hnd .rotz, body.rotate-mode .anno .gsel .rotz { display:
 .anno .rotz[data-cur="br"] { cursor: var(--cur-rotate-br) }
 .anno .rotz[data-cur="bl"] { cursor: var(--cur-rotate-bl) }
 .anno .hnd .kn.pill { stroke-width: 1 }
+
+/* ---------- Character and Paragraph (js/typepanel.js) ----------
+   A selected text mark's type, as Illustrator's Properties panel lays it
+   out; it stands in for the plain font / B / I / size row */
+body.has-typepanel #markPop #mpText { display: none !important }
+.markpop .mptype { flex: 1 1 100%; display: flex; flex-direction: column; gap: 10px; min-width: 0 }
+.markpop .mptype[hidden] { display: none }
+.markpop .tpsec { display: flex; flex-direction: column; gap: 7px; min-width: 0 }
+.markpop .tpsec + .tpsec { padding-top: 10px; border-top: 1px solid var(--line) }
+.markpop .tphd { font-size: 12px; font-weight: 600; color: var(--text) }
+.markpop .mptype svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
+.markpop .tpfont { position: relative; display: flex; align-items: center; height: 30px; min-width: 0;
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 6px }
+.markpop .tpfont:focus-within { border-color: var(--accent, #7B5CFF) }
+.markpop .tpsearch { display: flex; padding: 0 4px 0 7px; color: var(--text-dim) }
+.markpop .tpsearch svg { width: 15px; height: 15px }
+.markpop .tpfont input { flex: 1 1 auto; min-width: 0; height: 28px; border: 0; background: transparent;
+  color: var(--text); font-size: 13px; padding: 0 2px; outline: none }
+.markpop .tpopen { flex: none; width: 26px; height: 28px; padding: 0; border: 0; background: transparent; color: var(--text-dim);
+  display: flex; align-items: center; justify-content: center; border-left: 1px solid var(--line); border-radius: 0 6px 6px 0 }
+.markpop .tpopen:hover { background: var(--chrome-3, rgba(0,0,0,.06)) }
+.markpop .tplist { position: absolute; z-index: 30; left: -1px; right: -1px; top: calc(100% + 3px); max-height: 280px; overflow-y: auto;
+  background: var(--chrome, #fff); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 4px 0 }
+.markpop .tplist[hidden] { display: none }
+.markpop .tpopt { padding: 6px 10px; font-size: 15px; color: var(--text); cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.markpop .tpopt:hover, .markpop .tpopt.on { background: var(--chrome-2) }
+.markpop .tpopt.cur { font-weight: 600; color: var(--accent, #7B5CFF) }
+.markpop .tpnone { padding: 8px 10px; font-size: 12px; color: var(--text-dim) }
+.markpop .tpstyle { width: 100%; height: 30px }
+.markpop .tpgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px }
+.markpop .tpf { display: flex; align-items: center; height: 30px; min-width: 0;
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden }
+.markpop .tpf:focus-within { border-color: var(--accent, #7B5CFF) }
+.markpop .tpi { flex: none; display: flex; padding: 0 2px 0 4px; color: var(--text-dim) }
+.markpop .tpi svg { width: 17px; height: 17px }
+.markpop .tpspin { flex: none; display: flex; flex-direction: column; height: 28px; justify-content: center }
+.markpop .tpspin button { width: 14px; height: 13px; padding: 0; border: 0; background: transparent; color: var(--text-dim);
+  display: flex; align-items: center; justify-content: center; cursor: pointer }
+.markpop .tpspin button:hover { color: var(--text) }
+.markpop .tpspin svg { width: 12px; height: 12px; stroke-width: 2 }
+.markpop .tpf input { flex: 1 1 auto; min-width: 0; width: 100%; height: 28px; border: 0; background: transparent;
+  color: var(--text); font-size: 12px; padding: 0 2px; outline: none; text-align: left }
+.markpop .tpf .tppre { flex: none; width: 18px; min-width: 0; height: 28px; padding: 0; border: 0; border-left: 1px solid var(--line);
+  border-radius: 0; background: transparent; color: transparent; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: center; background-size: 13px; appearance: none; -webkit-appearance: none }
+.markpop .tpf .tppre option { color: var(--text); background: var(--chrome, #fff) }
+.markpop .tpdeco { display: flex; gap: 4px; align-items: center }
+.markpop .tptog { width: 32px; height: 30px; min-width: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text) }
+.markpop .tptog:hover { background: var(--chrome-2); border-color: var(--line) }
+.markpop .tptog.on { background: var(--text); color: var(--chrome, #fff); border-color: var(--text) }
+.markpop .tpalign { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px }
+.markpop .tpalign .tptog { width: 100%; max-width: 32px }
+.rprops .markpop .mptype .tpgrid > *, .rprops .markpop .mptype .tpalign > * { flex: none; min-width: 0 }
+
+.markpop .mptype .tpstyle { width: 100% !important; max-width: none !important }
