@@ -1913,6 +1913,8 @@ try {
       !!sidePill && sidePill.cur === 'ew' && sStretched.w > s2.w + 10 && Math.abs(sStretched.h - s2.h) < 0.5,
       { sidePill, before: [s2.w, s2.h], after: [sStretched.w, sStretched.h] },
     );
+    /* its properties are in the Properties panel on the right, opened from its icon */
+    await page.click('#sTabProps');
     await page.fill('#mpAngle', '20');
     await page.press('#mpAngle', 'Enter');
     await page.fill('#mpOpacity', '70');
@@ -2078,6 +2080,8 @@ try {
 
     /* the page list selects as Acrobat's does */
     await page.evaluate(() => window.ADDPDF.setRail(true));
+    /* the Pages panel, whichever panel was showing last */
+    await page.evaluate(() => document.getElementById('tabPages').click());
     const thumb = async (i) => {
       await page.evaluate((i) => window.ADDPDF.S.items[i].thumb.scrollIntoView({ block: 'center' }), i);
       return page.locator('#railPages .thumb').nth(i).locator('.hitbox');
