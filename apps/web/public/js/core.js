@@ -351,45 +351,82 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  /** Ask for a line of text in the app's own dialog, in place of
-      window.prompt — which the Windows app (Electron) does not support at
-      all: there it shows nothing and answers null. Resolves to the text
-      typed, or null when cancelled. `msg` is plain text; a blank line in it
-      starts a new paragraph. */
-  function ask(msg, value, opts) {
-    opts = opts || {};
+  /** The app's own modal dialog, laid out as Windows 11 lays out one: a
+      title with a close button, the content, and a footer band with the
+      main action and Cancel at the right. In place of window.prompt, which
+      the Windows app (Electron) does not have at all.
+      o: { title, body (HTML), ok, cancel, width,
+           open(box) — wire up the content once it is on screen,
+           value(box) — what OK answers; return { error } to stay open and say why }
+      Resolves to that value, or null when cancelled. Enter is OK, Esc is Cancel. */
+  function dialog(o) {
     return new Promise(function (resolve) {
       const was = document.activeElement;
       const wrap = document.createElement('div');
-      wrap.className = 'cdwrap askwrap';
+      wrap.className = 'wdwrap';
       wrap.innerHTML =
-        '<form class="cdbox askbox" role="dialog" aria-modal="true">' +
-          (opts.title ? '<h2>' + esc(opts.title) + '</h2>' : '') +
-          '<p class="askmsg"></p>' +
-          '<input class="askin" type="text" spellcheck="false" autocomplete="off">' +
-          '<div class="cdfoot"><button type="submit" class="btn primary">' + esc(opts.ok || 'OK') + '</button>' +
-          '<button type="button" class="btn askno">Cancel</button></div>' +
+        '<form class="wdbox" role="dialog" aria-modal="true" novalidate>' +
+          '<div class="wdhead"><h2 class="wdtitle"></h2>' +
+          '<button type="button" class="wdx" aria-label="Close">' +
+          '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>' +
+          '<div class="wdbody">' + (o.body || '') + '<p class="wderr" role="alert" hidden></p></div>' +
+          '<div class="wdfoot"><button type="submit" class="wdbtn wdok"></button>' +
+          '<button type="button" class="wdbtn wdno"></button></div>' +
         '</form>';
-      const box = wrap.firstChild, input = wrap.querySelector('.askin');
-      wrap.querySelector('.askmsg').textContent = msg || '';
-      box.setAttribute('aria-label', opts.title || String(msg || '').split('\n')[0]);
-      input.value = value == null ? '' : String(value);
+      const box = wrap.firstChild;
+      box.querySelector('.wdtitle').textContent = o.title || '';
+      box.querySelector('.wdok').textContent = o.ok || 'OK';
+      box.querySelector('.wdno').textContent = o.cancel || 'Cancel';
+      box.setAttribute('aria-label', o.title || '');
+      if (o.width) box.style.width = 'min(' + o.width + 'px, 100%)';
+      const err = box.querySelector('.wderr');
       document.body.appendChild(wrap);
       function done(v) {
         wrap.remove();
         if (was && was.focus) try { was.focus(); } catch (e) { /* gone */ }
         resolve(v);
       }
-      box.addEventListener('submit', function (e) { e.preventDefault(); done(input.value); });
-      wrap.querySelector('.askno').addEventListener('click', function () { done(null); });
-      wrap.addEventListener('mousedown', function (e) { if (e.target === wrap) done(null); });
-      /* the app's own shortcuts stay out of the way while typing */
+      box.addEventListener('submit', function (e) {
+        e.preventDefault();
+        const v = o.value ? o.value(box) : true;
+        if (v && v.error) {
+          err.textContent = v.error; err.hidden = false;
+          const bad = v.field && box.querySelector(v.field);
+          if (bad) { bad.classList.add('bad'); bad.focus(); if (bad.select) bad.select(); }
+          return;
+        }
+        done(v);
+      });
+      box.addEventListener('input', function (e) {
+        err.hidden = true;
+        if (e.target.classList) e.target.classList.remove('bad');
+      });
+      box.querySelector('.wdno').addEventListener('click', function () { done(null); });
+      box.querySelector('.wdx').addEventListener('click', function () { done(null); });
+      /* the app's own shortcuts stay out of the way while the dialog is up */
       wrap.addEventListener('keydown', function (e) {
         e.stopPropagation();
         if (e.key === 'Escape') { e.preventDefault(); done(null); }
       });
-      input.focus();
-      input.select();
+      if (o.open) o.open(box);
+      const first = box.querySelector('input, select, textarea') || box.querySelector('.wdok');
+      first.focus();
+      if (first.select) first.select();
+    });
+  }
+
+  /** Ask for a line of text in the app's own dialog. Resolves to the text
+      typed, or null when cancelled. `msg` is plain text; a blank line in it
+      starts a new paragraph. */
+  function ask(msg, value, opts) {
+    opts = opts || {};
+    return dialog({
+      title: opts.title || 'Add Dots PDF',
+      ok: opts.ok,
+      body: '<p class="wdmsg">' + esc(msg || '') + '</p>' +
+        '<input class="wdin" type="text" spellcheck="false" autocomplete="off" value="' +
+        esc(value == null ? '' : String(value)) + '">',
+      value: function (box) { return box.querySelector('.wdin').value; },
     });
   }
   function bytesLabel(n) {
@@ -10360,7 +10397,7 @@
   /* ---- hand the feature modules what they need, and nothing more ---- */
   Object.assign(EXT, {
     S: S, SVGNS: SVGNS, COLORS: COLORS, WIDTHS: WIDTHS, FONTS: FONTS,
-    $: $, toast: toast, ask: ask, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
+    $: $, toast: toast, ask: ask, dialog: dialog, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
     snapLine: snapLine, snapBox: snapBox, constrainPt: constrainPt,
     selList: selList, setGroup: setGroup,
     groupSelected: groupSelected, ungroupSelected: ungroupSelected, groupMembers: groupMembers,

@@ -551,27 +551,63 @@
       const pts = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
       if (pts < 2) { X.toast('That line is too short to calibrate from'); return; }
 
-      X.ask('How long is that line in real life?\n\n' +
-        'Type the number and the unit, for example "1200 mm" or "4 ft".', '1200 mm',
-        { title: 'Calibrate' }).then(function (answer) { calibrateTo(pts, answer); });
+      calibrateDialog(pts).then(function (r) {
+        if (!r) return;
+        scale.unit = r.unit;
+        scale.custom = r.value / pts;
+        /* report it back as a drawing scale, which is what it really is */
+        scale.denom = Math.max(1, Math.round((r.value / pts) / UNITS[r.unit].per));
+        noteScale(); redrawDims();
+        X.toast('Calibrated — about <b>1:' + scale.denom + '</b>, reading in ' + r.unit, true);
+      });
     }
-    function calibrateTo(pts, answer) {
-      if (!answer) return;
 
-      const m = String(answer).trim().match(/^([\d.,]+)\s*([A-Za-z"']*)$/);
-      if (!m) { X.toast('Could not read that — try something like <b>1200 mm</b>'); return; }
-      const value = parseFloat(m[1].replace(/,/g, ''));
-      if (!isFinite(value) || value <= 0) { X.toast('That is not a length'); return; }
-
-      let unit = String(m[2] || scale.unit).toLowerCase().replace(/[^a-z]/g, '');
-      if (m[2] === '"') unit = 'in';
-      if (!UNITS[unit]) unit = scale.unit;
-      scale.unit = unit;
-      scale.custom = value / pts;
-      /* report it back as a drawing scale, which is what it really is */
-      scale.denom = Math.max(1, Math.round((value / pts) / UNITS[unit].per));
-      noteScale(); redrawDims();
-      X.toast('Calibrated — about <b>1:' + scale.denom + '</b>, reading in ' + unit);
+    /** The real length of a line pts long, asked in the app's own dialog:
+        the number and its unit apart, the scale it comes to shown as it is
+        typed, and a wrong entry said in the dialog rather than after it. */
+    function calibrateDialog(pts) {
+      const paperMm = pts * UNITS.mm.per;
+      const units = Object.keys(UNITS).filter(function (u) { return u !== 'pt'; });
+      const start = units.indexOf(scale.unit) >= 0 ? scale.unit : 'mm';
+      const read = function (box) {
+        const v = parseFloat(String(box.querySelector('#calVal').value).replace(/,/g, '').trim());
+        return { value: v, unit: box.querySelector('#calUnit').value };
+      };
+      return X.dialog({
+        title: 'Calibrate scale',
+        ok: 'Calibrate',
+        width: 420,
+        body:
+          '<p class="wdnote">The line you drew measures <b>' + X.esc(paperMm.toFixed(1)) +
+            ' mm</b> on the page. Enter its real length, and every dimension is measured to match.</p>' +
+          '<label class="wdlabel" for="calVal">Real length</label>' +
+          '<div class="wdrow">' +
+            '<input class="wdin" id="calVal" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="e.g. 1200">' +
+            '<select class="wdsel" id="calUnit" aria-label="Unit">' +
+              units.map(function (u) {
+                return '<option value="' + u + '"' + (u === start ? ' selected' : '') + '>' + UNITS[u].label + '</option>';
+              }).join('') +
+            '</select>' +
+          '</div>' +
+          '<div class="wdpreview"><span>Drawing scale</span><b id="calScale">—</b></div>',
+        open: function (box) {
+          function paint() {
+            const r = read(box);
+            box.querySelector('#calScale').textContent = isFinite(r.value) && r.value > 0
+              ? '1 : ' + Math.max(1, Math.round((r.value / pts) / UNITS[r.unit].per)).toLocaleString()
+              : '—';
+          }
+          box.addEventListener('input', paint);
+          box.addEventListener('change', paint);
+        },
+        value: function (box) {
+          const r = read(box);
+          if (!isFinite(r.value) || r.value <= 0) {
+            return { error: 'Enter the real length as a number, for example 1200.', field: '#calVal' };
+          }
+          return r;
+        },
+      });
     }
 
     /* ---------------- drawing on screen ---------------- */

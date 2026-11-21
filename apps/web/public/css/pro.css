@@ -1419,17 +1419,69 @@ body:not([data-ui="light"]) .pgrid .psq { border-color: rgba(255,255,255,.25) }
 #pmswatch input[type="color"] { width: 28px; height: 28px; padding: 1px; border: 1px solid var(--line); border-radius: 50%; background: transparent; cursor: pointer }
 #markPop .mpstack svg { fill: none; stroke: currentColor; stroke-width: 1.8 }
 
-/* a line of text asked for in the app's own dialog (core.js ask), in place of
-   window.prompt, which the Windows app does not have */
-.askbox { width: min(420px, 100%) }
-.askbox h2 { font-size: 17px; margin-bottom: 8px }
-.askmsg { margin: 0 0 12px; font-size: 13px; line-height: 1.5; white-space: pre-line; color: var(--text) }
-.askin {
-  box-sizing: border-box; width: 100%; height: 36px; padding: 0 10px; font: inherit; color: var(--text);
-  border: 1px solid var(--line); border-radius: 6px; background: var(--chrome);
+/* The app's own dialogs (core.js dialog, ask), laid out as Windows 11's:
+   a title and close button, the content, and a footer band with the main
+   action and Cancel at the right, the main one filled in the accent. */
+.wdwrap {
+  position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; padding: 16px;
+  background: rgba(0, 0, 0, .4); animation: wdfade .12s ease-out;
 }
-.askin:focus { outline: 2px solid var(--btn, var(--marker)); outline-offset: 1px }
-.askbox .cdfoot { margin-top: 16px }
+.wdbox {
+  --wd-accent: var(--btn, #0067C0);
+  width: min(440px, 100%); max-height: calc(100vh - 32px); overflow: auto; box-sizing: border-box; margin: 0;
+  display: flex; flex-direction: column; border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--chrome-2); color: var(--text);
+  box-shadow: 0 32px 64px rgba(0, 0, 0, .28), 0 2px 21px rgba(0, 0, 0, .22);
+  font: 14px/1.45 "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  animation: wdpop .16s cubic-bezier(.1, .9, .2, 1);
+}
+@keyframes wdfade { from { opacity: 0 } }
+@keyframes wdpop { from { opacity: 0; transform: scale(1.04) } }
+@media (prefers-reduced-motion: reduce) { .wdwrap, .wdbox { animation: none } }
+.wdhead { display: flex; align-items: flex-start; gap: 12px; padding: 20px 16px 0 24px }
+.wdtitle { flex: 1; margin: 0; font-size: 20px; line-height: 28px; font-weight: 600 }
+.wdx {
+  flex: none; display: grid; place-items: center; width: 32px; height: 32px; margin-top: -6px;
+  border: none; border-radius: 4px; background: transparent; color: var(--text-dim); cursor: pointer;
+}
+.wdx:hover { background: color-mix(in srgb, var(--text) 8%, transparent); color: var(--text) }
+.wdx svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.4 }
+.wdbody { padding: 12px 24px 24px }
+.wdmsg { margin: 0 0 14px; white-space: pre-line }
+.wdlabel { display: block; margin: 0 0 6px; font-size: 13px; font-weight: 600 }
+.wdnote { margin: 0 0 16px; font-size: 13px; color: var(--text-dim) }
+.wdnote b { color: var(--text); font-weight: 600 }
+.wdrow { display: flex; gap: 8px }
+.wdin, .wdsel {
+  box-sizing: border-box; height: 34px; padding: 0 10px; font: inherit; color: var(--text);
+  border: 1px solid var(--line); border-bottom-color: color-mix(in srgb, var(--text) 45%, transparent);
+  border-radius: 4px; background: var(--chrome); outline: none;
+}
+.wdin { width: 100%; min-width: 0 }
+.wdrow .wdin { flex: 1 }
+.wdsel { flex: none; width: 96px; cursor: pointer }
+.wdin:focus, .wdsel:focus { border-bottom: 2px solid var(--wd-accent); padding-bottom: 0 }
+.wdin.bad { border-bottom: 2px solid var(--danger) }
+.wderr { margin: 10px 0 0; font-size: 13px; color: var(--danger) }
+.wderr[hidden] { display: none }
+.wdpreview {
+  display: flex; justify-content: space-between; gap: 12px; margin-top: 16px; padding: 10px 12px;
+  border-radius: 4px; font-size: 13px; background: color-mix(in srgb, var(--text) 5%, transparent);
+}
+.wdpreview span { color: var(--text-dim) }
+.wdpreview b { font-weight: 600; font-variant-numeric: tabular-nums }
+.wdfoot {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 24px;
+  border-top: 1px solid var(--line); background: var(--chrome);
+}
+.wdbtn {
+  height: 32px; padding: 0 12px; font: inherit; border-radius: 4px; cursor: pointer;
+  border: 1px solid var(--line); background: var(--chrome-2); color: var(--text);
+}
+.wdbtn:hover { background: color-mix(in srgb, var(--text) 6%, var(--chrome-2)) }
+.wdbtn.wdok { border-color: transparent; background: var(--wd-accent); color: #FFFFFF; font-weight: 600 }
+.wdbtn.wdok:hover { background: color-mix(in srgb, var(--wd-accent) 88%, #000) }
+.wdbtn:focus-visible, .wdx:focus-visible { outline: 2px solid var(--text); outline-offset: 1px }
 
 /* the Edit colours dialog (js/colordlg.js) */
 body.cdpicking, body.cdpicking * { cursor: crosshair !important }
