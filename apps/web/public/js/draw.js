@@ -551,9 +551,11 @@
       const pts = Math.hypot(s.b[0] - s.a[0], s.b[1] - s.a[1]);
       if (pts < 2) { X.toast('That line is too short to calibrate from'); return; }
 
-      const answer = window.prompt(
-        'How long is that line in real life?\n\n' +
-        'Type the number and the unit, for example "1200 mm" or "4 ft".', '1200 mm');
+      X.ask('How long is that line in real life?\n\n' +
+        'Type the number and the unit, for example "1200 mm" or "4 ft".', '1200 mm',
+        { title: 'Calibrate' }).then(function (answer) { calibrateTo(pts, answer); });
+    }
+    function calibrateTo(pts, answer) {
       if (!answer) return;
 
       const m = String(answer).trim().match(/^([\d.,]+)\s*([A-Za-z"']*)$/);
@@ -2655,14 +2657,14 @@
     function editDim(it, idx) {
       const s = it.shapes[idx];
       if (!s || !ALL_DIMS[s.t]) return;
-      const v = window.prompt(
-        'Reading to show on this dimension.\n' +
+      X.ask('Reading to show on this dimension.\n' +
         'Leave it empty to go back to the measured value.',
-        dimLabel(s));
-      if (v === null) return;
-      X.snapshot();
-      s.label = v.trim() === '' ? null : v.trim();
-      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+        dimLabel(s), { title: 'Dimension text' }).then(function (v) {
+        if (v === null || it.shapes[idx] !== s) return;
+        X.snapshot();
+        s.label = v.trim() === '' ? null : v.trim();
+        X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      });
     }
 
     /* Double-click straight onto a dimension — no need to select it first. */

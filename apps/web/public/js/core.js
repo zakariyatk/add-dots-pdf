@@ -351,6 +351,47 @@
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
+  /** Ask for a line of text in the app's own dialog, in place of
+      window.prompt — which the Windows app (Electron) does not support at
+      all: there it shows nothing and answers null. Resolves to the text
+      typed, or null when cancelled. `msg` is plain text; a blank line in it
+      starts a new paragraph. */
+  function ask(msg, value, opts) {
+    opts = opts || {};
+    return new Promise(function (resolve) {
+      const was = document.activeElement;
+      const wrap = document.createElement('div');
+      wrap.className = 'cdwrap askwrap';
+      wrap.innerHTML =
+        '<form class="cdbox askbox" role="dialog" aria-modal="true">' +
+          (opts.title ? '<h2>' + esc(opts.title) + '</h2>' : '') +
+          '<p class="askmsg"></p>' +
+          '<input class="askin" type="text" spellcheck="false" autocomplete="off">' +
+          '<div class="cdfoot"><button type="submit" class="btn primary">' + esc(opts.ok || 'OK') + '</button>' +
+          '<button type="button" class="btn askno">Cancel</button></div>' +
+        '</form>';
+      const box = wrap.firstChild, input = wrap.querySelector('.askin');
+      wrap.querySelector('.askmsg').textContent = msg || '';
+      box.setAttribute('aria-label', opts.title || String(msg || '').split('\n')[0]);
+      input.value = value == null ? '' : String(value);
+      document.body.appendChild(wrap);
+      function done(v) {
+        wrap.remove();
+        if (was && was.focus) try { was.focus(); } catch (e) { /* gone */ }
+        resolve(v);
+      }
+      box.addEventListener('submit', function (e) { e.preventDefault(); done(input.value); });
+      wrap.querySelector('.askno').addEventListener('click', function () { done(null); });
+      wrap.addEventListener('mousedown', function (e) { if (e.target === wrap) done(null); });
+      /* the app's own shortcuts stay out of the way while typing */
+      wrap.addEventListener('keydown', function (e) {
+        e.stopPropagation();
+        if (e.key === 'Escape') { e.preventDefault(); done(null); }
+      });
+      input.focus();
+      input.select();
+    });
+  }
   function bytesLabel(n) {
     if (n < 1024) return n + ' B';
     if (n < 1048576) return (n / 1024).toFixed(0) + ' KB';
@@ -10317,7 +10358,7 @@
   /* ---- hand the feature modules what they need, and nothing more ---- */
   Object.assign(EXT, {
     S: S, SVGNS: SVGNS, COLORS: COLORS, WIDTHS: WIDTHS, FONTS: FONTS,
-    $: $, toast: toast, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
+    $: $, toast: toast, ask: ask, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
     snapLine: snapLine, snapBox: snapBox, constrainPt: constrainPt,
     selList: selList, setGroup: setGroup,
     groupSelected: groupSelected, ungroupSelected: ungroupSelected, groupMembers: groupMembers,

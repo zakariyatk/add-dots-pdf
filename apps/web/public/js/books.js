@@ -228,11 +228,13 @@
         save(d); syncButtons();
         b.closest('li').remove();
       } else if (b.classList.contains('bkpop-ren')) {
-        const v = window.prompt('Name for this bookmark', m.name || ('Page ' + p));
-        if (v === null) return;
-        m.name = v.trim() || ('Page ' + p);
-        save(d);
-        b.closest('li').querySelector('span').textContent = m.name;
+        const li = b.closest('li');
+        X.ask('Name for this bookmark', m.name || ('Page ' + p), { title: 'Rename bookmark' }).then(function (v) {
+          if (v === null) return;
+          m.name = v.trim() || ('Page ' + p);
+          save(d);
+          if (li) li.querySelector('span').textContent = m.name;
+        });
       }
     });
 
@@ -415,9 +417,12 @@
       if (b.classList.contains('bkpop-del')) {
         d.marks = d.marks.filter(function (x) { return x !== m; });
       } else if (b.classList.contains('bkpop-ren')) {
-        const v = window.prompt('Name for this bookmark', m.name || ('Page ' + p));
-        if (v === null) return;
-        m.name = v.trim() || ('Page ' + p);
+        X.ask('Name for this bookmark', m.name || ('Page ' + p), { title: 'Rename bookmark' }).then(function (v) {
+          if (v === null) return;
+          m.name = v.trim() || ('Page ' + p);
+          save(d); syncButtons(); renderOwn();
+        });
+        return;
       }
       save(d); syncButtons(); renderOwn();
     });

@@ -192,8 +192,10 @@
       const others = ensureLayers().filter(function (l) { return l.id !== source.id; });
       if (!others.length) { X.toast('There is only one layer'); return; }
       const listing = others.map(function (l, i) { return (i + 1) + '. ' + l.name; }).join('\n');
-      const ans = window.prompt('Merge "' + source.name + '" into which layer?\n\n' + listing +
-        '\n\nType its number.', '1');
+      X.ask('Merge "' + source.name + '" into which layer?\n\n' + listing +
+        '\n\nType its number.', '1', { title: 'Merge layer' }).then(function (ans) { mergeInto(source, others, ans); });
+    });
+    function mergeInto(source, others, ans) {
       if (!ans) return;
       const n = parseInt(ans, 10);
       const target = others[n - 1];
@@ -209,7 +211,7 @@
       redrawEverywhere(); X.updateMeta();
       render();
       X.toast('Merged into <b>' + X.esc(target.name) + '</b>');
-    });
+    }
     /* Illustrator's own rule: deleting a layer deletes what is on it, so the
        marks go with it — after saying how many, and undoably */
     $('layDel').addEventListener('click', function () {

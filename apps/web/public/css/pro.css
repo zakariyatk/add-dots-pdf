@@ -1419,6 +1419,18 @@ body:not([data-ui="light"]) .pgrid .psq { border-color: rgba(255,255,255,.25) }
 #pmswatch input[type="color"] { width: 28px; height: 28px; padding: 1px; border: 1px solid var(--line); border-radius: 50%; background: transparent; cursor: pointer }
 #markPop .mpstack svg { fill: none; stroke: currentColor; stroke-width: 1.8 }
 
+/* a line of text asked for in the app's own dialog (core.js ask), in place of
+   window.prompt, which the Windows app does not have */
+.askbox { width: min(420px, 100%) }
+.askbox h2 { font-size: 17px; margin-bottom: 8px }
+.askmsg { margin: 0 0 12px; font-size: 13px; line-height: 1.5; white-space: pre-line; color: var(--text) }
+.askin {
+  box-sizing: border-box; width: 100%; height: 36px; padding: 0 10px; font: inherit; color: var(--text);
+  border: 1px solid var(--line); border-radius: 6px; background: var(--chrome);
+}
+.askin:focus { outline: 2px solid var(--btn, var(--marker)); outline-offset: 1px }
+.askbox .cdfoot { margin-top: 16px }
+
 /* the Edit colours dialog (js/colordlg.js) */
 body.cdpicking, body.cdpicking * { cursor: crosshair !important }
 .cdwrap { position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .45) }
