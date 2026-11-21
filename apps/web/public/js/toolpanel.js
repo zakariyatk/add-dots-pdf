@@ -37,6 +37,8 @@
         what: 'Pages, text, images, links, mark-up, watermark, redact' },
       { key: 'draw', tab: 'ribDraw', name: 'Draw', pans: ['panDraw'],
         what: 'Boxes, lines, arcs, clouds and dimensions' },
+      { key: 'tools', tab: 'ribTools', name: 'Tools', pans: ['panTools'],
+        what: 'Direct selection, add and delete anchor points' },
       { key: 'convert', tab: 'ribConvert', name: 'Convert', pans: ['panConvert'],
         what: 'PDF to Word, Excel, PowerPoint, pictures, text or CAD' },
       { key: 'sign', tab: 'ribForm', name: 'Sign', pans: ['panForm'],
@@ -106,6 +108,7 @@
       ['grpTools', 'Mark up'], ['grpEditObj', 'Edit objects'],
       ['btnWatermark', 'Document'], ['btnRedact', 'Protect'], ['btnPrint', 'Export'], ['btnCompress', 'Optimize'],
       ['grpDraw', 'Draw and measure'],
+      ['grpPoint', 'Point editing'],
       ['grpConvert', 'PDF to'],
       ['btnFields', 'Fill'], ['btnSign', 'Sign'], ['btnFlatten', 'Finish']
     ];

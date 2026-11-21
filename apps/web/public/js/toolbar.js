@@ -29,10 +29,15 @@
       { ids: ['tDrawPan', 'tDrawMove', 'tDrawSelect'] },
       { ids: ['tRect', 'tEllipse', 'tLine', 'tArrow'] },
       { ids: ['tArc', 'tCloud', 'tPoly'] },
-      /* point editing, as Illustrator's Direct Selection and Add / Delete Anchor Point (js/vertex.js) */
-      { ids: ['tVxDirect', 'tVxAdd', 'tVxDel'] },
       { ids: ['tText'] },
       { ids: ['tDim', 'tDimC', 'tDimR', 'tDimD', 'tDimA'] }
+    ];
+
+    /* The Tools tab, next to Draw: working on what is drawn, point by point,
+       as Illustrator's Direct Selection and Add / Delete Anchor Point (js/vertex.js) */
+    const TOOLS_GROUPS = [
+      { ids: ['tToolsPan', 'tToolsMove', 'tToolsSelect'] },
+      { ids: ['tVxDirect', 'tVxAdd', 'tVxDel'] }
     ];
 
     /* What is left on Edit: review marks, and the page tools. Text moved to
@@ -68,6 +73,29 @@
     panel.appendChild(drawTools);
 
     X.addRibbonTab('ribDraw', 'panDraw');
+
+    /* the Tools tab and its panel, right after Draw */
+    const toolsTab = document.createElement('button');
+    toolsTab.className = 'tab'; toolsTab.id = 'ribTools'; toolsTab.type = 'button';
+    toolsTab.setAttribute('role', 'tab');
+    toolsTab.setAttribute('aria-selected', 'false');
+    toolsTab.setAttribute('aria-controls', 'panTools');
+    toolsTab.textContent = 'Tools';
+    tab.insertAdjacentElement('afterend', toolsTab);
+
+    const toolsPanel = document.createElement('div');
+    toolsPanel.className = 'rpan'; toolsPanel.id = 'panTools'; toolsPanel.hidden = true;
+    toolsPanel.setAttribute('role', 'tabpanel');
+    toolsPanel.setAttribute('aria-labelledby', 'ribTools');
+    panel.insertAdjacentElement('afterend', toolsPanel);
+
+    const pointTools = document.createElement('div');
+    pointTools.className = 'grp'; pointTools.id = 'grpPoint';
+    pointTools.setAttribute('role', 'group');
+    pointTools.setAttribute('aria-label', 'Point editing tools');
+    toolsPanel.appendChild(pointTools);
+
+    X.addRibbonTab('ribTools', 'panTools');
 
     /* ---------------- Pan and Select, first on every tab ---------------- */
 
@@ -156,6 +184,9 @@
     drawTools.appendChild(toolCopy('tDrawPan', 'pan'));
     drawTools.appendChild(toolCopy('tDrawMove', 'move'));
     drawTools.appendChild(toolCopy('tDrawSelect', 'select'));
+    pointTools.appendChild(toolCopy('tToolsPan', 'pan'));
+    pointTools.appendChild(toolCopy('tToolsMove', 'move'));
+    pointTools.appendChild(toolCopy('tToolsSelect', 'select'));
 
     /* ---------------- moving the buttons ---------------- */
 
@@ -180,12 +211,13 @@
 
     function arrange() {
       fill(drawTools, DRAW_GROUPS);
+      fill(pointTools, TOOLS_GROUPS);
       fill($('grpTools'), EDIT_GROUPS);
 
       /* Anything a module adds later that neither list knows about stays on
          Edit rather than disappearing. */
       const known = {};
-      DRAW_GROUPS.concat(EDIT_GROUPS).forEach(function (g) {
+      DRAW_GROUPS.concat(TOOLS_GROUPS, EDIT_GROUPS).forEach(function (g) {
         g.ids.forEach(function (id) { known[id] = 1; });
       });
       Array.prototype.slice.call($('grpTools').children).forEach(function (el) {
@@ -198,10 +230,12 @@
 
     /* No ribbon at that width, so both groups live in the dock together. */
     X.dockGroup(drawTools);
+    X.dockGroup(pointTools);
 
     function countTools() {
       const n = $('grpTools').querySelectorAll('.btn').length +
-                drawTools.querySelectorAll('.btn').length;
+                drawTools.querySelectorAll('.btn').length +
+                pointTools.querySelectorAll('.btn:not([data-tool-btn])').length;
       document.body.dataset.toolCount = String(n);
       $('dock').dataset.crowded = n > 6 ? 'yes' : 'no';
     }

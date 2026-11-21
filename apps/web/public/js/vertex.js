@@ -578,7 +578,8 @@
         const a = anchorAt(it, p);
         const o = a ? null : outlineAt(it, p);
         hover = a || o ? { it: it, idx: (a || o).idx } : null;
-        it.capture.style.cursor = a ? 'move' : o ? 'pointer' : '';
+        /* over a point: the white arrow with its little square, as Illustrator shows it */
+        it.capture.style.cursor = a ? 'var(--cur-arrow-point)' : '';
         paint(it);
       },
       up: function (it) {
