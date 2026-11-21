@@ -1223,7 +1223,7 @@ body[data-tool="select"] .anno .picked * { cursor: var(--cur-move) }
 /* the grips as Acrobat draws them: a thin violet box, round corners, a pill on
    each side, and the turn grip a violet disc with the turn arrow in it */
 .anno .hnd .halo { fill: none; stroke: #7B5CFF; stroke-width: 1; stroke-dasharray: none; opacity: 1 }
-.anno .hnd .kn { fill: #FFFFFF; stroke: #7B5CFF; stroke-width: 1.3 }
+.anno .hnd .kn { fill: #FFFFFF; stroke: #7B5CFF; stroke-width: 1 }
 .anno .hnd .kn:hover { fill: #E4DDFF }
 /* the point picked out for point editing (js/vertex.js): filled in, as
    Illustrator fills the selected anchor */
@@ -2058,4 +2058,12 @@ body[data-tool="editobj"] .capture { cursor: pointer }
 .anno .rpivot path { fill: none; stroke: #22D3EE; stroke-width: 1.3 }
 body.rotate-mode .pagebox, body.rotate-mode .pagebox * { cursor: var(--cur-rotate) !important }
 body.rotate-mode .anno .gsel .gkn, body.rotate-mode .anno .hnd .kn,
-body.rotate-mode .anno .hnd .knpad, body.rotate-mode .anno .hnd .stem, body.rotate-mode .anno .hnd .turnic { display: none }
+body.rotate-mode .anno .hnd .knpad, body.rotate-mode .anno .hnd .stem, body.rotate-mode .anno .hnd .turnic,
+body.rotate-mode .anno .hnd .rotz { display: none }
+
+/* ---------- one selected mark, as Illustrator shows it ----------
+   A thin box with small square grips (core.js handlesEl): the pointer on a
+   grip is the resize arrow, and just off a corner (or a line's end) it
+   becomes the turn arrow, where a drag turns the mark */
+.anno .hnd .rotz { fill: transparent; stroke: none; pointer-events: all; touch-action: none; cursor: var(--cur-rotate) }
+.anno .hnd .kn.pill { stroke-width: 1 }
