@@ -27,6 +27,9 @@ type Api = {
   candidates: (a: Pt | Pt[], p: Pt, tol: number, o?: Opt) => Hit[];
   best: (a: Pt | Pt[], p: Pt, tol: number, o?: Opt) => Hit | null;
   live: (a: Pt | Pt[], hit: Hit | null, o?: Opt) => boolean[];
+  perpFoot: (s: Pt, a: Pt, b: Pt) => { p: Pt; t: number } | null;
+  parallel: (s: Pt, a: Pt, b: Pt, p: Pt, tol: number) => Hit | null;
+  clipLine: (s: Pt, d: Pt, w: number, h: number) => [Pt, Pt] | null;
 };
 const ctx: { ADDPDF_SNAPTRACK?: Api } = {};
 runInNewContext(src, ctx);
@@ -203,5 +206,71 @@ describe('which guides to show', () => {
   it('shows both guides that make a crossing', () => {
     const hit = T.crossGuides([A, B], [296, 103], TOL)[0] ?? null;
     expect(T.live([A, B], hit)).toEqual([false, true, true, false]);
+  });
+});
+
+describe('perpendicular', () => {
+  it('drops a right angle from the start onto the line', () => {
+    const f = T.perpFoot([50, 0], [0, 100], [200, 100]);
+    expect(f?.p).toEqual([50, 100]);
+    expect(f?.t).toBeCloseTo(0.25);
+  });
+
+  it('meets a slanted line square', () => {
+    const s: Pt = [0, 100];
+    const f = T.perpFoot(s, [0, 0], [100, 100]);
+    expect(f?.p[0]).toBeCloseTo(50);
+    expect(f?.p[1]).toBeCloseTo(50);
+    const along = [100, 100],
+      to = [(f?.p[0] ?? 0) - s[0], (f?.p[1] ?? 0) - s[1]];
+    expect(along[0]! * to[0]! + along[1]! * to[1]!).toBeCloseTo(0);
+  });
+
+  it('gives nothing when the foot falls past the line, or the start is on it', () => {
+    expect(T.perpFoot([300, 0], [0, 100], [200, 100])).toBeNull();
+    expect(T.perpFoot([50, 100], [0, 100], [200, 100])).toBeNull();
+    expect(T.perpFoot([5, 5], [10, 10], [10, 10])).toBeNull();
+  });
+});
+
+describe('parallel', () => {
+  const a: Pt = [0, 0];
+  const b: Pt = [100, 50];
+
+  it('brings the pointer onto the line through the start, the same way as the one taken up', () => {
+    const s: Pt = [0, 200];
+    const hit = T.parallel(s, a, b, [101, 247], TOL);
+    expect(hit?.kind).toBe('par');
+    const q = hit?.p ?? [0, 0];
+    /* q - s runs the same way as b - a */
+    expect((q[0] - s[0]) * (b[1] - a[1]) - (q[1] - s[1]) * (b[0] - a[0])).toBeCloseTo(0);
+    expect(hit?.d).toBeLessThan(TOL);
+  });
+
+  it('works backwards along the line too', () => {
+    expect(T.parallel([200, 200], a, b, [100, 150], TOL)?.kind).toBe('par');
+  });
+
+  it('lets go off the line, and right by the start', () => {
+    expect(T.parallel([0, 200], a, b, [100, 300], TOL)).toBeNull();
+    expect(T.parallel([0, 200], a, b, [4, 202], TOL)).toBeNull();
+  });
+});
+
+describe('clipping a guide to the stage', () => {
+  it('runs edge to edge through the point', () => {
+    const c = T.clipLine([50, 50], [1, 1], 100, 100);
+    expect(c).toEqual([
+      [0, 0],
+      [100, 100],
+    ]);
+  });
+
+  it('handles a flat line and one that misses', () => {
+    expect(T.clipLine([10, 40], [1, 0], 100, 80)).toEqual([
+      [0, 40],
+      [100, 40],
+    ]);
+    expect(T.clipLine([10, 140], [1, 0], 100, 80)).toBeNull();
   });
 });

@@ -1237,6 +1237,10 @@ body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
   shape-rendering: crispEdges;
 }
 .snaptrack path { stroke: #E8882A; stroke-width: 2; fill: none }
+/* Parallel: the line whose direction was taken up, drawn over solid, and the
+   guide through the start point that runs the same way */
+.snaptrack line.parref { stroke-width: 3; stroke-dasharray: none; opacity: .55; shape-rendering: auto }
+.snaptrack line.parguide { shape-rendering: auto }
 
 /* Smart guides, while a mark is dragged (core.js): solid, in Illustrator's
    own magenta, through whatever it has just lined up with — distinct from
