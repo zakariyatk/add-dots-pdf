@@ -2112,7 +2112,7 @@ body.has-typepanel #markPop #mpText { display: none !important }
 .markpop .tpopt.cur { font-weight: 600; color: var(--accent, #7B5CFF) }
 .markpop .tpnone { padding: 8px 10px; font-size: 12px; color: var(--text-dim) }
 .markpop .tpstyle { width: 100%; height: 30px }
-.markpop .tpgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px }
+.markpop .tpgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(122px, 1fr)); gap: 6px }
 .markpop .tpf { display: flex; align-items: center; height: 30px; min-width: 0;
   background: var(--chrome-2); border: 1px solid var(--line); border-radius: 6px; overflow: hidden }
 .markpop .tpf:focus-within { border-color: var(--accent, #7B5CFF) }
@@ -2125,11 +2125,10 @@ body.has-typepanel #markPop #mpText { display: none !important }
 .markpop .tpspin svg { width: 12px; height: 12px; stroke-width: 2 }
 .markpop .tpf input { flex: 1 1 auto; min-width: 0; width: 100%; height: 28px; border: 0; background: transparent;
   color: var(--text); font-size: 12px; padding: 0 2px; outline: none; text-align: left }
-.markpop .tpf .tppre { flex: none; width: 18px; min-width: 0; height: 28px; padding: 0; border: 0; border-left: 1px solid var(--line);
-  border-radius: 0; background: transparent; color: transparent; cursor: pointer;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5' fill='none' stroke='%23888' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-  background-repeat: no-repeat; background-position: center; background-size: 13px; appearance: none; -webkit-appearance: none }
-.markpop .tpf .tppre option { color: var(--text); background: var(--chrome, #fff) }
+.markpop .tpf .tppre { flex: none; width: 20px; min-width: 0; height: 28px; padding: 0; border: 0; border-left: 1px solid var(--line);
+  border-radius: 0; background: transparent; color: var(--text-dim); display: flex; align-items: center; justify-content: center; cursor: pointer }
+.markpop .tpf .tppre:hover, .markpop .tpf .tppre[aria-expanded="true"] { color: var(--text); background: var(--chrome-3, rgba(0,0,0,.06)) }
+.markpop .tpf .tppre svg { width: 13px; height: 13px; stroke-width: 2 }
 .markpop .tpdeco { display: flex; gap: 4px; align-items: center }
 .markpop .tptog { width: 32px; height: 30px; min-width: 0; padding: 0; display: inline-flex; align-items: center; justify-content: center;
   border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text) }
@@ -2140,3 +2139,14 @@ body.has-typepanel #markPop #mpText { display: none !important }
 .rprops .markpop .mptype .tpgrid > *, .rprops .markpop .mptype .tpalign > * { flex: none; min-width: 0 }
 
 .markpop .mptype .tpstyle { width: 100% !important; max-width: none !important }
+
+/* the presets' menu (js/typepanel.js): the app's own list, padded, sized to its entries */
+.tpmenu { position: fixed; z-index: 60; max-height: 280px; overflow-y: auto; padding: 4px;
+  background: var(--chrome, #fff); color: var(--text); border: 1px solid var(--line); border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.18); font-size: 13px; box-sizing: border-box }
+.tpmenu[hidden] { display: none }
+.tpmi { position: relative; padding: 6px 14px 6px 28px; border-radius: 5px; white-space: nowrap; cursor: pointer; line-height: 1.3 }
+.tpmi:hover { background: var(--chrome-2) }
+.tpmi.cur { font-weight: 600 }
+.tpmi.cur::before { content: ''; position: absolute; left: 10px; top: 50%; width: 9px; height: 5px; margin-top: -4px;
+  border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg) }

@@ -71,7 +71,8 @@
         svg('<path d="M7 14l5-5 5 5"/>') + '</button><button type="button" data-step="-1" aria-label="' + label + ' down">' +
         svg('<path d="M7 10l5 5 5-5"/>') + '</button></span>' +
         '<input type="text" inputmode="decimal" aria-label="' + label + '">' +
-        '<select class="tppre" aria-label="' + label + ' presets"></select></div>';
+        '<button type="button" class="tppre" aria-haspopup="listbox" aria-label="' + label + ' presets">' +
+        svg('<path d="M7 10l5 5 5-5"/>') + '</button></div>';
     }
     const sec = document.createElement('div');
     sec.className = 'mptype'; sec.id = 'mpType'; sec.hidden = true;
@@ -112,9 +113,67 @@
     sec.querySelectorAll('.tpf').forEach(function (el) {
       F[el.dataset.k] = { el: el, input: el.querySelector('input'), pre: el.querySelector('.tppre') };
     });
-    F.size.pre.innerHTML = '<option value="" hidden></option>' + SIZES.map(function (v) { return '<option value="' + v + '">' + v + ' pt</option>'; }).join('');
-    F.lead.pre.innerHTML = '<option value="" hidden></option><option value="auto">Auto</option>' + LEADS.map(function (v) { return '<option value="' + v + '">' + v + ' pt</option>'; }).join('');
-    F.track.pre.innerHTML = '<option value="" hidden></option>' + TRACKS.map(function (v) { return '<option value="' + v + '">' + v + '</option>'; }).join('');
+    /* each number's presets: [value, label] */
+    const PRESETS = {
+      size: SIZES.map(function (v) { return [String(v), v + ' pt']; }),
+      lead: [['auto', 'Auto']].concat(LEADS.map(function (v) { return [String(v), v + ' pt']; })),
+      track: TRACKS.map(function (v) { return [String(v), String(v)]; })
+    };
+
+    /* ---------------- a preset menu ----------------
+       The app's own, not the browser's: as wide as its longest entry with
+       room either side, opened under its button, the value in use ticked,
+       kept on screen, and closed by a pick, Esc or a click elsewhere. */
+    const menu = document.createElement('div');
+    menu.className = 'tpmenu'; menu.setAttribute('role', 'listbox'); menu.hidden = true;
+    document.body.appendChild(menu);
+    let menuFor = null;
+    function closeMenu() {
+      if (menu.hidden) return;
+      menu.hidden = true;
+      if (menuFor) menuFor.btn.setAttribute('aria-expanded', 'false');
+      menuFor = null;
+    }
+    function openMenu(k, btn) {
+      if (menuFor && menuFor.k === k) { closeMenu(); return; }
+      closeMenu();
+      const t = texts();
+      const now = !t ? null : k === 'size' ? String(round1(t.s.size))
+        : k === 'lead' ? (t.s.lh != null && t.s.lh > 0 ? String(round1(t.s.lh)) : 'auto') : String(t.s.tr || 0);
+      menu.innerHTML = PRESETS[k].map(function (o) {
+        return '<div class="tpmi' + (o[0] === now ? ' cur' : '') + '" role="option" data-v="' + o[0] + '" aria-selected="' +
+          (o[0] === now) + '">' + o[1] + '</div>';
+      }).join('');
+      menu.hidden = false;
+      menuFor = { k: k, btn: btn };
+      btn.setAttribute('aria-expanded', 'true');
+      /* under the whole field, its right edge on the field's, kept on screen */
+      const r = btn.closest('.tpf').getBoundingClientRect();
+      const w = Math.max(menu.offsetWidth, r.width * 0.6), h = menu.offsetHeight;
+      let left = r.right - w, top = r.bottom + 4;
+      left = Math.max(8, Math.min(window.innerWidth - w - 8, left));
+      if (top + h > window.innerHeight - 8) top = Math.max(8, r.top - h - 4);
+      menu.style.left = Math.round(left) + 'px';
+      menu.style.top = Math.round(top) + 'px';
+      menu.style.minWidth = Math.round(w) + 'px';
+      const cur = menu.querySelector('.cur');
+      if (cur) cur.scrollIntoView({ block: 'nearest' });
+    }
+    menu.addEventListener('pointerdown', function (e) {
+      const o = e.target.closest('.tpmi');
+      if (!o || !menuFor) return;
+      e.preventDefault();
+      const k = menuFor.k, v = o.dataset.v;
+      closeMenu();
+      if (v === 'auto') edit(function (s) { SET.lead(s, null); });
+      else edit(function (s) { SET[k](s, +v); });
+    });
+    document.addEventListener('pointerdown', function (e) {
+      if (!menu.hidden && !menu.contains(e.target) && !(e.target.closest && e.target.closest('.tppre'))) closeMenu();
+    }, true);
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !menu.hidden) { e.stopPropagation(); closeMenu(); } }, true);
+    window.addEventListener('resize', closeMenu);
+    document.addEventListener('scroll', closeMenu, true);
 
     /* ---------------- reading and writing the selection ---------------- */
 
@@ -232,13 +291,7 @@
         if (v == null) { sync(); return; }
         edit(function (s) { SET[k](s, v); });
       });
-      f.pre.addEventListener('change', function () {
-        const v = this.value;
-        this.value = '';
-        if (v === '') return;
-        if (v === 'auto') edit(function (s) { SET.lead(s, null); });
-        else edit(function (s) { SET[k](s, +v); });
-      });
+      f.pre.addEventListener('click', function () { openMenu(k, f.pre); });
       f.el.querySelectorAll('[data-step]').forEach(function (b) {
         b.addEventListener('click', function (e) { bump(k, +b.dataset.step, e.shiftKey); });
       });
@@ -269,7 +322,7 @@
     function sync() {
       const t = texts();
       sec.hidden = !t;
-      if (!t) { hideList(); return; }
+      if (!t) { hideList(); closeMenu(); return; }
       const s = t.s, fam = fontOf(s.f);
       if (document.activeElement !== fInput) {
         fInput.value = fam.name;
