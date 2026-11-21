@@ -4,6 +4,10 @@ on:
   pull_request:
   push:
     branches: [main]
+  # Actions -> CI -> Run workflow: every app built for the branch chosen,
+  # e.g. to get a Windows installer for a pull request that only changes
+  # the web app
+  workflow_dispatch:
 
 concurrency:
   group: ci-${{ github.ref }}
