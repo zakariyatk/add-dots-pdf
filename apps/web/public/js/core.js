@@ -2997,6 +2997,9 @@
        value, not its own old one */
     const n = o.pts.length;
     const closed = n > 2 && o.pts[0][0] === o.pts[n - 1][0] && o.pts[0][1] === o.pts[n - 1][1];
+    /* and never written where it lies: the undo snapshot shares that same
+       list, so changing it in place left Undo with nothing to go back to */
+    if (s.pts === o.pts) s.pts = o.pts.map(function (q) { return [q[0], q[1]]; });
     s.pts[i] = [p[0], p[1]];
     if (closed) {
       if (i === 0) s.pts[n - 1] = [p[0], p[1]];
@@ -3483,6 +3486,12 @@
       el.setAttribute('class', 'kn' + (turn ? ' turn' : ''));
       /* which cursor the grip wears: a point to drag, or a size to pull */
       el.dataset.cur = turn ? 'rotate' : (mode === 'pa' || mode === 'pb' || mode === 'pv') ? 'point' : 'nwse';
+      /* which point it is, for point editing (js/vertex.js), and whether it
+         is the point picked out there */
+      el.dataset.mode = mode;
+      if (extra != null) el.dataset.v = extra;
+      const vs = EXT.vsel;
+      if (mode === 'pv' && vs && vs.it === it && vs.idx === idx && vs.i === extra) el.classList.add('vsel');
       el.addEventListener('pointerdown', function (e) { beginDrag(it, idx, e, mode, extra); });
       g.appendChild(el);
       if (turn) {
