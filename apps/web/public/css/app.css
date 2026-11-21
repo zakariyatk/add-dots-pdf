@@ -263,7 +263,6 @@
   .doctabs .dtab:hover{background:var(--chrome)}
   .doctabs .dtab.on{background:var(--chrome);color:var(--text);border-color:var(--line)}
   .doctabs .dtab:focus-visible{outline:2px solid #7B5CFF;outline-offset:-2px}
-  .doctabs .dtico{width:16px;height:16px;flex:none;background:url(../assets/icons/pdf-file-small.svg) center/contain no-repeat}
   .doctabs .dtname{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .doctabs .dtdot{width:7px;height:7px;border-radius:50%;background:#7B5CFF;flex:none;display:none}
   .doctabs .dtab.dirty .dtdot{display:block}

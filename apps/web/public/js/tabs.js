@@ -171,8 +171,8 @@
           b.setAttribute('role', 'tab');
           b.tabIndex = 0;
           b.dataset.id = t.id;
-          b.innerHTML = '<i class="dtico" aria-hidden="true"></i>' +
-            '<span class="dtname"></span><i class="dtdot" aria-hidden="true"></i>' +
+          /* the document's name alone, no file icon in front of it */
+          b.innerHTML = '<span class="dtname"></span><i class="dtdot" aria-hidden="true"></i>' +
             /* not a button of its own: a tab holds nothing focusable. Delete
                or Ctrl+W close the tab from the keyboard */
             '<span class="dtx" aria-hidden="true" title="Close">&times;</span>';
