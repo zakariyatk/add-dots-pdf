@@ -150,6 +150,7 @@
       const tool = toolOf(q[0]) || src.dataset.toolBtn || null;
       if (tool) {
         b.dataset.toolBtn = tool;           /* core lights it with the tool */
+        if (src.dataset.move) b.dataset.move = src.dataset.move;   /* Move, lit apart from Select (toolbar.js) */
         b.classList.toggle('on', X.S.tool === tool);
       } else if (q[0] === 'btnRulers') {
         /* a switch rather than a tool: lit while the rulers show, however turned on */
@@ -167,6 +168,7 @@
       });
       rail.appendChild(b);
     });
+    if (X.paintMove) X.paintMove();                 /* Move and Select lit apart from the start */
 
     /* The last button is the last tool used that the bar does not already
        hold, kept on this device. It starts as Sign. */

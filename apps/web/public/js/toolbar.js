@@ -131,6 +131,22 @@
     }
     X.activateMove = activateMove;
 
+    /* Move and Select are one tool underneath, so core lights both buttons
+       together; as in other editors, only the one that was picked shows as
+       pressed: Move while move-mode is on, Select otherwise. */
+    function paintMove() {
+      const sel = X.S.tool === 'select', mv = document.body.classList.contains('move-mode');
+      document.querySelectorAll('#tSelect, [data-tool-btn="select"]').forEach(function (el) {
+        const isMove = el.dataset.move === '1';
+        el.classList.toggle('on', sel && (isMove ? mv : !mv));
+      });
+    }
+    X.paintMove = paintMove;
+    X.on('tool', paintMove);
+    if (window.MutationObserver) {
+      new MutationObserver(paintMove).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+    }
+
     function toolCopy(id, tool) {
       const b = document.createElement('button');
       b.className = 'btn'; b.id = id; b.type = 'button';
@@ -139,6 +155,7 @@
          tool */
       const acts = tool === 'move' ? 'select' : tool;
       b.dataset.toolBtn = acts;
+      if (tool === 'move') b.dataset.move = '1';   /* lit on its own, below */
       if (tool === 'pan') {
         b.title = 'Pan — drag the page anywhere (H, or hold Space)';
         b.setAttribute('aria-label', 'Pan tool');
