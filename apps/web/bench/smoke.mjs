@@ -2987,11 +2987,10 @@ try {
         panels: [...document.querySelectorAll('#ribbon > .rpan:not([hidden])')].map((p) => p.id).sort(),
         /* the tool's options are in the Properties panel on the right, the
            left panel keeps its tools (js/toolprops.js) */
-        strip:
-          document.querySelector('#railProps #modeBar.show') && !document.getElementById('rail').hidden
-            ? 'shown'
-            : 'none',
+        strip: document.querySelector('#railProps #modeBar.show') ? 'shown' : 'none',
         left: !!document.querySelector('#ribbon > #panTool:not([hidden])'),
+        /* picking up a tool leaves the rail as it was */
+        rail: !document.getElementById('rail').hidden,
         tool: window.ADDPDF.S.tool,
       }));
     const first = await state();
@@ -3012,11 +3011,12 @@ try {
       { first, edit },
     );
     check(
-      'a tool from the rail opens its tab with its options in the Properties panel on the right; another tab keeps them; Select puts it down',
+      'a tool from the rail opens its tab with its options in the Properties panel on the right, without opening that panel; another tab keeps them; Select puts it down',
       measuring.tool === 'dim' &&
         measuring.lit === 'ribDraw' &&
         measuring.strip === 'shown' &&
         !measuring.left &&
+        measuring.rail === first.rail &&
         picked.lit === 'ribEdit' &&
         picked.strip === 'shown' &&
         down.tool === 'select' &&

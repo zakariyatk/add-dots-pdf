@@ -188,15 +188,16 @@
         setBadge(b, label, label);
       }
       const now = toolLive ? 'tool' : markLive ? 'mark' : null;
-      /* Properties comes forward when a tool is picked up or a mark picked out
-         — once, at that moment, so a rail closed by hand stays closed — and
-         what the rail showed before is given back when there is nothing to
-         show (unless another panel was picked in between) */
-      if (now && !mode && !(now === 'mark' && layersShowing()) && (!railOpen() || ppanel.hidden)) {
+      /* Properties comes forward when a mark is picked out — once, at that
+         moment, so a rail closed by hand stays closed — and what the rail
+         showed before is given back when there is nothing to show (unless
+         another panel was picked in between). Picking up a tool does not open
+         it: the tool's options wait there for the Properties icon. */
+      if (now === 'mark' && mode !== 'mark' && !layersShowing() && (!railOpen() || ppanel.hidden)) {
         const on = document.querySelector('.rail-tabs .btn.on');
         before = { open: railOpen(), tab: on && on !== ptab ? on : null };
         showProps();
-      } else if (!now && mode && before) {
+      } else if (now !== 'mark' && mode === 'mark' && before) {
         const bk = before;
         before = null;
         if (railOpen() && !ppanel.hidden) {
