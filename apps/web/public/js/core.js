@@ -3140,7 +3140,7 @@
     markup: 'Markup', ink: 'Ink', note: 'Note', stamp: 'Stamp', sig: 'Signature',
     redact: 'Redaction', wm: 'Watermark', hf: 'Header / footer', bates: 'Bates',
     image: 'Image', video: 'Video', link: 'Link', table: 'Table', leader: 'Leader',
-    vpath: 'Shape', poly: 'Continuous Line'
+    vpath: 'Shape', poly: 'Continuous Line', pen: 'Pen path'
   };
   let mpBuilt = false;
 
@@ -3393,7 +3393,8 @@
     /* a shape off the page fills too — a Continuous Line only once it is
        snapped shut back onto its own first point */
     const isBox = s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath' ||
-      (s.t === 'poly' && EXT.polyClosed && EXT.polyClosed(s));
+      (s.t === 'poly' && EXT.polyClosed && EXT.polyClosed(s)) ||
+      (s.t === 'pen' && EXT.penClosed && EXT.penClosed(s));
     /* a picture: no line to style (a signature, or a stamp made from one) */
     const isPic = s.t === 'sig' || s.t === 'istamp';
     const count = selList().length;

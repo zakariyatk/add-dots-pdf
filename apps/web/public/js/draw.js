@@ -688,6 +688,36 @@
       return g;
     };
 
+    /* a Pen path (js/pen.js): cubic Bézier segments, s.pts running anchor,
+       out-handle, in-handle, anchor… — the same path the saved PDF draws
+       (engine painters/pen.ts) */
+    function penClosed(s) { return !!(s.pts && E.penClosed(s.pts)); }
+    X.penClosed = penClosed;
+    function penD(pts, vp) {
+      const v = pts.map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
+      let d = 'M' + v[0][0] + ' ' + v[0][1];
+      for (let i = 1; i + 2 < v.length; i += 3) {
+        d += 'C' + v[i][0] + ' ' + v[i][1] + ' ' + v[i + 1][0] + ' ' + v[i + 1][1] + ' ' + v[i + 2][0] + ' ' + v[i + 2][1];
+      }
+      return E.penClosed(pts) ? d + 'Z' : d;
+    }
+    X.penD = penD;
+    X.shapeRenderers.pen = function (it, s, vp, idx) {
+      const g = document.createElementNS(SVGNS, 'g');
+      if (!s.pts || s.pts.length < 4) return g;
+      const el = document.createElementNS(SVGNS, 'path');
+      el.setAttribute('d', penD(s.pts, vp));
+      stroked(el, s, idx, it);
+      if (s.fill && penClosed(s)) {
+        el.style.fill = s.fill;
+        el.style.fillOpacity = X.shOp(s);
+        el.style.pointerEvents = 'all';
+      }
+      g.appendChild(el);
+      return g;
+    };
+    X.handleKind.pen = 'bbox';
+
     X.shapeRenderers.dim = function (it, s0, vp, idx) {
       const g = document.createElementNS(SVGNS, 'g');
       /* the dimension's size (s.dz) scales the whole of it, its lines' weight

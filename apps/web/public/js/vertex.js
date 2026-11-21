@@ -537,6 +537,8 @@
       bare: false,
       down: function (it, at, e) {
         if (!it.vp || (e && e.button > 0)) return;
+        /* a Pen path's points and handles are the Pen's to edit (js/pen.js) */
+        if (X.penEdit && X.penEdit.down(it, at, e)) { cur = null; return; }
         const p = pdfOf(it, at);
         const a = anchorAt(it, p);
         if (a) {
@@ -553,7 +555,12 @@
       },
       move: function (it, at, e) {
         if (!it.vp) return;
+        if (X.penEdit && X.penEdit.busy()) { X.penEdit.move(it, at, e); return; }
         const p = pdfOf(it, at);
+        if (!drag && X.penEdit && X.penEdit.hover(it, at)) {
+          it.capture.style.cursor = 'var(--cur-direct-point)';
+          return;
+        }
         if (drag && drag.it === it) {
           if (!drag.moved) {
             if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 3) return;
@@ -583,6 +590,7 @@
         paint(it);
       },
       up: function (it) {
+        if (X.penEdit && X.penEdit.up(it)) return;
         if (drag && drag.moved) {
           if (X.snapHide) X.snapHide();
           const said = joinAfterDrag(it, drag);
@@ -606,8 +614,9 @@
       },
       up: function (it, at, e) {
         if (!it.vp || (e && e.button > 0)) return;
+        if (X.penEdit && X.penEdit.addAt(it, at)) return;          /* on a Pen path: its curve split there */
         const o = outlineAt(it, pdfOf(it, at));
-        if (!o) { X.toast('Click right on the outline of a line, rectangle or Continuous Line', true); return; }
+        if (!o) { X.toast('Click right on the outline of a line, rectangle, Continuous Line or Pen path', true); return; }
         const pts = outline(it.shapes[o.idx]), tol = tolAt();
         const a0 = pts[o.k], b0 = pts[o.k + 1];
         if (Math.hypot(a0[0] - o.p[0], a0[1] - o.p[1]) < tol || Math.hypot(b0[0] - o.p[0], b0[1] - o.p[1]) < tol) {
@@ -636,6 +645,7 @@
       },
       up: function (it, at, e) {
         if (!it.vp || (e && e.button > 0)) return;
+        if (X.penEdit && X.penEdit.deleteAt(it, at)) return;       /* a Pen path's point */
         const a = anchorAt(it, pdfOf(it, at));
         if (!a) { X.toast('Click right on a point of a line, rectangle or Continuous Line', true); return; }
         cur = null;

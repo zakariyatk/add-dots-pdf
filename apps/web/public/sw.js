@@ -49,6 +49,7 @@ const SHELL = [
   'js/snaptrack.js',
   'js/draw.js',
   'js/vertex.js',
+  'js/pen.js',
   'js/organize.js',
   'js/forms.js',
   'js/insert.js',

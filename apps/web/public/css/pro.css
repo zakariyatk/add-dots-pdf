@@ -1158,6 +1158,8 @@ body.props-in-ribbon #panTool #mpExt .btn {
      plus or a minus, the tip on the point; Direct Selection's black arrow (Select's is the white one) */
   --cur-pen-add: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M2.5 21.5l2.6-8.2 6.9-6.9 5.6 5.6-6.9 6.9z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M12.6 5.8l2.5-2.5 5.6 5.6-2.5 2.5z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M2.5 21.5l5.6-5.6' stroke='black' stroke-width='1.1' stroke-linecap='round'/%3E%3Ccircle cx='9.2' cy='14.8' r='1.2' fill='black'/%3E%3Cpath d='M19 14.5v6M16 17.5h6' stroke='white' stroke-width='3.4' stroke-linecap='round' fill='none'/%3E%3Cpath d='M19 14.5v6M16 17.5h6' stroke='black' stroke-width='1.3' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 3 21, crosshair;
   --cur-pen-del: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M2.5 21.5l2.6-8.2 6.9-6.9 5.6 5.6-6.9 6.9z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M12.6 5.8l2.5-2.5 5.6 5.6-2.5 2.5z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M2.5 21.5l5.6-5.6' stroke='black' stroke-width='1.1' stroke-linecap='round'/%3E%3Ccircle cx='9.2' cy='14.8' r='1.2' fill='black'/%3E%3Cpath d='M16 17.5h6' stroke='white' stroke-width='3.4' stroke-linecap='round' fill='none'/%3E%3Cpath d='M16 17.5h6' stroke='black' stroke-width='1.3' stroke-linecap='round' fill='none'/%3E%3C/svg%3E") 3 21, crosshair;
+  --cur-pen: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M2.5 21.5l2.6-8.2 6.9-6.9 5.6 5.6-6.9 6.9z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M12.6 5.8l2.5-2.5 5.6 5.6-2.5 2.5z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M2.5 21.5l5.6-5.6' stroke='black' stroke-width='1.1' stroke-linecap='round'/%3E%3Ccircle cx='9.2' cy='14.8' r='1.2' fill='black'/%3E%3C/svg%3E") 3 21, crosshair;
+  --cur-pen-close: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M2.5 21.5l2.6-8.2 6.9-6.9 5.6 5.6-6.9 6.9z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M12.6 5.8l2.5-2.5 5.6 5.6-2.5 2.5z' fill='white' stroke='black' stroke-width='1.1' stroke-linejoin='round'/%3E%3Cpath d='M2.5 21.5l5.6-5.6' stroke='black' stroke-width='1.1' stroke-linecap='round'/%3E%3Ccircle cx='9.2' cy='14.8' r='1.2' fill='black'/%3E%3Ccircle cx='19' cy='17.5' r='2.6' fill='none' stroke='white' stroke-width='3'/%3E%3Ccircle cx='19' cy='17.5' r='2.6' fill='none' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E") 3 21, crosshair;
   --cur-direct: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3C/svg%3E") 5 3, default;
   --cur-direct-point: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M4.5 2.5v16.2l4.1-3.9 2.9 6.2 2.6-1.2-2.9-6.1h5.6z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3Crect x='16.5' y='17.5' width='5' height='5' fill='white' stroke='black' stroke-width='1.1'/%3E%3C/svg%3E") 5 3, pointer;
   --cur-hand: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' shape-rendering='geometricPrecision'%3E%3Cpath d='M9 11V4.6a1.6 1.6 0 0 1 3.2 0V10M12.2 10V3.8a1.6 1.6 0 0 1 3.2 0V10M15.4 10.4V5.6a1.6 1.6 0 0 1 3.2 0V14a7 7 0 0 1-7 7h-1a6 6 0 0 1-4.5-2l-3-3.4a1.7 1.7 0 0 1 2.4-2.4L9 15.4V11' fill='white' stroke='black' stroke-width='1.2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E") 12 12, grab;
@@ -1176,6 +1178,7 @@ body[data-tool="ink"] .capture { cursor: var(--cur-pencil) }
 body[data-tool="crop"] .capture { cursor: var(--cur-crop) }
 body[data-tool="vadd"] .capture { cursor: var(--cur-pen-add) }
 body[data-tool="vdel"] .capture { cursor: var(--cur-pen-del) }
+body[data-tool="pen"] .capture { cursor: var(--cur-pen) }
 body[data-tool="vdirect"] .capture { cursor: var(--cur-direct) }
 body[data-tool="pin"] .capture { cursor: var(--cur-pin) }
 body[data-tool="note"] .capture,
@@ -1226,6 +1229,16 @@ body[data-tool="select"] .anno .picked * { cursor: var(--cur-move) }
    Illustrator fills the selected anchor */
 .anno .hnd .kn.vsel { fill: #7B5CFF; stroke: #FFFFFF; stroke-width: 1.5 }
 /* the Points row on a line's, rectangle's or Continuous Line's popover */
+/* the Pen tool's overlay (js/pen.js): the path in hand, its anchors as small
+   diamonds (the one in hand filled), and each direction handle a line out
+   to a dot, as Illustrator draws them */
+.anno .penov { pointer-events: none }
+.anno .penline { fill: none; stroke: #2D8CFF; stroke-width: 1 }
+.anno .penhl { stroke: #2D8CFF; stroke-width: 1 }
+.anno .penh { fill: #2D8CFF; stroke: #FFFFFF; stroke-width: 1 }
+.anno .pena { fill: #FFFFFF; stroke: #2D8CFF; stroke-width: 1.3 }
+.anno .pena.on { fill: #2D8CFF }
+.anno .pena.first { stroke-width: 2 }
 /* on a phone the Tools tab's group rides in the dock beside Draw's, which
    already leads with Pan, Move and Select */
 #dock #grpPoint [data-tool-btn] { display: none }

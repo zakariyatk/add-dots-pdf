@@ -37,7 +37,9 @@
        as Illustrator's Direct Selection and Add / Delete Anchor Point (js/vertex.js) */
     const TOOLS_GROUPS = [
       { ids: ['tToolsPan', 'tToolsMove', 'tToolsSelect'] },
-      { ids: ['tVxDirect', 'tVxAdd', 'tVxDel'] }
+      { ids: ['tVxDirect'] },
+      /* the Pen (js/pen.js) with its two anchor-point tools, as Illustrator groups them */
+      { ids: ['tPen', 'tVxAdd', 'tVxDel'] }
     ];
 
     /* What is left on Edit: review marks, and the page tools. Text moved to

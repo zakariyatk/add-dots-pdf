@@ -19,6 +19,7 @@ import { fieldsFinish, type FieldValues } from './painters/fields';
 import { formsPainters, insertPainters, prepareSignatures, prepareInsert } from './painters/insert';
 import { leaderPainters } from './painters/leader';
 import { polyPainters } from './painters/poly';
+import { penPainters } from './painters/pen';
 import { vpathPainters } from './painters/vpath';
 import { ocrFontNeeds, ocrPainters } from './painters/ocr';
 import { pinHooks, type PinLocation } from './pins';
@@ -95,6 +96,7 @@ export function saveHooks(state: SaveState, env: SaveEnv): SaveHooks {
       leader: leaderPainters.leader!,
       ...vpathPainters,
       ...polyPainters,
+      ...penPainters,
       ...ocrPainters,
       ...docopsPainters(doc),
       /* a mark someone else is still drawing, live: not saved */
