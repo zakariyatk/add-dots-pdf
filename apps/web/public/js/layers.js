@@ -150,6 +150,16 @@
         '<button type="button" id="layMerge" title="Merge the active layer into another" aria-label="Merge layer">' + MERGE + '</button>' +
         '<button type="button" class="laydanger" id="layDel" title="Delete the active layer" aria-label="Delete layer">' + DEL + '</button>' +
       '</div>' +
+      /* what is selected on the page — one mark or several — moved, copied
+         or deleted together; each mark's row no longer carries these */
+      '<div class="laytools laysel">' +
+        '<span class="laysel-lbl" id="laySelLbl">Nothing selected</span>' +
+        '<span class="grow"></span>' +
+        '<button type="button" data-selact="up" title="Bring forward" aria-label="Bring forward">' + UP + '</button>' +
+        '<button type="button" data-selact="down" title="Send backward" aria-label="Send backward">' + DOWN + '</button>' +
+        '<button type="button" data-selact="dup" title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
+        '<button type="button" class="laydanger" data-selact="del" title="Delete" aria-label="Delete">' + DEL + '</button>' +
+      '</div>' +
       '<div id="layList"></div>';
     $('railPages').parentNode.appendChild(panel);
 
@@ -309,6 +319,8 @@
       $('layDel').disabled = S.layers.length < 2;
 
       /* newest layer at the top, the way the stack reads everywhere else */
+      const selected = S.sel && S.sel.it === it ? X.selList() : [];
+      paintSel(it, selected);
       let h = '';
       S.layers.slice().reverse().forEach(function (L) {
         const list = map[L.id] || [], open = !shut[L.id], active = L.id === focusLayer;
@@ -328,25 +340,16 @@
           h += '<div class="layrow mrow laynone" data-lay="' + L.id + '">Empty — drag marks here</div>';
           return;
         }
-        const top = list[0].idx, bottom = list[list.length - 1].idx;
         list.forEach(function (r) {
-          const s = r.s, hid = !!s.hide, lck = !!s.locked, sel = S.sel && S.sel.it === it && S.sel.i === r.idx;
+          /* every mark in the selection, not just the last one picked */
+          const s = r.s, hid = !!s.hide, lck = !!s.locked, sel = selected.indexOf(r.idx) >= 0;
           h += '<div class="layrow mrow' + (hid ? ' hid' : '') + (lck ? ' locked' : '') + (sel ? ' sel' : '') +
               '" data-lay="' + L.id + '" data-idx="' + r.idx + '" draggable="' + (lck ? 'false' : 'true') + '">' +
             dot(!hid, hid ? 'Show' : 'Hide') +
             lockBtn(lck, lck ? 'Unlock' : 'Lock') +
             '<i class="layswatch" style="background:' + X.esc(swatch(s)) + '"></i>' +
             '<span class="laylabel">' + X.esc(label(s)) + '</span>' +
-            '<span class="laybtns">' +
-              '<button type="button" data-act="up"' + (r.idx === top || lck ? ' disabled' : '') +
-                ' title="Bring forward" aria-label="Bring forward">' + UP + '</button>' +
-              '<button type="button" data-act="down"' + (r.idx === bottom || lck ? ' disabled' : '') +
-                ' title="Send backward" aria-label="Send backward">' + DOWN + '</button>' +
-              '<button type="button" data-act="dup"' + (lck ? ' disabled' : '') +
-                ' title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
-              '<button type="button" class="laydel" data-act="del"' + (lck ? ' disabled' : '') +
-                ' title="Delete" aria-label="Delete">' + DEL + '</button>' +
-            '</span></div>';
+            '</div>';
         });
       });
       host.innerHTML = h;
@@ -385,7 +388,8 @@
         render();
         return;
       }
-      if (act && !act.disabled) { doAction(it, +row.dataset.idx, act.dataset.act); return; }
+      /* Ctrl or Shift adds a mark to the selection, or takes it out, as on the page */
+      if (e.ctrlKey || e.metaKey || e.shiftKey) { toggleSelect(it, +row.dataset.idx); return; }
       select(it, +row.dataset.idx);
     });
 
@@ -502,15 +506,34 @@
       render();
     }
 
-    function doAction(it, idx, act) {
+    function toggleSelect(it, idx) {
+      const now = S.sel && S.sel.it === it ? X.selList() : [];
+      const k = now.indexOf(idx);
+      if (k >= 0) now.splice(k, 1); else now.push(idx);
       X.setTool('select');
-      X.setGroup(it, [idx]);
-      if (act === 'up') { X.stackSelected('up'); }
-      else if (act === 'down') { X.stackSelected('down'); }
-      else if (act === 'dup') { X.duplicateSelected(); }
-      else if (act === 'del') { X.deleteSelected(); }
+      X.setGroup(it, now);
+      X.drawShapes(it);
       X.syncMarkPop();
       render();
+    }
+
+    /* the selection's own buttons, above the tree: they act on every mark
+       selected, so two picked together move, copy or go together */
+    panel.querySelector('.laysel').addEventListener('click', function (e) {
+      const b = e.target.closest('[data-selact]');
+      if (!b || b.disabled || !S.sel) return;
+      const act = b.dataset.selact;
+      if (act === 'up') X.stackSelected('up');
+      else if (act === 'down') X.stackSelected('down');
+      else if (act === 'dup') X.duplicateSelected();
+      else if (act === 'del') X.deleteSelected();
+      X.syncMarkPop();
+      render();
+    });
+    function paintSel(it, selected) {
+      const n = selected.filter(function (i) { return it && it.shapes[i] && !it.shapes[i].locked; }).length;
+      $('laySelLbl').textContent = !n ? 'Nothing selected' : n === 1 ? '1 selected' : n + ' selected';
+      panel.querySelectorAll('[data-selact]').forEach(function (b) { b.disabled = !n; });
     }
 
     /* ---------------- drag and drop ----------------

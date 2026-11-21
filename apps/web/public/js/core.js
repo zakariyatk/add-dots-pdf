@@ -3741,6 +3741,8 @@
      Text being typed is kept and the mark let go of. */
   document.addEventListener('pointerdown', function (e) {
     if ((!S.sel && !S.editing) || !e.target.closest) return;
+    /* the Layers panel works on the marks themselves, so it keeps them */
+    if (e.target.closest('#railLayers')) return;
     const tab = e.target.closest('[role="tab"]');
     if (!e.target.closest('#rail') && !e.target.closest('#statusBar') && !(tab && tab.id !== 'ribTool')) return;
     /* text being typed is kept, then let go of */
