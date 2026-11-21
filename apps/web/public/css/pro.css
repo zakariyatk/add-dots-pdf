@@ -1113,9 +1113,6 @@ body.props-in-ribbon #modeBar > * { flex: none }
 
 .props-empty { margin: 14px 12px; font-size: 12.5px; color: var(--text-dim) }
 .props-empty[hidden], .rprops[hidden] { display: none }
-.rprops-sub { border-top: 1px solid var(--line); margin-top: 6px }
-.rprops-h { padding: 10px 12px 0; font-size: 12.5px; font-weight: 600 }
-.rprops-h span { font-weight: 400; color: var(--text-dim) }
 
 /* the selected mark's panel, laid into the Drawing Tool tab instead of floating */
 body.props-in-ribbon #panTool .markpop {

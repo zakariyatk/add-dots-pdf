@@ -71,8 +71,8 @@
     /* ---------------- the selected mark's properties, on the right ----------------
        Not in the Drawing Tool tab, which would take the left panel over from
        whatever tools were open there: a panel of their own in the rail on the
-       right, after Layers — and, while Layers is the panel showing, under its
-       tree, so picking a mark there shows its properties right below it. */
+       right, after Layers. While Layers is the panel showing, picking a mark
+       leaves it there: the Properties icon brings them up. */
     const railHost = $('railPages') ? $('railPages').parentNode : null;
     const ptab = document.createElement('button');
     ptab.className = 'btn'; ptab.id = 'tabProps'; ptab.type = 'button'; ptab.textContent = 'Properties';
@@ -91,11 +91,6 @@
     /* the tool in hand's own options (core's #modeBar) go here too, not into
        a tab that would take the left panel over while drawing */
     const toolSec = ppanel.querySelector('#propsTool');
-    /* the same, under the Layers tree */
-    const layHost = document.createElement('div');
-    layHost.className = 'rprops rprops-sub'; layHost.id = 'propsInLayers'; layHost.hidden = true;
-    layHost.innerHTML = '<div class="rprops-h">Properties<span id="propsNameL"></span></div>';
-    if ($('railLayers')) $('railLayers').appendChild(layHost);
 
     /* what the rail showed before Properties came forward for a mark: put
        back when the mark is let go, as the Drawing Tool tab gave the ribbon
@@ -115,16 +110,13 @@
     });
     function railOpen() { return !!$('rail') && !$('rail').hidden; }
     function layersShowing() { return railOpen() && $('railLayers') && !$('railLayers').hidden; }
-    /* where the panel goes now: under Layers while that is the one showing */
-    function propsSpot() { return layersShowing() ? layHost : propsHost; }
+    function propsSpot() { return propsHost; }
     function paintProps() {
       const on = pop && !pop.hidden;
       const tool = !toolSec.hidden;
       const name = tool ? (badge.dataset.label || '') : ($('mpTitle') && $('mpTitle').textContent) || '';
       $('propsEmpty').hidden = tool || (on && pop.parentNode === propsHost);
       $('propsName').textContent = tool || on ? name : '';
-      $('propsNameL').textContent = on ? ' · ' + name : '';
-      layHost.hidden = !(on && pop.parentNode === layHost);
     }
 
     let fromTab = 'ribDraw';                    /* the tab to go back to */
