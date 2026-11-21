@@ -17,7 +17,7 @@ const mark = (o: Partial<TextMark> = {}): TextMark => ({
 });
 
 describe('leading', () => {
-  it('is 120% of the size when not set, and the mark\'s own when set', () => {
+  it("is 120% of the size when not set, and the mark's own when set", () => {
     expect(leading(mark())).toBeCloseTo(24);
     expect(leading(mark({ lh: 30 }))).toBe(30);
   });

@@ -60,7 +60,8 @@ export type FontFamily = StandardFamily | `g:${string}`;
     one line per paragraph (as every text mark is), the three "justify, last
     line …" kinds read as left, centre and right, and "justify all" spreads
     every line across the widest one. */
-export type Align = 'left' | 'center' | 'right' | 'justify' | 'justify-center' | 'justify-right' | 'justify-all';
+export type Align =
+  'left' | 'center' | 'right' | 'justify' | 'justify-center' | 'justify-right' | 'justify-all';
 
 /** A font of the page, as a table to write text in it again: the characters
     it can draw there, each with its code, and the codes' widths (Edit
