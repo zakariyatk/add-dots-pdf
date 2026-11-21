@@ -71,8 +71,7 @@
     /* ---------------- the selected mark's properties, on the right ----------------
        Not in the Drawing Tool tab, which would take the left panel over from
        whatever tools were open there: a panel of their own in the rail on the
-       right, after Layers. While Layers is the panel showing, picking a mark
-       leaves it there: the Properties icon brings them up. */
+       right, after Layers, opened by its icon (it never opens by itself). */
     const railHost = $('railPages') ? $('railPages').parentNode : null;
     const ptab = document.createElement('button');
     ptab.className = 'btn'; ptab.id = 'tabProps'; ptab.type = 'button'; ptab.textContent = 'Properties';
@@ -92,10 +91,6 @@
        a tab that would take the left panel over while drawing */
     const toolSec = ppanel.querySelector('#propsTool');
 
-    /* what the rail showed before Properties came forward for a mark: put
-       back when the mark is let go, as the Drawing Tool tab gave the ribbon
-       back — unless another panel was picked in between */
-    let before = null;                          /* {open, tab} */
     function railBodies() { return railHost ? Array.prototype.slice.call(railHost.querySelectorAll(':scope > .rail-body')) : []; }
     function showProps() {
       if (!S.items.length || !railHost) return;
@@ -109,7 +104,6 @@
       t.addEventListener('click', function () { ppanel.hidden = true; ptab.classList.remove('on'); });
     });
     function railOpen() { return !!$('rail') && !$('rail').hidden; }
-    function layersShowing() { return railOpen() && $('railLayers') && !$('railLayers').hidden; }
     function propsSpot() { return propsHost; }
     function paintProps() {
       const on = pop && !pop.hidden;
@@ -188,23 +182,8 @@
         setBadge(b, label, label);
       }
       const now = toolLive ? 'tool' : markLive ? 'mark' : null;
-      /* Properties comes forward when a mark is picked out — once, at that
-         moment, so a rail closed by hand stays closed — and what the rail
-         showed before is given back when there is nothing to show (unless
-         another panel was picked in between). Picking up a tool does not open
-         it: the tool's options wait there for the Properties icon. */
-      if (now === 'mark' && mode !== 'mark' && !layersShowing() && (!railOpen() || ppanel.hidden)) {
-        const on = document.querySelector('.rail-tabs .btn.on');
-        before = { open: railOpen(), tab: on && on !== ptab ? on : null };
-        showProps();
-      } else if (now !== 'mark' && mode === 'mark' && before) {
-        const bk = before;
-        before = null;
-        if (railOpen() && !ppanel.hidden) {
-          if (!bk.open) X.setRail(false);
-          else if (bk.tab) bk.tab.click();
-        }
-      }
+      /* nothing opens the rail by itself: the Properties icon does, and the
+         panel shows whatever is in hand then */
       mode = now;
       place();
       paintProps();
