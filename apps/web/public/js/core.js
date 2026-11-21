@@ -2260,7 +2260,11 @@
       it.anno.appendChild(el);
     });
     if (ghost) it.anno.appendChild(shapeEl(it, ghost, vp, -1));
-    if (!ghost && S.tool === 'select' && S.sel && S.sel.it === it) {
+    /* the text being typed into has its editor's own frame round it, as in
+       Illustrator: no selection box or grips of the mark's as well (they
+       would only frame the first letters, its text being hidden meanwhile) */
+    const typing = S.editing && S.editing.it === it && S.editing.idx >= 0 && S.sel && S.sel.i === S.editing.idx;
+    if (!ghost && !typing && S.tool === 'select' && S.sel && S.sel.it === it) {
       const list = selList();
       if (list.length > 1) {
         /* a group: one frame round the whole thing first, as its own drag
@@ -2542,7 +2546,7 @@
       });
     });
 
-    if (selected) {
+    if (selected && !open) {
       const h = document.createElementNS(SVGNS, 'polygon');
       h.setAttribute('class', 'halo');
       h.setAttribute('points', vpts(textQuad(s, vp)));
