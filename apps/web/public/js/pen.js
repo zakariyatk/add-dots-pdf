@@ -497,7 +497,9 @@
       hint: 'Click for a corner point, drag for a curve: the drag pulls the point\'s direction handles out. ' +
             'Click the first point to close the path; <b>Enter</b> or <b>Esc</b> ends it. On a path: drag a point ' +
             'or a handle to change it (<b>Alt</b> moves one handle alone), click the path to add a point, click a point to take it out.',
-      path: '<path d="M12 21l-4.5-8.5L12 3l4.5 9.5z"/><circle cx="12" cy="13" r="1.6"/><path d="M12 14.6V21"/><path d="M8.5 21h7"/>'
+      /* the same nib as Add and Delete Anchor Point (js/vertex.js), without their + and − */
+      path: '<path d="M3.5 20.5l2.3-7.6 6.4-6.4 5.3 5.3-6.4 6.4z"/><path d="M3.5 20.5l5-5"/>' +
+        '<circle cx="9.6" cy="14.4" r="1.3"/><path d="M12.2 6.5l2.4-2.4 5.3 5.3-2.4 2.4"/>'
     };
     const b = document.createElement('button');
     b.className = 'btn'; b.id = T.id; b.type = 'button';
