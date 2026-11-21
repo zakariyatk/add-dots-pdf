@@ -214,15 +214,42 @@
       if (S.tool !== 'select' || S.editing || e.button !== 0 || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) {
         lastPress = null; return;
       }
-      /* a corner or point grip is for dragging; a side's pill grip sits right
-         where the outline is double-clicked, so that one still counts */
-      if (e.target.closest && e.target.closest('.kn:not(.pill)')) { lastPress = null; return; }
       const now = Date.now();
       const again = lastPress && now - lastPress.t < 500 &&
         Math.hypot(e.clientX - lastPress.x, e.clientY - lastPress.y) < 6;
       lastPress = again ? null : { t: now, x: e.clientX, y: e.clientY };
-      if (again && addAt(e)) { e.preventDefault(); e.stopImmediatePropagation(); }
+      if (!again) return;
+      /* on a point (its grip, or the point of any line, rectangle,
+         Continuous Line or Pen path): Bézier editing of it (js/pen.js);
+         elsewhere on the outline: a point added there */
+      const at = pdfAt(e);
+      if ((at && curveUnder(at.it, at.p)) || (!(e.target.closest && e.target.closest('.kn:not(.pill)')) && addAt(e))) {
+        e.preventDefault(); e.stopImmediatePropagation();
+      }
     }, true);
+
+    /** the point of a line, rectangle, Continuous Line or Pen path at p, made
+        a smooth curve point (or a Pen path's smooth one a corner) */
+    function curveUnder(it, p) {
+      if (!X.penEdit || !X.penEdit.curveAt) return false;
+      const reach = 8 / Math.max(0.05, S.scale);
+      const order = [];
+      if (S.sel && S.sel.it === it) order.push(S.sel.i);
+      for (let i = it.shapes.length - 1; i >= 0; i--) if (order.indexOf(i) < 0) order.push(i);
+      for (let n = 0; n < order.length; n++) {
+        const s = it.shapes[order[n]];
+        if (!s || s.hide || s.locked || !(PATHABLE[s.t] || s.t === 'pen')) continue;
+        const pts = s.t === 'pen' ? s.pts.filter(function (_, i) { return i % 3 === 0; }) : outline(s);
+        let best = -1, bd = reach;
+        pts.forEach(function (q, k) {
+          const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+          if (d <= bd) { bd = d; best = k; }
+        });
+        if (best >= 0) return X.penEdit.curveAt(it, order[n], best);
+      }
+      return false;
+    }
+    X.curveUnder = curveUnder;
 
     function addAt(e) {
       const at = pdfAt(e);
@@ -321,6 +348,7 @@
 
     /* the point being worked on: {it, idx, i} (i null: the outline only) */
     let cur = null, hover = null, drag = null;
+    let dlast = null;                    /* the last press, for a double-click */
 
     function tolAt() { return TOL_PX / Math.max(0.05, S.scale); }
     function pdfOf(it, at) { const p = it.vp.convertToPdfPoint(at[0], at[1]); return [p[0], p[1]]; }
@@ -367,6 +395,7 @@
        anchor), and where a point would go or come off ---- */
     function paint(it, extra) {
       X.drawShapes(it);
+      if (X.penEdit && X.penEdit.redraw) X.penEdit.redraw(it);     /* a Pen path's handles, kept showing */
       if (!it.anno || !it.vp) return;
       const g = document.createElementNS(NS, 'g');
       g.setAttribute('class', 'vxov');
@@ -537,6 +566,11 @@
       bare: false,
       down: function (it, at, e) {
         if (!it.vp || (e && e.button > 0)) return;
+        /* a double-click on a point: Bézier editing of it (js/pen.js) */
+        const now = Date.now();
+        const twice = dlast && now - dlast.t < 500 && Math.hypot(e.clientX - dlast.x, e.clientY - dlast.y) < 6;
+        dlast = twice ? null : { t: now, x: e.clientX, y: e.clientY };
+        if (twice && curveUnder(it, pdfOf(it, at))) { cur = null; drag = null; return; }
         /* a Pen path's points and handles are the Pen's to edit (js/pen.js) */
         if (X.penEdit && X.penEdit.down(it, at, e)) { cur = null; return; }
         const p = pdfOf(it, at);

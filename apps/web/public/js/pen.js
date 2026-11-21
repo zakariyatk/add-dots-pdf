@@ -333,8 +333,72 @@
         deleteAnchor(it, hit.idx, hit.i);
         return true;
       },
-      clear: function () { const f = focus; focus = null; edit = null; if (f) X.drawShapes(f.it); }
+      clear: function () { const f = focus; focus = null; edit = null; if (f) X.drawShapes(f.it); },
+      /* the overlay of the path in hand, again over a page just redrawn by someone else */
+      redraw: function (it) {
+        if (focus && focus.it === it && editable(it.shapes[focus.idx])) {
+          overlay(it, it.shapes[focus.idx].pts, { on: edit && edit.kind === 'anchor' ? edit.i : null });
+        }
+      },
+      curveAt: curveAt
     };
+
+    /* ---------------- a double-click on a point: Bézier editing ----------------
+       Any line, rectangle or Continuous Line becomes a Pen path (its straight
+       sides kept straight, each handle on its own point), and the point
+       double-clicked turns smooth: its two handles pulled out along the line
+       through the points either side of it, a third of the way to each, the
+       curve Illustrator's Anchor Point tool gives. A smooth point of a Pen
+       path turns back into a corner. Direct Selection then shows the handles,
+       ready to drag. */
+    function asPen(s) {
+      let P;
+      if (s.t === 'pen') return s.pts;
+      if (s.t === 'line') P = [s.a, s.b];
+      else if (s.t === 'rect') { const q = X.rectCorners(s); P = [q[0], q[1], q[2], q[3], q[0]]; }
+      else if (s.t === 'poly') P = s.pts;
+      else return null;
+      const pts = [P[0].slice()];
+      for (let k = 1; k < P.length; k++) pts.push(P[k - 1].slice(), P[k].slice(), P[k].slice());
+      return pts;
+    }
+    function curveAt(it, idx, k) {
+      const s0 = it.shapes[idx];
+      if (!s0 || s0.hide || s0.locked) return false;
+      const pts0 = asPen(s0);
+      if (!pts0 || pts0.length < 4) return false;
+      X.snapshot();
+      const pts = copy(pts0), n = pts.length, c = closed(pts);
+      let a = Math.min(3 * k, n - 1);
+      if (c && a === n - 1) a = 0;
+      const A = pts[a];
+      const inn = a > 0 ? a - 1 : (c ? n - 2 : -1);
+      const out = a + 1 < n ? a + 1 : (c ? 1 : -1);
+      const smooth = (inn >= 0 && !same(pts[inn], A)) || (out >= 0 && !same(pts[out], A));
+      if (s0.t === 'pen' && smooth) {
+        /* smooth already: a corner again, its handles back on it */
+        if (inn >= 0) setPoint(pts, inn, A);
+        if (out >= 0) setPoint(pts, out, A);
+      } else {
+        const prevA = a > 0 ? pts[a - 3] : (c ? pts[n - 4] : null);
+        const nextA = a + 3 < n ? pts[a + 3] : (c ? pts[3] : null);
+        const from = prevA || A, to = nextA || A;
+        let dx = to[0] - from[0], dy = to[1] - from[1], l = Math.hypot(dx, dy);
+        if (l < 0.01) { dx = 1; dy = 0; l = 1; }
+        dx /= l; dy /= l;
+        if (inn >= 0 && prevA) { const d = dist(prevA, A) / 3; setPoint(pts, inn, [A[0] - dx * d, A[1] - dy * d]); }
+        if (out >= 0 && nextA) { const d = dist(nextA, A) / 3; setPoint(pts, out, [A[0] + dx * d, A[1] + dy * d]); }
+      }
+      /* the mark becomes a Pen path in place: its look, layer and place in the stack kept */
+      const s = Object.assign({}, s0, { t: 'pen', pts: pts });
+      delete s.a; delete s.b; delete s.r;
+      it.shapes[idx] = s;
+      if (S.tool !== 'vdirect') X.setTool('vdirect');
+      focus = { it: it, idx: idx };
+      done(it);
+      paintFocus(it);
+      return true;
+    }
 
     /* ---------------- the Pen tool: drawing ---------------- */
 
