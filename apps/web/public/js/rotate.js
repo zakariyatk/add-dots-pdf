@@ -232,6 +232,8 @@
       X.syncMarkPop();
     }
     X.rotateTool = { on: function () { return on; }, set: setOn };
+    /* core turns a whole selection by its corners with this too */
+    X.turnMark = turnMark;
     btn.addEventListener('click', function () { setOn(!on); });
 
     /* any other tool puts it down */

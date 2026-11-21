@@ -2946,7 +2946,7 @@
     }
     /* grabbing a member of a group moves the whole group */
     const list = selList();
-    const group = (mode === 'move' || mode === 'gscale') && list.length > 1 && S.sel.it === it && list.indexOf(idx) >= 0
+    const group = (mode === 'move' || mode === 'gscale' || mode === 'gturn') && list.length > 1 && S.sel.it === it && list.indexOf(idx) >= 0
       ? list.map(function (i) { return { i: i, s0: copyShape(it.shapes[i]) }; }) : null;
     dragOn = {
       it: it, idx: idx, mode: mode, extra: extra, from: at, s0: copyShape(s),
@@ -3114,6 +3114,19 @@
         sx = sx < 0 ? -m : m; sy = sy < 0 ? -m : m;
       }
       scaleGroup(d.it, d.group, k.f, sx, sy);
+    } else if (d.mode === 'gturn') {
+      /* the whole selection turned about the middle of its box, each mark
+         the way it turns (js/rotate.js) */
+      if (!d.group || !EXT.turnMark) return;
+      const c = d.extra.c;
+      if (d.ga0 == null) d.ga0 = Math.atan2(d.from[1] - c[1], d.from[0] - c[0]) * 180 / Math.PI;
+      let deg = Math.atan2(p[1] - c[1], p[0] - c[0]) * 180 / Math.PI - d.ga0;
+      if (e.shiftKey) deg = Math.round(deg / 15) * 15;
+      d.group.forEach(function (m) {
+        const sh = d.it.shapes[m.i];
+        if (sh) EXT.turnMark(sh, m.s0, c, deg);
+      });
+      d.turned = deg;
     } else if ((d.mode === 'pv' || ((d.mode === 'pa' || d.mode === 'pb') && o.t === 'line')) && EXT.vxJoinAt &&
                (d.join = EXT.vxJoinAt(d.it, d.idx, d.mode === 'pv' ? d.extra : d.mode === 'pa' ? 0 : 1, p, o))) {
       /* a point dragged near another point of a line or shape lands on it,
@@ -3160,7 +3173,7 @@
     }
     /* by the pointer, as Illustrator shows it: the size while a grip is
        pulled, the angle while the mark turns */
-    if (d.mode === 'turn') showHudText(e, 'Angle ' + fmtAngle(d.turned || 0));
+    if (d.mode === 'turn' || d.mode === 'gturn') showHudText(e, 'Angle ' + fmtAngle(d.turned || 0));
     else if (SIZE_MODES[d.mode]) {
       const vb = d.group ? unionBox(d.group.map(function (m) { return visBox(d.it.shapes[m.i]); })) : visBox(s);
       showHudText(e, 'W ' + fmtLen(vb.x2 - vb.x1) + '   H ' + fmtLen(vb.y2 - vb.y1));
@@ -3581,6 +3594,10 @@
     return { x1: x1, y1: y1, x2: x2, y2: y2 };
   }
 
+  /** Which way the turn pointer curls, for a zone off a corner whose way out
+      from the middle (on screen) is (dx, dy): 'tl', 'tr', 'br' or 'bl'. */
+  function cornerOf(dx, dy) { return (dy < 0 ? 't' : 'b') + (dx < 0 ? 'l' : 'r'); }
+
   /* The box round a selection of several marks and its eight square grips,
      as Illustrator draws them: a corner scales both ways from the corner
      opposite (Shift keeps the proportions), a side's middle one way from
@@ -3606,6 +3623,22 @@
     box.setAttribute('points', vpts(V));
     g.appendChild(box);
     const vc = [(V[0][0] + V[2][0]) / 2, (V[0][1] + V[2][1]) / 2];
+    /* just off each corner the pointer turns, as on one mark: a drag there
+       turns the whole selection about the middle of its box. Drawn first,
+       under the grips. */
+    const mid0 = [(u.x1 + u.x2) / 2, (u.y1 + u.y2) / 2];
+    V.forEach(function (v) {
+      let dx = v[0] - vc[0], dy = v[1] - vc[1];
+      const len = Math.hypot(dx, dy) || 1;
+      dx /= len; dy /= len;
+      const z = document.createElementNS(SVGNS, 'circle');
+      z.setAttribute('cx', v[0] + dx * 11); z.setAttribute('cy', v[1] + dy * 11);
+      z.setAttribute('r', 11);
+      z.setAttribute('class', 'rotz');
+      z.dataset.cur = cornerOf(dx, dy);
+      z.addEventListener('pointerdown', function (e) { beginDrag(it, S.sel.i, e, 'gturn', { c: mid0 }); });
+      g.appendChild(z);
+    });
     grips.forEach(function (k) {
       const ax = Math.abs(k.h[0] - k.f[0]) > 1e-6, ay = Math.abs(k.h[1] - k.f[1]) > 1e-6;
       const v = vp.convertToViewportPoint(k.h[0], k.h[1]);
@@ -3729,6 +3762,7 @@
         z.setAttribute('cx', v[0] + dx * 11); z.setAttribute('cy', v[1] + dy * 11);
         z.setAttribute('r', 11);
         z.setAttribute('class', 'rotz');
+        z.dataset.cur = cornerOf(dx, dy);
         z.addEventListener('pointerdown', function (e) { beginDrag(it, idx, e, 'turn'); });
         g.appendChild(z);
       });
