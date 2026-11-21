@@ -9372,7 +9372,14 @@
     if (!exBusy || force) $('extractPop').hidden = true;
     if (!jpgBusy || force) $('jpgPop').hidden = true;
     EXT_POPS.forEach(function (x) { const p = $(x.id); if (p) p.hidden = true; });
-    if (inPop && inPop.hidden && popFrom && popFrom.isConnected) popFrom.focus({ preventScroll: true });
+    if (inPop && inPop.hidden) {
+      /* let go of the field in the popover just hidden first: when the button
+         it came from cannot take focus back (on a phone it is hidden), a
+         field left focused keeps the phone's keyboard up, and Android then
+         spends the next Back press on closing that keyboard */
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      if (popFrom && popFrom.isConnected) popFrom.focus({ preventScroll: true });
+    }
   }
 
   /* Popovers a module owns. Registering one is what lets closePops shut it,
