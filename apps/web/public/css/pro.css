@@ -1153,6 +1153,15 @@ body[data-tool="select"] .anno .picked * { cursor: var(--cur-move) }
    Illustrator fills the selected anchor */
 .anno .hnd .kn.vsel { fill: #7B5CFF; stroke: #FFFFFF; stroke-width: 1.5 }
 /* the Points row on a line's, rectangle's or Continuous Line's popover */
+/* the point tools' overlay (js/vertex.js): the outline in hand, its points as
+   small squares, filled when picked out; red on the one about to be taken off */
+.anno .vxov { pointer-events: none }
+.anno .vxpath { fill: none; stroke: #2D8CFF; stroke-width: 1 }
+.anno .vxpt { fill: #FFFFFF; stroke: #2D8CFF; stroke-width: 1.2 }
+.anno .vxpt.on { fill: #2D8CFF }
+.anno .vxpt.kill { fill: #E5484D; stroke: #E5484D }
+.anno .vxjoin { fill: none; stroke: #18A058; stroke-width: 2 }
+.anno .vxadd { fill: #FFFFFF; stroke: #2D8CFF; stroke-width: 1.5 }
 .mpverts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px }
 .mpverts-lbl { font-size: 12px; color: var(--text-dim); margin-right: 2px }
 .mpverts .cbtn:disabled { opacity: .45; cursor: default }

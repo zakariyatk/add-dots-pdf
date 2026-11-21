@@ -29,6 +29,8 @@
       { ids: ['tDrawPan', 'tDrawMove', 'tDrawSelect'] },
       { ids: ['tRect', 'tEllipse', 'tLine', 'tArrow'] },
       { ids: ['tArc', 'tCloud', 'tPoly'] },
+      /* point editing, as Illustrator's Direct Selection and Add / Delete Anchor Point (js/vertex.js) */
+      { ids: ['tVxDirect', 'tVxAdd', 'tVxDel'] },
       { ids: ['tText'] },
       { ids: ['tDim', 'tDimC', 'tDimR', 'tDimD', 'tDimA'] }
     ];

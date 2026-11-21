@@ -1700,6 +1700,9 @@
         if (!s.r) {
           out.push([s.a, 'Corner'], [s.b, 'Corner'], [[s.a[0], s.b[1]], 'Corner'], [[s.b[0], s.a[1]], 'Corner']);
         }
+      } else if (t === 'poly' && s.pts && s.pts.length) {
+        /* every point of a Continuous Line, its ends and its corners */
+        s.pts.forEach(function (q) { out.push([q, 'Mark end']); });
       } else if (s.b && (t === 'line' || t === 'arrow' || t === 'dim' || t === 'arc')) {
         out.push([s.a, 'Mark end'], [s.b, 'Mark end'],
                  [[(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2], 'Mark middle']);

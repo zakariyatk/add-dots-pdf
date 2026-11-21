@@ -306,5 +306,377 @@
 
     X.on('reset', function () { X.vsel = null; });
     X.on('tool', function () { X.vsel = null; });
+
+    /* ================= the three tools =================
+       As Illustrator has them, on the Draw tab beside Continuous Line:
+       Direct Selection (the white arrow) picks out and drags single points;
+       Add Anchor Point (pen +) clicks a point onto an outline; Delete Anchor
+       Point (pen −) clicks one off. Each shows the points of the outline under
+       the pointer, so there is always something to aim at. None of them
+       selects the mark as a whole: they work on its points only. */
+
+    const NS = 'http://www.w3.org/2000/svg';
+    const TOL_PX = 8;                       /* reach, in screen pixels */
+    const VX_TOOLS = { vdirect: 1, vadd: 1, vdel: 1 };
+
+    /* the point being worked on: {it, idx, i} (i null: the outline only) */
+    let cur = null, hover = null, drag = null;
+
+    function tolAt() { return TOL_PX / Math.max(0.05, S.scale); }
+    function pdfOf(it, at) { const p = it.vp.convertToPdfPoint(at[0], at[1]); return [p[0], p[1]]; }
+    function editable(s) { return s && PATHABLE[s.t] && !s.hide && !s.locked; }
+    /** Marks to look through, the one in hand first, then top of the stack down. */
+    function order(it) {
+      const out = [];
+      if (cur && cur.it === it) out.push(cur.idx);
+      for (let i = it.shapes.length - 1; i >= 0; i--) if (out.indexOf(i) < 0) out.push(i);
+      return out;
+    }
+    /** The point of any line, rectangle or Continuous Line within reach of p.
+        A closed shape's last point is its first one, so it answers 0 for it. */
+    function anchorAt(it, p) {
+      const tol = tolAt(), list = order(it);
+      for (let n = 0; n < list.length; n++) {
+        const s = it.shapes[list[n]];
+        if (!editable(s)) continue;
+        const pts = outline(s), closed = s.t === 'rect' || closedPts(pts);
+        let best = -1, bd = tol;
+        pts.forEach(function (q, i) {
+          if (closed && i === pts.length - 1) return;
+          const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
+          if (d <= bd) { bd = d; best = i; }
+        });
+        if (best >= 0) return { it: it, idx: list[n], i: best };
+      }
+      return null;
+    }
+    /** The outline within reach of p, with the place on it nearest p. */
+    function outlineAt(it, p) {
+      const tol = tolAt(), list = order(it);
+      for (let n = 0; n < list.length; n++) {
+        const s = it.shapes[list[n]];
+        if (!editable(s)) continue;
+        const h = nearestOnOutline(outline(s), p, tol);
+        if (h) return { it: it, idx: list[n], k: h.k, p: h.p };
+      }
+      return null;
+    }
+
+    /* ---- what is drawn over the page: the outline in hand, its points as
+       small squares (filled when picked out, as Illustrator draws a selected
+       anchor), and where a point would go or come off ---- */
+    function paint(it, extra) {
+      X.drawShapes(it);
+      if (!it.anno || !it.vp) return;
+      const g = document.createElementNS(NS, 'g');
+      g.setAttribute('class', 'vxov');
+      const vp = it.vp;
+      const v = function (q) { return vp.convertToViewportPoint(q[0], q[1]); };
+      const shown = [];
+      if (cur && cur.it === it) shown.push(cur.idx);
+      if (hover && hover.it === it && shown.indexOf(hover.idx) < 0) shown.push(hover.idx);
+      shown.forEach(function (idx) {
+        const s = it.shapes[idx];
+        if (!editable(s)) return;
+        const pts = outline(s).map(v), closed = s.t === 'rect' || closedPts(outline(s));
+        const line = document.createElementNS(NS, 'polyline');
+        line.setAttribute('class', 'vxpath');
+        line.setAttribute('points', pts.map(function (q) { return q[0] + ',' + q[1]; }).join(' '));
+        g.appendChild(line);
+        pts.forEach(function (q, i) {
+          if (closed && i === pts.length - 1) return;
+          const r = document.createElementNS(NS, 'rect');
+          r.setAttribute('x', q[0] - 3.5); r.setAttribute('y', q[1] - 3.5);
+          r.setAttribute('width', 7); r.setAttribute('height', 7);
+          let cls = 'vxpt';
+          if (cur && cur.it === it && cur.idx === idx && cur.i === i) cls += ' on';
+          if (extra && extra.kill && extra.kill.idx === idx && extra.kill.i === i) cls += ' kill';
+          r.setAttribute('class', cls);
+          g.appendChild(r);
+        });
+      });
+      if (extra && extra.join) {
+        const q = v(extra.join);
+        const c = document.createElementNS(NS, 'circle');
+        c.setAttribute('cx', q[0]); c.setAttribute('cy', q[1]); c.setAttribute('r', 7);
+        c.setAttribute('class', 'vxjoin');
+        g.appendChild(c);
+      }
+      if (extra && extra.add) {
+        const q = v(extra.add);
+        const c = document.createElementNS(NS, 'circle');
+        c.setAttribute('cx', q[0]); c.setAttribute('cy', q[1]); c.setAttribute('r', 4);
+        c.setAttribute('class', 'vxadd');
+        g.appendChild(c);
+      }
+      it.anno.appendChild(g);
+    }
+    function clear() {
+      const it = (cur && cur.it) || (hover && hover.it);
+      cur = null; hover = null; drag = null;
+      if (it) X.drawShapes(it);
+    }
+
+    /** Point i of mark idx moved to p, as a Continuous Line, keeping a closed
+        shape closed. */
+    function movePoint(it, idx, i, p) {
+      const s = toPath(it, idx);
+      const pts = ownPts(s), n = pts.length, closed = closedPts(pts);
+      pts[i] = [p[0], p[1]];
+      if (closed && i === 0) pts[n - 1] = [p[0], p[1]];
+      return s;
+    }
+    function takeOut(it, idx, i) {
+      const s0 = it.shapes[idx];
+      const n0 = outline(s0).length;
+      const closed0 = s0.t === 'rect' || closedPts(outline(s0));
+      if (closed0 ? n0 - 1 <= 3 : n0 <= 2) {
+        X.toast(closed0 ? 'A closed shape needs at least three points' : 'A line needs at least two points', true);
+        return false;
+      }
+      X.snapshot();
+      removePoint(toPath(it, idx), i);
+      done(it);
+      return true;
+    }
+
+    /* ---- snapping a dragged point onto another, and joining there ----
+       A point dragged near any other point of a line, rectangle or
+       Continuous Line lands exactly on it. If both are open ends, letting go
+       joins them, as Illustrator's Join does: its own other end closes the
+       shape; another line's end makes the two one Continuous Line. */
+    function isOpenEnd(pts, i) {
+      return !closedPts(pts) && (i === 0 || i === pts.length - 1);
+    }
+    function joinTarget(it, d, p) {
+      const tol = tolAt();
+      let best = null, bd = tol;
+      it.shapes.forEach(function (s, idx) {
+        if (!editable(s)) return;
+        const pts = outline(s), closed = s.t === 'rect' || closedPts(pts);
+        pts.forEach(function (q, i) {
+          if (closed && i === pts.length - 1) return;
+          if (idx === d.idx) {
+            /* of its own points, only the far end, to close the shape on */
+            const own = outline(it.shapes[d.idx]);
+            if (!d.openEnd || i === d.i || !(i === 0 || i === own.length - 1) || own.length < 4) return;   /* three corners once closed */
+          }
+          const dist = Math.hypot(q[0] - p[0], q[1] - p[1]);
+          if (dist <= bd) { bd = dist; best = { idx: idx, i: i, p: [q[0], q[1]] }; }
+        });
+      });
+      return best;
+    }
+    /** Join where the drag let go, if it is an open end on an open end. */
+    function joinAfterDrag(it, d) {
+      const t = d.join;
+      if (!t) return null;
+      const a = it.shapes[d.idx];
+      if (!a || a.t !== 'poly' || !d.openEnd) return null;
+      if (t.idx === d.idx) {
+        /* its own far end: the shape closes */
+        const pts = ownPts(a), n = pts.length;
+        const far = d.i === 0 ? n - 1 : 0;
+        pts[d.i] = [pts[far][0], pts[far][1]];
+        return 'Shape closed';
+      }
+      const b0 = it.shapes[t.idx];
+      if (!editable(b0) || b0.t === 'rect' || !isOpenEnd(outline(b0), t.i)) return null;
+      const b = toPath(it, t.idx);
+      /* a's joined end last, b's joined end first, the shared point once */
+      let ap = a.pts.map(function (q) { return [q[0], q[1]]; });
+      let bp = b.pts.map(function (q) { return [q[0], q[1]]; });
+      if (d.i === 0) ap.reverse();
+      if (t.i !== 0) bp.reverse();
+      a.pts = ap.concat(bp.slice(1));
+      it.shapes.splice(t.idx, 1);
+      if (cur && cur.it === it) cur = { it: it, idx: t.idx < d.idx ? d.idx - 1 : d.idx, i: null };
+      return 'Joined into one line';
+    }
+
+    /* ---- Direct Selection ---- */
+    X.tools.vdirect = {
+      bare: false,
+      down: function (it, at, e) {
+        if (!it.vp || (e && e.button > 0)) return;
+        const p = pdfOf(it, at);
+        const a = anchorAt(it, p);
+        if (a) {
+          cur = a;
+          drag = { it: it, idx: a.idx, i: a.i, moved: false, x: e.clientX, y: e.clientY,
+                   /* read now: landing on its own far end closes it before release */
+                   openEnd: isOpenEnd(outline(it.shapes[a.idx]), a.i) };
+          try { it.capture.setPointerCapture(e.pointerId); } catch (err) { /* a mouse drags without it */ }
+        } else {
+          const o = outlineAt(it, p);
+          cur = o ? { it: it, idx: o.idx, i: null } : null;
+        }
+        paint(it);
+      },
+      move: function (it, at, e) {
+        if (!it.vp) return;
+        const p = pdfOf(it, at);
+        if (drag && drag.it === it) {
+          if (!drag.moved) {
+            if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 3) return;
+            X.snapshot();
+            drag.moved = true;
+          }
+          /* onto another point (and joined there on release), else onto a
+             snap point, else level, plumb or 45° from the point before with Shift */
+          drag.join = joinTarget(it, drag, p);
+          let q = drag.join ? drag.join.p : null;
+          if (q && X.snapHide) X.snapHide();
+          if (!q && X.snapPt) q = X.snapPt(it, p, e, { skip: drag.idx });
+          if (!q && e.shiftKey) {
+            const pts = outline(it.shapes[drag.idx]);
+            const ref = pts[drag.i > 0 ? drag.i - 1 : 1] || pts[0];
+            q = X.snapLine(ref, p);
+          }
+          movePoint(it, drag.idx, drag.i, q || p);
+          paint(it, drag.join ? { join: drag.join.p } : null);
+          return;
+        }
+        const a = anchorAt(it, p);
+        const o = a ? null : outlineAt(it, p);
+        hover = a || o ? { it: it, idx: (a || o).idx } : null;
+        it.capture.style.cursor = a ? 'move' : o ? 'pointer' : '';
+        paint(it);
+      },
+      up: function (it) {
+        if (drag && drag.moved) {
+          if (X.snapHide) X.snapHide();
+          const said = joinAfterDrag(it, drag);
+          done(it);
+          if (said) X.toast(said, true);
+        }
+        drag = null;
+        paint(it);
+      },
+      cancel: function () { drag = null; clear(); }
+    };
+
+    /* ---- Add Anchor Point ---- */
+    X.tools.vadd = {
+      down: function () { /* a click tool: it happens on release */ },
+      move: function (it, at) {
+        if (!it.vp) return;
+        const o = outlineAt(it, pdfOf(it, at));
+        hover = o ? { it: it, idx: o.idx } : null;
+        paint(it, o ? { add: o.p } : null);
+      },
+      up: function (it, at, e) {
+        if (!it.vp || (e && e.button > 0)) return;
+        const o = outlineAt(it, pdfOf(it, at));
+        if (!o) { X.toast('Click right on the outline of a line, rectangle or Continuous Line', true); return; }
+        const pts = outline(it.shapes[o.idx]), tol = tolAt();
+        const a0 = pts[o.k], b0 = pts[o.k + 1];
+        if (Math.hypot(a0[0] - o.p[0], a0[1] - o.p[1]) < tol || Math.hypot(b0[0] - o.p[0], b0[1] - o.p[1]) < tol) {
+          X.toast('There is a point there already', true);
+          return;
+        }
+        X.snapshot();
+        const i = insertPoint(toPath(it, o.idx), o.k, o.p);
+        cur = { it: it, idx: o.idx, i: i };
+        done(it);
+        paint(it);
+      },
+      cancel: function () { clear(); }
+    };
+
+    /* ---- Delete Anchor Point ---- */
+    X.tools.vdel = {
+      down: function () { /* a click tool: it happens on release */ },
+      move: function (it, at) {
+        if (!it.vp) return;
+        const p = pdfOf(it, at);
+        const a = anchorAt(it, p);
+        const o = a ? null : outlineAt(it, p);
+        hover = a || o ? { it: it, idx: (a || o).idx } : null;
+        paint(it, a ? { kill: a } : null);
+      },
+      up: function (it, at, e) {
+        if (!it.vp || (e && e.button > 0)) return;
+        const a = anchorAt(it, pdfOf(it, at));
+        if (!a) { X.toast('Click right on a point of a line, rectangle or Continuous Line', true); return; }
+        cur = null;
+        takeOut(it, a.idx, a.i);
+        paint(it);
+      },
+      cancel: function () { clear(); }
+    };
+
+    /* keys for the point in hand, ahead of core's own */
+    window.addEventListener('keydown', function (e) {
+      if (!VX_TOOLS[S.tool] || e.ctrlKey || e.metaKey || e.altKey) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      if (e.key === 'Escape' && cur) { e.preventDefault(); e.stopImmediatePropagation(); clear(); return; }
+      if (!cur || cur.i == null || !editable(cur.it.shapes[cur.idx])) return;
+      const it = cur.it;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        e.preventDefault(); e.stopImmediatePropagation();
+        const idx = cur.idx, i = cur.i;
+        cur = { it: it, idx: idx, i: null };
+        takeOut(it, idx, i);
+        paint(it);
+      } else if (/^Arrow/.test(e.key)) {
+        e.preventDefault(); e.stopImmediatePropagation();
+        const step = (e.shiftKey ? 10 : 1) * S.scale, vp = it.vp;
+        const sx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+        const sy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+        const o = vp.convertToPdfPoint(0, 0), q = vp.convertToPdfPoint(sx, sy);
+        const p0 = outline(it.shapes[cur.idx])[cur.i];
+        X.snapshot();
+        movePoint(it, cur.idx, cur.i, [p0[0] + q[0] - o[0], p0[1] + q[1] - o[1]]);
+        done(it);
+        paint(it);
+      }
+    }, true);
+    X.on('tool', function (t) {
+      if (VX_TOOLS[t]) return;
+      S.items.forEach(function (it) { if (it.capture) it.capture.style.cursor = ''; });
+      if (cur || hover) clear();
+    });
+
+    /* ---- their buttons, beside Continuous Line on the Draw tab ---- */
+    const PEN = '<path d="M3.5 20.5l2.3-7.6 6.4-6.4 5.3 5.3-6.4 6.4z"/><path d="M3.5 20.5l5-5"/>' +
+      '<circle cx="9.6" cy="14.4" r="1.3"/><path d="M12.2 6.5l2.4-2.4 5.3 5.3-2.4 2.4"/>';
+    const VTOOLS = [
+      { t: 'vdirect', id: 'tVxDirect', label: 'Direct Selection', key: 'V', shift: true,
+        hint: 'Click a <b>point</b> of a line, rectangle or Continuous Line and drag it. A picked ' +
+              'point fills in: nudge it with the <b>arrow keys</b> (Shift: ten at a time) or press ' +
+              '<b>Delete</b>. Hold <b>Shift</b> while dragging to keep it level, plumb or at 45°.',
+        path: '<path d="M5.5 3.5l13 8-5.8 1.5-3.3 5.3z"/>' },
+      { t: 'vadd', id: 'tVxAdd', label: 'Add Anchor Point', key: null,
+        hint: 'Click the outline of a line, rectangle or Continuous Line to put a <b>point</b> there. ' +
+              'A line or rectangle becomes a Continuous Line to take it, with the same look.',
+        path: PEN + '<path d="M18.5 15.5v6M15.5 18.5h6"/>' },
+      { t: 'vdel', id: 'tVxDel', label: 'Delete Anchor Point', key: null,
+        hint: 'Click a <b>point</b> of a line, rectangle or Continuous Line to take it out — the ' +
+              'outline closes up across the gap. A closed shape keeps three corners, a line two ends.',
+        path: PEN + '<path d="M15.5 18.5h6"/>' }
+    ];
+    const grpTools = $('grpTools');
+    VTOOLS.forEach(function (T) {
+      const b = document.createElement('button');
+      b.className = 'btn'; b.id = T.id; b.type = 'button';
+      b.title = T.label + (T.key ? ' (' + (T.shift ? 'Shift+' : '') + T.key + ')' : '');
+      b.setAttribute('aria-label', T.label);
+      b.dataset.label = T.label;
+      b.innerHTML = '<svg viewBox="0 0 24 24">' + T.path + '</svg>';
+      b.addEventListener('click', function () { X.toggleTool(T.t); });
+      if (grpTools) grpTools.appendChild(b);
+      X.toolBtn[T.t] = T.id;
+      X.hints[T.t] = T.hint;
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.target.matches && e.target.matches('input,textarea,select')) return;
+      if (e.ctrlKey || e.metaKey || e.altKey || !S.items.length) return;
+      const hit = VTOOLS.filter(function (T) {
+        return T.key && T.key.toLowerCase() === e.key.toLowerCase() && !!T.shift === !!e.shiftKey;
+      })[0];
+      if (hit) { e.preventDefault(); X.toggleTool(hit.t); }
+    });
   });
 })();
