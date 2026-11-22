@@ -875,6 +875,7 @@
       $('layOpRange').setAttribute('aria-label', lbl + ' opacity');
       const pc = Math.round(v * 100);
       if (!opHeld && document.activeElement !== $('layOpRange')) $('layOpRange').value = pc;
+      $('layOpRange').style.setProperty('--p', $('layOpRange').value + '%');
       if (document.activeElement !== $('layOpNum')) $('layOpNum').value = pc;
     }
     function setOpacity(pc, live) {
@@ -900,7 +901,10 @@
       $('layOpNum').value = Math.round(v * 100);
       render();
     }
-    $('layOpRange').addEventListener('input', function () { setOpacity(+this.value, true); });
+    $('layOpRange').addEventListener('input', function () {
+      this.style.setProperty('--p', this.value + '%');            /* the track fills as it is dragged */
+      setOpacity(+this.value, true);
+    });
     $('layOpRange').addEventListener('change', function () {
       const was = opHeld;
       opHeld = false;
