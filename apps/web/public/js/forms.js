@@ -668,14 +668,15 @@
     X.shapeRenderers.sig = function (it, s, vp, idx) {
       const a = vp.convertToViewportPoint(s.a[0], s.a[1]);
       const b = vp.convertToViewportPoint(s.b[0], s.b[1]);
-      const x = Math.min(a[0], b[0]), y = Math.min(a[1], b[1]);
-      const w = Math.abs(b[0] - a[0]), h = Math.abs(b[1] - a[1]);
+      /* at its true size about its middle, turned by its own angle and the
+         page's, as the saved PDF has it (a page turned a quarter would
+         otherwise swap its width and height and stand it upright) */
+      const w = Math.abs(s.b[0] - s.a[0]) * vp.scale, h = Math.abs(s.b[1] - s.a[1]) * vp.scale;
+      const x = (a[0] + b[0]) / 2 - w / 2, y = (a[1] + b[1]) / 2 - h / 2;
       const g = document.createElementNS(X.SVGNS, 'g');
       g.setAttribute('class', 'sig-mk');
-      if (s.r) {
-        const mid = X.shapeMid(s);
-        g.setAttribute('transform', 'rotate(' + X.dirAngle(vp, mid[0], mid[1], s.r) + ',' + (x + w / 2) + ',' + (y + h / 2) + ')');
-      }
+      const mid = X.shapeMid(s), ang = X.dirAngle(vp, mid[0], mid[1], s.r || 0);
+      if (Math.abs(ang) > 1e-6) g.setAttribute('transform', 'rotate(' + ang + ',' + (x + w / 2) + ',' + (y + h / 2) + ')');
       const im = document.createElementNS(X.SVGNS, 'image');
       im.setAttribute('x', x); im.setAttribute('y', y);
       im.setAttribute('width', w); im.setAttribute('height', h);
