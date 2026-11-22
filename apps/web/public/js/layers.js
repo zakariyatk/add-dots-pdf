@@ -148,17 +148,18 @@
         '<span class="grow"></span>' +
         '<button type="button" id="layRename" title="Rename the active layer" aria-label="Rename layer">' + PENCIL + '</button>' +
         '<button type="button" id="layMerge" title="Merge the active layer into another" aria-label="Merge layer">' + MERGE + '</button>' +
-        '<button type="button" class="laydanger" id="layDel" title="Delete the active layer" aria-label="Delete layer">' + DEL + '</button>' +
       '</div>' +
-      /* what is selected on the page — one mark or several — moved, copied
-         or deleted together; each mark's row no longer carries these */
+      /* one Duplicate and one Delete for whatever is picked out: the marks
+         selected on the page (one or several, together), or with none the
+         active layer itself, as Illustrator's Layers panel has them. Up and
+         down are for marks only. */
       '<div class="laytools laysel">' +
         '<span class="laysel-lbl" id="laySelLbl">Nothing selected</span>' +
         '<span class="grow"></span>' +
-        '<button type="button" data-selact="up" title="Bring forward" aria-label="Bring forward">' + UP + '</button>' +
-        '<button type="button" data-selact="down" title="Send backward" aria-label="Send backward">' + DOWN + '</button>' +
-        '<button type="button" data-selact="dup" title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
-        '<button type="button" class="laydanger" data-selact="del" title="Delete" aria-label="Delete">' + DEL + '</button>' +
+        '<button type="button" data-selact="up" data-marks="1" title="Bring forward" aria-label="Bring forward">' + UP + '</button>' +
+        '<button type="button" data-selact="down" data-marks="1" title="Send backward" aria-label="Send backward">' + DOWN + '</button>' +
+        '<button type="button" data-selact="dup" id="layDup" title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
+        '<button type="button" class="laydanger" data-selact="del" id="layDel" title="Delete" aria-label="Delete">' + DEL + '</button>' +
       '</div>' +
       '<div id="layList"></div>';
     $('railPages').parentNode.appendChild(panel);
@@ -224,7 +225,7 @@
     }
     /* Illustrator's own rule: deleting a layer deletes what is on it, so the
        marks go with it — after saying how many, and undoably */
-    $('layDel').addEventListener('click', function () {
+    function deleteLayer() {
       ensureLayers();
       if (S.layers.length < 2) { X.toast('The last layer cannot be deleted'); return; }
       const L = layerOf(focusLayer);
@@ -244,7 +245,49 @@
       redrawEverywhere(); X.updateMeta(); X.syncMarkPop();
       render();
       X.toast('<b>' + X.esc(L.name) + '</b> deleted');
-    });
+    }
+    /* A layer duplicated: a new layer just above it, named after it, with a
+       copy of every mark on it on every page, in the same order, on top of
+       the page's stack, and the copy the active layer — as Illustrator's
+       Duplicate Layer. A copied group is a group of its own. */
+    function duplicateLayer() {
+      ensureLayers();
+      const L = layerOf(focusLayer);
+      layerSeq++;
+      const C = {
+        id: 'L' + Date.now().toString(36) + layerSeq,
+        name: L.name + ' copy',
+        hidden: !!L.hidden,
+        locked: false,
+        color: STRIPES[S.layers.length % STRIPES.length]
+      };
+      let n = 0;
+      X.snapshot();
+      S.items.forEach(function (it) {
+        const grpMap = {};
+        const copies = [];
+        it.shapes.forEach(function (sh, i) {
+          if (NOT_SELECTABLE[sh.t] || layerIdOf(sh) !== L.id) return;
+          const c = JSON.parse(JSON.stringify(sh));
+          c.layer = C.id;
+          c.locked = false;
+          if (c.id != null) c.id = String(c.id) + '-' + Date.now().toString(36) + i;
+          if (c.grp != null) {
+            if (!grpMap[c.grp]) grpMap[c.grp] = 'g' + Date.now().toString(36) + 'd' + (++layerSeq);
+            c.grp = grpMap[c.grp];
+          }
+          copies.push(c);
+        });
+        copies.forEach(function (c) { it.shapes.push(c); });
+        n += copies.length;
+      });
+      S.layers.splice(S.layers.indexOf(L) + 1, 0, C);
+      focusLayer = C.id;
+      S.sel = null; S.multi = null;
+      redrawEverywhere(); X.updateMeta(); X.syncMarkPop();
+      render();
+      X.toast('<b>' + X.esc(C.name) + '</b> added' + (n ? ' — ' + n + (n === 1 ? ' mark copied' : ' marks copied') : ''));
+    }
 
     function bodies() { return Array.prototype.slice.call(document.querySelectorAll('#rail > .rail-body')); }
     /* the tab always opens it, as Bookmarks' does: the side rail button
@@ -316,7 +359,6 @@
       $('layCount').textContent = S.layers.length + (S.layers.length === 1 ? ' layer · ' : ' layers · ') +
         total + ' on page ' + S.current;
       $('layMerge').disabled = S.layers.length < 2;
-      $('layDel').disabled = S.layers.length < 2;
 
       /* newest layer at the top, the way the stack reads everywhere else */
       const selected = S.sel && S.sel.it === it ? X.selList() : [];
@@ -383,8 +425,12 @@
       }
       if (!isMark) {                       /* a layer's own row: make it active */
         if (e.target.closest('.layname')) return;
-        if (focusLayer === row.dataset.lay) return;
+        /* and pick the layer out rather than marks, so Duplicate and Delete
+           act on it, as clicking a layer in Illustrator targets the layer */
+        const hadMarks = !!S.sel;
+        if (focusLayer === row.dataset.lay && !hadMarks) return;
         focusLayer = row.dataset.lay;
+        if (hadMarks) { S.sel = null; S.multi = null; X.redrawAll(); X.syncMarkPop(); }
         render();
         return;
       }
@@ -521,8 +567,14 @@
        selected, so two picked together move, copy or go together */
     panel.querySelector('.laysel').addEventListener('click', function (e) {
       const b = e.target.closest('[data-selact]');
-      if (!b || b.disabled || !S.sel) return;
+      if (!b || b.disabled) return;
       const act = b.dataset.selact;
+      if (!marksPicked()) {
+        /* nothing selected on the page: Duplicate and Delete act on the layer */
+        if (act === 'dup') duplicateLayer();
+        else if (act === 'del') deleteLayer();
+        return;
+      }
       if (act === 'up') X.stackSelected('up');
       else if (act === 'down') X.stackSelected('down');
       else if (act === 'dup') X.duplicateSelected();
@@ -530,10 +582,25 @@
       X.syncMarkPop();
       render();
     });
+    /* how many unlocked marks are selected on the page shown */
+    function marksPicked() {
+      const it = S.items[S.current - 1];
+      if (!S.sel || !it || S.sel.it !== it) return 0;
+      return X.selList().filter(function (i) { return it.shapes[i] && !it.shapes[i].locked; }).length;
+    }
     function paintSel(it, selected) {
       const n = selected.filter(function (i) { return it && it.shapes[i] && !it.shapes[i].locked; }).length;
-      $('laySelLbl').textContent = !n ? 'Nothing selected' : n === 1 ? '1 selected' : n + ' selected';
-      panel.querySelectorAll('[data-selact]').forEach(function (b) { b.disabled = !n; });
+      /* with no marks selected, the buttons are the active layer's */
+      const L = n ? null : layerOf(focusLayer);
+      $('laySelLbl').textContent = n ? (n === 1 ? '1 selected' : n + ' selected') : L.name;
+      panel.querySelectorAll('[data-marks]').forEach(function (b) { b.disabled = !n; });
+      const what = n ? (n === 1 ? 'the selected mark' : 'the ' + n + ' selected marks') : 'layer "' + L.name + '"';
+      $('layDup').disabled = false;
+      $('layDup').title = 'Duplicate ' + what;
+      $('layDup').setAttribute('aria-label', $('layDup').title);
+      $('layDel').disabled = !n && S.layers.length < 2;
+      $('layDel').title = !n && S.layers.length < 2 ? 'The last layer cannot be deleted' : 'Delete ' + what;
+      $('layDel').setAttribute('aria-label', 'Delete ' + what);
     }
 
     /* ---------------- drag and drop ----------------
