@@ -686,13 +686,17 @@
 
   /* ---------------- undo ---------------- */
   function snapshot() {
-    S.undo.push(S.items.map(function (it) {
+    const snap = S.items.map(function (it) {
       return {
         ref: it, src: it.src, num: it.num, rot: it.rot, added: it.added,
         crop: it.crop ? { x: it.crop.x, y: it.crop.y, w: it.crop.w, h: it.crop.h } : null,
         shapes: it.shapes.map(function (s) { return Object.assign({}, s); })
       };
-    }));
+    });
+    /* the layers too (js/layers.js), so undoing a merge or a delete brings
+       the layer back as well as its marks */
+    snap.layers = S.layers ? S.layers.map(function (l) { return Object.assign({}, l); }) : null;
+    S.undo.push(snap);
     if (S.undo.length > 60) S.undo.shift();
     setUndoState();
   }
@@ -716,7 +720,9 @@
       it.thumbDone = false;
       return it;
     });
+    if (snap.layers) S.layers = snap.layers;
     await syncAll();
+    EXT.emit('meta');
     toast('Undone');
   }
 

@@ -1813,6 +1813,9 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
 /* --- a layer's own row in the tree, and the branch under it --- */
 .layrow.layhead { padding-right: 6px }
 .layrow.layhead.active { background: var(--chrome-2) }
+/* a layer picked out (js/layers.js selLayers) reads as selected, the active one too */
+.layrow.layhead.sel { background: color-mix(in srgb, var(--marker) 14%, transparent); box-shadow: inset 3px 0 0 var(--marker) }
+.layrow.layhead.sel:hover { background: color-mix(in srgb, var(--marker) 20%, transparent) }
 .layrow.layhead .laylabel { font-weight: 600 }
 .layrow.layhead .laylabel { cursor: text }
 /* a layer's name, being renamed in place (js/layers.js) */
