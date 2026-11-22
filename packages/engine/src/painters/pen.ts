@@ -42,7 +42,8 @@ const pen: Painter = (p: PDFPage, s: PenMark) => {
   const op = shOp(s);
   if (s.fill && penClosed(pts))
     p.drawSvgPath(d, { x: 0, y: 0, color: hexRgb(s.fill), opacity: op, borderWidth: 0 });
-  if (s.nos) return;
+  /* a closed path can drop its outline; an open one is nothing but its line */
+  if (s.nos && penClosed(pts)) return;
   const da = dashOf(s, s.w);
   p.drawSvgPath(d, {
     x: 0,

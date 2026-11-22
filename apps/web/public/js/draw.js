@@ -640,18 +640,28 @@
       const g = document.createElementNS(SVGNS, 'g');
       const el = polyline(ellipsePts(s, 72), vp, true);
       stroked(el, s, idx, it);
-      if (s.fill) {
-        el.style.fill = s.fill;
-        el.style.fillOpacity = X.shOp(s);
-        el.style.pointerEvents = 'all';
-      }
+      fillIn(el, s);
       g.appendChild(el);
       return g;
     };
 
+    /* a closed shape's fill, and its inside answering a click wherever it is
+       filled or has no outline to click on (with neither, it would otherwise
+       be impossible to pick out again) */
+    function fillIn(el, s) {
+      if (s.fill) {
+        el.style.fill = s.fill;
+        el.style.fillOpacity = X.shOp(s);
+      }
+      if (s.fill || s.nos) el.style.pointerEvents = 'all';
+    }
+
     X.shapeRenderers.cloud = function (it, s, vp, idx) {
       const g = document.createElementNS(SVGNS, 'g');
-      g.appendChild(stroked(polyline(cloudPts(s, 6), vp, false), s, idx, it));
+      /* closed, so it can be filled like a box */
+      const el = stroked(polyline(cloudPts(s, 6), vp, true), s, idx, it);
+      fillIn(el, s);
+      g.appendChild(el);
       return g;
     };
 
@@ -679,11 +689,8 @@
       const g = document.createElementNS(SVGNS, 'g');
       const el = polyline(s.pts, vp, false);
       stroked(el, s, idx, it);
-      if (s.fill && polyClosed(s)) {
-        el.style.fill = s.fill;
-        el.style.fillOpacity = X.shOp(s);
-        el.style.pointerEvents = 'all';
-      }
+      if (polyClosed(s)) fillIn(el, s);
+      else el.style.stroke = s.c;               /* an open line always shows its line */
       g.appendChild(el);
       return g;
     };
@@ -708,11 +715,8 @@
       const el = document.createElementNS(SVGNS, 'path');
       el.setAttribute('d', penD(s.pts, vp));
       stroked(el, s, idx, it);
-      if (s.fill && penClosed(s)) {
-        el.style.fill = s.fill;
-        el.style.fillOpacity = X.shOp(s);
-        el.style.pointerEvents = 'all';
-      }
+      if (penClosed(s)) fillIn(el, s);
+      else el.style.stroke = s.c;               /* an open path always shows its line */
       g.appendChild(el);
       return g;
     };

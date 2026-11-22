@@ -3462,6 +3462,14 @@
 
   /* the colour picker shared by Fill and Border */
   let swFor = null;
+  /** A closed shape, which takes a fill and can do without its outline: a
+      box, circle or cloud, a shape from Edit Object or Pathfinder, and a
+      Continuous Line or Pen path once closed. */
+  function closedShape(s) {
+    return s.t === 'rect' || s.t === 'ellipse' || s.t === 'cloud' || s.t === 'vpath' ||
+      (s.t === 'poly' && !!EXT.polyClosed && EXT.polyClosed(s)) ||
+      (s.t === 'pen' && !!EXT.penClosed && EXT.penClosed(s));
+  }
   function openSwatches(key, anchor) {
     const s = selShape(); if (!s) return;
     const pop = $('mpSwatches');
@@ -3479,12 +3487,12 @@
       });
       pop.appendChild(n);
     }
-    /* a box, a circle, or a shape off the page can drop its outline and keep just the fill */
-    if (key === 'c' && (s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath')) {
+    /* any closed shape can drop its outline and keep just the fill */
+    if (key === 'c' && closedShape(s)) {
       const n = document.createElement('button');
       n.type = 'button';
       n.className = 'pnofill' + (s.nos ? ' on' : '');
-      n.title = 'No outline'; n.setAttribute('aria-label', 'No outline');
+      n.title = 'No border'; n.setAttribute('aria-label', 'No border');
       n.addEventListener('click', function (e) {
         e.stopPropagation(); markEdit(function (x) { x.nos = true; }); closeSwatches();
       });
@@ -3538,9 +3546,7 @@
     const isText = s.t === 'text';
     /* a shape off the page fills too — a Continuous Line only once it is
        snapped shut back onto its own first point */
-    const isBox = s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath' ||
-      (s.t === 'poly' && EXT.polyClosed && EXT.polyClosed(s)) ||
-      (s.t === 'pen' && EXT.penClosed && EXT.penClosed(s));
+    const isBox = closedShape(s);
     /* a picture: no line to style (a signature, or a stamp made from one) */
     const isPic = s.t === 'sig' || s.t === 'istamp';
     const count = selList().length;
