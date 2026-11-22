@@ -42,6 +42,7 @@ import {
   charSpacing,
   lineSpans,
   lineWidth,
+  rectCorners,
   rotPt,
   textRect,
   type MeasureText,
@@ -60,6 +61,7 @@ import { drawLine, embedFallbacks, needsUnicode, textIn, textWidth, type Unicode
 import { readXrefTail, reserveNumbers, snapshot, writeUpdate } from './append';
 import { annotRect, commitAnnot, isAnnotMark, scratchPage } from './annots';
 import { encodePageFont, markInPageFont } from './pagefont';
+import { fillGradient, ringPath } from './painters/gradient';
 
 const PDF_CAP = [LineCapStyle.Butt, LineCapStyle.Round, LineCapStyle.Projecting];
 const PDF_JOIN = [LineJoinStyle.Miter, LineJoinStyle.Round, LineJoinStyle.Bevel];
@@ -533,14 +535,19 @@ async function compose(
           rotate: degrees(s.r || 0),
           ...(s.nos ? { borderWidth: 0 } : { borderColor: col, borderWidth: th, borderOpacity: op }),
         };
-        if (s.fill) {
+        /* a gradient goes in first, through the box's corners, the border over it */
+        const grad = !!(s.fill && s.grad);
+        if (grad) fillGradient(p, s, ringPath(rectCorners(s)), op);
+        else if (s.fill) {
           ro.color = hexRgb(s.fill);
           ro.opacity = op;
         }
         if (da) ro.borderDashArray = da;
-        p.pushOperators(pushGraphicsState(), setLineJoin(PDF_JOIN[shJoin(s)]!), setLineCap(cap!));
-        p.drawRectangle(ro);
-        p.pushOperators(popGraphicsState());
+        if (!(grad && s.nos)) {
+          p.pushOperators(pushGraphicsState(), setLineJoin(PDF_JOIN[shJoin(s)]!), setLineCap(cap!));
+          p.drawRectangle(ro);
+          p.pushOperators(popGraphicsState());
+        }
       } else {
         const line: Parameters<PDFPage['drawLine']>[0] = {
           start: { x: s.a[0], y: s.a[1] },

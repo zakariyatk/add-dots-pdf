@@ -369,6 +369,13 @@
       if (s.fill) { el.style.fillOpacity = s.fo == null ? X.shOp(s) : s.fo; el.style.fillRule = 'evenodd'; }
       if (s.fill || s.nos) el.style.pointerEvents = 'all';
       if (idx >= 0) el.addEventListener('pointerdown', function (e) { X.beginDrag(it, idx, e, 'move'); });
+      if (s.fill && s.grad) {
+        /* a gradient: its <defs> and the path together, one child for the mark */
+        const g = document.createElementNS(SVGNS, 'g');
+        g.appendChild(el);
+        X.paintFill(g, el, s, vp, s.fo == null ? X.shOp(s) : s.fo);
+        return g;
+      }
       return el;
     };
     X.handleKind.vpath = 'bbox';

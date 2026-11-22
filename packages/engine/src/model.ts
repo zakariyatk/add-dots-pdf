@@ -5,6 +5,8 @@
    without extra wiring. Feature modules add their own mark types (`t`) with
    their own fields, so the index signature stays open. */
 
+import type { Grad } from './gradient';
+
 export type Pt = [number, number];
 
 /** A PDF the pages were taken from. `id` groups pages that share one source. */
@@ -52,6 +54,8 @@ export interface Mark extends MarkBase {
   fill?: string | null;
   /** No outline: a closed shape can keep just its fill, or neither. */
   nos?: boolean;
+  /** A gradient over the fill (gradient.ts); `fill` stays its first colour. */
+  grad?: Grad | null;
 }
 
 /** A standard PDF font, or 'g:<id>': a Google Font the page supplies (see SaveHooks.fonts). */

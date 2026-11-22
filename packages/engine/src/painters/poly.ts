@@ -9,6 +9,7 @@ import type { Mark, Pt } from '../model';
 import { hexRgb } from '../save';
 import { shOp } from '../style';
 import { fillPolygon, paintPts, type Painter } from './common';
+import { fillGradient, ringPath } from './gradient';
 
 export interface PolyMark extends Mark {
   t: 'poly';
@@ -27,7 +28,8 @@ function closed(pts: Pt[]): boolean {
 const poly: Painter = (p: PDFPage, s: PolyMark) => {
   if (!s.pts || s.pts.length < 2) return;
   const shut = closed(s.pts);
-  if (s.fill && shut) fillPolygon(p, s.pts, hexRgb(s.fill), shOp(s));
+  if (s.fill && shut && s.grad) fillGradient(p, s, ringPath(s.pts), shOp(s));
+  else if (s.fill && shut) fillPolygon(p, s.pts, hexRgb(s.fill), shOp(s));
   /* a closed one can drop its outline and keep just the fill */
   if (!(s.nos && shut)) paintPts(p, s.pts, s);
 };

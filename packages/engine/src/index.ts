@@ -24,3 +24,5 @@ export * from './pagefont';
 export * from './painters/vpath';
 export * from './painters/poly';
 export * from './painters/pen';
+export * from './gradient';
+export * from './painters/gradient';

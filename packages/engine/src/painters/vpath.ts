@@ -9,6 +9,7 @@ import type { ContentShape } from '../content';
 import { hexRgb } from '../save';
 import { dashOf, shCap, shOp } from '../style';
 import { PDF_CAP, type Painter } from './common';
+import { fillGradient, svgPath } from './gradient';
 
 export interface VPathMark extends Mark {
   t: 'vpath';
@@ -70,10 +71,15 @@ const vpath: Painter = (p: PDFPage, s: VPathMark) => {
   const op = shOp(s);
   const outline = !s.nos;
   const dash = s.d ? dashOf(s, s.w) : s.dash || null;
+  /* a gradient through the path (inside as the screen reads it, even-odd),
+     then the outline alone over it */
+  const grad = !!(s.fill && s.grad);
+  if (grad) fillGradient(p, s, svgPath(vpathD(s)), s.fo == null ? op : s.fo, true);
+  if (grad && !outline) return;
   p.drawSvgPath(d, {
     x: 0,
     y: 0,
-    ...(s.fill ? { color: hexRgb(s.fill), opacity: s.fo == null ? op : s.fo } : {}),
+    ...(s.fill && !grad ? { color: hexRgb(s.fill), opacity: s.fo == null ? op : s.fo } : {}),
     ...(outline
       ? {
           borderColor: hexRgb(s.c),

@@ -2088,6 +2088,86 @@ body.rotate-mode .anno .gsel .gkn, body.rotate-mode .anno .hnd .kn,
 body.rotate-mode .anno .hnd .knpad, body.rotate-mode .anno .hnd .stem, body.rotate-mode .anno .hnd .turnic,
 body.rotate-mode .anno .hnd .rotz, body.rotate-mode .anno .gsel .rotz { display: none }
 
+/* ---------- gradients (js/gradient.js) ----------
+   The Gradient panel in the selected mark's properties, laid out as
+   Illustrator's: swatch and type, Edit Gradient, angle and reverse, the
+   slider (midpoint diamonds over the ramp, stops under it), and the stop
+   picked. On the page, the Gradient tool's annotator: the vector as a line
+   with a halo so it reads on any colour, a circle where it starts, a square
+   where it ends, the stops along it. */
+.markpop .mpgrad { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  padding-top: 10px; border-top: 1px solid var(--line) }
+.markpop .mpgrad[hidden], .markpop .mpgrad [hidden] { display: none !important }
+.markpop .mpgrad svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
+.markpop .mpgrad .grtype svg rect { stroke: currentColor; stroke-width: 1.2 }
+.markpop .grhd { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--text) }
+.markpop .grnone { width: 24px; height: 22px; min-width: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--text-dim);
+  display: inline-flex; align-items: center; justify-content: center; flex: none }
+.markpop .grnone:hover { background: var(--chrome-2); color: var(--text) }
+.markpop .grnone svg { width: 14px; height: 14px }
+.markpop .grtop { display: flex; align-items: center; gap: 10px; min-width: 0 }
+.markpop .grsw { width: 40px; height: 40px; min-width: 0; flex: none; padding: 3px; border: 1px solid var(--line); border-radius: 6px; background: var(--chrome-2); cursor: pointer }
+.markpop .grsw i, .markpop .grramp i, .markpop .grchip i { display: block; width: 100%; height: 100%; border-radius: 3px }
+.markpop .grsw.on { border-color: var(--text) }
+.markpop .grsw:not(.on) i { opacity: .55 }
+.markpop .grtype { display: flex; align-items: center; gap: 2px; font-size: 12px; color: var(--text-dim) }
+.markpop .grtype > span { margin-right: 4px }
+.markpop .grtog { width: 32px; height: 30px; min-width: 0; padding: 0; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text) }
+.markpop .grtog:hover:not(:disabled) { background: var(--chrome-2); border-color: var(--line) }
+.markpop .grtog.on { border-color: var(--text); background: var(--chrome-2) }
+.markpop .grtog:disabled { opacity: .35; cursor: default }
+.markpop .grbody { display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.markpop .gredit { height: 28px; padding: 0 12px; align-self: flex-start; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--chrome-2); color: var(--text); font-size: 12px; cursor: pointer }
+.markpop .gredit:hover { border-color: var(--text-dim) }
+.markpop .gredit.on { background: var(--text); color: var(--chrome, #fff); border-color: var(--text) }
+.markpop .grrow { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap }
+.markpop .grf { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px; min-width: 0;
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; color: var(--text-dim) }
+.markpop .grf:focus-within { border-color: var(--accent, #7B5CFF) }
+.markpop .grf input { width: 44px; min-width: 0; height: 26px; border: 0; padding: 0; background: transparent; color: var(--text); font-size: 12px; outline: none }
+.markpop .grf em { font-style: normal }
+.markpop .gri { display: flex; color: var(--text-dim) }
+.markpop .grslider { display: flex; align-items: flex-end; gap: 6px; min-width: 0 }
+.markpop .grbar { position: relative; flex: 1 1 auto; min-width: 120px; margin: 0 7px; padding: 12px 0 16px; touch-action: none }
+.markpop .grramp { height: 16px; border: 1px solid var(--line); border-radius: 2px;
+  background: repeating-conic-gradient(#cfcfcf 0 25%, #fff 0 50%) 0 0 / 8px 8px }
+.markpop .grmids { position: absolute; left: 0; right: 0; top: 0; height: 12px }
+.markpop .grmid { position: absolute; top: 2px; width: 8px; height: 8px; margin-left: -4px; transform: rotate(45deg);
+  background: var(--chrome, #fff); border: 1px solid var(--text); cursor: ew-resize; touch-action: none }
+.markpop .grstops { position: absolute; left: 0; right: 0; bottom: 0; height: 16px; cursor: copy }
+.markpop .grstp { position: absolute; top: 1px; width: 14px; height: 14px; min-width: 0; margin-left: -7px; padding: 2px;
+  border: 1px solid var(--text-dim); border-radius: 50%; background: var(--chrome, #fff); cursor: ew-resize; touch-action: none }
+.markpop .grstp::before { content: ''; position: absolute; left: 50%; top: -5px; height: 4px; border-left: 1px solid var(--text-dim) }
+.markpop .grstp i { display: block; width: 100%; height: 100%; border-radius: 50% }
+.markpop .grstp.on { border: 2px solid var(--accent, #2F80ED); box-shadow: 0 0 0 1px var(--chrome, #fff) }
+.markpop .grstp:focus-visible { outline: 2px solid var(--accent, #2F80ED); outline-offset: 2px }
+.markpop.grdropping .grstp.on, .markpop .mpgrad.grdropping .grstp.on { opacity: .3 }
+.markpop .grstop { flex-wrap: nowrap; gap: 4px }
+.markpop .grstop .grf { padding: 0 5px; gap: 3px }
+.markpop .grstop .grf input { width: 28px }
+.markpop .grchip { width: 28px; height: 28px; min-width: 0; padding: 3px; flex: none; border: 1px solid var(--line); border-radius: 6px; background: var(--chrome-2); cursor: pointer }
+.rprops .markpop .mpgrad > *, .rprops .markpop .mpgrad .grrow > *, .rprops .markpop .mpgrad .grtop > * { min-width: 0 }
+.rprops .markpop .mpgrad .grbar { min-width: 120px }
+.grpal { z-index: 61 }
+
+.anno .grann { pointer-events: none }
+.anno .grann .grhalo { stroke: rgba(255,255,255,.9); stroke-width: 4 }
+.anno .grann .grline { stroke: #1C1F24; stroke-width: 1.3 }
+.anno .grann .grring { fill: none; stroke: #1C1F24; stroke-width: 1; stroke-dasharray: 4 3; opacity: .7 }
+.anno .grann .grknot { stroke: #fff; stroke-width: 1.5; filter: drop-shadow(0 0 1px rgba(0,0,0,.8)) }
+.anno .grann .grknot.on { stroke: #2F80ED; stroke-width: 2 }
+.anno .grann .grstart { fill: #fff; stroke: #1C1F24; stroke-width: 1.5 }
+.anno .grann .grend { fill: #1C1F24; stroke: #fff; stroke-width: 1.2 }
+body.gradient-mode .pagebox, body.gradient-mode .pagebox * { cursor: crosshair !important }
+body.gradient-mode[data-grq="start"] .pagebox, body.gradient-mode[data-grq="start"] .pagebox * { cursor: var(--cur-move, move) !important }
+body.gradient-mode[data-grq="end"] .pagebox, body.gradient-mode[data-grq="end"] .pagebox *,
+body.gradient-mode[data-grq="stop"] .pagebox, body.gradient-mode[data-grq="stop"] .pagebox * { cursor: pointer !important }
+body.gradient-mode .anno .gsel .gkn, body.gradient-mode .anno .hnd .kn,
+body.gradient-mode .anno .hnd .knpad, body.gradient-mode .anno .hnd .stem, body.gradient-mode .anno .hnd .turnic,
+body.gradient-mode .anno .hnd .rotz, body.gradient-mode .anno .gsel .rotz { display: none }
+
 /* ---------- one selected mark, as Illustrator shows it ----------
    A thin box with small square grips (core.js handlesEl): the pointer on a
    grip is the resize arrow, and just off a corner (or a line's end) it

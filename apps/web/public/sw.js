@@ -70,6 +70,7 @@ const SHELL = [
   'js/toolprops.js',
   'js/arrange.js',
   'js/rotate.js',
+  'js/gradient.js',
   'js/typepanel.js',
   'js/toolbar.js',
   'js/toolpanel.js',

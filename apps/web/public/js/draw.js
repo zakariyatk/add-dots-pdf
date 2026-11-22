@@ -640,19 +640,16 @@
       const g = document.createElementNS(SVGNS, 'g');
       const el = polyline(ellipsePts(s, 72), vp, true);
       stroked(el, s, idx, it);
-      fillIn(el, s);
       g.appendChild(el);
+      fillIn(g, el, s, vp);
       return g;
     };
 
-    /* a closed shape's fill, and its inside answering a click wherever it is
+    /* a closed shape's fill (a colour or a gradient, core's paintFill), and its inside answering a click wherever it is
        filled or has no outline to click on (with neither, it would otherwise
        be impossible to pick out again) */
-    function fillIn(el, s) {
-      if (s.fill) {
-        el.style.fill = s.fill;
-        el.style.fillOpacity = X.shOp(s);
-      }
+    function fillIn(g, el, s, vp) {
+      X.paintFill(g, el, s, vp);
       if (s.fill || s.nos) el.style.pointerEvents = 'all';
     }
 
@@ -660,8 +657,8 @@
       const g = document.createElementNS(SVGNS, 'g');
       /* closed, so it can be filled like a box */
       const el = stroked(polyline(cloudPts(s, 6), vp, true), s, idx, it);
-      fillIn(el, s);
       g.appendChild(el);
+      fillIn(g, el, s, vp);
       return g;
     };
 
@@ -689,9 +686,9 @@
       const g = document.createElementNS(SVGNS, 'g');
       const el = polyline(s.pts, vp, false);
       stroked(el, s, idx, it);
-      if (polyClosed(s)) fillIn(el, s);
-      else el.style.stroke = s.c;               /* an open line always shows its line */
       g.appendChild(el);
+      if (polyClosed(s)) fillIn(g, el, s, vp);
+      else el.style.stroke = s.c;               /* an open line always shows its line */
       return g;
     };
 
@@ -715,9 +712,9 @@
       const el = document.createElementNS(SVGNS, 'path');
       el.setAttribute('d', penD(s.pts, vp));
       stroked(el, s, idx, it);
-      if (penClosed(s)) fillIn(el, s);
-      else el.style.stroke = s.c;               /* an open path always shows its line */
       g.appendChild(el);
+      if (penClosed(s)) fillIn(g, el, s, vp);
+      else el.style.stroke = s.c;               /* an open path always shows its line */
       return g;
     };
     X.handleKind.pen = 'bbox';

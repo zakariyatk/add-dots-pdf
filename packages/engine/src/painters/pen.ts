@@ -10,6 +10,7 @@ import type { Mark, Pt } from '../model';
 import { hexRgb } from '../save';
 import { dashOf, shCap, shOp } from '../style';
 import { PDF_CAP, type Painter } from './common';
+import { fillGradient, svgPath } from './gradient';
 
 export interface PenMark extends Mark {
   t: 'pen';
@@ -40,7 +41,8 @@ const pen: Painter = (p: PDFPage, s: PenMark) => {
   if (!pts || pts.length < 4) return;
   const d = penPathData(pts);
   const op = shOp(s);
-  if (s.fill && penClosed(pts))
+  if (s.fill && s.grad && penClosed(pts)) fillGradient(p, s, svgPath(penPathData(pts, 1)), op);
+  else if (s.fill && penClosed(pts))
     p.drawSvgPath(d, { x: 0, y: 0, color: hexRgb(s.fill), opacity: op, borderWidth: 0 });
   /* a closed path can drop its outline; an open one is nothing but its line */
   if (s.nos && penClosed(pts)) return;
