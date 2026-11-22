@@ -1846,6 +1846,13 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
   content: ''; position: absolute; inset: 0; pointer-events: none;
   box-shadow: inset 0 0 0 1px var(--marker); border-radius: 3px;
 }
+/* on a mark's row: a line where it will land, above that mark or below it */
+.layrow.drop-above::after, .layrow.drop-below::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 2px; pointer-events: none;
+  background: var(--marker); border-radius: 1px; z-index: 2;
+}
+.layrow.drop-above::after { top: -1px }
+.layrow.drop-below::after { bottom: -1px }
 
 /* ---------- colour and width: one dropdown each ---------- */
 .swmore { margin-left: 0 }

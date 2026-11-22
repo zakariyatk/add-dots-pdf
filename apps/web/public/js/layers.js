@@ -538,14 +538,17 @@
 
     /* ---------------- drag and drop ----------------
        A mark's row dropped on a layer's row joins that layer, on top of what
-       is already in it; dropped on another mark's row it lands in front of
-       that mark, which moves it in the page's own stack (it.shapes) as well —
-       the two orders are the same thing. A row that is part of the selection
-       takes every selected mark with it, keeping their order. */
+       is already in it; dropped on another mark's row it lands next to that
+       mark: on the row's upper half above it in the list (in front of it on
+       the page), on its lower half below it (behind it). That moves it in the
+       page's own stack (it.shapes) as well — the two orders are the same
+       thing — so a mark can go anywhere, the bottom of a layer included. A
+       line between the rows shows where it will land. A row that is part of
+       the selection takes every selected mark with it, keeping their order. */
     let dragIdx = null, dragGroup = null;
 
     function clearOver() {
-      Array.prototype.forEach.call(host.children, function (c) { c.classList.remove('over'); });
+      Array.prototype.forEach.call(host.children, function (c) { c.classList.remove('over', 'drop-above', 'drop-below'); });
     }
     host.addEventListener('dragstart', function (e) {
       const row = e.target.closest('.mrow[draggable]');
@@ -571,11 +574,18 @@
       if (!row) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      if (!row.classList.contains('over')) { clearOver(); row.classList.add('over'); }
+      /* a mark's row: above or below it, by which half the pointer is on;
+         a layer's row: into the layer */
+      const cls = row.dataset.idx !== undefined ? (lowerHalf(row, e) ? 'drop-below' : 'drop-above') : 'over';
+      if (!row.classList.contains(cls)) { clearOver(); row.classList.add(cls); }
     });
+    function lowerHalf(row, e) {
+      const r = row.getBoundingClientRect();
+      return e.clientY > r.top + r.height / 2;
+    }
     host.addEventListener('dragleave', function (e) {
       const row = e.target.closest('.layrow');
-      if (row && !row.contains(e.relatedTarget)) row.classList.remove('over');
+      if (row && !row.contains(e.relatedTarget)) row.classList.remove('over', 'drop-above', 'drop-below');
     });
     host.addEventListener('drop', function (e) {
       if (dragIdx == null) return;
@@ -583,11 +593,12 @@
       if (!row) return;
       e.preventDefault();
       const group = dragGroup || [dragIdx];
+      const below = row.dataset.idx !== undefined && lowerHalf(row, e);
       dragIdx = null; dragGroup = null; clearOver();
-      drop(S.items[S.current - 1], group, row);
+      drop(S.items[S.current - 1], group, row, below);
     });
 
-    function drop(it, group, row) {
+    function drop(it, group, row, below) {
       group = (group || []).filter(function (i) { return it && it.shapes[i]; });
       if (!group.length) { render(); return; }
       const L = layerOf(row.dataset.lay);
@@ -595,7 +606,9 @@
       if (row.dataset.idx !== undefined) {
         const onto = +row.dataset.idx;
         if (group.indexOf(onto) >= 0) { render(); return; }   /* dropped on itself */
-        at = onto + 1;                      /* in front of the mark dropped on */
+        /* the list runs front to back: above a row is in front of its mark
+           (after it in the stack), below is behind it (before it) */
+        at = below ? onto : onto + 1;
       } else {
         /* a layer's own row, or its empty placeholder: on top of its members */
         let top = -1;
