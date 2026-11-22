@@ -159,6 +159,24 @@
       try { stage.setPointerCapture(e.pointerId); } catch (err) { /* a mouse works without it */ }
     }, true);
 
+    /* The turn pointer curls the way a turn about the pivot goes from where
+       the pointer is, as Illustrator's does: one of four, by which quarter
+       round the pivot (on screen) it is in. Over the pivot itself it is the
+       pointer that moves it. */
+    function aim(e) {
+      if (!on) return;
+      const sel = selection();
+      let q = '';
+      if (sel && sel.it.anno) {
+        const c = pivotFor(sel), v = sel.it.vp.convertToViewportPoint(c[0], c[1]);
+        const r = sel.it.anno.getBoundingClientRect();
+        const dx = e.clientX - r.left - v[0], dy = e.clientY - r.top - v[1];
+        q = Math.hypot(dx, dy) <= HIT ? 'pivot' : (dy < 0 ? 't' : 'b') + (dx < 0 ? 'l' : 'r');
+      }
+      if (document.body.dataset.rotq !== q) document.body.dataset.rotq = q;
+    }
+    document.addEventListener('pointermove', aim);
+
     document.addEventListener('pointermove', function (e) {
       const d = drag;
       if (!d || e.pointerId !== d.id) return;
@@ -234,6 +252,7 @@
       } else {
         on = false;
         drag = null; hideHud();
+        delete document.body.dataset.rotq;
       }
       paintBtns();
       X.redrawAll();

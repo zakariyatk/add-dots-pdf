@@ -26,8 +26,10 @@ function closed(pts: Pt[]): boolean {
 
 const poly: Painter = (p: PDFPage, s: PolyMark) => {
   if (!s.pts || s.pts.length < 2) return;
-  if (s.fill && closed(s.pts)) fillPolygon(p, s.pts, hexRgb(s.fill), shOp(s));
-  paintPts(p, s.pts, s);
+  const shut = closed(s.pts);
+  if (s.fill && shut) fillPolygon(p, s.pts, hexRgb(s.fill), shOp(s));
+  /* a closed one can drop its outline and keep just the fill */
+  if (!(s.nos && shut)) paintPts(p, s.pts, s);
 };
 
 export const polyPainters: Record<string, Painter> = { poly };

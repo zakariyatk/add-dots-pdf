@@ -686,13 +686,17 @@
 
   /* ---------------- undo ---------------- */
   function snapshot() {
-    S.undo.push(S.items.map(function (it) {
+    const snap = S.items.map(function (it) {
       return {
         ref: it, src: it.src, num: it.num, rot: it.rot, added: it.added,
         crop: it.crop ? { x: it.crop.x, y: it.crop.y, w: it.crop.w, h: it.crop.h } : null,
         shapes: it.shapes.map(function (s) { return Object.assign({}, s); })
       };
-    }));
+    });
+    /* the layers too (js/layers.js), so undoing a merge or a delete brings
+       the layer back as well as its marks */
+    snap.layers = S.layers ? S.layers.map(function (l) { return Object.assign({}, l); }) : null;
+    S.undo.push(snap);
     if (S.undo.length > 60) S.undo.shift();
     setUndoState();
   }
@@ -716,7 +720,9 @@
       it.thumbDone = false;
       return it;
     });
+    if (snap.layers) S.layers = snap.layers;
     await syncAll();
+    EXT.emit('meta');
     toast('Undone');
   }
 
@@ -2444,6 +2450,12 @@
     const b = markBox(s);
     return [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
   }
+  /* a text mark's box as four PDF corners, turned with it */
+  function textCorners(s) {
+    const r = textRect(s), c = rotCenter(s);
+    const q = [[r.x, r.y], [r.x + r.w, r.y], [r.x + r.w, r.y + r.h], [r.x, r.y + r.h]];
+    return s.r ? q.map(function (p) { return rotPt(p, c, s.r); }) : q;
+  }
   /* the un-turned footprint of a text mark, in PDF points */
   function textRect(s) { return E.textRect(s, textWidth); }
   /* that footprint as four viewport points, turned */
@@ -2546,7 +2558,7 @@
       });
     });
 
-    if (selected && !open) {
+    if (selected && !open && S.tool !== 'select') {
       const h = document.createElementNS(SVGNS, 'polygon');
       h.setAttribute('class', 'halo');
       h.setAttribute('points', vpts(textQuad(s, vp)));
@@ -3220,6 +3232,20 @@
       stretchBox(s, o, d.extra, p);
     } else if (d.mode === 'turn') {
       turnShape(s, o, d, p, e.shiftKey);
+    } else if (d.mode === 'tsize') {
+      /* the type sized from the grip opposite, which stays where it is: the
+         pull is the pointer's distance along the line from that grip */
+      const f = d.extra.f, h = d.extra.h;
+      const vx = h[0] - f[0], vy = h[1] - f[1], l2 = vx * vx + vy * vy;
+      if (l2 > 1e-6) {
+        let k = ((p[0] - f[0]) * vx + (p[1] - f[1]) * vy) / l2;
+        const size = Math.max(1, Math.min(1296, o.size * Math.max(0.02, k)));
+        k = size / o.size;
+        s.size = Math.round(size * 100) / 100;
+        k = s.size / o.size;
+        s.a = [f[0] + (o.a[0] - f[0]) * k, f[1] + (o.a[1] - f[1]) * k];
+        if (o.lh) s.lh = Math.round(o.lh * k * 100) / 100;
+      }
     } else if (d.mode === 'size') {
       const c = rotCenter(o);
       const d1 = Math.hypot(p[0] - c[0], p[1] - c[1]);
@@ -3228,13 +3254,14 @@
     /* by the pointer, as Illustrator shows it: the size while a grip is
        pulled, the angle while the mark turns */
     if (d.mode === 'turn' || d.mode === 'gturn') showHudText(e, 'Angle ' + fmtAngle(d.turned || 0));
+    else if (d.mode === 'tsize' || (d.mode === 'size' && s.t === 'text')) showHudText(e, 'Size ' + (Math.round(s.size * 10) / 10) + ' pt');
     else if (SIZE_MODES[d.mode]) {
       const vb = d.group ? unionBox(d.group.map(function (m) { return visBox(d.it.shapes[m.i]); })) : visBox(s);
       showHudText(e, 'W ' + fmtLen(vb.x2 - vb.x1) + '   H ' + fmtLen(vb.y2 - vb.y1));
     }
     drawShapes(d.it);
   }
-  const SIZE_MODES = { corner: 1, side: 1, bscale: 1, bside: 1, gscale: 1, size: 1 };
+  const SIZE_MODES = { corner: 1, side: 1, bscale: 1, bside: 1, gscale: 1, size: 1, tsize: 1 };
 
   function dragEnd(e) {
     const d = dragOn; if (!d) return;
@@ -3462,6 +3489,14 @@
 
   /* the colour picker shared by Fill and Border */
   let swFor = null;
+  /** A closed shape, which takes a fill and can do without its outline: a
+      box, circle or cloud, a shape from Edit Object or Pathfinder, and a
+      Continuous Line or Pen path once closed. */
+  function closedShape(s) {
+    return s.t === 'rect' || s.t === 'ellipse' || s.t === 'cloud' || s.t === 'vpath' ||
+      (s.t === 'poly' && !!EXT.polyClosed && EXT.polyClosed(s)) ||
+      (s.t === 'pen' && !!EXT.penClosed && EXT.penClosed(s));
+  }
   function openSwatches(key, anchor) {
     const s = selShape(); if (!s) return;
     const pop = $('mpSwatches');
@@ -3479,12 +3514,12 @@
       });
       pop.appendChild(n);
     }
-    /* a box, a circle, or a shape off the page can drop its outline and keep just the fill */
-    if (key === 'c' && (s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath')) {
+    /* any closed shape can drop its outline and keep just the fill */
+    if (key === 'c' && closedShape(s)) {
       const n = document.createElement('button');
       n.type = 'button';
       n.className = 'pnofill' + (s.nos ? ' on' : '');
-      n.title = 'No outline'; n.setAttribute('aria-label', 'No outline');
+      n.title = 'No border'; n.setAttribute('aria-label', 'No border');
       n.addEventListener('click', function (e) {
         e.stopPropagation(); markEdit(function (x) { x.nos = true; }); closeSwatches();
       });
@@ -3538,9 +3573,7 @@
     const isText = s.t === 'text';
     /* a shape off the page fills too — a Continuous Line only once it is
        snapped shut back onto its own first point */
-    const isBox = s.t === 'rect' || s.t === 'ellipse' || s.t === 'vpath' ||
-      (s.t === 'poly' && EXT.polyClosed && EXT.polyClosed(s)) ||
-      (s.t === 'pen' && EXT.penClosed && EXT.penClosed(s));
+    const isBox = closedShape(s);
     /* a picture: no line to style (a signature, or a stamp made from one) */
     const isPic = s.t === 'sig' || s.t === 'istamp';
     const count = selList().length;
@@ -3954,15 +3987,26 @@
       }
       vq.forEach(function (v, i) { knob(v, 'pv', i); });
     } else if (s.t === 'text') {
-      const q = textQuad(s, vp);
+      /* As Illustrator shows point text: one box with eight grips. Any grip
+         sizes the type from the grip opposite, which stays put (mode
+         'tsize'); off each corner the pointer turns it. */
+      const Q = textCorners(s);
+      const q = Q.map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
       const out = document.createElementNS(SVGNS, 'polygon');
       out.setAttribute('class', 'halo'); out.setAttribute('points', vpts(q));
       g.appendChild(out);
-      /* any corner pulled out or in sizes the type */
       const cx = (q[0][0] + q[2][0]) / 2, cy = (q[0][1] + q[2][1]) / 2;
-      turnZones(q, [cx, cy]);                   /* off each corner, as in Illustrator */
-      q.forEach(function (v) {
-        knob(v, 'size').dataset.cur = (v[0] - cx) * (v[1] - cy) > 0 ? 'nwse' : 'nesw';
+      turnZones(q, [cx, cy]);
+      const mid = function (a, b) { return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; };
+      Q.forEach(function (P, i) {
+        const v = q[i];
+        knob(v, 'tsize', { h: P, f: Q[(i + 2) % 4] }).dataset.cur = (v[0] - cx) * (v[1] - cy) > 0 ? 'nwse' : 'nesw';
+      });
+      Q.forEach(function (P, i) {
+        const P2 = Q[(i + 1) % 4], v = mid(q[i], q[(i + 1) % 4]);
+        const k = knob(v, 'tsize', { h: mid(P, P2), f: mid(Q[(i + 2) % 4], Q[(i + 3) % 4]) });
+        k.classList.add('pill');
+        k.dataset.cur = Math.abs(q[(i + 1) % 4][0] - q[i][0]) >= Math.abs(q[(i + 1) % 4][1] - q[i][1]) ? 'ns' : 'ew';
       });
     }
     return g;
@@ -4029,7 +4073,11 @@
       }
       if (S.tool === 'text') {
         e.preventDefault();
-        pendingPin = { it: it, at: pt(e), x: e.clientX, y: e.clientY, id: e.pointerId, text: true };
+        /* on text already there: type in it, the caret where it was clicked,
+           as Illustrator's Type tool does — not a new box on top of it */
+        const tp = pt(e), on = textAt(it, it.vp.convertToPdfPoint(tp[0], tp[1]));
+        if (on >= 0) { openEditorAt(it, on, e.clientX, e.clientY); return; }
+        pendingPin = { it: it, at: tp, x: e.clientX, y: e.clientY, id: e.pointerId, text: true };
         return;
       }
       e.preventDefault();
@@ -4190,15 +4238,48 @@
     lastPress = again ? null : { shape: shape, t: now, x: e.clientX, y: e.clientY };
     if (!again) return;
     e.preventDefault(); e.stopPropagation();
-    openEditor(hit.it, null, hit.i, true);
+    openEditorAt(hit.it, hit.i, e.clientX, e.clientY);
   }, true);
   stage.addEventListener('dblclick', function (e) {
     if ((S.tool !== 'select' && S.tool !== 'text') || S.editing) return;
     const hit = textUnder(e);
     if (!hit) return;
     e.preventDefault(); e.stopPropagation();
-    openEditor(hit.it, null, hit.i, true);
+    openEditorAt(hit.it, hit.i, e.clientX, e.clientY);
   });
+  /** the topmost text mark on page it whose box holds PDF point p, or -1 */
+  function textAt(it, p) {
+    const pad = 3 / Math.max(0.05, S.scale);
+    for (let i = it.shapes.length - 1; i >= 0; i--) {
+      const s = it.shapes[i];
+      if (!s || s.t !== 'text' || s.hide || s.locked) continue;
+      const r = textRect(s), q = s.r ? rotPt(p, rotCenter(s), -s.r) : p;
+      if (q[0] >= r.x - pad && q[0] <= r.x + r.w + pad && q[1] >= r.y - pad && q[1] <= r.y + r.h + pad) return i;
+    }
+    return -1;
+  }
+  /* Open text mark idx for typing with the caret where the pointer is, as a
+     click into text does in Illustrator: the editor shows the same text in
+     the same place, so the character under the pointer is found in it. */
+  function openEditorAt(it, idx, x, y) {
+    openEditor(it, null, idx, true);
+    const ed = S.editing;
+    if (!ed || !ed.el) return;
+    let node = null, off = 0;
+    if (document.caretPositionFromPoint) {
+      const cp = document.caretPositionFromPoint(x, y);
+      if (cp) { node = cp.offsetNode; off = cp.offset; }
+    } else if (document.caretRangeFromPoint) {
+      const cr = document.caretRangeFromPoint(x, y);
+      if (cr) { node = cr.startContainer; off = cr.startOffset; }
+    }
+    if (!node || !ed.el.contains(node)) return;
+    try {
+      const sel = window.getSelection(), r = document.createRange();
+      r.setStart(node, off); r.collapse(true);
+      sel.removeAllRanges(); sel.addRange(r);
+    } catch (err) { /* the caret stays at the end */ }
+  }
 
   /* Ctrl+click adds a mark to the selection, or takes it out. Capture phase,
      so it runs before the mark's own handler starts a drag. */

@@ -79,6 +79,10 @@
        engine's save already skip, so hiding a layer is only ever setting
        that flag on its members. */
     let focusLayer = null;              /* the active layer: where new marks land */
+    /* layers picked out in the panel (a click on a layer's row; Ctrl or
+       Shift adds more), for Duplicate, Delete and Merge — kept apart from
+       the marks selected on the page, and let go when marks are selected */
+    let selLayers = [];
     let layerSeq = 1;
     const shut = {};                    /* layer id -> its branch is collapsed */
 
@@ -148,17 +152,18 @@
         '<span class="grow"></span>' +
         '<button type="button" id="layRename" title="Rename the active layer" aria-label="Rename layer">' + PENCIL + '</button>' +
         '<button type="button" id="layMerge" title="Merge the active layer into another" aria-label="Merge layer">' + MERGE + '</button>' +
-        '<button type="button" class="laydanger" id="layDel" title="Delete the active layer" aria-label="Delete layer">' + DEL + '</button>' +
       '</div>' +
-      /* what is selected on the page — one mark or several — moved, copied
-         or deleted together; each mark's row no longer carries these */
+      /* one Duplicate and one Delete for whatever is picked out: the marks
+         selected on the page (one or several, together), or with none the
+         active layer itself, as Illustrator's Layers panel has them. Up and
+         down are for marks only. */
       '<div class="laytools laysel">' +
         '<span class="laysel-lbl" id="laySelLbl">Nothing selected</span>' +
         '<span class="grow"></span>' +
-        '<button type="button" data-selact="up" title="Bring forward" aria-label="Bring forward">' + UP + '</button>' +
-        '<button type="button" data-selact="down" title="Send backward" aria-label="Send backward">' + DOWN + '</button>' +
-        '<button type="button" data-selact="dup" title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
-        '<button type="button" class="laydanger" data-selact="del" title="Delete" aria-label="Delete">' + DEL + '</button>' +
+        '<button type="button" data-selact="up" data-marks="1" title="Bring forward" aria-label="Bring forward">' + UP + '</button>' +
+        '<button type="button" data-selact="down" data-marks="1" title="Send backward" aria-label="Send backward">' + DOWN + '</button>' +
+        '<button type="button" data-selact="dup" id="layDup" title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
+        '<button type="button" class="laydanger" data-selact="del" id="layDel" title="Delete" aria-label="Delete">' + DEL + '</button>' +
       '</div>' +
       '<div id="layList"></div>';
     $('railPages').parentNode.appendChild(panel);
@@ -198,6 +203,12 @@
     });
     $('layRename').addEventListener('click', function () { renameInPlace(focusLayer); });
     $('layMerge').addEventListener('click', function () {
+      /* marks selected from more than one layer: into one layer, the front one's */
+      const picked = pageSelection();
+      if (picked && marksPicked()) { mergeMarks(picked.it, picked.list); return; }
+      /* several layers picked: into the active one */
+      const many = pickedLayers();
+      if (many.length > 1) { mergeLayers(many); return; }
       const source = layerOf(focusLayer);
       const others = ensureLayers().filter(function (l) { return l.id !== source.id; });
       if (!others.length) { X.toast('There is only one layer'); return; }
@@ -205,6 +216,55 @@
       X.ask('Merge "' + source.name + '" into which layer?\n\n' + listing +
         '\n\nType its number.', '1', { title: 'Merge layer' }).then(function (ans) { mergeInto(source, others, ans); });
     });
+    /* Several layers merged into one, as Illustrator's Merge Selected: every
+       mark of the others moves into the active layer (or, if it is not one
+       of them, the topmost of them), taking its visibility and lock, and
+       the others go. */
+    function mergeLayers(ids) {
+      const target = layerOf(ids.indexOf(focusLayer) >= 0 ? focusLayer
+        : S.layers.filter(function (l) { return ids.indexOf(l.id) >= 0; }).pop().id);
+      const others = ids.filter(function (id) { return id !== target.id; });
+      X.snapshot();
+      let n = 0;
+      S.items.forEach(function (it) {
+        it.shapes.forEach(function (s) {
+          if (!NOT_SELECTABLE[s.t] && others.indexOf(layerIdOf(s)) >= 0) {
+            s.layer = target.id; s.hide = !!target.hidden; s.locked = !!target.locked; n++;
+          }
+        });
+      });
+      S.layers = S.layers.filter(function (l) { return others.indexOf(l.id) < 0; });
+      focusLayer = target.id;
+      selLayers = [target.id];
+      redrawEverywhere(); X.updateMeta();
+      render();
+      X.toast((others.length + 1) + ' layers merged into <b>' + X.esc(target.name) + '</b>' +
+        (n ? ' — ' + n + (n === 1 ? ' mark moved' : ' marks moved') : ''));
+    }
+    /* Marks selected from more than one layer gathered into one: the layer of
+       the frontmost of them. Their places in the page's stack stay as they
+       are, so nothing moves in front of or behind anything else. */
+    function mergeMarks(it, list) {
+      const front = list.slice().sort(function (a, b) { return a - b; }).pop();
+      const target = layerOf(layerIdOf(it.shapes[front]));
+      const from = {};
+      list.forEach(function (i) { const id = layerIdOf(it.shapes[i]); if (id !== target.id) from[id] = 1; });
+      if (!Object.keys(from).length) { X.toast('These are all on <b>' + X.esc(target.name) + '</b> already'); return; }
+      X.snapshot();
+      list.forEach(function (i) {
+        const s = it.shapes[i];
+        if (s && !s.locked) { s.layer = target.id; s.hide = !!target.hidden; s.locked = !!target.locked; }
+      });
+      focusLayer = target.id;
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      render();
+      X.toast(list.length + ' marks merged into <b>' + X.esc(target.name) + '</b>');
+    }
+    /* the layers picked out in the panel that still exist */
+    function pickedLayers() {
+      ensureLayers();
+      return selLayers.filter(function (id) { return S.layers.some(function (l) { return l.id === id; }); });
+    }
     function mergeInto(source, others, ans) {
       if (!ans) return;
       const n = parseInt(ans, 10);
@@ -224,27 +284,80 @@
     }
     /* Illustrator's own rule: deleting a layer deletes what is on it, so the
        marks go with it — after saying how many, and undoably */
-    $('layDel').addEventListener('click', function () {
+    function deleteLayer(ids) {
       ensureLayers();
-      if (S.layers.length < 2) { X.toast('The last layer cannot be deleted'); return; }
-      const L = layerOf(focusLayer);
+      ids = (ids && ids.length ? ids : [focusLayer]).filter(function (id) { return S.layers.some(function (l) { return l.id === id; }); });
+      if (S.layers.length - ids.length < 1) { X.toast('The last layer cannot be deleted'); return; }
+      const gone = ids.map(layerOf);
       let n = 0;
       S.items.forEach(function (it) {
-        it.shapes.forEach(function (s) { if (layerIdOf(s) === L.id) n++; });
+        it.shapes.forEach(function (s) { if (ids.indexOf(layerIdOf(s)) >= 0) n++; });
       });
-      if (n && !window.confirm('Delete "' + L.name + '" and the ' + n +
-        (n === 1 ? ' mark on it?' : ' marks on it?'))) return;
+      const what = gone.length === 1 ? '"' + gone[0].name + '"' : gone.length + ' layers';
+      if (n && !window.confirm('Delete ' + what + ' and the ' + n +
+        (n === 1 ? ' mark on ' : ' marks on ') + (gone.length === 1 ? 'it?' : 'them?'))) return;
       X.snapshot();
       S.items.forEach(function (it) {
-        it.shapes = it.shapes.filter(function (s) { return layerIdOf(s) !== L.id; });
+        it.shapes = it.shapes.filter(function (s) { return ids.indexOf(layerIdOf(s)) < 0; });
       });
-      S.layers = S.layers.filter(function (l) { return l.id !== L.id; });
+      S.layers = S.layers.filter(function (l) { return ids.indexOf(l.id) < 0; });
       S.sel = null; S.multi = null;
-      focusLayer = S.layers[0].id;
+      selLayers = [];
+      focusLayer = S.layers[S.layers.length - 1].id;
       redrawEverywhere(); X.updateMeta(); X.syncMarkPop();
       render();
-      X.toast('<b>' + X.esc(L.name) + '</b> deleted');
-    });
+      X.toast((gone.length === 1 ? '<b>' + X.esc(gone[0].name) + '</b>' : gone.length + ' layers') + ' deleted');
+    }
+    /* A layer duplicated: a new layer just above it, named after it, with a
+       copy of every mark on it on every page, in the same order, on top of
+       the page's stack, and the copy the active layer — as Illustrator's
+       Duplicate Layer. A copied group is a group of its own. */
+    function duplicateLayers(ids) {
+      ids = ids && ids.length ? ids : [focusLayer];
+      X.snapshot();
+      const made = ids.map(function (id) { return duplicateLayer(id); });
+      selLayers = made.length > 1 ? made : [];
+      redrawEverywhere(); X.updateMeta(); X.syncMarkPop();
+      render();
+      X.toast(made.length > 1 ? made.length + ' layers duplicated' : '<b>' + X.esc(layerOf(made[0]).name) + '</b> added');
+    }
+    /** one layer copied (the undo snapshot is the caller's); answers the copy's id */
+    function duplicateLayer(id) {
+      ensureLayers();
+      const L = layerOf(id);
+      layerSeq++;
+      const C = {
+        id: 'L' + Date.now().toString(36) + layerSeq,
+        name: L.name + ' copy',
+        hidden: !!L.hidden,
+        locked: false,
+        color: STRIPES[S.layers.length % STRIPES.length]
+      };
+      let n = 0;
+      S.items.forEach(function (it) {
+        const grpMap = {};
+        const copies = [];
+        it.shapes.forEach(function (sh, i) {
+          if (NOT_SELECTABLE[sh.t] || layerIdOf(sh) !== L.id) return;
+          const c = JSON.parse(JSON.stringify(sh));
+          c.layer = C.id;
+          c.locked = false;
+          if (c.id != null) c.id = String(c.id) + '-' + Date.now().toString(36) + i;
+          if (c.grp != null) {
+            if (!grpMap[c.grp]) grpMap[c.grp] = 'g' + Date.now().toString(36) + 'd' + (++layerSeq);
+            c.grp = grpMap[c.grp];
+          }
+          copies.push(c);
+        });
+        copies.forEach(function (c) { it.shapes.push(c); });
+        n += copies.length;
+      });
+      S.layers.splice(S.layers.indexOf(L) + 1, 0, C);
+      focusLayer = C.id;
+      S.sel = null; S.multi = null;
+      void n;
+      return C.id;
+    }
 
     function bodies() { return Array.prototype.slice.call(document.querySelectorAll('#rail > .rail-body')); }
     /* the tab always opens it, as Bookmarks' does: the side rail button
@@ -288,7 +401,7 @@
       const lay = (S.layers || []).map(function (l) {
         return l.id + l.name + (l.hidden ? '1' : '0') + (l.locked ? '1' : '0');
       }).join('|');
-      return S.current + ':' + marks + ':' + lay + ':' + focusLayer +
+      return S.current + ':' + marks + ':' + lay + ':' + focusLayer + ':' + selLayers.join(',') +
         ':' + (S.sel && S.sel.it === it ? S.sel.i : -1) + ':' + multi;
     }
 
@@ -316,15 +429,17 @@
       $('layCount').textContent = S.layers.length + (S.layers.length === 1 ? ' layer · ' : ' layers · ') +
         total + ' on page ' + S.current;
       $('layMerge').disabled = S.layers.length < 2;
-      $('layDel').disabled = S.layers.length < 2;
 
       /* newest layer at the top, the way the stack reads everywhere else */
       const selected = S.sel && S.sel.it === it ? X.selList() : [];
+      /* marks selected on the page take over from layers picked in the panel */
+      if (selected.length) selLayers = [];
       paintSel(it, selected);
       let h = '';
       S.layers.slice().reverse().forEach(function (L) {
         const list = map[L.id] || [], open = !shut[L.id], active = L.id === focusLayer;
-        h += '<div class="layrow layhead' + (active ? ' active' : '') + (L.hidden ? ' hid' : '') +
+        h += '<div class="layrow layhead' + (active ? ' active' : '') + (selLayers.indexOf(L.id) >= 0 ? ' sel' : '') +
+            (L.hidden ? ' hid' : '') +
             (L.locked ? ' locked' : '') + '" data-lay="' + L.id + '">' +
           dot(!L.hidden, L.hidden ? 'Show this layer' : 'Hide this layer') +
           lockBtn(!!L.locked, L.locked ? 'Unlock this layer' : 'Lock this layer') +
@@ -383,8 +498,21 @@
       }
       if (!isMark) {                       /* a layer's own row: make it active */
         if (e.target.closest('.layname')) return;
-        if (focusLayer === row.dataset.lay) return;
-        focusLayer = row.dataset.lay;
+        /* and pick the layer out rather than marks, so Duplicate and Delete
+           act on it, as clicking a layer in Illustrator targets the layer */
+        const id = row.dataset.lay;
+        if (e.ctrlKey || e.metaKey || e.shiftKey) {
+          /* Ctrl or Shift: one more layer picked out, or one taken back out */
+          const have = pickedLayers();
+          if (!have.length && focusLayer && focusLayer !== id) have.push(focusLayer);
+          const k = have.indexOf(id);
+          if (k >= 0 && have.length > 1) have.splice(k, 1); else if (k < 0) have.push(id);
+          selLayers = have;
+        } else {
+          selLayers = [id];
+        }
+        focusLayer = selLayers.indexOf(id) >= 0 ? id : selLayers[selLayers.length - 1];
+        if (S.sel) { S.sel = null; S.multi = null; X.redrawAll(); X.syncMarkPop(); }
         render();
         return;
       }
@@ -521,8 +649,16 @@
        selected, so two picked together move, copy or go together */
     panel.querySelector('.laysel').addEventListener('click', function (e) {
       const b = e.target.closest('[data-selact]');
-      if (!b || b.disabled || !S.sel) return;
+      if (!b || b.disabled) return;
       const act = b.dataset.selact;
+      if (!marksPicked()) {
+        /* nothing selected on the page: Duplicate and Delete act on the
+           layers picked out, or the active one */
+        const ids = pickedLayers();
+        if (act === 'dup') duplicateLayers(ids.length ? ids : [focusLayer]);
+        else if (act === 'del') deleteLayer(ids.length ? ids : [focusLayer]);
+        return;
+      }
       if (act === 'up') X.stackSelected('up');
       else if (act === 'down') X.stackSelected('down');
       else if (act === 'dup') X.duplicateSelected();
@@ -530,22 +666,53 @@
       X.syncMarkPop();
       render();
     });
+    /* how many unlocked marks are selected on the page shown */
+    function marksPicked() {
+      const it = S.items[S.current - 1];
+      if (!S.sel || !it || S.sel.it !== it) return 0;
+      return X.selList().filter(function (i) { return it.shapes[i] && !it.shapes[i].locked; }).length;
+    }
     function paintSel(it, selected) {
       const n = selected.filter(function (i) { return it && it.shapes[i] && !it.shapes[i].locked; }).length;
-      $('laySelLbl').textContent = !n ? 'Nothing selected' : n === 1 ? '1 selected' : n + ' selected';
-      panel.querySelectorAll('[data-selact]').forEach(function (b) { b.disabled = !n; });
+      /* with no marks selected, the buttons are the picked layers', or the active one's */
+      const ids = n ? [] : pickedLayers();
+      const L = n ? null : layerOf(ids.length === 1 ? ids[0] : focusLayer);
+      $('laySelLbl').textContent = n ? (n === 1 ? '1 selected' : n + ' selected')
+        : ids.length > 1 ? ids.length + ' layers selected' : L.name;
+      panel.querySelectorAll('[data-marks]').forEach(function (b) { b.disabled = !n; });
+      const what = n ? (n === 1 ? 'the selected mark' : 'the ' + n + ' selected marks')
+        : ids.length > 1 ? 'the ' + ids.length + ' selected layers' : 'layer "' + L.name + '"';
+      const leaves = n ? 1 : S.layers.length - Math.max(1, ids.length);
+      $('layDup').disabled = false;
+      $('layDup').title = 'Duplicate ' + what;
+      $('layDup').setAttribute('aria-label', $('layDup').title);
+      $('layDel').disabled = leaves < 1;
+      $('layDel').title = leaves < 1 ? 'At least one layer has to stay' : 'Delete ' + what;
+      $('layDel').setAttribute('aria-label', 'Delete ' + what);
+      /* Merge says what it will do */
+      let mergeWhat = 'Merge the active layer into another';
+      if (n) {
+        const layersOf = {};
+        selected.forEach(function (i) { if (it.shapes[i]) layersOf[layerIdOf(it.shapes[i])] = 1; });
+        mergeWhat = Object.keys(layersOf).length > 1 ? 'Merge the selected marks into one layer' : 'The selected marks are on one layer';
+      } else if (ids.length > 1) mergeWhat = 'Merge the ' + ids.length + ' selected layers into one';
+      $('layMerge').title = mergeWhat;
+      $('layMerge').setAttribute('aria-label', mergeWhat);
     }
 
     /* ---------------- drag and drop ----------------
        A mark's row dropped on a layer's row joins that layer, on top of what
-       is already in it; dropped on another mark's row it lands in front of
-       that mark, which moves it in the page's own stack (it.shapes) as well —
-       the two orders are the same thing. A row that is part of the selection
-       takes every selected mark with it, keeping their order. */
+       is already in it; dropped on another mark's row it lands next to that
+       mark: on the row's upper half above it in the list (in front of it on
+       the page), on its lower half below it (behind it). That moves it in the
+       page's own stack (it.shapes) as well — the two orders are the same
+       thing — so a mark can go anywhere, the bottom of a layer included. A
+       line between the rows shows where it will land. A row that is part of
+       the selection takes every selected mark with it, keeping their order. */
     let dragIdx = null, dragGroup = null;
 
     function clearOver() {
-      Array.prototype.forEach.call(host.children, function (c) { c.classList.remove('over'); });
+      Array.prototype.forEach.call(host.children, function (c) { c.classList.remove('over', 'drop-above', 'drop-below'); });
     }
     host.addEventListener('dragstart', function (e) {
       const row = e.target.closest('.mrow[draggable]');
@@ -571,11 +738,18 @@
       if (!row) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      if (!row.classList.contains('over')) { clearOver(); row.classList.add('over'); }
+      /* a mark's row: above or below it, by which half the pointer is on;
+         a layer's row: into the layer */
+      const cls = row.dataset.idx !== undefined ? (lowerHalf(row, e) ? 'drop-below' : 'drop-above') : 'over';
+      if (!row.classList.contains(cls)) { clearOver(); row.classList.add(cls); }
     });
+    function lowerHalf(row, e) {
+      const r = row.getBoundingClientRect();
+      return e.clientY > r.top + r.height / 2;
+    }
     host.addEventListener('dragleave', function (e) {
       const row = e.target.closest('.layrow');
-      if (row && !row.contains(e.relatedTarget)) row.classList.remove('over');
+      if (row && !row.contains(e.relatedTarget)) row.classList.remove('over', 'drop-above', 'drop-below');
     });
     host.addEventListener('drop', function (e) {
       if (dragIdx == null) return;
@@ -583,11 +757,12 @@
       if (!row) return;
       e.preventDefault();
       const group = dragGroup || [dragIdx];
+      const below = row.dataset.idx !== undefined && lowerHalf(row, e);
       dragIdx = null; dragGroup = null; clearOver();
-      drop(S.items[S.current - 1], group, row);
+      drop(S.items[S.current - 1], group, row, below);
     });
 
-    function drop(it, group, row) {
+    function drop(it, group, row, below) {
       group = (group || []).filter(function (i) { return it && it.shapes[i]; });
       if (!group.length) { render(); return; }
       const L = layerOf(row.dataset.lay);
@@ -595,7 +770,9 @@
       if (row.dataset.idx !== undefined) {
         const onto = +row.dataset.idx;
         if (group.indexOf(onto) >= 0) { render(); return; }   /* dropped on itself */
-        at = onto + 1;                      /* in front of the mark dropped on */
+        /* the list runs front to back: above a row is in front of its mark
+           (after it in the stack), below is behind it (before it) */
+        at = below ? onto : onto + 1;
       } else {
         /* a layer's own row, or its empty placeholder: on top of its members */
         let top = -1;

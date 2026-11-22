@@ -47,9 +47,10 @@ export interface Mark extends MarkBase {
   cap?: number;
   /** Line join: 0 miter, 1 round (default), 2 bevel. */
   j?: number;
-  /** Fill colour for boxes. */
+  /** Fill colour, for any closed shape: a box, circle, cloud, closed
+      Continuous Line or Pen path, or a shape from Edit Object or Pathfinder. */
   fill?: string | null;
-  /** No outline (boxes only: a rect or ellipse can be filled with no border). */
+  /** No outline: a closed shape can keep just its fill, or neither. */
   nos?: boolean;
 }
 

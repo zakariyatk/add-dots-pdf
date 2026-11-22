@@ -403,7 +403,12 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
     if (!s.nos) paintPts(p, ring, s);
   };
 
-  const cloud: Painter = (p, s: CloudMark) => paintPts(p, cloudPts(s, 8), s, true);
+  /* a closed shape: a fill under it, and its outline unless it has none */
+  const cloud: Painter = (p, s: CloudMark) => {
+    const ring = cloudPts(s, 8);
+    if (s.fill) fillPolygon(p, ring, hexRgb(s.fill), shOp(s));
+    if (!s.nos) paintPts(p, ring, s, true);
+  };
   const arc: Painter = (p, s: ArcMark) => paintPts(p, arcPts(s, 64), s);
 
   const dim: Painter = (p, s: DimMark, ctx) => {

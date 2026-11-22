@@ -1813,6 +1813,9 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
 /* --- a layer's own row in the tree, and the branch under it --- */
 .layrow.layhead { padding-right: 6px }
 .layrow.layhead.active { background: var(--chrome-2) }
+/* a layer picked out (js/layers.js selLayers) reads as selected, the active one too */
+.layrow.layhead.sel { background: color-mix(in srgb, var(--marker) 14%, transparent); box-shadow: inset 3px 0 0 var(--marker) }
+.layrow.layhead.sel:hover { background: color-mix(in srgb, var(--marker) 20%, transparent) }
 .layrow.layhead .laylabel { font-weight: 600 }
 .layrow.layhead .laylabel { cursor: text }
 /* a layer's name, being renamed in place (js/layers.js) */
@@ -1846,6 +1849,13 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
   content: ''; position: absolute; inset: 0; pointer-events: none;
   box-shadow: inset 0 0 0 1px var(--marker); border-radius: 3px;
 }
+/* on a mark's row: a line where it will land, above that mark or below it */
+.layrow.drop-above::after, .layrow.drop-below::after {
+  content: ''; position: absolute; left: 0; right: 0; height: 2px; pointer-events: none;
+  background: var(--marker); border-radius: 1px; z-index: 2;
+}
+.layrow.drop-above::after { top: -1px }
+.layrow.drop-below::after { bottom: -1px }
 
 /* ---------- colour and width: one dropdown each ---------- */
 .swmore { margin-left: 0 }
@@ -2068,6 +2078,12 @@ body[data-tool="editobj"] .capture { cursor: pointer }
 .anno .rpivot circle.dot { fill: #22D3EE; stroke: none }
 .anno .rpivot path { fill: none; stroke: #22D3EE; stroke-width: 1.3 }
 body.rotate-mode .pagebox, body.rotate-mode .pagebox * { cursor: var(--cur-rotate) !important }
+/* curled the way the turn goes from the pointer's quarter round the pivot (js/rotate.js aim) */
+body.rotate-mode[data-rotq="tl"] .pagebox, body.rotate-mode[data-rotq="tl"] .pagebox * { cursor: var(--cur-rotate-tl) !important }
+body.rotate-mode[data-rotq="tr"] .pagebox, body.rotate-mode[data-rotq="tr"] .pagebox * { cursor: var(--cur-rotate-tr) !important }
+body.rotate-mode[data-rotq="br"] .pagebox, body.rotate-mode[data-rotq="br"] .pagebox * { cursor: var(--cur-rotate-br) !important }
+body.rotate-mode[data-rotq="bl"] .pagebox, body.rotate-mode[data-rotq="bl"] .pagebox * { cursor: var(--cur-rotate-bl) !important }
+body.rotate-mode[data-rotq="pivot"] .pagebox, body.rotate-mode[data-rotq="pivot"] .pagebox * { cursor: var(--cur-move) !important }
 body.rotate-mode .anno .gsel .gkn, body.rotate-mode .anno .hnd .kn,
 body.rotate-mode .anno .hnd .knpad, body.rotate-mode .anno .hnd .stem, body.rotate-mode .anno .hnd .turnic,
 body.rotate-mode .anno .hnd .rotz, body.rotate-mode .anno .gsel .rotz { display: none }
