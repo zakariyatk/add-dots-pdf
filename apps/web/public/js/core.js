@@ -10995,6 +10995,8 @@
     visBox: visBox, moveShape: moveShape, copyShape: copyShape, markBox: markBox,
     /* for the Rotate tool (js/rotate.js) */
     turnsByEnds: turnsByEnds, unionBox: unionBox,
+    /* the smart guides' lines, for lining a point up while drawing (js/draw.js) */
+    showSmartGuide: showSmartGuide, hideSmartGuide: hideSmartGuide,
     /* for gradients (js/gradient.js) and every closed shape's renderer */
     paintFill: paintFill, gradCss: gradCss, closedShape: closedShape, selShape: selShape,
     ZOOM_MIN: ZOOM_MIN,

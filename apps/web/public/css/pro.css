@@ -1281,7 +1281,12 @@ body.panning, body.panning *, body.midpan, body.midpan * { cursor: var(--cur-han
 body.pmpan #pmcv { cursor: var(--cur-hand) }
 body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
 
-/* ---------- object snap ---------- */
+/* ---------- object snap ----------
+   Every snap and guide is one rose colour, as Illustrator's smart guides
+   are one colour: the marker on the point caught, its label, the dot the
+   drawing started from, the tracking guides, and the lines through what a
+   point or a moved mark lines up with. */
+:root { --snap-rose: #FF2E7E }
 .snapmark {
   position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none;
   display: flex; align-items: center; gap: 6px; will-change: transform;
@@ -1289,13 +1294,13 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
 .snapmark[hidden] { display: none }
 .snapmark svg {
   width: 18px; height: 18px; margin: -9px 0 0 -9px; overflow: visible;
-  fill: none; stroke: #7B5CFF; stroke-width: 2; stroke-linejoin: round;
+  fill: none; stroke: var(--snap-rose); stroke-width: 2; stroke-linejoin: round;
   filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000);
 }
-.snapmark svg .dot { fill: #7B5CFF; stroke: none }
+.snapmark svg .dot { fill: var(--snap-rose); stroke: none }
 .snapmark span {
   margin: 14px 0 0 2px; padding: 2px 6px; border-radius: 4px; white-space: nowrap;
-  font: 600 10.5px/1.2 Helvetica, Arial, sans-serif; color: #FFFFFF; background: #7B5CFF;
+  font: 600 10.5px/1.2 Helvetica, Arial, sans-serif; color: #FFFFFF; background: var(--snap-rose);
   box-shadow: 0 1px 3px rgba(0,0,0,.35);
 }
 /* the reading that rides with the pointer while a mark is drawn, and the dot
@@ -1309,7 +1314,7 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
 .drawread[hidden], .drawstart[hidden] { display: none }
 .drawstart {
   position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; will-change: transform;
-  width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #7B5CFF;
+  width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--snap-rose);
   box-shadow: 0 0 0 1px rgba(255,255,255,.7);
 }
 /* how far a drag has moved a mark so far (core.js), beside the cursor */
@@ -1322,7 +1327,7 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
 .movehud[hidden] { display: none }
 /* the gap to a near neighbour (core.js), centred in it rather than beside
    the cursor — the smart guides' own magenta, so the two read as one family */
-.disthud { background: #FF2BD6; font-weight: 700; padding: 2px 6px }
+.disthud { background: var(--snap-rose); font-weight: 700; padding: 2px 6px }
 /* held at drop, Ctrl/Cmd leaves a copy behind rather than just moving —
    the plain copy cursor while it is held says so during the drag itself */
 body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
@@ -1342,7 +1347,7 @@ body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
 .snappop-h { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); padding: 6px 12px 4px }
 .snappop label { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer }
 .snappop label:hover { background: rgba(127,127,127,.12) }
-.snappop input { accent-color: #7B5CFF }
+.snappop input { accent-color: var(--snap-rose) }
 .snappop-note { margin: 6px 12px 0; font-size: 11.5px; color: var(--text-dim); line-height: 1.45 }
 
 /* The guides an acquired point sends out, over the stage: dashed, in the snap
@@ -1350,10 +1355,10 @@ body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
 .snaptrack { position: fixed; z-index: 59; pointer-events: none; overflow: visible }
 .snaptrack[hidden] { display: none }
 .snaptrack line {
-  stroke: #E8882A; stroke-width: 1.3; stroke-dasharray: 6 4;
+  stroke: var(--snap-rose); stroke-width: 1.3; stroke-dasharray: 6 4;
   shape-rendering: crispEdges;
 }
-.snaptrack path { stroke: #E8882A; stroke-width: 2; fill: none }
+.snaptrack path { stroke: var(--snap-rose); stroke-width: 2; fill: none }
 /* Parallel: the line whose direction was taken up, drawn over solid, and the
    guide through the start point that runs the same way */
 .snaptrack line.parref { stroke-width: 3; stroke-dasharray: none; opacity: .55; shape-rendering: auto }
@@ -1364,7 +1369,7 @@ body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
    the snap guides above, which only ever run from a point you dwelled on
    while drawing, not while moving something already on the page. */
 .smartguide { position: fixed; z-index: 59; pointer-events: none; overflow: visible }
-.smartguide line { stroke: #FF2BD6; stroke-width: 1; shape-rendering: crispEdges }
+.smartguide line { stroke: var(--snap-rose); stroke-width: 1; shape-rendering: crispEdges }
 
 /* The marker is a zero-size anchor at the snap point itself: the symbol is
    centred on it, and the label hangs off to the lower right, so neither can
