@@ -2174,9 +2174,13 @@ body.rotate-mode .anno .hnd .rotz, body.rotate-mode .anno .gsel .rotz { display:
 .markpop .grstp.on { border: 2px solid var(--accent, #2F80ED); box-shadow: 0 0 0 1px var(--chrome, #fff) }
 .markpop .grstp:focus-visible { outline: 2px solid var(--accent, #2F80ED); outline-offset: 2px }
 .markpop.grdropping .grstp.on, .markpop .mpgrad.grdropping .grstp.on { opacity: .3 }
-.markpop .grstop { flex-wrap: nowrap; gap: 4px }
-.markpop .grstop .grf { padding: 0 5px; gap: 3px }
-.markpop .grstop .grf input { width: 28px }
+/* the stop picked: its colour chip, then Opacity over Location, each a
+   whole field wide (as Illustrator stacks them), so the numbers always show */
+.markpop .mpgrad .grstop { display: grid; grid-template-columns: 28px minmax(0, 1fr); grid-template-rows: auto auto; gap: 4px 6px; align-items: center }
+.markpop .mpgrad .grstop .grchip { grid-row: 1 / span 2; align-self: start }
+.markpop .mpgrad .grstop .grf { display: flex; width: auto; min-width: 0; padding: 0 6px; gap: 4px }
+.markpop .mpgrad .grstop .grf span { flex: none; width: 52px }
+.markpop .mpgrad .grstop .grf input { flex: 1 1 auto; width: auto; min-width: 24px; max-width: none; text-align: right }
 .markpop .grchip { width: 28px; height: 28px; min-width: 0; padding: 3px; flex: none; border: 1px solid var(--line); border-radius: 6px; background: var(--chrome-2); cursor: pointer }
 .rprops .markpop .mpgrad > *, .rprops .markpop .mpgrad .grrow > *, .rprops .markpop .mpgrad .grtop > * { min-width: 0 }
 .rprops .markpop .mpgrad .grbar { min-width: 120px }
