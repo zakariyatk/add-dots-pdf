@@ -93,19 +93,24 @@
 
     /* the angle a box-style mark reads as on screen — same maths textEl uses,
        applied once to the whole group instead of per line */
+    /* The angle a box is drawn at on screen: its own turn (s.r) plus the
+       page's, the way the saved PDF has it (painters/insert.ts draws it
+       level in the page's own space, turned by s.r only, and a viewer then
+       turns the page). Not 0 on a turned page even with no turn of its own. */
     function boxAngle(vp, s) {
-      if (!s.r) return 0;
       const mid = X.shapeMid(s);
-      return X.dirAngle(vp, mid[0], mid[1], s.r);
+      const a = X.dirAngle(vp, mid[0], mid[1], s.r || 0);
+      return Math.abs(a) < 1e-6 ? 0 : a;
     }
+    /* the box level, at its true size, about its middle on screen; turned by
+       boxAngle. (Its corners' screen box would swap width and height on a
+       page turned a quarter, squeezing a picture into the wrong shape.) */
     function boxViewport(vp, s) {
       const a = vp.convertToViewportPoint(s.a[0], s.a[1]);
       const b = vp.convertToViewportPoint(s.b[0], s.b[1]);
-      return {
-        x: Math.min(a[0], b[0]), y: Math.min(a[1], b[1]),
-        w: Math.abs(b[0] - a[0]), h: Math.abs(b[1] - a[1]),
-        cx: (a[0] + b[0]) / 2, cy: (a[1] + b[1]) / 2
-      };
+      const w = Math.abs(s.b[0] - s.a[0]) * vp.scale, h = Math.abs(s.b[1] - s.a[1]) * vp.scale;
+      const cx = (a[0] + b[0]) / 2, cy = (a[1] + b[1]) / 2;
+      return { x: cx - w / 2, y: cy - h / 2, w: w, h: h, cx: cx, cy: cy };
     }
     function applyBoxTransform(g, vp, s, box) {
       const ang = boxAngle(vp, s);
@@ -651,8 +656,12 @@
            .capture it already sits inside the crop-shifted .inner, so no
            extra offset is needed on top of it. */
         const r = it.anno.getBoundingClientRect();
-        const px = ev.clientX - r.left, py = ev.clientY - r.top;
         const box = boxViewport(it.vp, s);
+        /* the pointer in the table's own frame, it being drawn turned with
+           its own angle and the page's (boxAngle) */
+        const t = -boxAngle(it.vp, s) * Math.PI / 180;
+        const qx = ev.clientX - r.left - box.cx, qy = ev.clientY - r.top - box.cy;
+        const px = box.cx + qx * Math.cos(t) - qy * Math.sin(t), py = box.cy + qx * Math.sin(t) + qy * Math.cos(t);
         if (kind === 'col') {
           const fracs = colFracs(s).slice();
           applyDividerFrac(fracs, i, (px - box.x) / box.w);
