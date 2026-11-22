@@ -2399,7 +2399,14 @@
     el.style.fillOpacity = op == null ? shOp(s) : op;
   }
 
+  /* a mark on screen, faded as a whole by its layer's opacity (s.lo, kept
+     on each member by js/layers.js), the way the saved PDF fades it */
   function shapeEl(it, s, vp, idx) {
+    const el = markEl(it, s, vp, idx);
+    if (el && el.style && s.lo != null && s.lo < 1) el.style.opacity = Math.max(0, s.lo);
+    return el;
+  }
+  function markEl(it, s, vp, idx) {
     if (s.t === 'text') return textEl(it, s, vp, idx);
     if (s.t === 'pin') return pinEl(it, s, vp, idx);
     if (EXT.shapeRenderers[s.t]) return EXT.shapeRenderers[s.t](it, s, vp, idx);
@@ -6918,6 +6925,7 @@
     const o = Object.assign({}, sh);
     if ('c' in o) o.c = safeColour(o.c, '#E2483D');
     if ('fill' in o) o.fill = safeColour(o.fill, null);
+    if ('lo' in o) { const lo = Number(o.lo); if (isFinite(lo) && lo >= 0 && lo < 1) o.lo = lo; else delete o.lo; }
     /* a gradient's colours end up in the page's markup: #hex only */
     if ('grad' in o) { o.grad = E.cleanGrad(o.grad); if (!o.grad) delete o.grad; }
     if (o.note && typeof o.note === 'object') {

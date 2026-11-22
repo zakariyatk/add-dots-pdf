@@ -62,6 +62,7 @@ import { readXrefTail, reserveNumbers, snapshot, writeUpdate } from './append';
 import { annotRect, commitAnnot, isAnnotMark, scratchPage } from './annots';
 import { encodePageFont, markInPageFont } from './pagefont';
 import { fillGradient, ringPath } from './painters/gradient';
+import { layerFade } from './painters/fade';
 
 const PDF_CAP = [LineCapStyle.Butt, LineCapStyle.Round, LineCapStyle.Projecting];
 const PDF_JOIN = [LineJoinStyle.Miter, LineJoinStyle.Round, LineJoinStyle.Bevel];
@@ -354,8 +355,8 @@ async function compose(
        Bring to front and Send to back hold in the saved file. Pins go last. */
     it.shapes.forEach((s) => {
       if (s.t === 'pin' || s.hide) return;
-      if (isText(s)) onto(s, (p) => paintText(p, s));
-      else onto(s, (p) => paintMark(p, s));
+      if (isText(s)) onto(s, (p) => layerFade(p, s.lo, () => paintText(p, s)));
+      else onto(s, (p) => layerFade(p, s.lo, () => paintMark(p, s)));
     });
     function paintText(p: PDFPage, s: TextMark) {
       /* text lifted by Edit Object and retyped within the characters the

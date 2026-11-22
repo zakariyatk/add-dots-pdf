@@ -35,6 +35,9 @@ interface MarkBase {
   r?: number;
   /** Hidden in the Layers panel: skipped on screen and left out of the saved PDF. */
   hide?: boolean;
+  /** Its layer's opacity 0..1 (default 1), set on each member by the Layers
+      panel: the whole mark fades by it, on top of its own opacity `o`. */
+  lo?: number;
   [key: string]: unknown;
 }
 
