@@ -28,7 +28,15 @@
    ordinary entry in it.shapes (core.js), in the order it draws — last is
    topmost — so undo, Save and the thumbnails already follow every change
    made here. The one new field there is `hide`, which core.js's renderer and
-   the engine's save (packages/engine/src/save.ts) both already skip. */
+   the engine's save (packages/engine/src/save.ts) both already skip.
+
+   Opacity, as Illustrator's Transparency panel targets it: the slider under
+   the buttons sets the selected objects' own opacity (s.o, the same as the
+   Properties panel's), or with none selected the picked layers' (or the
+   active one's). A layer's opacity is kept on the layer (L.opacity) and on
+   each of its members as s.lo, the way hide is (syncOpacity below), so the
+   screen fades each mark as a whole and the saved PDF does the same
+   (packages/engine/src/painters/fade.ts), on top of the mark's own. */
 (function () {
   'use strict';
 
@@ -132,6 +140,30 @@
       return got;
     }
 
+    /* ---------------- a layer's opacity on its members ----------------
+       Each mark carries its layer's opacity as s.lo, as it carries hide: the
+       renderer and the save read the mark alone. A layer whose opacity was
+       never set (the first one, on a document just opened) leaves its
+       members as they are, so what a saved project held stays. */
+    function layerOpacity(L) { return typeof L.opacity === 'number' ? L.opacity : null; }
+    function syncOpacity() {
+      if (!S.items || !S.items.length) return false;
+      ensureLayers();
+      let any = false;
+      S.items.forEach(function (it) {
+        let changed = false;
+        it.shapes.forEach(function (s) {
+          if (NOT_SELECTABLE[s.t]) return;
+          const v = layerOpacity(layerOf(layerIdOf(s)));
+          if (v == null) return;
+          if (v >= 1) { if (s.lo != null) { delete s.lo; changed = true; } }
+          else if (s.lo !== v) { s.lo = v; changed = true; }
+        });
+        if (changed) { any = true; if (it.anno) X.drawShapes(it); X.drawThumb(it); }
+      });
+      return any;
+    }
+
     /* ---------------- the tab and its panel ----------------
        Like Bookmarks (js/books.js): reached from the side rail of icons
        (js/toolpanel.js) on a wide screen rather than this row of tabs,
@@ -165,6 +197,12 @@
         '<button type="button" data-selact="dup" id="layDup" title="Duplicate" aria-label="Duplicate">' + DUP + '</button>' +
         '<button type="button" class="laydanger" data-selact="del" id="layDel" title="Delete" aria-label="Delete">' + DEL + '</button>' +
       '</div>' +
+      /* opacity, for what is picked out: the selected objects, else the layer(s) */
+      '<div class="laytools layop">' +
+        '<span class="layop-lbl" id="layOpLbl">Layer</span>' +
+        '<input type="range" id="layOpRange" min="0" max="100" step="1" aria-label="Opacity">' +
+        '<span class="layop-num"><input type="text" id="layOpNum" inputmode="numeric" aria-label="Opacity in percent"><em>%</em></span>' +
+      '</div>' +
       '<div id="layList"></div>';
     $('railPages').parentNode.appendChild(panel);
 
@@ -185,6 +223,7 @@
         name: 'Layer ' + (S.layers.length + 1),
         hidden: false,
         locked: false,
+        opacity: 1,
         color: STRIPES[S.layers.length % STRIPES.length]
       };
       S.layers.push(L);
@@ -331,6 +370,7 @@
         name: L.name + ' copy',
         hidden: !!L.hidden,
         locked: false,
+        opacity: L.opacity,
         color: STRIPES[S.layers.length % STRIPES.length]
       };
       let n = 0;
@@ -396,10 +436,10 @@
       if (!it) return '';
       const multi = S.multi && S.multi.it === it ? S.multi.idx.join(',') : '';
       const marks = it.shapes.map(function (s) {
-        return (s.hide ? '1' : '0') + (s.locked ? '1' : '0') + (s.layer || '-');
+        return (s.hide ? '1' : '0') + (s.locked ? '1' : '0') + (s.layer || '-') + (s.o == null ? '' : '/' + s.o);
       }).join('|');
       const lay = (S.layers || []).map(function (l) {
-        return l.id + l.name + (l.hidden ? '1' : '0') + (l.locked ? '1' : '0');
+        return l.id + l.name + (l.hidden ? '1' : '0') + (l.locked ? '1' : '0') + (l.opacity == null ? '' : '/' + l.opacity);
       }).join('|');
       return S.current + ':' + marks + ':' + lay + ':' + focusLayer + ':' + selLayers.join(',') +
         ':' + (S.sel && S.sel.it === it ? S.sel.i : -1) + ':' + multi;
@@ -447,6 +487,8 @@
             (open ? 'Collapse' : 'Expand') + '">' + (open ? TWIST_OPEN : TWIST_SHUT) + '</button>' +
           '<i class="laystrip" style="background:' + X.esc(L.color) + '"></i>' +
           '<span class="laylabel">' + X.esc(L.name) + '</span>' +
+          (layerOpacity(L) != null && layerOpacity(L) < 1
+            ? '<span class="layop-badge" title="Layer opacity">' + Math.round(layerOpacity(L) * 100) + '%</span>' : '') +
           '<span class="laynum">' + list.length + '</span>' +
           '<span class="laypen" title="New marks land here">' + (active ? PENCIL : '') + '</span>' +
           '</div>';
@@ -464,6 +506,7 @@
             lockBtn(lck, lck ? 'Unlock' : 'Lock') +
             '<i class="layswatch" style="background:' + X.esc(swatch(s)) + '"></i>' +
             '<span class="laylabel">' + X.esc(label(s)) + '</span>' +
+            (s.o != null && s.o < 1 ? '<span class="layop-badge" title="Opacity">' + Math.round(s.o * 100) + '%</span>' : '') +
             '</div>';
         });
       });
@@ -696,6 +739,7 @@
         selected.forEach(function (i) { if (it.shapes[i]) layersOf[layerIdOf(it.shapes[i])] = 1; });
         mergeWhat = Object.keys(layersOf).length > 1 ? 'Merge the selected marks into one layer' : 'The selected marks are on one layer';
       } else if (ids.length > 1) mergeWhat = 'Merge the ' + ids.length + ' selected layers into one';
+      paintOp(it, n ? selected.filter(function (i) { return it.shapes[i] && !it.shapes[i].locked; }) : null, ids);
       $('layMerge').title = mergeWhat;
       $('layMerge').setAttribute('aria-label', mergeWhat);
     }
@@ -808,10 +852,82 @@
       }
     }
 
+    /* ---------------- opacity ----------------
+       One slider and its number, for the selected objects (their own
+       opacity, as the Properties panel sets it) or, with none selected, the
+       layers picked out (or the active layer). A drag of the slider is one
+       undo step. */
+    let opHeld = false;
+    let opFor = null;                   /* what the slider is set for: {it, list} or {ids} */
+    function paintOp(it, list, ids) {
+      opFor = list && list.length ? { it: it, list: list } : { ids: ids && ids.length ? ids : [focusLayer] };
+      let v, lbl;
+      if (opFor.list) {
+        v = X.shOp(it.shapes[opFor.list[0]]);
+        lbl = opFor.list.length === 1 ? 'Object' : opFor.list.length + ' objects';
+      } else {
+        const L = layerOf(opFor.ids[0]);
+        v = layerOpacity(L) == null ? 1 : layerOpacity(L);
+        lbl = opFor.ids.length > 1 ? opFor.ids.length + ' layers' : 'Layer';
+      }
+      $('layOpLbl').textContent = lbl;
+      $('layOpLbl').title = opFor.list ? 'The selected objects\' own opacity' : 'Fades everything on the layer';
+      $('layOpRange').setAttribute('aria-label', lbl + ' opacity');
+      const pc = Math.round(v * 100);
+      if (!opHeld && document.activeElement !== $('layOpRange')) $('layOpRange').value = pc;
+      $('layOpRange').style.setProperty('--p', $('layOpRange').value + '%');
+      if (document.activeElement !== $('layOpNum')) $('layOpNum').value = pc;
+    }
+    function setOpacity(pc, live) {
+      const f = opFor;
+      if (!f) return;
+      const v = Math.max(0, Math.min(100, Math.round(pc))) / 100;
+      if (!live || !opHeld) X.snapshot();
+      if (live) opHeld = true;
+      if (f.list) {
+        f.list.forEach(function (i) {
+          const s = f.it.shapes[i];
+          if (!s || s.locked) return;
+          if (v >= 1) delete s.o; else s.o = v;
+        });
+        X.drawShapes(f.it);
+        if (!live) { X.drawThumb(f.it); X.updateMeta(); }
+        X.syncMarkPop();
+      } else {
+        f.ids.forEach(function (id) { layerOf(id).opacity = v; });
+        syncOpacity();
+        if (!live) X.updateMeta();
+      }
+      $('layOpNum').value = Math.round(v * 100);
+      render();
+    }
+    $('layOpRange').addEventListener('input', function () {
+      this.style.setProperty('--p', this.value + '%');            /* the track fills as it is dragged */
+      setOpacity(+this.value, true);
+    });
+    $('layOpRange').addEventListener('change', function () {
+      const was = opHeld;
+      opHeld = false;
+      if (was) {
+        if (opFor && opFor.list) { X.drawThumb(opFor.it); }
+        X.updateMeta();
+      }
+    });
+    $('layOpNum').addEventListener('change', function () {
+      const n = parseFloat(String(this.value).replace('%', ''));
+      if (isNaN(n)) { render(); return; }
+      setOpacity(n, false);
+    });
+    $('layOpNum').addEventListener('keydown', function (e) {
+      e.stopPropagation();
+      if (e.key === 'Enter') { e.preventDefault(); this.dispatchEvent(new Event('change')); this.blur(); }
+      else if (e.key === 'Escape') { this.blur(); render(); }
+    });
+
     /* ---------------- keeping up with the page ---------------- */
 
-    X.on('pages', function () { claimNew(); if (!panel.hidden) render(); });
-    X.on('meta', function () { if (claimNew() && !panel.hidden) render(); });
+    X.on('pages', function () { claimNew(); syncOpacity(); if (!panel.hidden) render(); });
+    X.on('meta', function () { const a = claimNew(), b = syncOpacity(); if ((a || b) && !panel.hidden) render(); });
     X.on('reset', function () {
       panel.hidden = true; tab.classList.remove('on'); lastSig = null;
       S.layers = null; focusLayer = null;
@@ -823,6 +939,7 @@
        the side rail (js/toolpanel.js) uses for its pressed state */
     setInterval(function () {
       const fresh = claimNew();
+      if (!opHeld) syncOpacity();
       if (panel.hidden) return;
       const it = S.items[S.current - 1];
       if (fresh || sigOf(it) !== lastSig) render();

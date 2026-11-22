@@ -247,6 +247,7 @@
         if (S.tool !== 'select') X.setTool('select');
         if (keep && !S.sel) { S.sel = keep.sel; S.multi = keep.multi; }
         on = true;
+        X.emit('modetool', 'rotate');          /* the Gradient tool goes down (js/gradient.js) */
         pivot = null; pivotKey = '';
         if (!selection()) X.toast('Select one or more objects to rotate, then drag to turn them');
       } else {

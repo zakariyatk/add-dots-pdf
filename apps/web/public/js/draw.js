@@ -640,19 +640,16 @@
       const g = document.createElementNS(SVGNS, 'g');
       const el = polyline(ellipsePts(s, 72), vp, true);
       stroked(el, s, idx, it);
-      fillIn(el, s);
       g.appendChild(el);
+      fillIn(g, el, s, vp);
       return g;
     };
 
-    /* a closed shape's fill, and its inside answering a click wherever it is
+    /* a closed shape's fill (a colour or a gradient, core's paintFill), and its inside answering a click wherever it is
        filled or has no outline to click on (with neither, it would otherwise
        be impossible to pick out again) */
-    function fillIn(el, s) {
-      if (s.fill) {
-        el.style.fill = s.fill;
-        el.style.fillOpacity = X.shOp(s);
-      }
+    function fillIn(g, el, s, vp) {
+      X.paintFill(g, el, s, vp);
       if (s.fill || s.nos) el.style.pointerEvents = 'all';
     }
 
@@ -660,8 +657,8 @@
       const g = document.createElementNS(SVGNS, 'g');
       /* closed, so it can be filled like a box */
       const el = stroked(polyline(cloudPts(s, 6), vp, true), s, idx, it);
-      fillIn(el, s);
       g.appendChild(el);
+      fillIn(g, el, s, vp);
       return g;
     };
 
@@ -689,9 +686,9 @@
       const g = document.createElementNS(SVGNS, 'g');
       const el = polyline(s.pts, vp, false);
       stroked(el, s, idx, it);
-      if (polyClosed(s)) fillIn(el, s);
-      else el.style.stroke = s.c;               /* an open line always shows its line */
       g.appendChild(el);
+      if (polyClosed(s)) fillIn(g, el, s, vp);
+      else el.style.stroke = s.c;               /* an open line always shows its line */
       return g;
     };
 
@@ -715,9 +712,9 @@
       const el = document.createElementNS(SVGNS, 'path');
       el.setAttribute('d', penD(s.pts, vp));
       stroked(el, s, idx, it);
-      if (penClosed(s)) fillIn(el, s);
-      else el.style.stroke = s.c;               /* an open path always shows its line */
       g.appendChild(el);
+      if (penClosed(s)) fillIn(g, el, s, vp);
+      else el.style.stroke = s.c;               /* an open path always shows its line */
       return g;
     };
     X.handleKind.pen = 'bbox';
@@ -1643,13 +1640,13 @@
        Ctrl to ignore it for a moment. */
 
     const SNAP_TOOLS = { rect: 1, line: 1, arrow: 1, ellipse: 1, cloud: 1, arc: 1,
-                         dim: 1, dimc: 1, dimr: 1, dimd: 1, dima: 1, poly: 1 };
+                         dim: 1, dimc: 1, dimr: 1, dimd: 1, dima: 1, poly: 1, pen: 1 };
     const SNAP_KINDS = [['end', 'Endpoint'], ['mid', 'Midpoint'], ['int', 'Intersection'],
                         ['near', 'Nearest'], ['perp', 'Perpendicular'], ['par', 'Parallel'],
                         ['mark', 'Points of your marks'], ['guide', 'Guides']];
     /* Perpendicular and Parallel are about the direction of the line in hand,
        so they only work for tools that draw one from a start point */
-    const DIR_TOOLS = { line: 1, arrow: 1, dim: 1, poly: 1 };
+    const DIR_TOOLS = { line: 1, arrow: 1, dim: 1, poly: 1, pen: 1 };
     /* A crossing of two real lines is as much a point as an end is, so it
        ranks with them and the nearer of the two wins; the crossings tracking
        and the rulers invent rank below that, and lying along something below
@@ -1717,11 +1714,50 @@
       return out;
     }
 
-    /* the points a mark offers: its ends, a box's corners, a circle's centre */
+    /* a path's anchors (not its handles): a Pen path's every third point, an
+       Edit Object or Pathfinder shape's ends of each command */
+    function penAnchors(pts) {
+      const out = [];
+      for (let a = 0; a < pts.length; a += 3) out.push(pts[a]);
+      return out;
+    }
+    function vpathAnchors(s) {
+      const out = [];
+      let j = 0;
+      for (const c of String(s.k || '')) {
+        if (c === 'M' || c === 'L') { if (s.pts[j]) out.push(s.pts[j]); j++; }
+        else if (c === 'C') { if (s.pts[j + 2]) out.push(s.pts[j + 2]); j += 3; }
+      }
+      return out;
+    }
+    /* the points a mark offers, as Illustrator's anchor points: its ends, a
+       box's corners (turned with it), a circle's four quadrant points and
+       its centre, every anchor of a path */
     function markPoints(s) {
       const out = [];
-      if (!s || !s.a) return out;
+      if (!s || s.hide) return out;
       const t = s.t;
+      if (t === 'pen' && s.pts && s.pts.length) {
+        penAnchors(s.pts).forEach(function (q) { out.push([q, 'Anchor']); });
+        return out;
+      }
+      if (t === 'vpath' && s.pts && s.pts.length) {
+        vpathAnchors(s).forEach(function (q) { out.push([q, 'Anchor']); });
+        return out;
+      }
+      if (!s.a) return out;
+      if (t === 'ellipse' && s.b) {
+        const b = E.boxOf(s), c = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
+        out.push([c, 'Centre']);
+        [[b.x1, c[1]], [b.x2, c[1]], [c[0], b.y1], [c[0], b.y2]].forEach(function (q) {
+          out.push([s.r ? E.rotPt(q, c, s.r) : q, 'Anchor']);
+        });
+        return out;
+      }
+      if ((t === 'rect' || t === 'cloud') && s.b && s.r) {
+        E.rectCorners(s).forEach(function (q) { out.push([q, 'Anchor']); });
+        return out;
+      }
       if (t === 'ink' && s.pts && s.pts.length) {
         out.push([s.pts[0], 'Pen end'], [s.pts[s.pts.length - 1], 'Pen end']);
       } else if (t === 'dimr' || t === 'dimd') {
@@ -1731,12 +1767,10 @@
       } else if (t === 'ellipse' && s.b) {
         out.push([[(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2], 'Centre']);
       } else if ((t === 'rect' || t === 'cloud' || t === 'redact') && s.b) {
-        if (!s.r) {
-          out.push([s.a, 'Corner'], [s.b, 'Corner'], [[s.a[0], s.b[1]], 'Corner'], [[s.b[0], s.a[1]], 'Corner']);
-        }
+        out.push([s.a, 'Anchor'], [s.b, 'Anchor'], [[s.a[0], s.b[1]], 'Anchor'], [[s.b[0], s.a[1]], 'Anchor']);
       } else if (t === 'poly' && s.pts && s.pts.length) {
         /* every point of a Continuous Line, its ends and its corners */
-        s.pts.forEach(function (q) { out.push([q, 'Mark end']); });
+        s.pts.forEach(function (q) { out.push([q, 'Anchor']); });
       } else if (s.b && (t === 'line' || t === 'arrow' || t === 'dim' || t === 'arc')) {
         out.push([s.a, 'Mark end'], [s.b, 'Mark end'],
                  [[(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2], 'Mark middle']);
@@ -1760,6 +1794,18 @@
         for (let i = 1; i < s.pts.length && out.length < 24; i++) out.push([s.pts[i - 1], s.pts[i]]);
         return out;
       }
+      if (s.b && (t === 'rect' || t === 'cloud') && s.r) {
+        const q = E.rectCorners(s);
+        return [[q[0], q[1]], [q[1], q[2]], [q[2], q[3]], [q[3], q[0]]];
+      }
+      /* a Pen path's straight segments: those whose handles sit on their anchors */
+      if (t === 'pen' && s.pts && s.pts.length >= 4) {
+        const out = [], P = s.pts, on = function (a, b) { return Math.abs(a[0] - b[0]) < 0.01 && Math.abs(a[1] - b[1]) < 0.01; };
+        for (let i = 0; i + 3 < P.length && out.length < 24; i += 3) {
+          if (on(P[i], P[i + 1]) && on(P[i + 2], P[i + 3])) out.push([P[i], P[i + 3]]);
+        }
+        return out;
+      }
       return [];
     }
 
@@ -1771,7 +1817,10 @@
         const d = Math.hypot(q[0] - p[0], q[1] - p[1]);
         if (d > tol) return;
         const r = SNAP_RANK[kind];
-        if (!best || r < best.r || (r === best.r && d < best.d)) {
+        /* a mark's own anchor on the very spot of another catch (a box's
+           corner, where its two edges also cross) is called an anchor */
+        const sameSpot = best && kind === 'mark' && r === best.r && Math.abs(d - best.d) < 1e-6;
+        if (!best || r < best.r || (r === best.r && d < best.d) || sameSpot) {
           best = { p: q, kind: kind, label: label, d: d, r: r };
         }
       }
@@ -2243,9 +2292,47 @@
       if (acqs.length || opStart) trackPaint(null, null);
     };
 
+    /* ---- smart guides while drawing ----
+       As Illustrator's: with no point to catch, a point being placed lines
+       up with the anchor points and centres of the marks already on the
+       page — level with one, plumb with another, or both — and a rose line
+       runs through each match. The same lines core.js draws while a mark is
+       moved. Reach is in screen pixels, so it is the same at any zoom. */
+    const ALIGN_PX = 6;
+    let alignOn = false;
+    function alignHide() { if (alignOn) { alignOn = false; if (X.hideSmartGuide) X.hideSmartGuide(); } }
+    function alignFind(it, p, opts) {
+      if (!snap.kinds.mark) return null;
+      const tol = ALIGN_PX / Math.max(0.05, S.scale);
+      let bx = null, bxd = tol, by = null, byd = tol;
+      it.shapes.forEach(function (s, idx) {
+        if (opts && opts.skip === idx) return;
+        markPoints(s).forEach(function (m) {
+          const q = m[0];
+          const dx = Math.abs(q[0] - p[0]), dy = Math.abs(q[1] - p[1]);
+          if (dx < bxd) { bxd = dx; bx = q[0]; }
+          if (dy < byd) { byd = dy; by = q[1]; }
+        });
+      });
+      /* the point the drawing began from lines up too */
+      if (opStart && opStart.it === it && !(opts && opts.skip != null)) {
+        const q = opStart.p;
+        if (Math.abs(q[0] - p[0]) < bxd) { bxd = Math.abs(q[0] - p[0]); bx = q[0]; }
+        if (Math.abs(q[1] - p[1]) < byd) { byd = Math.abs(q[1] - p[1]); by = q[1]; }
+      }
+      if (bx === null && by === null) return null;
+      return { p: [bx === null ? p[0] : bx, by === null ? p[1] : by], vx: bx, hy: by };
+    }
+    function alignShow(it, a) {
+      if (!X.showSmartGuide) return;
+      X.showSmartGuide(it, a.vx, a.hy, { x1: a.p[0], x2: a.p[0], y1: a.p[1], y2: a.p[1] });
+      alignOn = true;
+    }
+    document.addEventListener('pointerup', function () { setTimeout(alignHide, 0); });
+
     /** The snap point for p on this page, showing the marker — or null. */
     X.snapPt = function (it, p, e, opts) {
-      if (!it || !it.vp || !snapActive(e, opts)) { snapHide(); trackClear(); return null; }
+      if (!it || !it.vp || !snapActive(e, opts)) { snapHide(); trackClear(); alignHide(); return null; }
       if (!it._segs) pageSegments(it);                        /* the lines arrive shortly */
       let hit = snapFind(it, p, opts);
       const tr = trackFind(it, p, opts);
@@ -2255,6 +2342,17 @@
       const pr = parFind(it, p, opts);
       if (pr && (!hit || SNAP_RANK.par < hit.r)) hit = pr;
       if (!opts || opts.skip == null) { dwellWatch(it, hit); parWatch(it); }
+      /* nothing better than somewhere along a line: line up with the marks instead */
+      if (!hit || hit.kind === 'near') {
+        const al = alignFind(it, p, opts);
+        if (al) {
+          trackPaint(it, null);
+          snapHide();
+          alignShow(it, al);
+          return al.p;
+        }
+      }
+      alignHide();
       trackPaint(it, hit);
       if (!hit) { snapHide(); return null; }
       snapShow(it, hit);
@@ -2277,7 +2375,7 @@
     document.addEventListener('pointermove', function (e) {
       if (e.buttons || !SNAP_TOOLS[S.tool]) return;
       const cap = e.target && e.target.closest ? e.target.closest('.capture') : null;
-      if (!cap) { snapHide(); return; }
+      if (!cap) { snapHide(); alignHide(); return; }
       const it = S.items.filter(function (x) { return x.capture === cap; })[0];
       if (!it || !it.vp) return;
       const r = cap.getBoundingClientRect();
@@ -2291,6 +2389,7 @@
     window.addEventListener('resize', function () { snapHide(); X.snapTrackRepaint(); });
     X.on('tool', function (t) {
       snapHide();
+      alignHide();
       trackClear();                  /* a point acquired for one tool is not the next one's */
       snapCtl.hidden = !SNAP_TOOLS[t];
       if (SNAP_TOOLS[t]) { const it = S.items[S.current - 1]; if (it) pageSegments(it); }

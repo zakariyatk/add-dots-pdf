@@ -42,6 +42,7 @@ import {
   charSpacing,
   lineSpans,
   lineWidth,
+  rectCorners,
   rotPt,
   textRect,
   type MeasureText,
@@ -60,6 +61,8 @@ import { drawLine, embedFallbacks, needsUnicode, textIn, textWidth, type Unicode
 import { readXrefTail, reserveNumbers, snapshot, writeUpdate } from './append';
 import { annotRect, commitAnnot, isAnnotMark, scratchPage } from './annots';
 import { encodePageFont, markInPageFont } from './pagefont';
+import { fillGradient, ringPath } from './painters/gradient';
+import { layerFade } from './painters/fade';
 
 const PDF_CAP = [LineCapStyle.Butt, LineCapStyle.Round, LineCapStyle.Projecting];
 const PDF_JOIN = [LineJoinStyle.Miter, LineJoinStyle.Round, LineJoinStyle.Bevel];
@@ -352,8 +355,8 @@ async function compose(
        Bring to front and Send to back hold in the saved file. Pins go last. */
     it.shapes.forEach((s) => {
       if (s.t === 'pin' || s.hide) return;
-      if (isText(s)) onto(s, (p) => paintText(p, s));
-      else onto(s, (p) => paintMark(p, s));
+      if (isText(s)) onto(s, (p) => layerFade(p, s.lo, () => paintText(p, s)));
+      else onto(s, (p) => layerFade(p, s.lo, () => paintMark(p, s)));
     });
     function paintText(p: PDFPage, s: TextMark) {
       /* text lifted by Edit Object and retyped within the characters the
@@ -533,14 +536,19 @@ async function compose(
           rotate: degrees(s.r || 0),
           ...(s.nos ? { borderWidth: 0 } : { borderColor: col, borderWidth: th, borderOpacity: op }),
         };
-        if (s.fill) {
+        /* a gradient goes in first, through the box's corners, the border over it */
+        const grad = !!(s.fill && s.grad);
+        if (grad) fillGradient(p, s, ringPath(rectCorners(s)), op);
+        else if (s.fill) {
           ro.color = hexRgb(s.fill);
           ro.opacity = op;
         }
         if (da) ro.borderDashArray = da;
-        p.pushOperators(pushGraphicsState(), setLineJoin(PDF_JOIN[shJoin(s)]!), setLineCap(cap!));
-        p.drawRectangle(ro);
-        p.pushOperators(popGraphicsState());
+        if (!(grad && s.nos)) {
+          p.pushOperators(pushGraphicsState(), setLineJoin(PDF_JOIN[shJoin(s)]!), setLineCap(cap!));
+          p.drawRectangle(ro);
+          p.pushOperators(popGraphicsState());
+        }
       } else {
         const line: Parameters<PDFPage['drawLine']>[0] = {
           start: { x: s.a[0], y: s.a[1] },

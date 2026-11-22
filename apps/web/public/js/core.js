@@ -2351,7 +2351,62 @@
     if (!ghost) EXT.afterDraw.forEach(function (fn) { try { fn(it); } catch (e) { console.error('[afterDraw]', e); } });
   }
 
+  /* ---- a closed shape's fill: a colour, or a gradient (engine gradient.ts)
+     drawn as an SVG gradient over the same steps the saved PDF blends
+     through, so the two agree. The gradient's <defs> go first in the mark's
+     own group: the marks layer keeps one child per mark. ---- */
+  let gradSeq = 0;
+  function gradCss(g) {
+    /* the gradient as CSS, left to right, for a swatch */
+    return 'linear-gradient(90deg,' + E.gradRamp(g).map(function (r) {
+      return 'rgba(' + Math.round(r.rgb[0] * 255) + ',' + Math.round(r.rgb[1] * 255) + ',' + Math.round(r.rgb[2] * 255) + ',' +
+        (Math.round(r.o * 1000) / 1000) + ') ' + (Math.round(r.p * 10000) / 100) + '%';
+    }).join(',') + ')';
+  }
+  function paintFill(g, el, s, vp, op) {
+    if (!s.fill) return;
+    if (!s.grad) {
+      el.style.fill = s.fill;
+      el.style.fillOpacity = op == null ? shOp(s) : op;
+      return;
+    }
+    const grad = s.grad, ends = E.gradEnds(s, grad);
+    const a = vp.convertToViewportPoint(ends[0][0], ends[0][1]);
+    const b = vp.convertToViewportPoint(ends[1][0], ends[1][1]);
+    const radial = grad.k === 'radial';
+    const id = 'adgr' + (++gradSeq);
+    const defs = document.createElementNS(SVGNS, 'defs');
+    const gr = document.createElementNS(SVGNS, radial ? 'radialGradient' : 'linearGradient');
+    gr.setAttribute('id', id);
+    gr.setAttribute('gradientUnits', 'userSpaceOnUse');
+    if (radial) {
+      gr.setAttribute('cx', a[0]); gr.setAttribute('cy', a[1]);
+      gr.setAttribute('r', Math.max(0.01, Math.hypot(b[0] - a[0], b[1] - a[1])));
+    } else {
+      gr.setAttribute('x1', a[0]); gr.setAttribute('y1', a[1]);
+      gr.setAttribute('x2', b[0]); gr.setAttribute('y2', b[1]);
+    }
+    E.gradRamp(grad).forEach(function (r) {
+      const st = document.createElementNS(SVGNS, 'stop');
+      st.setAttribute('offset', r.p);
+      st.setAttribute('stop-color', 'rgb(' + Math.round(r.rgb[0] * 255) + ',' + Math.round(r.rgb[1] * 255) + ',' + Math.round(r.rgb[2] * 255) + ')');
+      st.setAttribute('stop-opacity', r.o);
+      gr.appendChild(st);
+    });
+    defs.appendChild(gr);
+    g.insertBefore(defs, g.firstChild);
+    el.style.fill = 'url(#' + id + ')';
+    el.style.fillOpacity = op == null ? shOp(s) : op;
+  }
+
+  /* a mark on screen, faded as a whole by its layer's opacity (s.lo, kept
+     on each member by js/layers.js), the way the saved PDF fades it */
   function shapeEl(it, s, vp, idx) {
+    const el = markEl(it, s, vp, idx);
+    if (el && el.style && s.lo != null && s.lo < 1) el.style.opacity = Math.max(0, s.lo);
+    return el;
+  }
+  function markEl(it, s, vp, idx) {
     if (s.t === 'text') return textEl(it, s, vp, idx);
     if (s.t === 'pin') return pinEl(it, s, vp, idx);
     if (EXT.shapeRenderers[s.t]) return EXT.shapeRenderers[s.t](it, s, vp, idx);
@@ -2382,12 +2437,10 @@
       const r = document.createElementNS(SVGNS, 'polygon');
       r.setAttribute('points', vpts(q));
       stroke(r);
-      r.style.fill = s.fill || 'none';
-      if (s.fill) {
-        r.style.fillOpacity = shOp(s);
-        r.style.pointerEvents = 'all';        /* a filled box is grabbable anywhere */
-      }
+      r.style.fill = 'none';
       g.appendChild(r);
+      paintFill(g, r, s, vp);
+      if (s.fill) r.style.pointerEvents = 'all';        /* a filled box is grabbable anywhere */
     } else {
       const l = document.createElementNS(SVGNS, 'line');
       l.setAttribute('x1', a[0]); l.setAttribute('y1', a[1]);
@@ -3510,7 +3563,7 @@
       n.className = 'pnofill' + (s.fill ? '' : ' on');
       n.title = 'No fill'; n.setAttribute('aria-label', 'No fill');
       n.addEventListener('click', function (e) {
-        e.stopPropagation(); markEdit(function (x) { delete x.fill; }); closeSwatches();
+        e.stopPropagation(); markEdit(function (x) { delete x.fill; delete x.grad; }); closeSwatches();
       });
       pop.appendChild(n);
     }
@@ -3526,7 +3579,8 @@
       pop.appendChild(n);
     }
     buildPalette(pop, s[key], function (c) {
-      markEdit(function (x) { x[key] = c; if (key === 'c') delete x.nos; });
+      /* a plain colour picked for the fill takes the place of a gradient */
+      markEdit(function (x) { x[key] = c; if (key === 'c') delete x.nos; if (key === 'fill') delete x.grad; });
       closeSwatches();
     });
     pop.hidden = false;
@@ -3568,7 +3622,7 @@
   }
   function syncMarkPop() {
     const pop = $('markPop'), s = selShape();
-    if (!s || (dragOn && !markPopDocked())) { pop.hidden = true; closeSwatches(); return; }
+    if (!s || (dragOn && !markPopDocked())) { pop.hidden = true; closeSwatches(); EXT.emit('markpop', null); return; }
     buildMarkPop();
     const isText = s.t === 'text';
     /* a shape off the page fills too — a Continuous Line only once it is
@@ -3581,7 +3635,7 @@
 
     $('mpFillBtn').hidden = !isBox;
     $('mpFillChip').className = s.fill ? '' : 'none';
-    $('mpFillChip').style.background = s.fill || '';
+    $('mpFillChip').style.background = s.fill ? (s.grad ? gradCss(s.grad) : s.fill) : '';
     $('mpStrokeChip').style.background = s.nos ? '' : s.c;
     $('mpStrokeChip').className = s.nos ? 'none' : '';
     $('mpStrokeLbl').textContent = isText ? 'Text' : isBox ? 'Border' : 'Colour';
@@ -3628,6 +3682,7 @@
 
     pop.hidden = false;
     placeMarkPop();
+    EXT.emit('markpop', s);
   }
 
   /* park it just clear of the mark, kept inside the window */
@@ -6870,6 +6925,9 @@
     const o = Object.assign({}, sh);
     if ('c' in o) o.c = safeColour(o.c, '#E2483D');
     if ('fill' in o) o.fill = safeColour(o.fill, null);
+    if ('lo' in o) { const lo = Number(o.lo); if (isFinite(lo) && lo >= 0 && lo < 1) o.lo = lo; else delete o.lo; }
+    /* a gradient's colours end up in the page's markup: #hex only */
+    if ('grad' in o) { o.grad = E.cleanGrad(o.grad); if (!o.grad) delete o.grad; }
     if (o.note && typeof o.note === 'object') {
       o.note = Object.assign({}, o.note, {
         text: String(o.note.text || ''),
@@ -10937,6 +10995,10 @@
     visBox: visBox, moveShape: moveShape, copyShape: copyShape, markBox: markBox,
     /* for the Rotate tool (js/rotate.js) */
     turnsByEnds: turnsByEnds, unionBox: unionBox,
+    /* the smart guides' lines, for lining a point up while drawing (js/draw.js) */
+    showSmartGuide: showSmartGuide, hideSmartGuide: hideSmartGuide,
+    /* for gradients (js/gradient.js) and every closed shape's renderer */
+    paintFill: paintFill, gradCss: gradCss, closedShape: closedShape, selShape: selShape,
     ZOOM_MIN: ZOOM_MIN,
     /* the document put away (its tab closed): back to the home screen */
     closeDocument: function () { hardReset(); updateMeta(); showHome(); },

@@ -13,6 +13,7 @@ import type { FontFamily, Mark, Pt, StandardFamily } from '../model';
 import { hexRgb } from '../save';
 import { shOp } from '../style';
 import { fillPolygon, paintPts, type FontNeed, type Painter } from './common';
+import { fillGradient, ringPath } from './gradient';
 
 /* ---------------- geometry ---------------- */
 
@@ -379,6 +380,25 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
        native call whenever there is no dash pattern to honour and no turn.
        (v1 tested s.dash, which nothing sets; the dash style is s.d.) */
     const b = boxOf(s);
+    if (s.fill && s.grad) {
+      /* a gradient goes through the ring the screen draws, the outline over it */
+      const ring = ellipsePts(s, 96);
+      fillGradient(p, s, ringPath(ring), shOp(s));
+      if (!s.nos) {
+        if (!s.d && !s.r)
+          p.drawEllipse({
+            x: (b.x1 + b.x2) / 2,
+            y: (b.y1 + b.y2) / 2,
+            xScale: (b.x2 - b.x1) / 2,
+            yScale: (b.y2 - b.y1) / 2,
+            borderColor: hexRgb(s.c),
+            borderWidth: s.w,
+            borderOpacity: shOp(s),
+          });
+        else paintPts(p, ring, s);
+      }
+      return;
+    }
     if (!s.d && !s.r) {
       const opts: Parameters<PDFPage['drawEllipse']>[0] = {
         x: (b.x1 + b.x2) / 2,
@@ -406,7 +426,8 @@ export function drawPainters(getScale: () => Scale): Record<string, Painter> {
   /* a closed shape: a fill under it, and its outline unless it has none */
   const cloud: Painter = (p, s: CloudMark) => {
     const ring = cloudPts(s, 8);
-    if (s.fill) fillPolygon(p, ring, hexRgb(s.fill), shOp(s));
+    if (s.fill && s.grad) fillGradient(p, s, ringPath(ring), shOp(s));
+    else if (s.fill) fillPolygon(p, ring, hexRgb(s.fill), shOp(s));
     if (!s.nos) paintPts(p, ring, s, true);
   };
   const arc: Painter = (p, s: ArcMark) => paintPts(p, arcPts(s, 64), s);

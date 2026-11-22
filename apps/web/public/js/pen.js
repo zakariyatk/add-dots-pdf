@@ -13,10 +13,12 @@
      partner turns with it, keeping the point smooth; Alt moves one alone,
      making a corner); Alt and drag a point pulls new handles out of it,
      Alt and click turns it into a corner
-   • with the Pen tool: a click on a path adds a point there, a click on a
-     point takes it out, and a click on an open end carries the drawing on
-     (a Pen path's, a Line's or a Continuous Line's); while drawing, a click
-     on another drawing's open end joins the two into one path
+   • with the Pen tool: a click on a path adds a point there, a click on an
+     anchor point of any shape starts a new path from it, and a click on an
+     open end carries the drawing on (a Pen path's, a Line's or a Continuous
+     Line's); while drawing, a click on another drawing's open end joins the
+     two into one path. Every point placed snaps (js/draw.js): to anchor
+     points, ends, crossings, and in line with other marks' anchors
 
    A path is the 'pen' mark: s.pts runs anchor, out-handle, in-handle,
    anchor… (3n + 1 points), so it moves, scales and turns as one list of
@@ -512,8 +514,13 @@
             paintDraw();
             return;
           }
-          if (hit && editDown(it, at, e, { addOnPath: true, deleteAnchor: true })) return;
-          draw = { it: it, A: [], idx: null, drag: null, join: null };
+          /* on another path's anchor: a new path starts there, as Illustrator's
+             Pen starts one on any anchor point (the Delete Anchor Point tool
+             takes points out; Alt and a click still makes one a corner) */
+          const fromAnchor = hit && hit.kind === 'anchor' && !e.altKey ? it.shapes[hit.idx].pts[hit.i] : null;
+          if (!fromAnchor && hit && editDown(it, at, e, { addOnPath: true })) return;
+          if (fromAnchor && focus) { const f = focus.it; focus = null; X.drawShapes(f); }
+          draw = { it: it, A: [], idx: null, drag: null, join: null, at: fromAnchor ? [fromAnchor[0], fromAnchor[1]] : null };
           $('modeHint').innerHTML = 'Click for a corner, drag for a curve. Click the first point to close; <b>Enter</b> or <b>Esc</b> ends the path.';
         }
         if (draw.it !== it) { finish(false); return; }
@@ -534,7 +541,11 @@
           try { it.capture.setPointerCapture(e.pointerId); } catch (err) { /* fine */ }
           return;
         }
-        const snapped = X.snapPt ? X.snapPt(it, raw, e) : null;
+        /* the first point exactly on the anchor it was started on; any other
+           caught by the snaps (anchors, ends, crossings, lining up) */
+        const startAt = draw.at && !draw.A.length ? draw.at : null;
+        draw.at = null;
+        const snapped = startAt || (X.snapPt ? X.snapPt(it, raw, e) : null);
         const p = snapped || constrain(raw, e);
         draw.A.push({ p: p, hin: p.slice(), hout: p.slice() });
         draw.drag = { k: draw.A.length - 1, x: e.clientX, y: e.clientY };
@@ -571,7 +582,7 @@
         it.capture.style.cursor = end ? 'var(--cur-pen-cont)'
           : !hit ? ''
           : hit.kind === 'path' ? 'var(--cur-pen-add)'
-          : hit.kind === 'anchor' && !e.altKey ? 'var(--cur-pen-del)'
+          : hit.kind === 'anchor' && !e.altKey ? ''
           : 'var(--cur-direct-point)';
         if (hit && (!focus || focus.it !== it || focus.idx !== hit.idx)) focus = { it: it, idx: hit.idx };
         paintFocus(it);
@@ -621,7 +632,7 @@
       t: 'pen', id: 'tPen', label: 'Pen',
       hint: 'Click for a corner point, drag for a curve: the drag pulls the point\'s direction handles out. ' +
             'Click the first point to close the path; <b>Enter</b> or <b>Esc</b> ends it. On a path: drag a point ' +
-            'or a handle to change it (<b>Alt</b> moves one handle alone), click the path to add a point, click a point to take it out.',
+            'or a handle to change it (<b>Alt</b> moves one handle alone), click the path to add a point. A click on any shape\'s anchor point starts a new path from it.',
       /* the same nib as Add and Delete Anchor Point (js/vertex.js), without their + and − */
       path: '<path d="M3.5 20.5l2.3-7.6 6.4-6.4 5.3 5.3-6.4 6.4z"/><path d="M3.5 20.5l5-5"/>' +
         '<circle cx="9.6" cy="14.4" r="1.3"/><path d="M12.2 6.5l2.4-2.4 5.3 5.3-2.4 2.4"/>'

@@ -1281,7 +1281,12 @@ body.panning, body.panning *, body.midpan, body.midpan * { cursor: var(--cur-han
 body.pmpan #pmcv { cursor: var(--cur-hand) }
 body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
 
-/* ---------- object snap ---------- */
+/* ---------- object snap ----------
+   Every snap and guide is one rose colour, as Illustrator's smart guides
+   are one colour: the marker on the point caught, its label, the dot the
+   drawing started from, the tracking guides, and the lines through what a
+   point or a moved mark lines up with. */
+:root { --snap-rose: #FF2E7E }
 .snapmark {
   position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none;
   display: flex; align-items: center; gap: 6px; will-change: transform;
@@ -1289,13 +1294,13 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
 .snapmark[hidden] { display: none }
 .snapmark svg {
   width: 18px; height: 18px; margin: -9px 0 0 -9px; overflow: visible;
-  fill: none; stroke: #7B5CFF; stroke-width: 2; stroke-linejoin: round;
+  fill: none; stroke: var(--snap-rose); stroke-width: 2; stroke-linejoin: round;
   filter: drop-shadow(0 0 1px #000) drop-shadow(0 0 1px #000);
 }
-.snapmark svg .dot { fill: #7B5CFF; stroke: none }
+.snapmark svg .dot { fill: var(--snap-rose); stroke: none }
 .snapmark span {
   margin: 14px 0 0 2px; padding: 2px 6px; border-radius: 4px; white-space: nowrap;
-  font: 600 10.5px/1.2 Helvetica, Arial, sans-serif; color: #FFFFFF; background: #7B5CFF;
+  font: 600 10.5px/1.2 Helvetica, Arial, sans-serif; color: #FFFFFF; background: var(--snap-rose);
   box-shadow: 0 1px 3px rgba(0,0,0,.35);
 }
 /* the reading that rides with the pointer while a mark is drawn, and the dot
@@ -1309,7 +1314,7 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
 .drawread[hidden], .drawstart[hidden] { display: none }
 .drawstart {
   position: fixed; left: 0; top: 0; z-index: 60; pointer-events: none; will-change: transform;
-  width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: #7B5CFF;
+  width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px; border-radius: 50%; background: var(--snap-rose);
   box-shadow: 0 0 0 1px rgba(255,255,255,.7);
 }
 /* how far a drag has moved a mark so far (core.js), beside the cursor */
@@ -1322,7 +1327,7 @@ body.pmpan #pmcv:active { cursor: var(--cur-hand-shut) }
 .movehud[hidden] { display: none }
 /* the gap to a near neighbour (core.js), centred in it rather than beside
    the cursor — the smart guides' own magenta, so the two read as one family */
-.disthud { background: #FF2BD6; font-weight: 700; padding: 2px 6px }
+.disthud { background: var(--snap-rose); font-weight: 700; padding: 2px 6px }
 /* held at drop, Ctrl/Cmd leaves a copy behind rather than just moving —
    the plain copy cursor while it is held says so during the drag itself */
 body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
@@ -1342,7 +1347,7 @@ body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
 .snappop-h { font-size: 11px; letter-spacing: .05em; text-transform: uppercase; color: var(--text-dim); padding: 6px 12px 4px }
 .snappop label { display: flex; align-items: center; gap: 8px; padding: 6px 12px; font-size: 13px; cursor: pointer }
 .snappop label:hover { background: rgba(127,127,127,.12) }
-.snappop input { accent-color: #7B5CFF }
+.snappop input { accent-color: var(--snap-rose) }
 .snappop-note { margin: 6px 12px 0; font-size: 11.5px; color: var(--text-dim); line-height: 1.45 }
 
 /* The guides an acquired point sends out, over the stage: dashed, in the snap
@@ -1350,10 +1355,10 @@ body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
 .snaptrack { position: fixed; z-index: 59; pointer-events: none; overflow: visible }
 .snaptrack[hidden] { display: none }
 .snaptrack line {
-  stroke: #E8882A; stroke-width: 1.3; stroke-dasharray: 6 4;
+  stroke: var(--snap-rose); stroke-width: 1.3; stroke-dasharray: 6 4;
   shape-rendering: crispEdges;
 }
-.snaptrack path { stroke: #E8882A; stroke-width: 2; fill: none }
+.snaptrack path { stroke: var(--snap-rose); stroke-width: 2; fill: none }
 /* Parallel: the line whose direction was taken up, drawn over solid, and the
    guide through the start point that runs the same way */
 .snaptrack line.parref { stroke-width: 3; stroke-dasharray: none; opacity: .55; shape-rendering: auto }
@@ -1364,7 +1369,7 @@ body.dragdup .anno, body.dragdup .anno * { cursor: copy !important }
    the snap guides above, which only ever run from a point you dwelled on
    while drawing, not while moving something already on the page. */
 .smartguide { position: fixed; z-index: 59; pointer-events: none; overflow: visible }
-.smartguide line { stroke: #FF2BD6; stroke-width: 1; shape-rendering: crispEdges }
+.smartguide line { stroke: var(--snap-rose); stroke-width: 1; shape-rendering: crispEdges }
 
 /* The marker is a zero-size anchor at the snap point itself: the symbol is
    centred on it, and the label hangs off to the lower right, so neither can
@@ -1809,6 +1814,31 @@ body:not([data-ui="light"]) .layswatch { border-color: rgba(255,255,255,.3) }
 /* the selection's own row: how many are picked, and what to do with them */
 .laytools.laysel { padding-top: 3px; padding-bottom: 3px }
 .laysel-lbl { font-size: 11.5px; color: var(--text-dim); white-space: nowrap }
+/* opacity of the selected objects, or of the layer (js/layers.js) */
+.laytools.layop { gap: 6px; padding-top: 4px; padding-bottom: 6px; min-width: 0 }
+.layop-lbl { flex: 0 1 auto; font-size: 11.5px; color: var(--text-dim); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis }
+.laytools.layop input[type=range] { flex: 1 1 0; width: 0; min-width: 48px; height: 14px; margin: 0; padding: 0;
+  -webkit-appearance: none; appearance: none; background: transparent; cursor: pointer;
+  --fill: var(--accent, #7B5CFF) }
+/* a thin track, filled up to the value (layers.js sets --p), and a small round knob */
+.laytools.layop input[type=range]::-webkit-slider-runnable-track { height: 3px; border-radius: 2px;
+  background: linear-gradient(90deg, var(--fill) 0 var(--p, 100%), var(--line) var(--p, 100%) 100%) }
+.laytools.layop input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none;
+  width: 11px; height: 11px; margin-top: -4px; border-radius: 50%; background: var(--fill);
+  border: 2px solid var(--chrome, #fff); box-shadow: 0 0 0 1px var(--fill) }
+.laytools.layop input[type=range]::-moz-range-track { height: 3px; border-radius: 2px; background: var(--line) }
+.laytools.layop input[type=range]::-moz-range-progress { height: 3px; border-radius: 2px; background: var(--fill) }
+.laytools.layop input[type=range]::-moz-range-thumb { width: 9px; height: 9px; border-radius: 50%; background: var(--fill);
+  border: 2px solid var(--chrome, #fff); box-shadow: 0 0 0 1px var(--fill) }
+.laytools.layop input[type=range]:focus-visible { outline: 2px solid var(--fill); outline-offset: 2px; border-radius: 3px }
+.layop-num { flex: none; display: inline-flex; align-items: center; gap: 2px; height: 24px; padding: 0 5px;
+  border: 1px solid var(--line); border-radius: 5px; background: var(--chrome-2); font-size: 11px; color: var(--text-dim) }
+.layop-num:focus-within { border-color: var(--accent, #7B5CFF) }
+.layop-num input { width: 28px; border: 0; padding: 0; background: transparent; color: var(--text); font-size: 12px; text-align: right; outline: none }
+.layop-num em { font-style: normal }
+.layop-badge { flex: none; font-size: 10px; line-height: 14px; color: var(--text-dim); padding: 0 2px; margin-right: 2px }
+.layrow .laylabel { min-width: 3em }
+.layrow.layhead .laylabel { min-width: 2em }
 
 /* --- a layer's own row in the tree, and the branch under it --- */
 .layrow.layhead { padding-right: 6px }
@@ -2087,6 +2117,90 @@ body.rotate-mode[data-rotq="pivot"] .pagebox, body.rotate-mode[data-rotq="pivot"
 body.rotate-mode .anno .gsel .gkn, body.rotate-mode .anno .hnd .kn,
 body.rotate-mode .anno .hnd .knpad, body.rotate-mode .anno .hnd .stem, body.rotate-mode .anno .hnd .turnic,
 body.rotate-mode .anno .hnd .rotz, body.rotate-mode .anno .gsel .rotz { display: none }
+
+/* ---------- gradients (js/gradient.js) ----------
+   The Gradient panel in the selected mark's properties, laid out as
+   Illustrator's: swatch and type, Edit Gradient, angle and reverse, the
+   slider (midpoint diamonds over the ramp, stops under it), and the stop
+   picked. On the page, the Gradient tool's annotator: the vector as a line
+   with a halo so it reads on any colour, a circle where it starts, a square
+   where it ends, the stops along it. */
+.markpop .mpgrad { flex: 1 1 100%; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+  padding-top: 10px; border-top: 1px solid var(--line) }
+.markpop .mpgrad[hidden], .markpop .mpgrad [hidden] { display: none !important }
+.markpop .mpgrad svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
+.markpop .mpgrad .grtype svg rect { stroke: currentColor; stroke-width: 1.2 }
+.markpop .grhd { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--text) }
+.markpop .grnone { width: 24px; height: 22px; min-width: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--text-dim);
+  display: inline-flex; align-items: center; justify-content: center; flex: none }
+.markpop .grnone:hover { background: var(--chrome-2); color: var(--text) }
+.markpop .grnone svg { width: 14px; height: 14px }
+.markpop .grtop { display: flex; align-items: center; gap: 10px; min-width: 0 }
+.markpop .grsw { width: 40px; height: 40px; min-width: 0; flex: none; padding: 3px; border: 1px solid var(--line); border-radius: 6px; background: var(--chrome-2); cursor: pointer }
+.markpop .grsw i, .markpop .grramp i, .markpop .grchip i { display: block; width: 100%; height: 100%; border-radius: 3px }
+.markpop .grsw.on { border-color: var(--text) }
+.markpop .grsw:not(.on) i { opacity: .55 }
+.markpop .grtype { display: flex; align-items: center; gap: 2px; font-size: 12px; color: var(--text-dim) }
+.markpop .grtype > span { margin-right: 4px }
+.markpop .grtog { width: 32px; height: 30px; min-width: 0; padding: 0; flex: none; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--text) }
+.markpop .grtog:hover:not(:disabled) { background: var(--chrome-2); border-color: var(--line) }
+.markpop .grtog.on { border-color: var(--text); background: var(--chrome-2) }
+.markpop .grtog:disabled { opacity: .35; cursor: default }
+.markpop .grbody { display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.markpop .gredit { height: 28px; padding: 0 12px; align-self: flex-start; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--chrome-2); color: var(--text); font-size: 12px; cursor: pointer }
+.markpop .gredit:hover { border-color: var(--text-dim) }
+.markpop .gredit.on { background: var(--text); color: var(--chrome, #fff); border-color: var(--text) }
+.markpop .grrow { display: flex; align-items: center; gap: 6px; min-width: 0; flex-wrap: wrap }
+.markpop .grf { display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 6px; min-width: 0;
+  background: var(--chrome-2); border: 1px solid var(--line); border-radius: 6px; font-size: 11px; color: var(--text-dim) }
+.markpop .grf:focus-within { border-color: var(--accent, #7B5CFF) }
+.markpop .grf input { width: 44px; min-width: 0; height: 26px; border: 0; padding: 0; background: transparent; color: var(--text); font-size: 12px; outline: none }
+.markpop .grf em { font-style: normal }
+.markpop .gri { display: flex; color: var(--text-dim) }
+.markpop .grslider { display: flex; align-items: flex-end; gap: 6px; min-width: 0 }
+.markpop .grbar { position: relative; flex: 1 1 auto; min-width: 120px; margin: 0 7px; padding: 12px 0 16px; touch-action: none }
+.markpop .grramp { height: 16px; border: 1px solid var(--line); border-radius: 2px;
+  background: repeating-conic-gradient(#cfcfcf 0 25%, #fff 0 50%) 0 0 / 8px 8px }
+.markpop .grmids { position: absolute; left: 0; right: 0; top: 0; height: 12px }
+.markpop .grmid { position: absolute; top: 2px; width: 8px; height: 8px; margin-left: -4px; transform: rotate(45deg);
+  background: var(--chrome, #fff); border: 1px solid var(--text); cursor: ew-resize; touch-action: none }
+.markpop .grstops { position: absolute; left: 0; right: 0; bottom: 0; height: 16px; cursor: copy }
+.markpop .grstp { position: absolute; top: 1px; width: 14px; height: 14px; min-width: 0; margin-left: -7px; padding: 2px;
+  border: 1px solid var(--text-dim); border-radius: 50%; background: var(--chrome, #fff); cursor: ew-resize; touch-action: none }
+.markpop .grstp::before { content: ''; position: absolute; left: 50%; top: -5px; height: 4px; border-left: 1px solid var(--text-dim) }
+.markpop .grstp i { display: block; width: 100%; height: 100%; border-radius: 50% }
+.markpop .grstp.on { border: 2px solid var(--accent, #2F80ED); box-shadow: 0 0 0 1px var(--chrome, #fff) }
+.markpop .grstp:focus-visible { outline: 2px solid var(--accent, #2F80ED); outline-offset: 2px }
+.markpop.grdropping .grstp.on, .markpop .mpgrad.grdropping .grstp.on { opacity: .3 }
+/* the stop picked: its colour chip, then Opacity over Location, each a
+   whole field wide (as Illustrator stacks them), so the numbers always show */
+.markpop .mpgrad .grstop { display: grid; grid-template-columns: 28px minmax(0, 1fr); grid-template-rows: auto auto; gap: 4px 6px; align-items: center }
+.markpop .mpgrad .grstop .grchip { grid-row: 1 / span 2; align-self: start }
+.markpop .mpgrad .grstop .grf { display: flex; width: auto; min-width: 0; padding: 0 6px; gap: 4px }
+.markpop .mpgrad .grstop .grf span { flex: none; width: 52px }
+.markpop .mpgrad .grstop .grf input { flex: 1 1 auto; width: auto; min-width: 24px; max-width: none; text-align: right }
+.markpop .grchip { width: 28px; height: 28px; min-width: 0; padding: 3px; flex: none; border: 1px solid var(--line); border-radius: 6px; background: var(--chrome-2); cursor: pointer }
+.rprops .markpop .mpgrad > *, .rprops .markpop .mpgrad .grrow > *, .rprops .markpop .mpgrad .grtop > * { min-width: 0 }
+.rprops .markpop .mpgrad .grbar { min-width: 120px }
+.grpal { z-index: 61 }
+
+.anno .grann { pointer-events: none }
+.anno .grann .grhalo { stroke: rgba(255,255,255,.9); stroke-width: 4 }
+.anno .grann .grline { stroke: #1C1F24; stroke-width: 1.3 }
+.anno .grann .grring { fill: none; stroke: #1C1F24; stroke-width: 1; stroke-dasharray: 4 3; opacity: .7 }
+.anno .grann .grknot { stroke: #fff; stroke-width: 1.5; filter: drop-shadow(0 0 1px rgba(0,0,0,.8)) }
+.anno .grann .grknot.on { stroke: #2F80ED; stroke-width: 2 }
+.anno .grann .grstart { fill: #fff; stroke: #1C1F24; stroke-width: 1.5 }
+.anno .grann .grend { fill: #1C1F24; stroke: #fff; stroke-width: 1.2 }
+body.gradient-mode .pagebox, body.gradient-mode .pagebox * { cursor: crosshair !important }
+body.gradient-mode[data-grq="start"] .pagebox, body.gradient-mode[data-grq="start"] .pagebox * { cursor: var(--cur-move, move) !important }
+body.gradient-mode[data-grq="end"] .pagebox, body.gradient-mode[data-grq="end"] .pagebox *,
+body.gradient-mode[data-grq="stop"] .pagebox, body.gradient-mode[data-grq="stop"] .pagebox * { cursor: pointer !important }
+body.gradient-mode .anno .gsel .gkn, body.gradient-mode .anno .hnd .kn,
+body.gradient-mode .anno .hnd .knpad, body.gradient-mode .anno .hnd .stem, body.gradient-mode .anno .hnd .turnic,
+body.gradient-mode .anno .hnd .rotz, body.gradient-mode .anno .gsel .rotz { display: none }
 
 /* ---------- one selected mark, as Illustrator shows it ----------
    A thin box with small square grips (core.js handlesEl): the pointer on a
