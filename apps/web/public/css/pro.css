@@ -2237,6 +2237,24 @@ body.gradient-mode .anno .gsel .gkn, body.gradient-mode .anno .hnd .kn,
 body.gradient-mode .anno .hnd .knpad, body.gradient-mode .anno .hnd .stem, body.gradient-mode .anno .hnd .turnic,
 body.gradient-mode .anno .hnd .rotz, body.gradient-mode .anno .gsel .rotz { display: none }
 
+/* the Shape Builder (js/shapebuilder.js): the arrow with a plus (merge) or,
+   with Alt held, a minus (take away); the region under it shaded */
+body.shapebuilder-mode { --cur-sb: image-set(url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 2.5v13l3.4-3.1 2.3 5 2.2-1-2.3-4.9 4.6-.1z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3Cpath d='M15.5 17.5h5M18 15v5' stroke='white' stroke-width='3.6' stroke-linecap='round'/%3E%3Cpath d='M15.5 17.5h5M18 15v5' stroke='black' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 1x, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24'%3E%3Cpath d='M3 2.5v13l3.4-3.1 2.3 5 2.2-1-2.3-4.9 4.6-.1z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3Cpath d='M15.5 17.5h5M18 15v5' stroke='white' stroke-width='3.6' stroke-linecap='round'/%3E%3Cpath d='M15.5 17.5h5M18 15v5' stroke='black' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 2x) 3 2, default; --cur-sb-minus: image-set(url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M3 2.5v13l3.4-3.1 2.3 5 2.2-1-2.3-4.9 4.6-.1z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3Cpath d='M15.5 17.5h5' stroke='white' stroke-width='3.6' stroke-linecap='round'/%3E%3Cpath d='M15.5 17.5h5' stroke='black' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 1x, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24'%3E%3Cpath d='M3 2.5v13l3.4-3.1 2.3 5 2.2-1-2.3-4.9 4.6-.1z' fill='black' stroke='white' stroke-width='1.2' stroke-linejoin='round'/%3E%3Cpath d='M15.5 17.5h5' stroke='white' stroke-width='3.6' stroke-linecap='round'/%3E%3Cpath d='M15.5 17.5h5' stroke='black' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E") 2x) 3 2, default }
+body.shapebuilder-mode .pagebox, body.shapebuilder-mode .pagebox * { cursor: var(--cur-sb) !important }
+body.shapebuilder-mode.sb-minus .pagebox, body.shapebuilder-mode.sb-minus .pagebox * { cursor: var(--cur-sb-minus) !important }
+body.shapebuilder-mode .anno .gsel .gkn, body.shapebuilder-mode .anno .hnd .kn,
+body.shapebuilder-mode .anno .hnd .knpad, body.shapebuilder-mode .anno .hnd .stem, body.shapebuilder-mode .anno .hnd .turnic,
+body.shapebuilder-mode .anno .hnd .rotz, body.shapebuilder-mode .anno .gsel .rotz { display: none }
+.anno .sbann { pointer-events: none }
+.anno .sbann .sbhatchbg { fill: rgba(47, 128, 237, .16) }
+.anno .sbann .sbhatch { stroke: rgba(47, 128, 237, .55); stroke-width: 1.4 }
+.anno .sbann .sbhatchbg.minus { fill: rgba(224, 49, 49, .14) }
+.anno .sbann .sbhatch.minus { stroke: rgba(224, 49, 49, .6) }
+.anno .sbann .sbreg { fill: url(#sbHatch); stroke: #2F80ED; stroke-width: 1.5; stroke-linejoin: round }
+.anno .sbann .sbreg.minus { fill: url(#sbHatchMinus); stroke: #E03131; stroke-dasharray: 4 3 }
+.anno .sbann .sbtrail { fill: none; stroke: #2F80ED; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
+.anno .sbann .sbtrail.minus { stroke: #E03131 }
+
 /* ---------- one selected mark, as Illustrator shows it ----------
    A thin box with small square grips (core.js handlesEl): the pointer on a
    grip is the resize arrow, and just off a corner (or a line's end) it

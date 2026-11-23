@@ -317,7 +317,7 @@
     /* the marks on the thumbnails too (the bar under them turns it off) */
     thumbMarks: (function () { try { return localStorage.getItem('adpdf.thumbMarks') !== '0'; } catch (e) { return true; } })(),
     baseName: 'document', metaBase: '', baseCount: 0,
-    undo: [], hits: [], hitIndex: -1, query: '',
+    undo: [], redo: [], hits: [], hitIndex: -1, query: '',
     textCache: new Map(), jumping: false,
     locs: {},            // photo-pin locations by id: {id, n, ref, desc, boq, note, photos}
     tool: 'select', color: '#E2483D', width: 0.5,   /* 0.5pt: a fine drawing line, not a marker stroke */
@@ -672,7 +672,7 @@
         try { Promise.resolve(src.doc.destroy()).catch(function () {}); } catch (e) {}
       }
     });
-    S.sources = []; S.items = []; S.undo = []; S.textCache = new Map();
+    S.sources = []; S.items = []; S.undo = []; S.redo = []; S.textCache = new Map();
     S.hits = []; S.hitIndex = -1; S.query = ''; S.current = 1; S.fit = 'width'; S.sel = null;
     S.locs = {}; pinSel = null; closeLb();
     stage.innerHTML = ''; $('railPages').innerHTML = '';
@@ -684,8 +684,13 @@
     setUndoState();
   }
 
-  /* ---------------- undo ---------------- */
-  function snapshot() {
+  /* ---------------- undo and redo ----------------
+     A step holds every page's marks (and layers) as they were. Undo by the
+     reader (Ctrl+Z, the button) keeps the state it leaves on the redo list,
+     which Redo (Ctrl+Y, Ctrl+Shift+Z) goes back to; any new change clears it.
+     A module's own undo (EXT.undo, taking back a drag it cancelled) keeps
+     nothing to redo. */
+  function capture() {
     const snap = S.items.map(function (it) {
       return {
         ref: it, src: it.src, num: it.num, rot: it.rot, added: it.added,
@@ -696,16 +701,37 @@
     /* the layers too (js/layers.js), so undoing a merge or a delete brings
        the layer back as well as its marks */
     snap.layers = S.layers ? S.layers.map(function (l) { return Object.assign({}, l); }) : null;
-    S.undo.push(snap);
+    return snap;
+  }
+  function snapshot() {
+    S.undo.push(capture());
     if (S.undo.length > 60) S.undo.shift();
+    S.redo = [];
     setUndoState();
   }
-  function setUndoState() { $('btnUndo').disabled = S.undo.length === 0; }
+  function setUndoState() {
+    $('btnUndo').disabled = S.undo.length === 0;
+    if ($('btnRedo')) $('btnRedo').disabled = !S.redo || S.redo.length === 0;
+  }
 
-  async function undo() {
+  async function undo(byReader) {
     const snap = S.undo.pop();
     if (!snap) return;
+    if (byReader === true) { S.redo.push(capture()); if (S.redo.length > 60) S.redo.shift(); }
     setUndoState();
+    await restore(snap);
+    toast('Undone');
+  }
+  async function redo() {
+    const snap = S.redo.pop();
+    if (!snap) return;
+    S.undo.push(capture());
+    if (S.undo.length > 60) S.undo.shift();
+    setUndoState();
+    await restore(snap);
+    toast('Redone');
+  }
+  async function restore(snap) {
     S.sel = null;
     hideMarkPop();
     S.items = snap.map(function (s) {
@@ -723,7 +749,6 @@
     if (snap.layers) S.layers = snap.layers;
     await syncAll();
     EXT.emit('meta');
-    toast('Undone');
   }
 
   /* ---------------- elements ---------------- */
@@ -9951,7 +9976,8 @@
   $('btnRotL').addEventListener('click', function (e) { e.shiftKey ? rotateAll(-90) : rotateItem(S.current - 1, -90); });
   $('btnRotR').addEventListener('click', function (e) { e.shiftKey ? rotateAll(90) : rotateItem(S.current - 1, 90); });
   $('btnDel').addEventListener('click', function () { if (S.items.length) removeItem(S.current - 1); });
-  $('btnUndo').addEventListener('click', undo);
+  $('btnUndo').addEventListener('click', function () { undo(true); });
+  if ($('btnRedo')) $('btnRedo').addEventListener('click', redo);
 
   $('btnAdd').addEventListener('click', function () {
     if (!S.items.length) return;
@@ -10529,7 +10555,8 @@
     }
     if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); quickSave(); return; }
     if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); printDoc(); return; }
-    if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+    if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(true); return; }
+    if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
     if (e.key === 'Escape') {
       closePops();
       TR.stop = true;
@@ -10965,7 +10992,7 @@
     shCap: shCap, shJoin: shJoin,
     vpts: vpts, textWidth: textWidth, fontIdx: fontIdx,
     dirAngle: dirAngle, shOp: shOp,
-    openPop: openPop, closePops: closePops, undo: undo,
+    openPop: openPop, closePops: closePops, undo: undo, redo: redo,
     invalidateSearch: invalidateSearch,
     isMobile: isMobile,
     openFiles: takeFiles,
