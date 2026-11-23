@@ -50,7 +50,7 @@
     /* ---------------- how a mark reads in the list ---------------- */
 
     const LABEL = {
-      rect: 'Rectangle', ellipse: 'Circle', line: 'Line', arrow: 'Arrow',
+      rect: 'Rectangle', ellipse: 'Ellipse', line: 'Line', arrow: 'Arrow',
       cloud: 'Cloud', arc: 'Arc', dim: 'Dimension', dimr: 'Radius',
       dimd: 'Diameter', dima: 'Angle', ink: 'Drawing', markup: 'Highlight',
       note: 'Note', stamp: 'Stamp', istamp: 'Image stamp',

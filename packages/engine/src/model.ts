@@ -124,6 +124,13 @@ export interface TextMark extends MarkBase {
       family, bold and italic the mark had then. While it keeps those, text
       the font can draw is saved in it (pagefont.ts). */
   pf?: (PageFont & { f: FontFamily; b: boolean; i: boolean }) | null;
+  /** Area text, as Illustrator's: the frame's width and height in points.
+      The text wraps inside the width (layoutText) and what does not fit the
+      height overflows, hidden. Without them it is point text, one line until
+      a line break, as wide as it runs. The frame's top is s.a[1] + size;
+      its left is s.a[0]. */
+  aw?: number | null;
+  ah?: number | null;
 }
 
 /** One page in the editor: page `num` (1-based) of `src`, plus what was done to it. */

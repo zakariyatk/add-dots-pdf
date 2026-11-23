@@ -103,9 +103,10 @@
     /* ---------------- toolbar ---------------- */
 
     const TOOLS = [
-      { t: 'ellipse', id: 'tEllipse', label: 'Circle', key: 'C', shift: true,
-        hint: 'Drag to draw an ellipse. Hold <b>Shift</b> for a true circle.',
-        path: '<ellipse cx="12" cy="12" rx="9" ry="7"/>' },
+      { t: 'ellipse', id: 'tEllipse', label: 'Ellipse', key: 'L', shift: false,
+        hint: 'Drag to draw an ellipse. <b>Shift</b>: a perfect circle. <b>Alt</b>: from the centre. ' +
+              'Hold <b>Space</b> to move it while drawing. <b>Esc</b> cancels. Click without dragging to type its size.',
+        path: '<ellipse cx="12" cy="12" rx="9" ry="6.5"/>' },
       { t: 'cloud', id: 'tCloud', label: 'Cloud', key: 'L', shift: true,
         hint: 'Drag a box and it becomes a revision cloud around it. ' +
               'The <b>Scallop</b> control sets how big the bumps are. Hold <b>Shift</b> for a square.',
@@ -636,9 +637,35 @@
       return el;
     }
 
+    /** The ellipse as an SVG path on the page as shown: its four Bézier arcs
+        (E.ellipseBezier), each point taken onto the screen. The page's own
+        turn and zoom are a plain affine map, which keeps a Bézier exact, so
+        the curve is the true ellipse at any zoom, not a polygon. */
+    function ellipsePath(s, vp) {
+      const P = E.ellipseBezier(s).map(function (q) { return vp.convertToViewportPoint(q[0], q[1]); });
+      let d = 'M' + P[0][0] + ' ' + P[0][1];
+      for (let i = 1; i + 2 < P.length; i += 3) {
+        d += 'C' + P[i][0] + ' ' + P[i][1] + ' ' + P[i + 1][0] + ' ' + P[i + 1][1] + ' ' + P[i + 2][0] + ' ' + P[i + 2][1];
+      }
+      const el = document.createElementNS(SVGNS, 'path');
+      el.setAttribute('d', d + 'Z');
+      return el;
+    }
     X.shapeRenderers.ellipse = function (it, s, vp, idx) {
       const g = document.createElementNS(SVGNS, 'g');
-      const el = polyline(ellipsePts(s, 72), vp, true);
+      if ((s.sa === 'in' || s.sa === 'out') && !s.nos && s.w) {
+        /* the stroke aligned inside or outside: the fill on the edge, the
+           outline on the edge moved in or out by half its width, as the PDF has it */
+        const fillEl = ellipsePath(s, vp);
+        stroked(fillEl, Object.assign({}, s, { nos: true }), idx, it);
+        g.appendChild(fillEl);
+        fillIn(g, fillEl, s, vp);
+        const line = ellipsePath(E.strokeEllipse(s), vp);
+        stroked(line, s, idx, it);
+        g.appendChild(line);
+        return g;
+      }
+      const el = ellipsePath(s, vp);
       stroked(el, s, idx, it);
       g.appendChild(el);
       fillIn(g, el, s, vp);
@@ -996,7 +1023,347 @@
       return s;
     }
 
-    X.tools.ellipse = common('ellipse');
+    X.tools.ellipse = ellipseTool();
+
+    /* ---------------- the Ellipse tool (L) ----------------
+       As Illustrator's: drag from one corner of the ellipse's box to the
+       other, with a live preview and its width and height by the pointer.
+       Shift keeps it a perfect circle, Alt draws it out from the centre
+       (both together: a circle from its centre), and holding Space moves the
+       whole ellipse, size kept, until it is let go and sizing carries on.
+       The modifiers are read as they change, not only when the pointer
+       moves. Esc throws the drawing away and keeps the tool. A click with no
+       drag asks for the width and height and draws it from that point.
+
+       Every point snaps as the other drawing tools' do (snapPt): to anchor
+       points, edges, centres, crossings, the grid and ruler guides, and in
+       line with other marks along a smart guide. With Shift the circle's
+       proportion wins over a snap.
+
+       A new ellipse takes the look set in the tool's bar: the stroke colour
+       and width every drawing tool shares, and its own fill (or none), no
+       stroke, solid or dashed, opacity and stroke alignment, kept for next
+       time. */
+    const ELL_KEY = 'adpdf.ellipseLook';
+    const ELL_DEFAULT = { fill: null, fillC: '#FFFFFF', nos: false, d: 0, o: 1, sa: '' };
+    let ellLook = (function () {
+      try { return Object.assign({}, ELL_DEFAULT, JSON.parse(localStorage.getItem(ELL_KEY) || '{}')); }
+      catch (e) { return Object.assign({}, ELL_DEFAULT); }
+    })();
+    function keepEllLook() { try { localStorage.setItem(ELL_KEY, JSON.stringify(ellLook)); } catch (e) { /* this session only */ } }
+    /** A new ellipse with the tool's look, over box a-b (any two corners). */
+    function ellipseMark(a, b) {
+      const m = { t: 'ellipse', a: [Math.min(a[0], b[0]), Math.min(a[1], b[1])], b: [Math.max(a[0], b[0]), Math.max(a[1], b[1])], c: S.color, w: S.width };
+      if (ellLook.fill) m.fill = ellLook.fill;
+      if (ellLook.nos) m.nos = true;
+      if (ellLook.d) m.d = ellLook.d;
+      if (ellLook.o != null && ellLook.o < 1) m.o = ellLook.o;
+      if (ellLook.sa) m.sa = ellLook.sa;
+      return m;
+    }
+    /** The ellipse's box from where the drag began (a) to the pointer (p):
+        Shift squares it, Alt makes a its centre. */
+    function ellipseBox(a, p, shift, alt) {
+      let dx = p[0] - a[0], dy = p[1] - a[1];
+      if (shift) {
+        const m = Math.max(Math.abs(dx), Math.abs(dy));
+        dx = (dx < 0 ? -1 : 1) * m; dy = (dy < 0 ? -1 : 1) * m;
+      }
+      return alt ? { a: [a[0] - dx, a[1] - dy], b: [a[0] + dx, a[1] + dy] } : { a: [a[0], a[1]], b: [a[0] + dx, a[1] + dy] };
+    }
+    X.ellipseBox = ellipseBox;
+
+    function ellipseTool() {
+      let d = null;     /* { it, a, raw, shift, alt, space: { from, a0 } | null, moved, at0 } */
+      function geom() {
+        const g = ellipseBox(d.a, d.p, d.shift, d.alt);
+        return g;
+      }
+      function render() {
+        if (!d) return;
+        const g = geom();
+        const m = ellipseMark(g.a, g.b);
+        X.drawShapes(d.it, m);
+        readBox(d.it, m, d.p);
+      }
+      /* where the pointer is, snapped (Shift's proportion beats a snap) */
+      function pointer(it, at, e) {
+        const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+        if (d && d.space) { snapHide(); return [raw[0], raw[1]]; }
+        if (e && e.shiftKey) { snapHide(); if (X.hideSmartGuide) X.hideSmartGuide(); return [raw[0], raw[1]]; }
+        const sn = X.snapPt(it, raw, e);
+        return sn ? [sn[0], sn[1]] : [raw[0], raw[1]];
+      }
+      function end() {
+        d = null;
+        snapHide(); readHide();
+        trackStart(null, null);
+        if (X.hideSmartGuide) X.hideSmartGuide();
+      }
+      const tool = {
+        colors: true, widths: true,
+        down: function (it, at, e) {
+          if (!it.vp) return;
+          const a = pdfAt(it, at, e);
+          d = { it: it, a: [a[0], a[1]], p: [a[0], a[1]], shift: !!(e && e.shiftKey), alt: !!(e && e.altKey),
+                space: null, moved: false, at0: [at[0], at[1]] };
+          trackStart(it, d.a);
+          /* the drag keeps coming here even off the page's edge */
+          if (e && e.pointerId != null) { try { it.capture.setPointerCapture(e.pointerId); } catch (err) { /* a mouse draws without it */ } }
+        },
+        move: function (it, at, e) {
+          if (!d || d.it !== it) return;
+          if (Math.hypot(at[0] - d.at0[0], at[1] - d.at0[1]) > 2) d.moved = true;
+          d.shift = !!(e && e.shiftKey); d.alt = !!(e && e.altKey);
+          const p = pointer(it, at, e);
+          if (d.space) {
+            /* Space held: the whole ellipse follows the pointer, its size kept */
+            const dx = p[0] - d.space.from[0], dy = p[1] - d.space.from[1];
+            d.a = [d.space.a0[0] + dx, d.space.a0[1] + dy];
+          }
+          d.p = p;
+          render();
+        },
+        cancel: function (it) { if (!d) return; end(); X.drawShapes(it); },
+        up: function (it, at, e) {
+          if (!d || d.it !== it) return;
+          const was = d;
+          if (!was.moved) {
+            /* a click: its size typed in, drawn from the point clicked
+               (its centre with Alt), as Illustrator asks */
+            end();
+            X.drawShapes(it);
+            askEllipseSize(it, was.a, !!(e && e.altKey));
+            return;
+          }
+          tool.move(it, at, e);
+          const g = geom();
+          end();
+          const m = ellipseMark(g.a, g.b);
+          if (m.b[0] - m.a[0] < 0.5 && m.b[1] - m.a[1] < 0.5) { X.drawShapes(it); return; }
+          X.snapshot();
+          it.shapes.push(m);
+          X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+        },
+        /* the modifiers changed with the pointer still: the preview follows */
+        key: function (e, down) {
+          if (!d) return false;
+          if (e.key === 'Shift') { d.shift = down; render(); return false; }
+          if (e.key === 'Alt') { d.alt = down; render(); return true; }
+          if (e.key === ' ' || e.code === 'Space') {
+            if (down && !d.space) d.space = { from: [d.p[0], d.p[1]], a0: [d.a[0], d.a[1]] };
+            else if (!down) d.space = null;
+            return true;
+          }
+          if (e.key === 'Escape' && down) { const it = d.it; end(); X.drawShapes(it); X.toast('Ellipse cancelled'); return true; }
+          return false;
+        },
+        drawing: function () { return !!d; }
+      };
+      /* ahead of Space-to-pan (js/navigate.js) and core's Escape, and only
+         while an ellipse is being drawn */
+      ['keydown', 'keyup'].forEach(function (type) {
+        window.addEventListener(type, function (e) {
+          if (S.tool !== 'ellipse' || !d) return;
+          if (type === 'keydown' && e.repeat && (e.key === ' ' || e.code === 'Space')) { e.preventDefault(); e.stopImmediatePropagation(); return; }
+          if (tool.key(e, type === 'keydown')) { e.preventDefault(); e.stopImmediatePropagation(); }
+        }, true);
+      });
+      window.addEventListener('blur', function () { if (d) { d.space = null; d.shift = false; d.alt = false; } });
+      return tool;
+    }
+
+    /** The width and height beside the pointer while an ellipse is drawn. */
+    function readBox(it, m, p) {
+      if (!it.anno) return;
+      const r = it.anno.getBoundingClientRect();
+      const w = m.b[0] - m.a[0], h = m.b[1] - m.a[1];
+      if (w < 0.5 && h < 0.5) { readHide(); return; }
+      const v = it.vp.convertToViewportPoint(p[0], p[1]);
+      readout.textContent = 'W ' + measureLen(w) + '   H ' + measureLen(h);
+      readout.style.transform = 'translate(' + Math.round(r.left + v[0] + 14) + 'px,' + Math.round(r.top + v[1] + 34) + 'px)';
+      readout.hidden = false;
+      if (!startDot.hidden) startDot.hidden = true;
+    }
+
+    /** Illustrator's Ellipse dialog: a click with no drag asks for the size. */
+    function askEllipseSize(it, at, centre) {
+      const last = ellLook.lastWH || [72, 72];
+      X.dialog({
+        title: 'Ellipse',
+        ok: 'OK',
+        width: 360,
+        body:
+          '<div class="wdrow ellwh">' +
+            '<label class="wdlabel" for="ellW">Width</label><span class="unit"><input class="wdin" id="ellW" inputmode="decimal" value="' + last[0] + '"><em>pt</em></span>' +
+            '<label class="wdlabel" for="ellH">Height</label><span class="unit"><input class="wdin" id="ellH" inputmode="decimal" value="' + last[1] + '"><em>pt</em></span>' +
+          '</div>' +
+          '<label class="prchk ellcircle"><input type="checkbox" id="ellRound"' + (last[0] === last[1] ? ' checked' : '') + '> Keep it a circle</label>',
+        open: function (box) {
+          const W = box.querySelector('#ellW'), H = box.querySelector('#ellH'), R = box.querySelector('#ellRound');
+          W.addEventListener('input', function () { if (R.checked) H.value = W.value; });
+          H.addEventListener('input', function () { if (R.checked) W.value = H.value; });
+          R.addEventListener('change', function () { if (R.checked) H.value = W.value; });
+        },
+        value: function (box) {
+          const w = parseFloat(box.querySelector('#ellW').value), h = parseFloat(box.querySelector('#ellH').value);
+          if (!(w > 0 && w <= 20000)) return { error: 'Width: a size from 0 to 20000 pt', field: '#ellW' };
+          if (!(h > 0 && h <= 20000)) return { error: 'Height: a size from 0 to 20000 pt', field: '#ellH' };
+          return { w: w, h: h };
+        }
+      }).then(function (v) {
+        if (!v) return;
+        ellLook.lastWH = [v.w, v.h]; keepEllLook();
+        /* the click is its top-left corner as the page is seen, or its centre */
+        const vp = it.vp;
+        const tl = centre ? [at[0] - v.w / 2, at[1] - v.h / 2] : null;
+        let a, b;
+        if (centre) { a = tl; b = [tl[0] + v.w, tl[1] + v.h]; }
+        else {
+          /* down and right on the screen, whatever the page's turn */
+          const o = vp.convertToViewportPoint(at[0], at[1]);
+          const q = vp.convertToPdfPoint(o[0] + 1, o[1] + 1);
+          const sx = q[0] >= at[0] ? 1 : -1, sy = q[1] >= at[1] ? 1 : -1;
+          a = at; b = [at[0] + sx * v.w, at[1] + sy * v.h];
+        }
+        X.snapshot();
+        it.shapes.push(ellipseMark(a, b));
+        X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      });
+    }
+
+    /* ---- the tool's bar: the look the next ellipse takes ---- */
+    const ellCtl = ctl('ellCtl',
+      '<span class="anno-lbl">Fill</span>' +
+      '<input type="color" id="ellFill" aria-label="Fill colour">' +
+      '<label class="anno-lbl ellchk"><input type="checkbox" id="ellNoFill"> None</label>' +
+      '<span class="anno-lbl">Stroke</span>' +
+      '<label class="anno-lbl ellchk"><input type="checkbox" id="ellNoStroke"> None</label>' +
+      '<select id="ellDash" aria-label="Stroke style"><option value="0">━━━ Solid</option><option value="1">━ ━ Dashed</option><option value="2">· · · Dotted</option></select>' +
+      '<select id="ellAlign" aria-label="Stroke alignment"><option value="">Align centre</option><option value="in">Align inside</option><option value="out">Align outside</option></select>' +
+      '<span class="anno-lbl">Opacity</span>' +
+      '<input type="number" id="ellOp" min="0" max="100" step="1" aria-label="Opacity, in percent"><span class="anno-lbl">%</span>');
+    function syncEllCtl() {
+      $('ellFill').value = ellLook.fill || ellLook.fillC || '#FFFFFF';
+      $('ellNoFill').checked = !ellLook.fill;
+      $('ellFill').disabled = !ellLook.fill;
+      $('ellNoStroke').checked = !!ellLook.nos;
+      $('ellDash').value = String(ellLook.d || 0);
+      $('ellAlign').value = ellLook.sa || '';
+      $('ellOp').value = Math.round((ellLook.o == null ? 1 : ellLook.o) * 100);
+    }
+    ellCtl.addEventListener('change', function (e) {
+      const id = e.target.id;
+      if (id === 'ellFill') { ellLook.fill = e.target.value.toUpperCase(); ellLook.fillC = ellLook.fill; }
+      else if (id === 'ellNoFill') ellLook.fill = e.target.checked ? null : (ellLook.fillC || '#FFFFFF');
+      else if (id === 'ellNoStroke') ellLook.nos = e.target.checked;
+      else if (id === 'ellDash') ellLook.d = +e.target.value || 0;
+      else if (id === 'ellAlign') ellLook.sa = e.target.value;
+      else if (id === 'ellOp') ellLook.o = Math.max(0, Math.min(100, +e.target.value || 0)) / 100;
+      /* never neither: with no fill and no stroke an ellipse could not be seen or picked */
+      if (!ellLook.fill && ellLook.nos) {
+        if (id === 'ellNoStroke') { ellLook.fill = ellLook.fillC || '#FFFFFF'; X.toast('An ellipse needs a fill or a stroke: fill turned on'); }
+        else { ellLook.nos = false; X.toast('An ellipse needs a fill or a stroke: stroke turned on'); }
+      }
+      keepEllLook();
+      syncEllCtl();
+    });
+    X.on('tool', function (t) { ellCtl.hidden = t !== 'ellipse'; if (t === 'ellipse') syncEllCtl(); });
+    syncEllCtl();
+
+    /* ---- on the selected ellipse's properties: its exact place and size,
+       stroke alignment, a circle at a click, and Convert to Path ---- */
+    const ellPop = document.createElement('div');
+    ellPop.className = 'mpell';
+    ellPop.innerHTML =
+      '<label class="mfield"><span>X</span><span class="unit"><input id="ellPX" inputmode="decimal" aria-label="Left edge, in points"><em>pt</em></span></label>' +
+      '<label class="mfield"><span>Y</span><span class="unit"><input id="ellPY" inputmode="decimal" aria-label="Top edge from the top of the page, in points"><em>pt</em></span></label>' +
+      '<label class="mfield"><span>W</span><span class="unit"><input id="ellPW" inputmode="decimal" aria-label="Width, in points"><em>pt</em></span></label>' +
+      '<label class="mfield"><span>H</span><span class="unit"><input id="ellPH" inputmode="decimal" aria-label="Height, in points"><em>pt</em></span></label>' +
+      '<button class="cbtn ellbtn" id="ellPLock" type="button" title="Keep width and height in proportion" aria-pressed="false">⛓</button>' +
+      '<label class="mfield"><span>Align</span><select id="ellPAlign" aria-label="Stroke alignment"><option value="">Centre</option><option value="in">Inside</option><option value="out">Outside</option></select></label>' +
+      '<button class="cbtn ellbtn" id="ellPCircle" type="button" title="Make it a circle (its width for both)">Circle</button>' +
+      '<button class="cbtn ellbtn" id="ellPPath" type="button" title="Convert to a Pen path: anchor points and handles to edit with Direct Selection">Convert to Path</button>';
+    /* by id inside the panel itself: it is only in the page while an ellipse is selected */
+    const ellQ = function (id) { return ellPop.querySelector('#' + id); };
+    let ellLock = false;
+    function ellSel() {
+      const sh = S.sel && S.sel.it && S.sel.it.shapes[S.sel.i];
+      return sh && sh.t === 'ellipse' ? sh : null;
+    }
+    /* the page's top, for Y measured down from it as on screen */
+    function pageTop(it) { return it.vp ? it.vp.convertToPdfPoint(0, 0)[1] : 0; }
+    const r2 = function (v) { return Math.round(v * 100) / 100; };
+    X.markPop.ellipse = {
+      el: ellPop,
+      sync: function (sh) {
+        const it = S.sel.it, b = E.boxOf(sh);
+        const set = function (id, v) { if (document.activeElement !== $(id)) $(id).value = r2(v); };
+        set('ellPX', b.x1); set('ellPY', Math.abs(pageTop(it) - b.y2));
+        set('ellPW', b.x2 - b.x1); set('ellPH', b.y2 - b.y1);
+        ellQ('ellPAlign').value = sh.sa || '';
+        ellQ('ellPLock').classList.toggle('on', ellLock);
+        ellQ('ellPLock').setAttribute('aria-pressed', ellLock ? 'true' : 'false');
+      }
+    };
+    function ellChange(fn) {
+      const sh = ellSel();
+      if (!sh) return;
+      X.snapshot();
+      /* every ellipse selected takes it */
+      const it = S.sel.it;
+      X.selList().forEach(function (i) { const m = it.shapes[i]; if (m && m.t === 'ellipse' && !m.locked) fn(m, it); });
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+    }
+    function ellNum(id) { const v = parseFloat(String($(id).value).replace(',', '.')); return isFinite(v) ? v : null; }
+    ellPop.addEventListener('change', function (e) {
+      const id = e.target.id;
+      if (id === 'ellPAlign') { ellChange(function (m) { if (e.target.value) m.sa = e.target.value; else delete m.sa; }); return; }
+      const v = ellNum(id);
+      if (v == null) { X.syncMarkPop(); return; }
+      ellChange(function (m, it) {
+        const b = E.boxOf(m), w = b.x2 - b.x1, h = b.y2 - b.y1;
+        if (id === 'ellPX') { m.a = [v, b.y1]; m.b = [v + w, b.y2]; }
+        else if (id === 'ellPY') { const top = pageTop(it); const y2 = top >= b.y2 ? top - v : top + v; m.a = [b.x1, y2 - h]; m.b = [b.x2, y2]; }
+        else if (id === 'ellPW' || id === 'ellPH') {
+          /* sized about its centre, as Illustrator's W and H do with the centre reference point */
+          let nw = id === 'ellPW' ? Math.max(0.01, v) : w, nh = id === 'ellPH' ? Math.max(0.01, v) : h;
+          if (ellLock && w > 0 && h > 0) { if (id === 'ellPW') nh = h * nw / w; else nw = w * nh / h; }
+          const cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2;
+          m.a = [cx - nw / 2, cy - nh / 2]; m.b = [cx + nw / 2, cy + nh / 2];
+        }
+      });
+    });
+    ellPop.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); e.target.dispatchEvent(new Event('change', { bubbles: true })); e.target.blur(); }
+    });
+    ellQ('ellPLock').addEventListener('click', function () { ellLock = !ellLock; X.syncMarkPop(); });
+    ellQ('ellPCircle').addEventListener('click', function () {
+      ellChange(function (m) {
+        const b = E.boxOf(m), side = b.x2 - b.x1, cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2;
+        m.a = [cx - side / 2, cy - side / 2]; m.b = [cx + side / 2, cy + side / 2];
+      });
+    });
+    /* Convert to Path: the same four Bézier arcs as a Pen path, its look kept,
+       its anchors and handles then edited with Direct Selection (js/pen.js) */
+    ellQ('ellPPath').addEventListener('click', function () {
+      const sh = ellSel();
+      if (!sh) return;
+      const it = S.sel.it;
+      X.snapshot();
+      const made = [];
+      X.selList().forEach(function (i) {
+        const m = it.shapes[i];
+        if (!m || m.t !== 'ellipse' || m.locked) return;
+        const pen = { t: 'pen', pts: E.ellipseBezier(m).map(function (q) { return [q[0], q[1]]; }) };
+        Object.keys(m).forEach(function (k) { if (k !== 't' && k !== 'a' && k !== 'b' && k !== 'r' && k !== 'sa') pen[k] = m[k]; });
+        it.shapes[i] = pen;
+        made.push(i);
+      });
+      X.setGroup(it, made);
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+      X.toast('Converted to a path: Direct Selection (Shift+V) edits its points');
+    });
     X.tools.cloud = common('cloud');
     X.tools.arc = common('arc');
 
@@ -1866,7 +2233,7 @@
          the near ones, and capped, because crossing is quadratic. */
       if (K.int || wantDir) {
         it.shapes.forEach(function (s, idx) {
-          if (opts && opts.skip === idx) return;
+          if (skips(opts, idx)) return;
           if (lines.length > 80) return;
           markSegs(s).forEach(function (g) {
             if (lines.length > 80) return;
@@ -1928,7 +2295,7 @@
 
       if (K.mark) {
         it.shapes.forEach(function (s, idx) {
-          if (opts && opts.skip === idx) return;
+          if (skips(opts, idx)) return;
           markPoints(s).forEach(function (m) {
             consider(m[0], m[1] === 'Centre' ? 'cen' : 'mark', m[1]);
           });
@@ -2299,6 +2666,12 @@
        runs through each match. The same lines core.js draws while a mark is
        moved. Reach is in screen pixels, so it is the same at any zoom. */
     const ALIGN_PX = 6;
+    /** Is mark idx left out of the snaps: the one mark, or one of the
+        group, whose own grip is being dragged (opts.skip, one index or a list). */
+    function skips(opts, idx) {
+      if (!opts || opts.skip == null) return false;
+      return Array.isArray(opts.skip) ? opts.skip.indexOf(idx) >= 0 : opts.skip === idx;
+    }
     let alignOn = false;
     function alignHide() { if (alignOn) { alignOn = false; if (X.hideSmartGuide) X.hideSmartGuide(); } }
     function alignFind(it, p, opts) {
@@ -2306,7 +2679,7 @@
       const tol = ALIGN_PX / Math.max(0.05, S.scale);
       let bx = null, bxd = tol, by = null, byd = tol;
       it.shapes.forEach(function (s, idx) {
-        if (opts && opts.skip === idx) return;
+        if (skips(opts, idx)) return;
         markPoints(s).forEach(function (m) {
           const q = m[0];
           const dx = Math.abs(q[0] - p[0]), dy = Math.abs(q[1] - p[1]);
@@ -2320,6 +2693,9 @@
         if (Math.abs(q[0] - p[0]) < bxd) { bxd = Math.abs(q[0] - p[0]); bx = q[0]; }
         if (Math.abs(q[1] - p[1]) < byd) { byd = Math.abs(q[1] - p[1]); by = q[1]; }
       }
+      /* a side being pulled moves on one axis only: the other's guide would mean nothing */
+      if (opts && opts.axis === 'x') by = null;
+      if (opts && opts.axis === 'y') bx = null;
       if (bx === null && by === null) return null;
       return { p: [bx === null ? p[0] : bx, by === null ? p[1] : by], vx: bx, hy: by };
     }

@@ -9,12 +9,14 @@
              up on the selection's own box; with one, on the page. A group
              (Ctrl+G) moves as one piece. Directions are as the page is seen,
              whatever its turn.
-   Pathfinder — Unite, Minus Front, Intersect and Exclude on two or more
+   Pathfinder — Unite, Minus Front, Intersect, Exclude and Divide on two or more
              closed shapes (box, circle, a closed Continuous Line or Pen
              path, a shape from Edit Object). The result is one shape (a
              vpath, saved by the engine's painters/vpath.ts) in place of
              them. Unite, Intersect and Exclude take the front shape's look,
-             Minus Front the back one's, as in Illustrator.
+             Minus Front the back one's, as in Illustrator. Divide cuts
+             them into every region they make, each a shape of its own
+             (js/shapebuilder.js).
 
    The boolean maths is polygon-clipping (js/vendor/polygon-clipping.umd.min.js,
    MIT); curves are flattened into short straight steps first. */
@@ -36,6 +38,7 @@
     pu: '<path d="M3 3h11v6h7v12H10v-6H3z" fill="currentColor" fill-opacity=".85"/>',
     pm: '<path d="M3 3h11v6h-4v6H3z" fill="currentColor" fill-opacity=".85"/><rect x="10" y="9" width="11" height="12" fill="none"/>',
     pi: '<rect x="3" y="3" width="11" height="12" fill="none" stroke-dasharray="2 2"/><rect x="10" y="9" width="11" height="12" fill="none" stroke-dasharray="2 2"/><rect x="10" y="9" width="4" height="6" fill="currentColor" fill-opacity=".85"/>',
+    pd: '<path d="M3 3h11v6H10v6H3z" fill="currentColor" fill-opacity=".85"/><path d="M14 9h7v12H10v-6h4z" fill="currentColor" fill-opacity=".45"/><rect x="10" y="9" width="4" height="6" fill="currentColor" fill-opacity=".65"/><path d="M10 9h4v6h-4z"/>',
     px: '<path d="M3 3h11v6h-4v6H3z" fill="currentColor" fill-opacity=".85"/><path d="M14 9h7v12H10v-6h4z" fill="currentColor" fill-opacity=".85"/><rect x="10" y="9" width="4" height="6" fill="none"/>'
   };
   function btn(id, title, icon) {
@@ -74,6 +77,7 @@
           btn('minus', 'Minus Front', 'pm') +
           btn('intersect', 'Intersect', 'pi') +
           btn('exclude', 'Exclude', 'px') +
+          btn('divide', 'Divide: every overlapping region a shape of its own', 'pd') +
         '</div>' +
       '</div>';
     pop.appendChild(sec);
@@ -299,6 +303,7 @@
       e.stopPropagation();
       const a = b.dataset.ar;
       if (a === 'unite' || a === 'minus' || a === 'intersect' || a === 'exclude') pathfinder(a);
+      else if (a === 'divide') { if (X.shapeBuilder) X.shapeBuilder.divideSelected(); }
       else align(a);
     });
 

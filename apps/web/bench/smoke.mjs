@@ -3154,8 +3154,9 @@ try {
       page.evaluate((n) => (window.ADDPDF.S.items[n - 1].guides || []).map((g) => g.v), n);
     const made = await guidesOn(pg.n);
     /* the Line tool catches the guides: a line begun a few pixels off the
-       horizontal guide and ended a few off the vertical one lands on both */
-    await page.keyboard.press('l');
+       horizontal guide and ended a few off the vertical one lands on both
+       (\ is the Line tool, as Illustrator's Line Segment; L is the Ellipse) */
+    await page.keyboard.press('\\');
     await page.mouse.move(pg.x + 300, pg.y + 124);
     await page.mouse.down();
     await page.mouse.move(pg.x + 200, pg.y + 260, { steps: 6 });

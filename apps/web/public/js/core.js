@@ -317,7 +317,7 @@
     /* the marks on the thumbnails too (the bar under them turns it off) */
     thumbMarks: (function () { try { return localStorage.getItem('adpdf.thumbMarks') !== '0'; } catch (e) { return true; } })(),
     baseName: 'document', metaBase: '', baseCount: 0,
-    undo: [], hits: [], hitIndex: -1, query: '',
+    undo: [], redo: [], hits: [], hitIndex: -1, query: '',
     textCache: new Map(), jumping: false,
     locs: {},            // photo-pin locations by id: {id, n, ref, desc, boq, note, photos}
     tool: 'select', color: '#E2483D', width: 0.5,   /* 0.5pt: a fine drawing line, not a marker stroke */
@@ -672,7 +672,7 @@
         try { Promise.resolve(src.doc.destroy()).catch(function () {}); } catch (e) {}
       }
     });
-    S.sources = []; S.items = []; S.undo = []; S.textCache = new Map();
+    S.sources = []; S.items = []; S.undo = []; S.redo = []; S.textCache = new Map();
     S.hits = []; S.hitIndex = -1; S.query = ''; S.current = 1; S.fit = 'width'; S.sel = null;
     S.locs = {}; pinSel = null; closeLb();
     stage.innerHTML = ''; $('railPages').innerHTML = '';
@@ -684,8 +684,13 @@
     setUndoState();
   }
 
-  /* ---------------- undo ---------------- */
-  function snapshot() {
+  /* ---------------- undo and redo ----------------
+     A step holds every page's marks (and layers) as they were. Undo by the
+     reader (Ctrl+Z, the button) keeps the state it leaves on the redo list,
+     which Redo (Ctrl+Y, Ctrl+Shift+Z) goes back to; any new change clears it.
+     A module's own undo (EXT.undo, taking back a drag it cancelled) keeps
+     nothing to redo. */
+  function capture() {
     const snap = S.items.map(function (it) {
       return {
         ref: it, src: it.src, num: it.num, rot: it.rot, added: it.added,
@@ -696,16 +701,37 @@
     /* the layers too (js/layers.js), so undoing a merge or a delete brings
        the layer back as well as its marks */
     snap.layers = S.layers ? S.layers.map(function (l) { return Object.assign({}, l); }) : null;
-    S.undo.push(snap);
+    return snap;
+  }
+  function snapshot() {
+    S.undo.push(capture());
     if (S.undo.length > 60) S.undo.shift();
+    S.redo = [];
     setUndoState();
   }
-  function setUndoState() { $('btnUndo').disabled = S.undo.length === 0; }
+  function setUndoState() {
+    $('btnUndo').disabled = S.undo.length === 0;
+    if ($('btnRedo')) $('btnRedo').disabled = !S.redo || S.redo.length === 0;
+  }
 
-  async function undo() {
+  async function undo(byReader) {
     const snap = S.undo.pop();
     if (!snap) return;
+    if (byReader === true) { S.redo.push(capture()); if (S.redo.length > 60) S.redo.shift(); }
     setUndoState();
+    await restore(snap);
+    toast('Undone');
+  }
+  async function redo() {
+    const snap = S.redo.pop();
+    if (!snap) return;
+    S.undo.push(capture());
+    if (S.undo.length > 60) S.undo.shift();
+    setUndoState();
+    await restore(snap);
+    toast('Redone');
+  }
+  async function restore(snap) {
     S.sel = null;
     hideMarkPop();
     S.items = snap.map(function (s) {
@@ -723,7 +749,6 @@
     if (snap.layers) S.layers = snap.layers;
     await syncAll();
     EXT.emit('meta');
-    toast('Undone');
   }
 
   /* ---------------- elements ---------------- */
@@ -1168,7 +1193,7 @@
 
   async function relayout(opts) {
     if (!S.items.length) return;
-    if (S.editing) closeEditor(true);
+    const typing = holdEditing();
     /* page 1 sets the fit; the others arrive in the background (loadRestPages).
        A relayout is asked for from many places without a catch: if the
        document is replaced while page 1 loads, its load fails ("Transport
@@ -1193,6 +1218,7 @@
     });
     renderVisible(); drawVisibleThumbs();
     detailSoon(0);
+    resumeEditing(typing);
   }
 
   function densityChanged() {
@@ -1289,7 +1315,7 @@
     if (!S.items.length) return;
     next = Math.max(ZOOM_MIN, Math.min(zoomMax(), next));
     if (Math.abs(next - S.scale) < 0.0005) return;
-    if (S.editing) closeEditor(true);
+    resumeEditing(holdEditing());
     S.fit = null;
     landJump();
     jumpHold = null;
@@ -2357,6 +2383,14 @@
      own group: the marks layer keeps one child per mark. ---- */
   let gradSeq = 0;
   function gradCss(g) {
+    /* a freeform gradient as a swatch: a soft spot of each point's colour where it is */
+    if (g && g.k === 'freeform') {
+      const pts = E.freePoints(g);
+      return pts.map(function (q) {
+        return 'radial-gradient(circle at ' + Math.round(q.p[0] * 100) + '% ' + Math.round((1 - q.p[1]) * 100) + '%, ' +
+          q.c + ' 0, ' + q.c + '00 ' + Math.round(40 + q.s * 60) + '%)';
+      }).join(',') + ',' + pts[0].c;
+    }
     /* the gradient as CSS, left to right, for a swatch */
     return 'linear-gradient(90deg,' + E.gradRamp(g).map(function (r) {
       return 'rgba(' + Math.round(r.rgb[0] * 255) + ',' + Math.round(r.rgb[1] * 255) + ',' + Math.round(r.rgb[2] * 255) + ',' +
@@ -2376,10 +2410,44 @@
     const radial = grad.k === 'radial';
     const id = 'adgr' + (++gradSeq);
     const defs = document.createElementNS(SVGNS, 'defs');
+    if (grad.k === 'freeform') {
+      /* freeform: the blend the engine works out (freeColourAt, which the
+         saved PDF's mesh reads too), drawn as a small picture over the
+         shape's box, the shape's own outline cutting it */
+      const pic = freePicture(s, grad, vp);
+      const pat = document.createElementNS(SVGNS, 'pattern');
+      pat.setAttribute('id', id);
+      pat.setAttribute('patternUnits', 'userSpaceOnUse');
+      ['x', 'y', 'width', 'height'].forEach(function (k, i) { pat.setAttribute(k, pic.box[i]); });
+      const im = document.createElementNS(SVGNS, 'image');
+      im.setAttribute('href', pic.url);
+      /* inside the tile, which starts at the box's corner */
+      im.setAttribute('x', 0); im.setAttribute('y', 0);
+      im.setAttribute('width', pic.box[2]); im.setAttribute('height', pic.box[3]);
+      im.setAttribute('preserveAspectRatio', 'none');
+      pat.appendChild(im);
+      defs.appendChild(pat);
+      g.insertBefore(defs, g.firstChild);
+      el.style.fill = 'url(#' + id + ')';
+      el.style.fillOpacity = op == null ? shOp(s) : op;
+      return;
+    }
+    /* an elliptical radial, or one with its focal point moved: drawn in its
+       own frame (engine radialFrame), the unit circle laid on the page by a
+       matrix, as the saved PDF paints it */
+    const framed = radial && (grad.fp || (grad.ar != null && Math.abs(E.radialAspect(grad) - 1) > 1e-6));
     const gr = document.createElementNS(SVGNS, radial ? 'radialGradient' : 'linearGradient');
     gr.setAttribute('id', id);
     gr.setAttribute('gradientUnits', 'userSpaceOnUse');
-    if (radial) {
+    if (framed) {
+      const R = E.radialFrame(s, grad), F = E.radialFocal(s, grad);
+      const c = vp.convertToViewportPoint(R.c[0], R.c[1]);
+      const u = vp.convertToViewportPoint(R.c[0] + R.u[0], R.c[1] + R.u[1]);
+      const v = vp.convertToViewportPoint(R.c[0] + R.v[0], R.c[1] + R.v[1]);
+      gr.setAttribute('cx', 0); gr.setAttribute('cy', 0); gr.setAttribute('r', 1);
+      gr.setAttribute('fx', F[0]); gr.setAttribute('fy', F[1]);
+      gr.setAttribute('gradientTransform', 'matrix(' + [u[0] - c[0], u[1] - c[1], v[0] - c[0], v[1] - c[1], c[0], c[1]].join(' ') + ')');
+    } else if (radial) {
       gr.setAttribute('cx', a[0]); gr.setAttribute('cy', a[1]);
       gr.setAttribute('r', Math.max(0.01, Math.hypot(b[0] - a[0], b[1] - a[1])));
     } else {
@@ -2397,6 +2465,44 @@
     g.insertBefore(defs, g.firstChild);
     el.style.fill = 'url(#' + id + ')';
     el.style.fillOpacity = op == null ? shOp(s) : op;
+  }
+
+  /* A freeform gradient's picture: the shape's box as it shows on screen,
+     each cell the colour the engine gives there, at most 160 cells a side
+     (the browser smooths it up). Kept, a few dozen at a time, until the
+     gradient, the shape or the zoom changes. */
+  const FREE_PICS = new Map();
+  function freePicture(s, grad, vp) {
+    const f = E.gradFrame(s);
+    const corners = [[f.x1, f.y1], [f.x2, f.y1], [f.x2, f.y2], [f.x1, f.y2]].map(function (q) {
+      const p = f.r ? rotPt(q, f.c, f.r) : q;
+      return vp.convertToViewportPoint(p[0], p[1]);
+    });
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    corners.forEach(function (v) { x1 = Math.min(x1, v[0]); y1 = Math.min(y1, v[1]); x2 = Math.max(x2, v[0]); y2 = Math.max(y2, v[1]); });
+    const bw = Math.max(1, x2 - x1), bh = Math.max(1, y2 - y1);
+    const key = JSON.stringify([grad.pts, f, vp.scale, vp.rotation, Math.round(x1), Math.round(y1)]);
+    const hit = FREE_PICS.get(key);
+    if (hit) return hit;
+    const k = Math.min(1, 160 / Math.max(bw, bh));
+    const W = Math.max(2, Math.round(bw * k)), H = Math.max(2, Math.round(bh * k));
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    const img = ctx.createImageData(W, H), d = img.data;
+    for (let j = 0; j < H; j++) {
+      for (let i = 0; i < W; i++) {
+        const q = vp.convertToPdfPoint(x1 + (i + 0.5) * bw / W, y1 + (j + 0.5) * bh / H);
+        const c = E.freeColourAt(s, grad, q), o = (j * W + i) * 4;
+        d[o] = Math.round(c.rgb[0] * 255); d[o + 1] = Math.round(c.rgb[1] * 255);
+        d[o + 2] = Math.round(c.rgb[2] * 255); d[o + 3] = Math.round(c.o * 255);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const pic = { url: cv.toDataURL('image/png'), box: [x1, y1, bw, bh] };
+    if (FREE_PICS.size > 48) FREE_PICS.delete(FREE_PICS.keys().next().value);
+    FREE_PICS.set(key, pic);
+    return pic;
   }
 
   /* a mark on screen, faded as a whole by its layer's opacity (s.lo, kept
@@ -2524,10 +2630,30 @@
   function lineOrigin(s, li, lineWidth) { return E.lineOrigin(s, li, lineWidth, textWidth); }
   function vpts(q) { return q.map(function (p) { return p[0] + ',' + p[1]; }).join(' '); }
 
+  /** The dashed frame an area text drag draws, from a to b (viewport
+      points); kept as one element moved as the drag goes. */
+  function frameGhost(it, a, b, fr) {
+    if (!fr) {
+      const el = document.createElementNS(SVGNS, 'rect');
+      el.setAttribute('class', 'txframe');
+      it.anno.appendChild(el);
+      fr = { el: el };
+    }
+    fr.left = Math.min(a[0], b[0]); fr.top = Math.min(a[1], b[1]);
+    fr.width = Math.abs(b[0] - a[0]); fr.height = Math.abs(b[1] - a[1]);
+    fr.el.setAttribute('x', fr.left); fr.el.setAttribute('y', fr.top);
+    fr.el.setAttribute('width', fr.width); fr.el.setAttribute('height', fr.height);
+    if (fr.el.parentNode !== it.anno) it.anno.appendChild(fr.el);
+    return fr;
+  }
+
   function textEl(it, s, vp, idx) {
     const g = document.createElementNS(SVGNS, 'g');
     const selected = S.sel && S.sel.it === it && S.sel.i === idx;
     const ang = dirAngle(vp, s.a[0], s.a[1], s.r || 0);
+    /* area text: wrapped in its frame (engine layoutText), as the PDF has it */
+    const laid = s.aw && s.ah ? E.layoutText(s, textWidth) : null;
+    if (laid) s = laid;
 
     function clicker(el) {
       if (idx >= 0) {
@@ -2616,6 +2742,17 @@
       h.setAttribute('class', 'halo');
       h.setAttribute('points', vpts(textQuad(s, vp)));
       g.appendChild(h);
+    }
+    /* area text with more than its frame holds: Illustrator's red plus at the
+       frame's foot, the rest hidden until the frame is made bigger */
+    if (laid && laid.ovf && !open) {
+      const c = textCorners(s)[1], v = vp.convertToViewportPoint(c[0], c[1]);
+      const m = document.createElementNS(SVGNS, 'g');
+      m.setAttribute('class', 'txovf');
+      m.innerHTML = '<title>More text than the frame holds: make it bigger to show it</title>' +
+        '<rect x="' + (v[0] - 12) + '" y="' + (v[1] - 3) + '" width="9" height="9"/>' +
+        '<path d="M' + (v[0] - 7.5) + ' ' + (v[1] - 1) + 'v5M' + (v[0] - 10) + ' ' + (v[1] + 1.5) + 'h5"/>';
+      g.appendChild(m);
     }
     return g;
   }
@@ -3186,7 +3323,7 @@
     const d = dragOn; if (!d) return;
     const s = d.it.shapes[d.idx];
     if (!s || !d.it.vp) { dragOn = null; return; }
-    const p = annoPt(d.it, e);
+    let p = annoPt(d.it, e);
     const dx = p[0] - d.from[0], dy = p[1] - d.from[1];
     if (!d.moved) {
       if (Math.abs(dx) < 0.7 && Math.abs(dy) < 0.7) return;   /* a tap, not a drag */
@@ -3194,6 +3331,14 @@
       if (!d.snapped) { snapshot(); d.snapped = true; }        /* nothing is changed yet */
     }
     const o = d.s0;
+    /* a grip being pulled to resize lands on the anchors of the other marks
+       (and the page's own lines), or lines up with them along a smart guide,
+       as a line's end does when it is dragged (js/draw.js snapPt). The grip
+       is where the pointer is, so the edge lands exactly there. */
+    if (RESIZE_SNAP[d.mode] && EXT.snapPt) {
+      const sp = EXT.snapPt(d.it, p, e, { skip: d.group ? d.group.map(function (m) { return m.i; }) : d.idx, axis: resizeAxis(d, o) });
+      if (sp) p = [sp[0], sp[1]];
+    }
     if (d.mode === 'move') {
       let mx = dx, my = dy;
       if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) my = 0; else mx = 0; }   /* along one axis */
@@ -3299,6 +3444,21 @@
         s.a = [f[0] + (o.a[0] - f[0]) * k, f[1] + (o.a[1] - f[1]) * k];
         if (o.lh) s.lh = Math.round(o.lh * k * 100) / 100;
       }
+    } else if (d.mode === 'tframe') {
+      /* the frame from the grip opposite, which stays put, to the pointer,
+         in the text's own frame (it turns about s.a); the text reflows */
+      const c = o.a, r = o.r || 0;
+      const un = function (q) { return r ? rotPt(q, c, -r) : q; };
+      const loc = un(p), f = un(d.extra.f), h = un(d.extra.h), R = textRect(o);
+      let x1 = R.x, x2 = R.x + R.w, y1 = R.y, y2 = R.y + R.h;
+      if (Math.abs(h[0] - f[0]) > 1e-6) { x1 = Math.min(f[0], loc[0]); x2 = Math.max(f[0], loc[0]); }
+      if (Math.abs(h[1] - f[1]) > 1e-6) { y1 = Math.min(f[1], loc[1]); y2 = Math.max(f[1], loc[1]); }
+      const w = Math.max(x2 - x1, o.size * 0.6), hh = Math.max(y2 - y1, o.size * 1.2);
+      if (x1 === f[0] || Math.abs(x1 - f[0]) < 1e-6) x2 = x1 + w; else x1 = x2 - w;
+      if (Math.abs(y1 - f[1]) < 1e-6) y2 = y1 + hh; else y1 = y2 - hh;
+      const aU = [x1, y2 - o.size];
+      s.a = r ? rotPt(aU, c, r) : aU;
+      s.aw = Math.round(w * 100) / 100; s.ah = Math.round(hh * 100) / 100;
     } else if (d.mode === 'size') {
       const c = rotCenter(o);
       const d1 = Math.hypot(p[0] - c[0], p[1] - c[1]);
@@ -3314,7 +3474,18 @@
     }
     drawShapes(d.it);
   }
-  const SIZE_MODES = { corner: 1, side: 1, bscale: 1, bside: 1, gscale: 1, size: 1, tsize: 1 };
+  const SIZE_MODES = { corner: 1, side: 1, bscale: 1, bside: 1, gscale: 1, size: 1, tsize: 1, tframe: 1 };
+  const RESIZE_SNAP = { corner: 1, side: 1, bscale: 1, bside: 1, gscale: 1, tframe: 1 };
+  /* the one page axis a pulled side moves along, where it moves along one */
+  function resizeAxis(d, o) {
+    if (d.mode === 'gscale') {
+      const k = d.extra || {};
+      return k.ax && !k.ay ? 'x' : k.ay && !k.ax ? 'y' : null;
+    }
+    const straight = d.mode === 'side' ? !o.r : d.mode === 'bside' ? !frameOf(o) : false;
+    if (!straight) return null;
+    return d.extra === 0 || d.extra === 2 ? 'y' : 'x';
+  }
 
   function dragEnd(e) {
     const d = dragOn; if (!d) return;
@@ -3361,7 +3532,7 @@
      fall back to the bare word "Mark" */
   const MARK_NAME = {
     rect: 'Box', line: 'Line', arrow: 'Arrow', text: 'Text',
-    ellipse: 'Circle', cloud: 'Cloud', arc: 'Arc', dim: 'Dimension',
+    ellipse: 'Ellipse', cloud: 'Cloud', arc: 'Arc', dim: 'Dimension',
     dimr: 'Radius', dimd: 'Diameter', dima: 'Angle',
     markup: 'Markup', ink: 'Ink', note: 'Note', stamp: 'Stamp', sig: 'Signature',
     redact: 'Redaction', wm: 'Watermark', hf: 'Header / footer', bates: 'Bates',
@@ -4053,13 +4224,16 @@
       const cx = (q[0][0] + q[2][0]) / 2, cy = (q[0][1] + q[2][1]) / 2;
       turnZones(q, [cx, cy]);
       const mid = function (a, b) { return [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]; };
+      /* area text: the grips size the frame and the text reflows in it, the
+         type keeping its size (mode 'tframe') */
+      const gm = s.aw && s.ah ? 'tframe' : 'tsize';
       Q.forEach(function (P, i) {
         const v = q[i];
-        knob(v, 'tsize', { h: P, f: Q[(i + 2) % 4] }).dataset.cur = (v[0] - cx) * (v[1] - cy) > 0 ? 'nwse' : 'nesw';
+        knob(v, gm, { h: P, f: Q[(i + 2) % 4] }).dataset.cur = (v[0] - cx) * (v[1] - cy) > 0 ? 'nwse' : 'nesw';
       });
       Q.forEach(function (P, i) {
         const P2 = Q[(i + 1) % 4], v = mid(q[i], q[(i + 1) % 4]);
-        const k = knob(v, 'tsize', { h: mid(P, P2), f: mid(Q[(i + 2) % 4], Q[(i + 3) % 4]) });
+        const k = knob(v, gm, { h: mid(P, P2), f: mid(Q[(i + 2) % 4], Q[(i + 3) % 4]) });
         k.classList.add('pill');
         k.dataset.cur = Math.abs(q[(i + 1) % 4][0] - q[i][0]) >= Math.abs(q[(i + 1) % 4][1] - q[i][1]) ? 'ns' : 'ew';
       });
@@ -4133,6 +4307,8 @@
         const tp = pt(e), on = textAt(it, it.vp.convertToPdfPoint(tp[0], tp[1]));
         if (on >= 0) { openEditorAt(it, on, e.clientX, e.clientY); return; }
         pendingPin = { it: it, at: tp, x: e.clientX, y: e.clientY, id: e.pointerId, text: true };
+        /* a drag draws an area text frame (below): keep the pointer while it does */
+        if (!isMobile()) { try { it.capture.setPointerCapture(e.pointerId); } catch (err) { /* a mouse works without it */ } }
         return;
       }
       e.preventDefault();
@@ -4159,8 +4335,14 @@
       const xtm = capBlock ? null : EXT.tools[S.tool];
       if (xtm && xtm.move) { xtm.move(it, pt(e), e); return; }
       if (pendingPin && pendingPin.id === e.pointerId) {
+        const far = Math.hypot(e.clientX - pendingPin.x, e.clientY - pendingPin.y);
+        if (pendingPin.text && !isMobile() && (pendingPin.frame || far > 6)) {
+          /* the Type tool dragged: an area text frame, as Illustrator draws one */
+          pendingPin.frame = frameGhost(it, pendingPin.at, pt(e), pendingPin.frame);
+          return;
+        }
         /* a drag, not a tap: let it go so the page can be panned instead */
-        if (Math.hypot(e.clientX - pendingPin.x, e.clientY - pendingPin.y) > 10) pendingPin = null;
+        if (far > 10) { if (pendingPin.frame) pendingPin.frame.el.remove(); pendingPin = null; }
       }
       if (!start || !ghost || capBlock) return;
       const p = pt(e);
@@ -4184,7 +4366,13 @@
       const pend = pendingPin;
       if (pend && pend.id === e.pointerId && pend.it === it && !capBlock) {
         pendingPin = null;
-        if (pend.text) openEditor(it, pend.at, -1);
+        if (pend.text && pend.frame) {
+          const fr = pend.frame;
+          fr.el.remove();
+          /* too small to be meant as a frame: a click, point text */
+          if (fr.width < 12 || fr.height < 12) openEditor(it, pend.at, -1);
+          else openEditor(it, null, -1, false, fr);
+        } else if (pend.text) openEditor(it, pend.at, -1);
         else addPinAt(it, pend.at);
       }
       if (!start || !ghost) return;
@@ -4213,7 +4401,11 @@
       if (isMobile()) endToolOn(it);
     }
     it.capture.addEventListener('pointerup', finish);
-    it.capture.addEventListener('pointercancel', function () { dropGhost(); pendingPin = null; });
+    it.capture.addEventListener('pointercancel', function () {
+      dropGhost();
+      if (pendingPin && pendingPin.frame) pendingPin.frame.el.remove();
+      pendingPin = null;
+    });
   }
 
   /* On a phone a shape is finished when the finger lifts: no bar and no Done.
@@ -7088,7 +7280,31 @@
     } catch (e) { return '#FFFFFF'; }
   }
 
-  function closeEditor(commit) {
+  /* Zooming or laying the pages out again while text is being typed: the
+     text is kept (as a click away would), then opened again on the same
+     text, the same characters selected, once the page is drawn at its new
+     size, so typing carries on where it was. */
+  let editHold = 0;
+  function holdEditing() {
+    const ed = S.editing;
+    if (!ed) return null;
+    const sel = edGetSel(ed.el), n = ed.it.shapes.length;
+    editHold++;
+    closeEditor(true, true);
+    editHold--;
+    const idx = ed.idx >= 0 ? ed.idx : (ed.it.shapes.length > n ? ed.it.shapes.length - 1 : -1);
+    return idx >= 0 ? { it: ed.it, idx: idx, sel: sel } : null;
+  }
+  function resumeEditing(h) {
+    if (!h) return;
+    setTimeout(function () {
+      if (S.editing || !h.it.vp || !h.it.shapes[h.idx] || h.it.shapes[h.idx].t !== 'text') return;
+      openEditor(h.it, null, h.idx, true);
+      if (S.editing) { edSetSel(S.editing.el, h.sel[0], h.sel[1]); S.editing.sel = edGetSel(S.editing.el); }
+    }, 120);
+  }
+
+  function closeEditor(commit, quiet) {
     const ed = S.editing;
     if (!ed) return;
     const got = edRead(ed.el, ed.item);
@@ -7122,7 +7338,7 @@
     drawShapes(ed.it);
     drawThumb(ed.it);
     updateMeta();
-    toast(empty ? 'Text covered' : 'Text set');
+    if (!quiet) toast(empty ? 'Text covered' : 'Text set');
   }
 
   /* on-screen size of the editing box — never below 16px on phones,
@@ -7134,7 +7350,9 @@
 
   /* caretEnd: opened by a double-click, to carry on typing in the text
      rather than replace it */
-  function openEditor(it, pt, idx, caretEnd) {
+  /* frame: a new area text frame, dragged with the Type tool ({left, top,
+     width, height} on the page as shown) */
+  function openEditor(it, pt, idx, caretEnd, frame) {
     if (S.editing) closeEditor(true);
     const vp = it.vp;
     if (!vp) return;
@@ -7145,6 +7363,19 @@
       const s0 = it.shapes[idx];
       item = Object.assign({}, s0);
       box = textBox(s0, vp);
+    } else if (frame) {
+      /* area text: the frame dragged, the first line's baseline its size
+         below the frame's top (textRect: the top is s.a[1] + size) */
+      const size = S.size;
+      const tl = vp.convertToPdfPoint(frame.left, frame.top);
+      const br = vp.convertToPdfPoint(frame.left + frame.width, frame.top + frame.height);
+      const x1 = Math.min(tl[0], br[0]), top = Math.max(tl[1], br[1]);
+      item = {
+        t: 'text', a: [x1, top - size], text: '', size: size, c: S.color, f: S.font, b: S.bold, i: S.ital,
+        u: S.underline, k: S.strike, align: S.align, bg: S.bg, bgOp: S.bgOp, patch: null,
+        aw: Math.round(Math.abs(br[0] - tl[0]) * 100) / 100, ah: Math.round(Math.abs(br[1] - tl[1]) * 100) / 100
+      };
+      box = { left: frame.left, top: frame.top, width: frame.width, height: frame.height };
     } else {
       const line = lineUnder(it, pt[0], pt[1]);
       if (line) {
@@ -7196,8 +7427,15 @@
     ta.style.color = item.c;
     ta.style.background = item.bg ? cssRgba(item.bg, item.bgOp == null ? 1 : item.bgOp)
                           : item.patch ? item.patch.c : 'transparent';
-    ta.style.minWidth = Math.max(isMobile() ? 150 : 90, box.width) + 'px';
-    ta.style.minHeight = Math.max(box.height, editPx(item) * 1.35) + 'px';
+    if (item.aw && item.ah) {
+      /* area text: the box is the frame, and the text wraps inside it */
+      ta.classList.add('area');
+      ta.style.width = (item.aw * S.scale) + 'px';
+      ta.style.minHeight = (item.ah * S.scale) + 'px';
+    } else {
+      ta.style.minWidth = Math.max(isMobile() ? 150 : 90, box.width) + 'px';
+      ta.style.minHeight = Math.max(box.height, editPx(item) * 1.35) + 'px';
+    }
     edRender(ta, String(item.text), edStyles(item));
 
     /* no Apply or Cancel: as in Acrobat and Foxit, a click anywhere else,
@@ -7257,6 +7495,20 @@
       syncTextButtons();
     };
     document.addEventListener('selectionchange', ed.onSel);
+    /* a triple-click takes the line it lands in, from one line break to the
+       next (a paragraph of area text), as Illustrator's does; the browser
+       would take the whole box, which has no paragraphs of its own */
+    ta.addEventListener('click', function (e) {
+      if (e.detail !== 3) return;
+      let node = null, off = 0;
+      if (document.caretPositionFromPoint) { const cp = document.caretPositionFromPoint(e.clientX, e.clientY); if (cp) { node = cp.offsetNode; off = cp.offset; } }
+      else if (document.caretRangeFromPoint) { const cr = document.caretRangeFromPoint(e.clientX, e.clientY); if (cr) { node = cr.startContainer; off = cr.startOffset; } }
+      if (!node || !ta.contains(node)) return;
+      const at = edPos(ta, node, off), text = edRead(ta, ed.item).text;
+      const a = text.lastIndexOf('\n', at - 1) + 1, nl = text.indexOf('\n', at);
+      edSetSel(ta, a, nl < 0 ? text.length : nl);
+      ed.sel = edGetSel(ta);
+    });
     ta.addEventListener('keydown', function (e) {
       e.stopPropagation();
       /* Enter drops to the next line, like a normal text editor — it does not
@@ -9951,7 +10203,8 @@
   $('btnRotL').addEventListener('click', function (e) { e.shiftKey ? rotateAll(-90) : rotateItem(S.current - 1, -90); });
   $('btnRotR').addEventListener('click', function (e) { e.shiftKey ? rotateAll(90) : rotateItem(S.current - 1, 90); });
   $('btnDel').addEventListener('click', function () { if (S.items.length) removeItem(S.current - 1); });
-  $('btnUndo').addEventListener('click', undo);
+  $('btnUndo').addEventListener('click', function () { undo(true); });
+  if ($('btnRedo')) $('btnRedo').addEventListener('click', redo);
 
   $('btnAdd').addEventListener('click', function () {
     if (!S.items.length) return;
@@ -10529,7 +10782,8 @@
     }
     if (mod && e.key.toLowerCase() === 's') { e.preventDefault(); quickSave(); return; }
     if (mod && e.key.toLowerCase() === 'p') { e.preventDefault(); printDoc(); return; }
-    if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); return; }
+    if (mod && e.key.toLowerCase() === 'z') { e.preventDefault(); if (e.shiftKey) redo(); else undo(true); return; }
+    if (mod && e.key.toLowerCase() === 'y') { e.preventDefault(); redo(); return; }
     if (e.key === 'Escape') {
       closePops();
       TR.stop = true;
@@ -10581,9 +10835,11 @@
       case 'p': S.fit = 'page'; relayout(); break;
       case 'v': setTool('select'); break;
       case 'x': setTool('rect'); break;
-      case 'l': setTool('line'); break;
+      /* L is the Ellipse tool, as in Illustrator (js/draw.js); the Line is the backslash, Illustrator's Line Segment key */
+      case '\\': setTool('line'); break;
       case 'a': setTool('arrow'); break;
-      case 'e': setTool('text'); break;
+      /* T is the Type tool, as in Illustrator (E still picks it up too) */
+      case 'e': case 't': setTool('text'); break;
       case 'c': setTool('crop'); break;
       case 'z': setTool('pin'); break;
       case 'm': if (EXT.activateMove) EXT.activateMove(); break;
@@ -10595,7 +10851,7 @@
         break;
       case 'E': $('btnExtract').click(); break;
       case 'J': $('btnJpg').click(); break;
-      case 't': $('btnTheme').click(); break;
+      case 'T': $('btnTheme').click(); break;
       case 'g': TR.on ? setParallel(false) : $('btnTr').click(); break;
       case 's': $('btnRail').click(); break;
       case 'o': e.preventDefault(); pickNew(); break;
@@ -10965,7 +11221,9 @@
     shCap: shCap, shJoin: shJoin,
     vpts: vpts, textWidth: textWidth, fontIdx: fontIdx,
     dirAngle: dirAngle, shOp: shOp,
-    openPop: openPop, closePops: closePops, undo: undo,
+    openPop: openPop, closePops: closePops, undo: undo, redo: redo,
+    /* for the Fill and Stroke widget and the Swatches panel (js/colorpanel.js) */
+    markEdit: markEdit, recentColors: recentColors, noteRecent: noteRecent, COLORS_STD: STD_COLORS,
     invalidateSearch: invalidateSearch,
     isMobile: isMobile,
     openFiles: takeFiles,

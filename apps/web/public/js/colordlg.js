@@ -6,7 +6,12 @@
    <input type="color"> in the app, so each colour option gets it.
 
    The eyedropper is the browser's where it has one, which reads anywhere on
-   screen. Elsewhere (Firefox, phones) it reads a click on the PDF page. */
+   screen. Elsewhere (Firefox, phones) it reads a click on the PDF page.
+
+   As Illustrator's Color Picker it also reads and sets the colour as CMYK
+   (device CMYK, the plain conversion: PDF marks here are RGB), shows the
+   recently used colours, copies the hex code and pastes one, and, where the
+   caller asks (opts.alpha), an opacity slider: onPick(hex, alpha). */
 (function () {
   'use strict';
 
@@ -57,6 +62,20 @@
     if (/^[0-9a-f]{3}$/i.test(t)) t = t.replace(/./g, '$&$&');
     return /^[0-9a-f]{6}$/i.test(t) ? '#' + t.toUpperCase() : null;
   }
+
+  /* device CMYK from RGB (0..255) and back, in percent */
+  function rgbToCmyk(r, g, b) {
+    const k = 1 - Math.max(r, g, b) / 255;
+    if (k >= 1) return [0, 0, 0, 100];
+    const f = function (v) { return Math.round((1 - v / 255 - k) / (1 - k) * 100); };
+    return [f(r), f(g), f(b), Math.round(k * 100)];
+  }
+  function cmykToRgb(c, m, y, k) {
+    const f = function (v) { return clamp(Math.round(255 * (1 - v / 100) * (1 - k / 100)), 0, 255); };
+    return [f(c), f(m), f(y)];
+  }
+  X.rgbToCmyk = rgbToCmyk;
+  X.cmykToRgb = cmykToRgb;
 
   function customColours() {
     try { return (JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]') || []).slice(0, 24); } catch (e) { return []; }
@@ -113,10 +132,14 @@
 
   let open = false;
 
-  /** The dialog: onPick(#RRGGBB) on OK, nothing on Cancel. */
-  function colorDialog(current, onPick) {
+  /** The dialog: onPick(#RRGGBB, alpha) on OK, nothing on Cancel. opts.alpha
+      (0..1) shows the opacity slider, opts.title names the dialog. */
+  function colorDialog(current, onPick, opts) {
     if (open) return;
     open = true;
+    opts = opts || {};
+    const withAlpha = typeof opts.alpha === 'number';
+    let alpha = withAlpha ? clamp(opts.alpha, 0, 1) : 1;
     const start = cleanHex(current) || '#000000';
     let hsv = rgbToHsv.apply(null, rgbOf(start));
     let mode = 'rgb';
@@ -126,20 +149,24 @@
     wrap.className = 'cdwrap';
     wrap.innerHTML =
       '<div class="cdbox" role="dialog" aria-modal="true" aria-label="Edit colours">' +
-        '<h2>Edit colours</h2>' +
+        '<h2>' + (opts.title ? String(opts.title).replace(/[<>&"]/g, '') : 'Edit colours') + '</h2>' +
         '<div class="cdtop">' +
           '<div class="cdsv" tabindex="0" role="slider" aria-label="Hue and saturation"><i></i></div>' +
           '<div class="cdnow"></div>' +
           '<div class="cdval" tabindex="0" role="slider" aria-label="Brightness"><i></i></div>' +
           '<div class="cdfields">' +
             '<input class="cdhex" maxlength="7" aria-label="Hex colour" spellcheck="false">' +
-            '<select class="cdmode" aria-label="Colour model"><option value="rgb">RGB</option><option value="hsv">HSV</option></select>' +
-            [0, 1, 2].map(function (i) {
-              return '<label class="cdnum"><input inputmode="numeric" data-i="' + i + '"><span></span></label>';
+            '<div class="cdhexrow"><button type="button" class="btn cdcopy" title="Copy the hex code">Copy</button>' +
+              '<button type="button" class="btn cdpaste" title="Paste a hex code">Paste</button></div>' +
+            '<select class="cdmode" aria-label="Colour model"><option value="rgb">RGB</option><option value="hsv">HSB</option><option value="cmyk">CMYK</option></select>' +
+            [0, 1, 2, 3].map(function (i) {
+              return '<label class="cdnum"' + (i === 3 ? ' hidden' : '') + '><input inputmode="numeric" data-i="' + i + '"><span></span></label>';
             }).join('') +
+            (withAlpha ? '<label class="cdnum cdalpha"><input type="range" min="0" max="100" step="1" aria-label="Opacity"><span class="cdav"></span></label>' : '') +
             '<button type="button" class="btn cdeye"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14.5 4.5l5 5M4 20l1.5-4.5 9-9 3 3-9 9z"/></svg>Pick colour</button>' +
           '</div>' +
         '</div>' +
+        '<div class="cdrecent"><div class="cdhd">Recent colours</div><div class="cdgrid cdrec"></div></div>' +
         '<div class="cdlists">' +
           '<div><div class="cdhd">Basic colours</div><div class="cdgrid cdbasic"></div></div>' +
           '<div><div class="cdhd">Custom colours<button type="button" class="cdadd" title="Add this colour" aria-label="Add this colour">+</button></div>' +
@@ -151,11 +178,12 @@
     document.body.appendChild(wrap);
     const q = function (sel) { return wrap.querySelector(sel); };
     const sv = q('.cdsv'), val = q('.cdval'), hexIn = q('.cdhex');
-    const nums = Array.prototype.slice.call(wrap.querySelectorAll('.cdnum input'));
+    const nums = Array.prototype.slice.call(wrap.querySelectorAll('.cdnum:not(.cdalpha) input'));
 
     function hex() { return hexOf(hsvToRgb(hsv[0], hsv[1], hsv[2])); }
     function fieldValues() {
       if (mode === 'rgb') return rgbOf(hex());
+      if (mode === 'cmyk') return rgbToCmyk.apply(null, rgbOf(hex()));
       return [Math.round(hsv[0]), Math.round(hsv[1] * 100), Math.round(hsv[2] * 100)];
     }
     /* `from`: the field being typed in, left as it is */
@@ -165,10 +193,17 @@
       sv.firstChild.style.top = (1 - hsv[1]) * 100 + '%';
       val.firstChild.style.top = (1 - hsv[2]) * 100 + '%';
       val.style.setProperty('--cd-top', hexOf(hsvToRgb(hsv[0], hsv[1], 1)));
-      q('.cdnow').style.background = now;
+      q('.cdnow').style.background = withAlpha
+        ? 'linear-gradient(' + rgba(now, alpha) + ',' + rgba(now, alpha) + '), repeating-conic-gradient(#ccc 0 25%, #fff 0 50%) 0 0 / 10px 10px'
+        : now;
+      if (withAlpha) {
+        const ar = q('.cdalpha input');
+        if (from !== ar) ar.value = Math.round(alpha * 100);
+        q('.cdav').textContent = 'Opacity ' + Math.round(alpha * 100) + '%';
+      }
       if (from !== hexIn) hexIn.value = now;
       const vals = fieldValues();
-      nums.forEach(function (n, i) { if (n !== from) n.value = vals[i]; });
+      nums.forEach(function (n, i) { if (n !== from) n.value = vals[i] == null ? '' : vals[i]; });
     }
     function setHex(h, from) {
       const c = rgbToHsv.apply(null, rgbOf(h));
@@ -177,9 +212,13 @@
       paint(from);
     }
 
+    function rgba(h, a) { const c = rgbOf(h); return 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + a + ')'; }
     function labels() {
-      const names = mode === 'rgb' ? ['Red', 'Green', 'Blue'] : ['Hue', 'Sat', 'Val'];
-      wrap.querySelectorAll('.cdnum span').forEach(function (s, i) { s.textContent = names[i]; });
+      const names = mode === 'rgb' ? ['Red', 'Green', 'Blue'] : mode === 'cmyk' ? ['Cyan %', 'Magenta %', 'Yellow %', 'Black %'] : ['Hue', 'Sat %', 'Bright %'];
+      wrap.querySelectorAll('.cdnum:not(.cdalpha)').forEach(function (l, i) {
+        l.hidden = i >= names.length;
+        l.querySelector('span').textContent = names[i] || '';
+      });
     }
 
     function dot(c, cls) {
@@ -192,6 +231,27 @@
     }
     q('.cdbasic').innerHTML = BASIC.map(function (c) { return dot(c); }).join('');
     drawCustom();
+    /* the colours used lately, across the app (the palette notes them too) */
+    const recent = X.recentColors ? X.recentColors() : [];
+    q('.cdrec').innerHTML = recent.map(function (c) { return dot(c); }).join('');
+    q('.cdrecent').hidden = !recent.length;
+    q('.cdcopy').addEventListener('click', function () {
+      const h = hex();
+      const done = function () { X.toast('Copied <b>' + h + '</b>'); };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(h).then(done, function () { hexIn.select(); document.execCommand('copy'); done(); });
+      else { hexIn.select(); document.execCommand('copy'); done(); }
+    });
+    q('.cdpaste').addEventListener('click', function () {
+      const use = function (t) {
+        const h = cleanHex(String(t || '').trim().replace(/^([0-9a-f]{3}|[0-9a-f]{6})$/i, '#$1'));
+        if (h) setHex(h); else X.toast('The clipboard has no hex colour (#RRGGBB)');
+      };
+      if (navigator.clipboard && navigator.clipboard.readText) navigator.clipboard.readText().then(use, function () { X.toast('Paste the hex code into the box (Ctrl+V)'); hexIn.focus(); hexIn.select(); });
+      else { hexIn.focus(); hexIn.select(); }
+    });
+    if (withAlpha) {
+      q('.cdalpha input').addEventListener('input', function () { alpha = clamp((+this.value || 0) / 100, 0, 1); paint(this); });
+    }
 
     function drag(el, move) {
       el.addEventListener('pointerdown', function (e) {
@@ -238,7 +298,8 @@
     nums.forEach(function (n) {
       n.addEventListener('input', function () {
         const v = nums.map(function (x) { return parseFloat(x.value) || 0; });
-        if (mode === 'rgb') setHex(hexOf(v.map(function (c) { return clamp(Math.round(c), 0, 255); })), n);
+        if (mode === 'rgb') setHex(hexOf(v.slice(0, 3).map(function (c) { return clamp(Math.round(c), 0, 255); })), n);
+        else if (mode === 'cmyk') setHex(hexOf(cmykToRgb(clamp(v[0], 0, 100), clamp(v[1], 0, 100), clamp(v[2], 0, 100), clamp(v[3], 0, 100))), n);
         else {
           hsv = [clamp(v[0], 0, 359.9), clamp(v[1], 0, 100) / 100, clamp(v[2], 0, 100) / 100];
           paint(n);
@@ -270,7 +331,12 @@
       open = false;
       wrap.remove();
     }
-    q('.cdok').addEventListener('click', function () { const h = hex(); close(); onPick(h); });
+    q('.cdok').addEventListener('click', function () {
+      const h = hex();
+      close();
+      if (X.noteRecent) X.noteRecent(h);
+      onPick(h, alpha);
+    });
     q('.cdno').addEventListener('click', close);
     /* what is typed here is not a shortcut for the app behind */
     wrap.addEventListener('keydown', function (e) {

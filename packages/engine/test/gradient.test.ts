@@ -17,6 +17,7 @@ import {
   polyPainters,
   svgPath,
   vpathPainters,
+  freeColourAt,
   type AnyMark,
   type Grad,
   type MeasureText,
@@ -295,5 +296,91 @@ describe('svgPath', () => {
       },
       { k: 'Z' },
     ]);
+  });
+});
+
+/* Illustrator's radial ellipse and focal point, and the freeform gradient:
+   the model, and how the saved PDF paints them as vector shadings. */
+describe('elliptical radial, focal point and freeform', () => {
+  const sq = { t: 'rect', a: [100, 100], b: [300, 200], c: '#000000', w: 1, fill: '#FFFFFF' };
+  it('an elliptical radial is painted in its own frame: the unit circle laid on the page by a matrix', async () => {
+    const g: Grad = { ...defaultGrad('radial'), ar: 0.5 };
+    const r = await save([{ ...sq, grad: g }]);
+    const sh = r.shadings[0]!;
+    expect(num(sh, 'ShadingType')).toBe(3);
+    expect(nums(sh, 'Coords')).toEqual([0, 0, 0, 0, 0, 1]);
+    /* centre (200, 150); along the vector to the right edge (100, 0); across it half that (0, 50) */
+    expect(r.text).toMatch(/100 0 -?0 50 200 150 cm/);
+  });
+  it('a focal point moved off centre starts the blend there', async () => {
+    const g: Grad = { ...defaultGrad('radial'), fp: [0.75, 0.5] };
+    const r = await save([{ ...sq, grad: g }]);
+    const c = nums(r.shadings[0]!, 'Coords');
+    expect(c[0]).toBeCloseTo(0.5, 4);
+    expect(c[1]).toBeCloseTo(0, 4);
+    expect(c.slice(2)).toEqual([0, 0, 0, 1]);
+  });
+  it('a focal point is kept inside the ellipse', async () => {
+    const r = await save([{ ...sq, grad: { ...defaultGrad('radial'), fp: [3, 0.5] } }]);
+    expect(Math.hypot(nums(r.shadings[0]!, 'Coords')[0]!, nums(r.shadings[0]!, 'Coords')[1]!)).toBeLessThan(
+      0.99,
+    );
+  });
+  it('a freeform gradient is a smooth-shaded mesh over the shape, clipped to it', async () => {
+    const r = await save([{ ...sq, grad: defaultGrad('freeform') }]);
+    /* a mesh shading is a stream: its keys are on the stream's dictionary */
+    const sh = (r.shadings[0] as unknown as PDFLib.PDFRawStream).dict;
+    expect(num(sh, 'ShadingType')).toBe(5);
+    expect(num(sh, 'VerticesPerRow')).toBe(41);
+    expect(r.text).toMatch(/W\s+n\s+\/Gr[-\w]* sh/);
+  });
+  it('a freeform point less than opaque adds a soft mask', async () => {
+    const g = defaultGrad('freeform');
+    g.pts![0]!.o = 0.3;
+    const r = await save([{ ...sq, grad: g }]);
+    expect(r.states.some((st) => st.get(PDFLib.PDFName.of('SMask')))).toBe(true);
+  });
+  it('keeps the radial and freeform settings when a document is opened again', () => {
+    const g = cleanGrad(
+      JSON.parse(JSON.stringify({ ...defaultGrad('freeform'), ar: 0.4, fp: [0.2, 0.3], extra: 1 })),
+    )!;
+    expect(g.k).toBe('freeform');
+    expect(g.ar).toBe(0.4);
+    expect(g.fp).toEqual([0.2, 0.3]);
+    expect(g.pts!.length).toBe(3);
+    expect(
+      cleanGrad({ k: 'freeform', stops: defaultGrad().stops, pts: [{ p: [0, 0], c: 'red' }] })!.pts,
+    ).toBeUndefined();
+  });
+});
+
+describe('the freeform blend', () => {
+  const sq = { a: [0, 0], b: [100, 100] };
+  const g: Grad = {
+    k: 'freeform',
+    stops: defaultGrad().stops,
+    pts: [
+      { p: [0, 0], c: '#FF0000' },
+      { p: [1, 1], c: '#0000FF' },
+    ],
+  };
+  it('is each point’s own colour on the point', () => {
+    expect(freeColourAt(sq, g, [0, 0]).rgb).toEqual([1, 0, 0]);
+    expect(freeColourAt(sq, g, [100, 100]).rgb).toEqual([0, 0, 1]);
+  });
+  it('is half and half midway, and leans to the nearer point', () => {
+    const m = freeColourAt(sq, g, [50, 50]).rgb;
+    expect(m[0]).toBeCloseTo(0.5, 5);
+    expect(freeColourAt(sq, g, [30, 30]).rgb[0]).toBeGreaterThan(0.7);
+  });
+  it('reaches further from a point with more spread', () => {
+    const wide: Grad = {
+      ...g,
+      pts: [
+        { ...g.pts![0]!, s: 1 },
+        { ...g.pts![1]!, s: 0.1 },
+      ],
+    };
+    expect(freeColourAt(sq, wide, [50, 50]).rgb[0]).toBeGreaterThan(0.9);
   });
 });
