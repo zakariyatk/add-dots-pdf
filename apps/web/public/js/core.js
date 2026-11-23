@@ -2383,6 +2383,14 @@
      own group: the marks layer keeps one child per mark. ---- */
   let gradSeq = 0;
   function gradCss(g) {
+    /* a freeform gradient as a swatch: a soft spot of each point's colour where it is */
+    if (g && g.k === 'freeform') {
+      const pts = E.freePoints(g);
+      return pts.map(function (q) {
+        return 'radial-gradient(circle at ' + Math.round(q.p[0] * 100) + '% ' + Math.round((1 - q.p[1]) * 100) + '%, ' +
+          q.c + ' 0, ' + q.c + '00 ' + Math.round(40 + q.s * 60) + '%)';
+      }).join(',') + ',' + pts[0].c;
+    }
     /* the gradient as CSS, left to right, for a swatch */
     return 'linear-gradient(90deg,' + E.gradRamp(g).map(function (r) {
       return 'rgba(' + Math.round(r.rgb[0] * 255) + ',' + Math.round(r.rgb[1] * 255) + ',' + Math.round(r.rgb[2] * 255) + ',' +
@@ -2402,10 +2410,44 @@
     const radial = grad.k === 'radial';
     const id = 'adgr' + (++gradSeq);
     const defs = document.createElementNS(SVGNS, 'defs');
+    if (grad.k === 'freeform') {
+      /* freeform: the blend the engine works out (freeColourAt, which the
+         saved PDF's mesh reads too), drawn as a small picture over the
+         shape's box, the shape's own outline cutting it */
+      const pic = freePicture(s, grad, vp);
+      const pat = document.createElementNS(SVGNS, 'pattern');
+      pat.setAttribute('id', id);
+      pat.setAttribute('patternUnits', 'userSpaceOnUse');
+      ['x', 'y', 'width', 'height'].forEach(function (k, i) { pat.setAttribute(k, pic.box[i]); });
+      const im = document.createElementNS(SVGNS, 'image');
+      im.setAttribute('href', pic.url);
+      /* inside the tile, which starts at the box's corner */
+      im.setAttribute('x', 0); im.setAttribute('y', 0);
+      im.setAttribute('width', pic.box[2]); im.setAttribute('height', pic.box[3]);
+      im.setAttribute('preserveAspectRatio', 'none');
+      pat.appendChild(im);
+      defs.appendChild(pat);
+      g.insertBefore(defs, g.firstChild);
+      el.style.fill = 'url(#' + id + ')';
+      el.style.fillOpacity = op == null ? shOp(s) : op;
+      return;
+    }
+    /* an elliptical radial, or one with its focal point moved: drawn in its
+       own frame (engine radialFrame), the unit circle laid on the page by a
+       matrix, as the saved PDF paints it */
+    const framed = radial && (grad.fp || (grad.ar != null && Math.abs(E.radialAspect(grad) - 1) > 1e-6));
     const gr = document.createElementNS(SVGNS, radial ? 'radialGradient' : 'linearGradient');
     gr.setAttribute('id', id);
     gr.setAttribute('gradientUnits', 'userSpaceOnUse');
-    if (radial) {
+    if (framed) {
+      const R = E.radialFrame(s, grad), F = E.radialFocal(s, grad);
+      const c = vp.convertToViewportPoint(R.c[0], R.c[1]);
+      const u = vp.convertToViewportPoint(R.c[0] + R.u[0], R.c[1] + R.u[1]);
+      const v = vp.convertToViewportPoint(R.c[0] + R.v[0], R.c[1] + R.v[1]);
+      gr.setAttribute('cx', 0); gr.setAttribute('cy', 0); gr.setAttribute('r', 1);
+      gr.setAttribute('fx', F[0]); gr.setAttribute('fy', F[1]);
+      gr.setAttribute('gradientTransform', 'matrix(' + [u[0] - c[0], u[1] - c[1], v[0] - c[0], v[1] - c[1], c[0], c[1]].join(' ') + ')');
+    } else if (radial) {
       gr.setAttribute('cx', a[0]); gr.setAttribute('cy', a[1]);
       gr.setAttribute('r', Math.max(0.01, Math.hypot(b[0] - a[0], b[1] - a[1])));
     } else {
@@ -2423,6 +2465,44 @@
     g.insertBefore(defs, g.firstChild);
     el.style.fill = 'url(#' + id + ')';
     el.style.fillOpacity = op == null ? shOp(s) : op;
+  }
+
+  /* A freeform gradient's picture: the shape's box as it shows on screen,
+     each cell the colour the engine gives there, at most 160 cells a side
+     (the browser smooths it up). Kept, a few dozen at a time, until the
+     gradient, the shape or the zoom changes. */
+  const FREE_PICS = new Map();
+  function freePicture(s, grad, vp) {
+    const f = E.gradFrame(s);
+    const corners = [[f.x1, f.y1], [f.x2, f.y1], [f.x2, f.y2], [f.x1, f.y2]].map(function (q) {
+      const p = f.r ? rotPt(q, f.c, f.r) : q;
+      return vp.convertToViewportPoint(p[0], p[1]);
+    });
+    let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
+    corners.forEach(function (v) { x1 = Math.min(x1, v[0]); y1 = Math.min(y1, v[1]); x2 = Math.max(x2, v[0]); y2 = Math.max(y2, v[1]); });
+    const bw = Math.max(1, x2 - x1), bh = Math.max(1, y2 - y1);
+    const key = JSON.stringify([grad.pts, f, vp.scale, vp.rotation, Math.round(x1), Math.round(y1)]);
+    const hit = FREE_PICS.get(key);
+    if (hit) return hit;
+    const k = Math.min(1, 160 / Math.max(bw, bh));
+    const W = Math.max(2, Math.round(bw * k)), H = Math.max(2, Math.round(bh * k));
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const ctx = cv.getContext('2d');
+    const img = ctx.createImageData(W, H), d = img.data;
+    for (let j = 0; j < H; j++) {
+      for (let i = 0; i < W; i++) {
+        const q = vp.convertToPdfPoint(x1 + (i + 0.5) * bw / W, y1 + (j + 0.5) * bh / H);
+        const c = E.freeColourAt(s, grad, q), o = (j * W + i) * 4;
+        d[o] = Math.round(c.rgb[0] * 255); d[o + 1] = Math.round(c.rgb[1] * 255);
+        d[o + 2] = Math.round(c.rgb[2] * 255); d[o + 3] = Math.round(c.o * 255);
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    const pic = { url: cv.toDataURL('image/png'), box: [x1, y1, bw, bh] };
+    if (FREE_PICS.size > 48) FREE_PICS.delete(FREE_PICS.keys().next().value);
+    FREE_PICS.set(key, pic);
+    return pic;
   }
 
   /* a mark on screen, faded as a whole by its layer's opacity (s.lo, kept
