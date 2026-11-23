@@ -22,7 +22,7 @@ npm run electron:build -w @adddots/electron            # Windows setup .exe (NSI
 npm run electron:build:store -w @adddots/electron      # Microsoft Store package (.msix)
 npm run electron:build:mac -w @adddots/electron        # macOS .dmg and .zip (on a Mac)
 npm run electron:build:linux -w @adddots/electron      # Linux AppImage and .deb (on Linux)
-npm test -w @adddots/electron                          # the file rules, in plain Node
+npm test -w @adddots/electron                          # the file and update rules, in plain Node
 npm run e2e -w @adddots/electron                       # end to end, over apps/web/dist
 ```
 
@@ -102,10 +102,14 @@ The version is `package.json`'s as `1.0.N.0`; CI sets N to its run number,
 which only grows, as the Store wants each package newer than the last. The
 package is not signed: the Store signs it on upload.
 
-In the Store package the Store updates the app, so the app shows no update
-notice of its own (`store_update` answers false when `process.windowsStore`).
-The setup `.exe` compares its build with the website's and points to the
-Store page.
+In the Store package the Store updates the app in the background, but not
+while it is open, nor where the user has turned updates off. So the app asks
+the Store's public catalog (`displaycatalog.mp.microsoft.com`, at most once an
+hour, `src/updates.js`) which version it now offers. When that is newer than
+`package.json`'s, `store_update` answers true: the bell lights up and a notice
+in the corner offers **Update now** (this app's page in the Store) or **Later**
+(not again for a day). The setup `.exe` compares its build with the website's
+the same way and points to the Store page.
 
 CI ("Windows app (Electron)") builds the `.msix`, installs it signed with a
 throwaway certificate for the same Publisher, starts it from its Start menu

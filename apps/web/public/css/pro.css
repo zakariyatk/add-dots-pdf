@@ -1702,6 +1702,19 @@ body:not([data-ui="light"]) .pgrid .psq { border-color: rgba(255,255,255,.25) }
   .prgrid { grid-template-columns: 1fr }
 }
 
+/* a new version, in the Windows and phone apps (js/update.js notify) */
+.updnote {
+  position: fixed; right: 16px; bottom: 16px; z-index: 99990; display: flex; flex-direction: column; gap: 10px;
+  width: min(340px, calc(100vw - 32px)); box-sizing: border-box; padding: 14px 16px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--chrome-2); color: var(--text);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, .25); font-size: 13px; animation: wdpop .16s ease-out;
+}
+.updtxt { display: flex; flex-direction: column; gap: 3px }
+.updtxt b { font-size: 14px; font-weight: 600 }
+.updtxt small { font-size: 12.5px; color: var(--text-dim) }
+.updbtns { display: flex; justify-content: flex-end; gap: 8px }
+@media (prefers-reduced-motion: reduce) { .updnote { animation: none } }
+
 /* the Edit colours dialog (js/colordlg.js) */
 body.cdpicking, body.cdpicking * { cursor: crosshair !important }
 .cdwrap { position: fixed; inset: 0; z-index: 100000; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .45) }
