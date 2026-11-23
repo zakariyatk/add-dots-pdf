@@ -1637,6 +1637,28 @@ body:not([data-ui="light"]) .pgrid .psq { border-color: rgba(255,255,255,.25) }
 #prPaper { min-width: 200px }
 .prnum { width: 76px !important; flex: none }
 .prchk { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; margin-top: 8px }
+.prprinter { flex-wrap: wrap; gap: 8px 10px }
+.prdrv { display: inline-flex; gap: 8px }
+.prdrv[hidden], .prdrv .wdbtn[hidden] { display: none }
+.prdrv .wdbtn { min-width: 92px }
+.prbox { position: relative }
+.pradvwrap {
+  position: absolute; inset: 0; z-index: 2; display: grid; place-items: center; padding: 16px;
+  background: rgba(0, 0, 0, .3);
+}
+.pradvwrap[hidden] { display: none }
+.pradv {
+  width: min(420px, 100%); box-sizing: border-box; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--chrome-2); box-shadow: 0 16px 40px rgba(0, 0, 0, .3);
+}
+.pradvtitle { margin: 0; padding: 18px 20px 6px; font-size: 16px; font-weight: 600 }
+.pradvbody { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; padding: 8px 20px 16px }
+.pradvbody .prrow { width: 100%; justify-content: space-between }
+.pradvbody .prwide { min-width: 0; width: 210px }
+.pradvsys { margin-top: 6px; padding-top: 12px; border-top: 1px solid var(--line); width: 100% }
+.pradvsys .wdnote { margin: 6px 0 0; font-size: 12.5px }
+.pradvfoot { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--line); background: var(--chrome); border-radius: 0 0 8px 8px }
+.pradvfoot .wdbtn { min-width: 90px }
 .prmain { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 0; min-height: 0; overflow: auto }
 .prleft { padding: 6px 16px 12px 24px; display: flex; flex-direction: column; gap: 8px; min-width: 0 }
 .prset { margin: 0; padding: 8px 12px 12px; border: 1px solid var(--line); border-radius: 6px; min-width: 0 }
