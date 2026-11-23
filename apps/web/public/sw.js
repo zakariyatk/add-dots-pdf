@@ -71,6 +71,7 @@ const SHELL = [
   'js/arrange.js',
   'js/rotate.js',
   'js/gradient.js',
+  'js/colorpanel.js',
   'js/shapegeom.js',
   'js/shapebuilder.js',
   'js/typepanel.js',

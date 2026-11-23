@@ -11222,6 +11222,8 @@
     vpts: vpts, textWidth: textWidth, fontIdx: fontIdx,
     dirAngle: dirAngle, shOp: shOp,
     openPop: openPop, closePops: closePops, undo: undo, redo: redo,
+    /* for the Fill and Stroke widget and the Swatches panel (js/colorpanel.js) */
+    markEdit: markEdit, recentColors: recentColors, noteRecent: noteRecent, COLORS_STD: STD_COLORS,
     invalidateSearch: invalidateSearch,
     isMobile: isMobile,
     openFiles: takeFiles,
