@@ -29,6 +29,7 @@ const COMMANDS = new Set([
   'perf_native',
   'printers',
   'print_pages',
+  'printer_properties',
 ]);
 const EVENTS = new Set(['open-files', 'combine-files']);
 const WINDOW = new Set(['minimize', 'toggleMaximize', 'close', 'setAlwaysOnTop', 'isMaximized']);

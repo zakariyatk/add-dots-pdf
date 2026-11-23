@@ -105,9 +105,12 @@
     var pages = (job.pages || []).map(function (p) { return new U8(p); });   /* into the window's realm */
     return T.core.invoke('print_pages', {
       pages: pages, w: job.w, h: job.h, paper: job.paper || '',
-      printer: job.printer || '', copies: job.copies || 1, color: job.color !== false
+      printer: job.printer || '', copies: job.copies || 1, color: job.color !== false,
+      duplex: job.duplex || 'simplex', collate: job.collate !== false, dialog: job.dialog === true
     });
   };
+  /* Properties: the printer's own settings, from its driver */
+  api.printerProperties = function (printer) { return T.core.invoke('printer_properties', { printer: printer || '' }); };
 
   api.saveFile = function (data, name, type) {
     return toBytes(data).then(function (body) {

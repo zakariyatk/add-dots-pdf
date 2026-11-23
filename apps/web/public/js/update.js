@@ -1,17 +1,22 @@
 /* Add Dots PDF — Updates
    ---------------------
-   Telling the reader about a new version, wherever the app runs — always
-   through the bell (What is new, js/appbar.js), never a banner of its own
-   over the page: flagBell() lights its dot, and the bell's own click
-   handler asks X.checkForUpdate() fresh for what to show and do about it.
+   Telling the reader about a new version, wherever the app runs: through
+   the bell (What is new, js/appbar.js), whose dot flagBell() lights and
+   whose own click asks X.checkForUpdate() fresh for what to show and do
+   about it; and in the Windows and phone apps, which do not change by
+   themselves while open, a small notice in the corner too (notify()), with
+   Update now and Later.
 
    - On the website the service worker fetches a new version by itself
      (js/pwa.js). With no document open the page simply reloads into it; with
      one open, the bell lights up and the reload is one click away there.
-   - The Windows app from the Microsoft Store is updated by the Store
-     itself, so it shows no notice (apps/electron store_update says false).
-     The website is no guide there: a build reaches the Store only once it
-     is submitted and certified, days after the website has it.
+   - The Windows app from the Microsoft Store is updated by the Store in
+     the background, but not while it is open, nor where updates are turned
+     off. So it asks the Store's own catalog (apps/electron store_update)
+     whether the Store offers a newer version than this one, and if so
+     tells the reader, and Update now opens its page in the Store to take
+     it. The website is no guide there: a build reaches the Store only once
+     it is submitted and certified, days after the website has it.
    - The setup .exe and the phone apps carry every file and do not change on
      their own. They load latest.js from the website, which names the build
      the website has; when that is newer than this one, the bell lights up,
@@ -38,6 +43,33 @@
   function flagBell() {
     const dot = document.querySelector('#abNews .abdot');
     if (dot) dot.hidden = false;
+  }
+
+  /* The notice in the corner: once a start, and not again for a day after
+     Later. Update now takes the update the way the bell's button does. */
+  const LATER = 'adpdf.updateLater';
+  let shown = false;
+  function notify(run) {
+    if (shown || IN_FRAME) return;
+    let later = 0;
+    try { later = +localStorage.getItem(LATER) || 0; } catch (e) { /* none kept */ }
+    if (Date.now() - later < 24 * 3600000) return;
+    shown = true;
+    const n = document.createElement('div');
+    n.className = 'updnote';
+    n.setAttribute('role', 'status');
+    n.innerHTML =
+      '<div class="updtxt"><b>A new version of Add Dots PDF is available</b>' +
+      '<small>' + (IN_DESKTOP ? 'Save your work first: the Store closes the app to update it.'
+        : 'Get the newest features and fixes.') + '</small></div>' +
+      '<div class="updbtns"><button type="button" class="btn primary" data-go>Update now</button>' +
+      '<button type="button" class="btn" data-later>Later</button></div>';
+    n.querySelector('[data-go]').addEventListener('click', function () { n.remove(); run(); });
+    n.querySelector('[data-later]').addEventListener('click', function () {
+      n.remove();
+      try { localStorage.setItem(LATER, String(Date.now())); } catch (e) { /* this time only */ }
+    });
+    document.body.appendChild(n);
   }
 
   /* ---------------- website: the service worker has the update ---------------- */
@@ -128,6 +160,7 @@
       return store.then(function (has) {
         if (has === true) return { state: 'update', run: openStorePage };
         if (has === false) return { state: 'latest' };
+        if (has === 'unknown') return { state: 'unknown' };
         if (!BUILD) return { state: 'unknown' };
         return fetchLatest().then(function (v) {
           if (!v) return { state: 'unknown' };
@@ -140,16 +173,22 @@
     return Promise.resolve(webReady ? { state: 'update', run: reloadIntoUpdate } : { state: 'latest' });
   };
 
-  /* Soon after start, then every six hours while open: only ever lights
-     the bell, the panel's own click asks fresh for what to do about it. */
+  /* Soon after start, then every six hours while open: lights the bell and
+     shows the notice in the corner. */
   function checkApp() {
     if (!(IN_DESKTOP || IN_PHONE) || !BUILD || IN_FRAME) return;
     const store = IN_DESKTOP && X.storeUpdate
       ? X.storeUpdate().catch(function () { return false; })
       : Promise.resolve(null);
     store.then(function (has) {
-      if (has === true) flagBell();
-      else if (has === null) fetchLatest().then(function (v) { if (newer(v)) flagBell(); });
+      if (has === true) { flagBell(); notify(openStorePage); }
+      else if (has === null) {
+        fetchLatest().then(function (v) {
+          if (!newer(v)) return;
+          flagBell();
+          notify(IN_DESKTOP && X.openStore ? openStorePage : openSite);
+        });
+      }
     });
   }
 

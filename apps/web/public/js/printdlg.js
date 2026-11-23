@@ -10,7 +10,14 @@
    placed, scaled, turned and cut to its place on it. The Windows app sends
    that straight to the printer chosen (the desktop side lists the printers
    and prints, js/desktop.js); a browser cannot name a printer, so there the
-   sheets go to the browser's own print dialog, which asks for one. */
+   sheets go to the browser's own print dialog, which asks for one.
+
+   Beside the printer, as in Acrobat: Properties opens the printer's own
+   settings from its driver (on Windows its Printing Preferences: trays,
+   quality, stapling, which the job then prints with), and Advanced the
+   finer choices: which edge a two-sided sheet flips on, collating, the
+   resolution the sheets go at, and printing through the system's own
+   print dialog. */
 (function () {
   'use strict';
 
@@ -33,7 +40,8 @@
       tile: 100, overlap: 0, largeOnly: false,
       per: 2, order: 'h', border: false,
       side: 'both', binding: 'left',
-      orient: 'auto', markups: true
+      orient: 'auto', markups: true,
+      duplex: false, flip: 'long', collate: true, dpi: 'auto'
     };
     function kept() {
       try { return Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(KEEP) || '{}')); }
@@ -42,7 +50,7 @@
     function keep(o) {
       const k = {};
       ['printer', 'copies', 'gray', 'paper', 'mode', 'fit', 'scale', 'byPage', 'tile', 'overlap', 'largeOnly',
-        'per', 'order', 'border', 'side', 'binding', 'orient', 'markups'].forEach(function (n) { k[n] = o[n]; });
+        'per', 'order', 'border', 'side', 'binding', 'orient', 'markups', 'duplex', 'flip', 'collate', 'dpi'].forEach(function (n) { k[n] = o[n]; });
       try { localStorage.setItem(KEEP, JSON.stringify(k)); } catch (e) { /* this time only */ }
     }
 
@@ -137,9 +145,14 @@
         '<div class="wdhead"><h2 class="wdtitle">Print</h2>' +
           '<button type="button" class="wdx" id="prX" aria-label="Close"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></div>' +
         '<div class="prtop">' +
-          '<label class="prrow"><span>Printer:</span><select class="wdsel prwide" id="prPrinter"></select></label>' +
+          '<div class="prrow prprinter"><label class="prrow"><span>Printer:</span><select class="wdsel prwide" id="prPrinter"></select></label>' +
+            '<span class="prdrv" id="prDrv">' +
+              '<button type="button" class="wdbtn" id="prProps" title="The printer\'s own settings: paper tray, quality, stapling">Properties</button>' +
+              '<button type="button" class="wdbtn" id="prAdv" aria-haspopup="dialog">Advanced</button>' +
+            '</span></div>' +
           '<label class="prrow"><span>Copies:</span><input class="wdin prnum" id="prCopies" type="number" min="1" max="999" step="1"></label>' +
           '<label class="prchk" id="prGrayWrap"><input type="checkbox" id="prGray"> Print in grayscale (black and white)</label>' +
+          '<label class="prchk" id="prDuplexWrap"><input type="checkbox" id="prDuplex"> Print on both sides of paper</label>' +
           '<label class="prrow"><span>Paper:</span><select class="wdsel" id="prPaper"></select></label>' +
         '</div>' +
         '<div class="prmain">' +
@@ -227,6 +240,27 @@
           '<button type="submit" class="wdbtn wdok" id="prGo">Print</button>' +
           '<button type="button" class="wdbtn" id="prCancel">Cancel</button>' +
         '</div>' +
+        '<div class="pradvwrap" id="prAdvWrap" hidden>' +
+          '<div class="pradv" role="dialog" aria-modal="true" aria-labelledby="prAdvTitle">' +
+            '<h3 class="pradvtitle" id="prAdvTitle">Advanced Print Setup</h3>' +
+            '<div class="pradvbody">' +
+              '<label class="prrow"><span>Two-sided:</span><select class="wdsel prwide" id="prFlip">' +
+                '<option value="long">Flip on long edge</option><option value="short">Flip on short edge</option></select></label>' +
+              '<label class="prrow"><span>Print resolution:</span><select class="wdsel prwide" id="prDpi">' +
+                '<option value="auto">Automatic (by job length)</option><option value="150">150 dpi (draft)</option>' +
+                '<option value="300">300 dpi</option><option value="600">600 dpi (fine)</option></select></label>' +
+              '<label class="prchk"><input type="checkbox" id="prCollate"> Collate copies</label>' +
+              '<div class="pradvsys">' +
+                '<button type="button" class="wdbtn" id="prSys">Print using system dialog…</button>' +
+                '<p class="wdnote">Prints these sheets through the system\'s own print dialog, with every option the printer\'s driver has.</p>' +
+              '</div>' +
+            '</div>' +
+            '<div class="pradvfoot">' +
+              '<button type="button" class="wdbtn wdok" id="prAdvOk">OK</button>' +
+              '<button type="button" class="wdbtn" id="prAdvCancel">Cancel</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
       '</form>';
     document.body.appendChild(wrap);
     const box = wrap.firstChild;
@@ -251,6 +285,7 @@
     function fill() {
       $('prCopies').value = o.copies;
       $('prGray').checked = !!o.gray;
+      $('prDuplex').checked = !!o.duplex;
       $('prPaper').value = o.paper;
       radios('prPick', o.pick);
       $('prRange').value = o.range || ('1 - ' + S.items.length);
@@ -268,6 +303,7 @@
       o.printer = $('prPrinter').value;
       o.copies = Math.max(1, Math.min(999, parseInt($('prCopies').value, 10) || 1));
       o.gray = $('prGray').checked;
+      o.duplex = $('prDuplex').checked;
       o.paper = $('prPaper').value;
       o.pick = radio('prPick') || 'all';
       o.range = $('prRange').value;
@@ -361,7 +397,7 @@
     /* each sheet as a picture, for the desktop side to print: sharp enough
        for print, lighter as the job gets longer */
     async function sheetPictures(bytes, n) {
-      const dpi = n <= 20 ? 300 : n <= 80 ? 200 : 150;
+      const dpi = o.dpi !== 'auto' && +o.dpi > 0 ? +o.dpi : n <= 20 ? 300 : n <= 80 ? 200 : 150;
       const pdf = await window.pdfjsLib.getDocument({ data: bytes }).promise;
       const out = [];
       try {
@@ -383,7 +419,7 @@
       return out;
     }
 
-    async function go() {
+    async function go(viaSystem) {
       if (busy) return;
       read();
       if (!pl || pl.error) return;
@@ -394,13 +430,17 @@
         const bytes = await compose(src, pl, all);
         if (desk()) {
           const pics = await sheetPictures(bytes, all.length);
-          $('prBusy').textContent = 'Sending to the printer…';
-          await X.printPages({
+          $('prBusy').textContent = viaSystem ? 'Waiting for the system print dialog…' : 'Sending to the printer…';
+          const r = await X.printPages({
             pages: pics, w: pl.w, h: pl.h, paper: o.paper,
-            printer: o.printer, copies: o.copies, color: !o.gray
+            printer: o.printer, copies: o.copies, color: !o.gray,
+            duplex: o.duplex ? (o.flip === 'short' ? 'shortEdge' : 'longEdge') : 'simplex',
+            collate: o.collate, dialog: viaSystem === true
           });
+          if (r && r.cancelled) return;
           close();
-          X.toast('Sent to <b>' + X.esc(o.printer || 'the printer') + '</b>' + (o.copies > 1 ? ', ' + o.copies + ' copies' : ''), true);
+          X.toast(viaSystem ? 'Sent to the printer'
+            : 'Sent to <b>' + X.esc(o.printer || 'the printer') + '</b>' + (o.copies > 1 ? ', ' + o.copies + ' copies' : ''), true);
         } else {
           close();
           X.printFrame(bytes);                  /* the browser asks for the printer */
@@ -425,6 +465,10 @@
       const sel = $('prPrinter');
       sel.innerHTML = '';
       $('prGrayWrap').hidden = !desk();
+      $('prDuplexWrap').hidden = !desk();
+      $('prDrv').hidden = !desk();
+      $('prProps').hidden = typeof X.printerProperties !== 'function';
+      $('prAdvWrap').hidden = true;
       $('prCopies').closest('.prrow').hidden = !desk();
       if (desk()) {
         let list = [];
@@ -453,6 +497,7 @@
     }
     function close() {
       wrap.hidden = true;
+      $('prAdvWrap').hidden = true;
       src = null; pl = null;
       if (was && was.focus) try { was.focus(); } catch (e) { /* gone */ }
     }
@@ -470,7 +515,8 @@
     let tick = 0;
     function soon() { clearTimeout(tick); tick = setTimeout(replan, 150); }
     box.addEventListener('change', function (e) {
-      if (e.target.id === 'prPrinter' || e.target.id === 'prCopies') { read(); return; }
+      if (e.target.closest('#prAdvWrap')) return;
+      if (e.target.id === 'prPrinter' || e.target.id === 'prCopies' || e.target.id === 'prDuplex') { read(); return; }
       if (e.target.name === 'prPick' && radio('prPick') === 'range') setTimeout(function () { $('prRange').focus(); $('prRange').select(); });
       soon();
     });
@@ -485,12 +531,48 @@
     $('prNext').addEventListener('click', function () {
       if (pl && at < pl.sheets.length - 1) { at++; $('prSlider').value = String(at + 1); drawSheet(); }
     });
-    box.addEventListener('submit', function (e) { e.preventDefault(); go(); });
+    box.addEventListener('submit', function (e) { e.preventDefault(); if ($('prAdvWrap').hidden) go(); });
+
+    /* Properties: the printer's own settings, in its driver's window; the
+       list is read again after, in case the printer was renamed */
+    $('prProps').addEventListener('click', async function () {
+      if (busy || typeof X.printerProperties !== 'function') return;
+      read();
+      const btn = this;
+      btn.disabled = true;
+      try {
+        await X.printerProperties(o.printer);
+      } catch (e) {
+        X.toast('Could not open the printer\'s properties: ' + X.esc(String((e && e.message) || e).slice(0, 160)));
+      } finally { btn.disabled = false; btn.focus(); }
+    });
+
+    /* Advanced: the finer choices, in a panel over the dialog */
+    function advOpen() {
+      read();
+      $('prFlip').value = o.flip; $('prDpi').value = String(o.dpi); $('prCollate').checked = o.collate !== false;
+      $('prCollate').disabled = o.copies < 2;
+      $('prAdvWrap').hidden = false;
+      $('prFlip').focus();
+    }
+    function advRead() {
+      o.flip = $('prFlip').value === 'short' ? 'short' : 'long';
+      o.dpi = $('prDpi').value;
+      o.collate = $('prCollate').checked;
+    }
+    function advClose() { $('prAdvWrap').hidden = true; $('prAdv').focus(); }
+    $('prAdv').addEventListener('click', advOpen);
+    $('prAdvOk').addEventListener('click', function () { advRead(); keep(o); advClose(); });
+    $('prAdvCancel').addEventListener('click', advClose);
+    $('prSys').addEventListener('click', function () { advRead(); $('prAdvWrap').hidden = true; go(true); });
     $('prCancel').addEventListener('click', close);
     $('prX').addEventListener('click', close);
     wrap.addEventListener('keydown', function (e) {
       e.stopPropagation();                      /* the app's own keys stay out of the dialog */
-      if (e.key === 'Escape') { e.preventDefault(); if (!busy) close(); }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        if (!$('prAdvWrap').hidden) advClose(); else if (!busy) close();
+      }
     });
   });
 })();

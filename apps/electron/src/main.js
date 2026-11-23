@@ -22,11 +22,13 @@
    https links open in the system browser. */
 'use strict';
 
-const { app, BrowserWindow, dialog, ipcMain, Menu, protocol, session, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, Menu, net, protocol, session, shell } = require('electron');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFile } = require('node:child_process');
 const { Opened, safeName, writeAtomic } = require('./files');
+const { latestInCatalog, newerVersion } = require('./updates');
 
 const SCHEME = 'app';
 const HOST = 'adddots';
@@ -55,7 +57,14 @@ const SITES = {
   opbuilder: 'https://opbuilder.adddots.com/',
   call: 'https://call.adddots.com/',
 };
-const STORE_PAGE = 'ms-windows-store://pdp/?productid=9PGHPBRMLQMS';
+const STORE_ID = '9PGHPBRMLQMS';
+const STORE_PAGE = 'ms-windows-store://pdp/?productid=' + STORE_ID;
+const STORE_IDENTITY = 'ADDDOTS.ADDDOTSPDF';
+/* the Store's public catalog: the packages it now offers for this app */
+const STORE_CATALOG =
+  'https://displaycatalog.mp.microsoft.com/v7.0/products?bigIds=' +
+  STORE_ID +
+  '&market=US&languages=en-US&fieldsTemplate=Details';
 
 const opened = new Opened();
 let lastWindow = null;
@@ -350,11 +359,12 @@ const COMMANDS = {
   },
   /* the Store package's version is package.json's, 1.0.N (CI sets N) */
   app_version: () => app.getVersion(),
-  /* The Microsoft Store package (process.windowsStore) is updated by the
-     Store itself: no update notice in the app (false, js/update.js). The
-     setup .exe is not a Store install (null): it compares with the website
-     and points to the Store page. */
-  store_update: () => (process.windowsStore ? false : null),
+  /* The Microsoft Store package (process.windowsStore) asks the Store's
+     catalog which version it offers now: true when that is newer than this
+     one (js/update.js tells the reader and opens the Store page to take it),
+     false when it is not, 'unknown' when the catalog could not say. The
+     setup .exe is not a Store install (null): it compares with the website. */
+  store_update: () => (process.windowsStore ? storeUpdate() : null),
 
   perf_native: () => ({ now: process.memoryUsage().rss, peak: process.resourceUsage().maxRSS * 1024 }),
 
@@ -369,8 +379,70 @@ const COMMANDS = {
     }));
   },
   print_pages: ({ args }) => printPages(args),
+  /* Properties, beside the printer: the printer's own settings, from its
+     driver (trays, quality, stapling, finishing). On Windows that is the
+     printer's Printing Preferences, which the job then prints with; on
+     macOS and Linux the system's printer settings. Answers once it is
+     closed, so the dialog can read the printers again. */
+  printer_properties: async ({ args }, win) => {
+    const name = typeof args.printer === 'string' ? args.printer : '';
+    const list = await win.webContents.getPrintersAsync();
+    const known = list.find((p) => p.name === name) || list.find((p) => p.isDefault) || list[0];
+    if (!known) throw new Error('no printer found');
+    return printerProperties(String(known.name));
+  },
 };
 
+function run(file, argv) {
+  return new Promise((resolve, reject) => {
+    execFile(file, argv, { windowsHide: false }, (e) => (e && e.code === 'ENOENT' ? reject(e) : resolve()));
+  });
+}
+async function printerProperties(name) {
+  if (process.platform === 'win32') {
+    /* printui's own way to a printer's Printing Preferences: /e, by its name (/n) */
+    const rundll = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'rundll32.exe');
+    await run(rundll, ['printui.dll,PrintUIEntry', '/e', '/n', name]);
+    return { shown: 'preferences', printer: name };
+  }
+  if (process.platform === 'darwin') {
+    await shell.openExternal('x-apple.systempreferences:com.apple.Print-Scanner-Settings.extension');
+    return { shown: 'settings', printer: name };
+  }
+  try {
+    await run('system-config-printer', []);
+  } catch {
+    await shell.openExternal('http://localhost:631/printers/' + encodeURIComponent(name));
+  }
+  return { shown: 'settings', printer: name };
+}
+
+/* The newest version the Store offers, from its catalog: each package's
+   full name is Identity_Version_Arch__PublisherHash. Asked at most once an
+   hour; a failed answer is not kept. */
+let storeAsked = null;
+function storeUpdate() {
+  if (storeAsked && Date.now() - storeAsked.at < 3600000) return storeAsked.answer;
+  const answer = storeLatest()
+    .then((latest) => (latest ? newerVersion(latest, app.getVersion()) : 'unknown'))
+    .catch(() => 'unknown');
+  storeAsked = { at: Date.now(), answer };
+  answer.then((a) => {
+    if (a === 'unknown') storeAsked = null;
+  });
+  return answer;
+}
+async function storeLatest() {
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 20000);
+  try {
+    const res = await net.fetch(STORE_CATALOG, { signal: ctl.signal, cache: 'no-store' });
+    if (!res.ok) return null;
+    return latestInCatalog(await res.json(), STORE_IDENTITY);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 /* Each sheet comes as a PNG, at the sheet's own size; they go on the paper
    edge to edge in a hidden window of their own, which prints them, silently
    on the printer named (the system's default when none is). With
@@ -393,6 +465,9 @@ async function printPages(args) {
   const copies = Math.max(1, Math.min(999, Math.floor(Number(args.copies) || 1)));
   const printer = typeof args.printer === 'string' ? args.printer.slice(0, 300) : '';
   const landscape = w > h;
+  const duplexMode = ['simplex', 'longEdge', 'shortEdge'].includes(args.duplex) ? args.duplex : 'simplex';
+  const collate = args.collate !== false;
+  const dialog = args.dialog === true;
   const dir = await fs.promises.mkdtemp(path.join(app.getPath('temp'), 'adddots-print-'));
   let pw = null;
   try {
@@ -434,24 +509,33 @@ async function printPages(args) {
         margins: { top: 0, bottom: 0, left: 0, right: 0 },
       });
       writeAtomic(path.join(process.env.ADDDOTS_PRINT_TO, 'printed.pdf'), pdf);
-      return { printed: pages.length, copies, printer, color: args.color !== false };
+      return { printed: pages.length, copies, printer, color: args.color !== false, duplexMode, collate };
     }
-    await new Promise((resolve, reject) => {
+    const how = await new Promise((resolve, reject) => {
       pw.webContents.print(
         {
-          silent: true,
+          /* the system's own print dialog when asked for (Advanced), with
+             everything the driver offers; straight to the printer otherwise */
+          silent: !dialog,
           printBackground: true,
           deviceName: printer || undefined,
           copies,
+          collate,
+          duplexMode,
           color: args.color !== false,
           landscape,
           pageSize,
           margins: { marginType: 'none' },
         },
-        (ok, why) => (ok ? resolve() : reject(new Error(why || 'not printed'))),
+        (ok, why) =>
+          ok
+            ? resolve()
+            : dialog && /cancel/i.test(why || '')
+              ? resolve('cancelled')
+              : reject(new Error(why || 'not printed')),
       );
     });
-    return { printed: pages.length, copies };
+    return how === 'cancelled' ? { printed: 0, cancelled: true } : { printed: pages.length, copies };
   } finally {
     if (pw && !pw.isDestroyed()) pw.destroy();
     fs.promises.rm(dir, { recursive: true, force: true }).catch(() => {});
