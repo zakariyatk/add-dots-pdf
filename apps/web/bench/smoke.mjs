@@ -2665,7 +2665,7 @@ try {
         back,
       },
     );
-    await page.keyboard.press('p');
+    await page.keyboard.press('Control+0');
     await page.waitForTimeout(900);
     const fitPage = await page.evaluate(() => {
       const S = window.ADDPDF.S,

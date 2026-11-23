@@ -722,22 +722,23 @@
     /* a Pen path (js/pen.js): cubic Bézier segments, s.pts running anchor,
        out-handle, in-handle, anchor… — the same path the saved PDF draws
        (engine painters/pen.ts) */
-    function penClosed(s) { return !!(s.pts && E.penClosed(s.pts)); }
+    function penClosed(s) { return !!(s.pts && E.penClosed(s.pts, !!s.open)); }
     X.penClosed = penClosed;
-    function penD(pts, vp) {
+    /* open: ends that meet without closing it (s.open) */
+    function penD(pts, vp, open) {
       const v = pts.map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
       let d = 'M' + v[0][0] + ' ' + v[0][1];
       for (let i = 1; i + 2 < v.length; i += 3) {
         d += 'C' + v[i][0] + ' ' + v[i][1] + ' ' + v[i + 1][0] + ' ' + v[i + 1][1] + ' ' + v[i + 2][0] + ' ' + v[i + 2][1];
       }
-      return E.penClosed(pts) ? d + 'Z' : d;
+      return E.penClosed(pts, !!open) ? d + 'Z' : d;
     }
     X.penD = penD;
     X.shapeRenderers.pen = function (it, s, vp, idx) {
       const g = document.createElementNS(SVGNS, 'g');
       if (!s.pts || s.pts.length < 4) return g;
       const el = document.createElementNS(SVGNS, 'path');
-      el.setAttribute('d', penD(s.pts, vp));
+      el.setAttribute('d', penD(s.pts, vp, s.open));
       stroked(el, s, idx, it);
       g.appendChild(el);
       if (penClosed(s)) fillIn(g, el, s, vp);

@@ -24,6 +24,10 @@ describe('the path', () => {
     expect(penClosed(CLOSED)).toBe(true);
     expect(penPathData(CLOSED).endsWith(' Z')).toBe(true);
   });
+  it('stays open when marked open, its ends meeting (a closed path cut there)', () => {
+    expect(penClosed(CLOSED, true)).toBe(false);
+    expect(penPathData(CLOSED, -1, true).endsWith(' Z')).toBe(false);
+  });
 });
 
 /* what the painter asks pdf-lib to draw: each drawSvgPath call, its path and options */
@@ -52,6 +56,11 @@ describe('painted on a page', () => {
   it('leaves an open path unfilled, and a path of one point unpainted', () => {
     expect(paint({ t: 'pen', pts: S, c: '#000000', w: 1, fill: '#CFE0FF' })).toHaveLength(1);
     expect(paint({ t: 'pen', pts: [[1, 1]], c: '#000000', w: 1 })).toHaveLength(0);
+  });
+  it('a path marked open is not filled, whatever its ends do', () => {
+    const calls = paint({ t: 'pen', pts: CLOSED, c: '#000000', w: 1, fill: '#FFCC00', open: true });
+    expect(calls.length).toBe(1);
+    expect(calls[0]!.o.color).toBeUndefined();
   });
   it('a dashed path keeps its dashes', () => {
     const calls = paint({ t: 'pen', pts: S, c: '#000000', w: 2, d: 1 });

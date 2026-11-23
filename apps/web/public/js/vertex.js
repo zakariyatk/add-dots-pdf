@@ -586,6 +586,8 @@
         } else {
           const o = outlineAt(it, p);
           cur = o ? { it: it, idx: o.idx, i: null } : null;
+          /* empty page: a box drawn there selects the Pen paths' anchors in it (js/pen.js) */
+          if (!o && X.penEdit && X.penEdit.marquee) X.penEdit.marquee(it, at, e);
         }
         paint(it);
       },
@@ -728,10 +730,11 @@
     const PEN = '<path d="M3.5 20.5l2.3-7.6 6.4-6.4 5.3 5.3-6.4 6.4z"/><path d="M3.5 20.5l5-5"/>' +
       '<circle cx="9.6" cy="14.4" r="1.3"/><path d="M12.2 6.5l2.4-2.4 5.3 5.3-2.4 2.4"/>';
     const VTOOLS = [
-      { t: 'vdirect', id: 'tVxDirect', label: 'Direct Selection', key: 'V', shift: true,
-        hint: 'Click a <b>point</b> of a line, rectangle or Continuous Line and drag it. A picked ' +
-              'point fills in: nudge it with the <b>arrow keys</b> (Shift: ten at a time) or press ' +
-              '<b>Delete</b>. Hold <b>Shift</b> while dragging to keep it level, plumb or at 45°.',
+      /* A, as Illustrator has it (js/pen.js); Shift+V still picks it up */
+      { t: 'vdirect', id: 'tVxDirect', label: 'Direct Selection', key: 'V', shift: true, title: 'Direct Selection (A)',
+        hint: 'Click a <b>point</b> to select it (<b>Shift</b> adds more), or drag a box round several; drag them, nudge them ' +
+              'with the <b>arrow keys</b> or press <b>Delete</b>. Drag a <b>handle</b> to bend the curve (<b>Alt</b>: that one alone), ' +
+              'a curved segment to reshape it. Double-click a point to switch it between smooth and corner.',
         /* solid, the way its pointer is: the Select tool's arrow is the open one */
         path: '<path d="M5.5 3.5l13 8-5.8 1.5-3.3 5.3z" fill="currentColor"/>' },
       { t: 'vadd', id: 'tVxAdd', label: 'Add Anchor Point', key: null,
@@ -747,7 +750,7 @@
     VTOOLS.forEach(function (T) {
       const b = document.createElement('button');
       b.className = 'btn'; b.id = T.id; b.type = 'button';
-      b.title = T.label + (T.key ? ' (' + (T.shift ? 'Shift+' : '') + T.key + ')' : '');
+      b.title = T.title || (T.label + (T.key ? ' (' + (T.shift ? 'Shift+' : '') + T.key + ')' : ''));
       b.setAttribute('aria-label', T.label);
       b.dataset.label = T.label;
       b.innerHTML = '<svg viewBox="0 0 24 24">' + T.path + '</svg>';

@@ -10832,12 +10832,11 @@
       case '+': case '=': e.preventDefault(); setZoom(1.2); break;
       case '-': e.preventDefault(); setZoom(1 / 1.2); break;
       case 'w': S.fit = 'width'; relayout(); break;
-      case 'p': S.fit = 'page'; relayout(); break;
+      /* P is the Pen and A Direct Selection, as in Illustrator (js/pen.js); Fit page is Ctrl+0 */
       case 'v': setTool('select'); break;
       case 'x': setTool('rect'); break;
       /* L is the Ellipse tool, as in Illustrator (js/draw.js); the Line is the backslash, Illustrator's Line Segment key */
       case '\\': setTool('line'); break;
-      case 'a': setTool('arrow'); break;
       /* T is the Type tool, as in Illustrator (E still picks it up too) */
       case 'e': case 't': setTool('text'); break;
       case 'c': setTool('crop'); break;
