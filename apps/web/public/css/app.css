@@ -585,6 +585,11 @@
     border:1px solid rgba(115,87,255,.7);border-radius:2px;padding:1px 3px;margin:0;
     line-height:1.2;outline:none;cursor:text;caret-color:currentColor;
   }
+  /* area text (Type tool dragged): the frame's width, the text wrapping in it */
+  .texted .txed.area{display:block;white-space:pre-wrap;overflow-wrap:anywhere;box-sizing:content-box}
+  .anno .txframe{fill:none;stroke:rgba(115,87,255,.9);stroke-width:1;stroke-dasharray:4 3;pointer-events:none}
+  .anno .txovf rect{fill:#fff;stroke:#E03131;stroke-width:1.2}
+  .anno .txovf path{stroke:#E03131;stroke-width:1.4;fill:none}
 
   .txctl{display:flex;align-items:center;gap:6px}
   .txctl select,.txctl input{

@@ -41,6 +41,7 @@ import {
   lineOrigin,
   charSpacing,
   lineSpans,
+  layoutText,
   lineWidth,
   rectCorners,
   rotPt,
@@ -370,6 +371,8 @@ async function compose(
       const measureS: MeasureText = pf
         ? (m, line) => ((encodePageFont(pf, line)?.w ?? 0) / 1000) * m.size
         : measureT;
+      /* area text: wrapped in its frame, as the page shows it */
+      if (s.aw && s.ah) s = layoutText(s, measureS);
       if (s.bg) {
         const r = textRect(s, measureS);
         const bo = s.r ? rotPt([r.x, r.y], [s.a[0], s.a[1]], s.r) : [r.x, r.y];

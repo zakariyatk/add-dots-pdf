@@ -65,6 +65,8 @@ export interface Rect {
 /** The un-turned footprint of a text mark, in PDF points. */
 export function textRect(s: TextMark, measure: MeasureText): Rect {
   if (s.patch) return { x: s.patch.x, y: s.patch.y, w: s.patch.w, h: s.patch.h };
+  /* area text: its frame, whatever the text in it */
+  if (s.aw && s.ah) return { x: s.a[0], y: s.a[1] + s.size - s.ah, w: s.aw, h: s.ah };
   const lines = String(s.text).split('\n');
   let wid = 0;
   lines.forEach((l, li) => {
@@ -179,6 +181,133 @@ export function lineOrigin(s: TextMark, li: number, lineWidth: number, measure: 
   const base: Pt = [s.a[0] + dx, s.a[1] - d];
   if (!s.r) return base;
   return rotPt(base, [s.a[0], s.a[1]], s.r);
+}
+
+/* ---------------- area text ---------------- */
+
+/** The mark with run `r` (bold, italic…) laid over it, for measuring. */
+function styled(s: TextMark, r: StyleRun | null): TextMark {
+  return r ? { ...s, runs: null, b: r.b ?? s.b, i: r.i ?? s.i } : { ...s, runs: null };
+}
+/** The run covering each character of the text (null where the mark's own style). */
+function charRuns(s: TextMark, n: number): (StyleRun | null)[] {
+  const out: (StyleRun | null)[] = [];
+  for (const r of s.runs || []) for (let j = 0; j < r.n && out.length < n; j++) out.push(r);
+  while (out.length < n) out.push(null);
+  return out;
+}
+
+/**
+ * Area text laid out in its frame, as Illustrator wraps it: each line takes
+ * as many words as fit the frame's width; a space where a line breaks
+ * becomes the line break (so the characters, and the style runs counted
+ * over them, keep their places), and a word wider than the frame is broken
+ * between characters. Lines past the frame's height are left out, and
+ * `ovf` says some were. Point text comes back as it is. The page, the
+ * editor's outline and the saved PDF all draw the result, so they wrap
+ * alike.
+ */
+export function layoutText(s: TextMark, measure: MeasureText): TextMark & { ovf?: boolean } {
+  if (!s.aw || !s.ah || s.patch) return s;
+  const text = String(s.text);
+  const W = Math.max(s.size * 0.5, s.aw);
+  const track = tracking(s);
+  const runOf = charRuns(s, text.length);
+  /* the width of text[i, j), each piece in its own style, with its tracking */
+  const width = (i: number, j: number): number => {
+    let w = 0,
+      a = i;
+    while (a < j) {
+      let b = a + 1;
+      while (b < j && runOf[b] === runOf[a]) b++;
+      const piece = text.slice(a, b);
+      const m = measure(styled(s, runOf[a] ?? null), piece);
+      w += (m == null ? piece.length * s.size * 0.5 : m) + track * Array.from(piece).length;
+      a = b;
+    }
+    return w;
+  };
+  const out: string[] = [];
+  /* where a line break was added between two characters: before original index k */
+  const added: number[] = [];
+  const breakBefore = (k: number) => {
+    /* a space just written ends the line in its place; else a break goes in */
+    if (out.length && out[out.length - 1] === ' ') out[out.length - 1] = '\n';
+    else {
+      out.push('\n');
+      added.push(k);
+    }
+  };
+  let i = 0;
+  while (i <= text.length) {
+    const end = text.indexOf('\n', i) < 0 ? text.length : text.indexOf('\n', i);
+    let lineW = 0; /* the line so far, its trailing spaces left out */
+    const re = /(\S+)(\s*)/g;
+    const line = text.slice(i, end);
+    let m: RegExpExecArray | null;
+    /* spaces the line starts with */
+    const lead = /^\s*/.exec(line)![0].length;
+    for (let k = 0; k < lead; k++) out.push(line[k]!);
+    /* the trailing spaces' width */
+    let spaces = lead ? width(i, i + lead) : 0;
+    re.lastIndex = lead;
+    while ((m = re.exec(line))) {
+      const ws = i + m.index,
+        we = ws + m[1]!.length,
+        te = we + m[2]!.length;
+      const wW = width(ws, we);
+      if (lineW > 0 && lineW + spaces + wW > W) {
+        breakBefore(ws);
+        lineW = 0;
+        spaces = 0;
+      }
+      if (wW > W) {
+        /* wider than the frame: broken between its characters */
+        for (let c = ws; c < we; c++) {
+          const cw = width(c, c + 1);
+          if (lineW > 0 && lineW + cw > W) {
+            breakBefore(c);
+            lineW = 0;
+          }
+          out.push(text[c]!);
+          lineW += cw;
+        }
+      } else {
+        for (let c = ws; c < we; c++) out.push(text[c]!);
+        lineW += spaces + wW;
+      }
+      for (let c = we; c < te; c++) out.push(text[c]!);
+      spaces = te > we ? width(we, te) : 0;
+    }
+    if (end < text.length) out.push('\n');
+    i = end + 1;
+  }
+  let laid = out.join('');
+  /* the runs: a break put in between two characters joins the run of the
+     one before it */
+  let runs = s.runs || null;
+  if (runs && added.length) {
+    runs = runs.map((r) => ({ ...r }));
+    for (const k of added) {
+      let start = 0;
+      for (const r of runs) {
+        if (k - 1 >= start && k - 1 < start + r.n) {
+          r.n++;
+          break;
+        }
+        start += r.n;
+      }
+    }
+  }
+  /* as many lines as the frame's height holds, the first always */
+  const lines = laid.split('\n');
+  const fit = Math.max(1, 1 + Math.floor((s.ah - s.size * 1.2) / leading(s) + 1e-6));
+  let ovf = false;
+  if (lines.length > fit) {
+    ovf = lines.slice(fit).some((l) => l.trim().length > 0);
+    laid = lines.slice(0, fit).join('\n');
+  }
+  return { ...s, text: laid, runs, ovf };
 }
 
 /** The two barb ends of an arrow head at b, for a line from a to b. */
