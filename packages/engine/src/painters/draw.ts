@@ -33,6 +33,47 @@ export function ellipsePts(s: Pick<Mark, 'a' | 'b' | 'r'>, steps: number): Pt[] 
   return out;
 }
 
+/** The magic number of the four-arc Bézier circle: each quarter's handles
+    reach this fraction of the radius along its tangents (the error is under
+    0.03% of the radius). */
+export const ELLIPSE_KAPPA = 0.5522847498307936;
+
+/**
+ * An ellipse as four cubic Bézier arcs, in the Pen path's own form: anchor,
+ * out-handle, in-handle, anchor… closed back on its first anchor (13
+ * points), from the right-hand quadrant point round anticlockwise, turned by
+ * s.r. The screen draws it, and Convert to Path makes a Pen path of it whose
+ * anchors and handles are then edited as any other.
+ */
+export function ellipseBezier(s: Pick<Mark, 'a' | 'b' | 'r'>): Pt[] {
+  const b = boxOf(s);
+  const cx = (b.x1 + b.x2) / 2,
+    cy = (b.y1 + b.y2) / 2;
+  const rx = (b.x2 - b.x1) / 2,
+    ry = (b.y2 - b.y1) / 2;
+  const kx = rx * ELLIPSE_KAPPA,
+    ky = ry * ELLIPSE_KAPPA;
+  const local: [number, number][] = [
+    [rx, 0],
+    [rx, ky],
+    [kx, ry],
+    [0, ry],
+    [-kx, ry],
+    [-rx, ky],
+    [-rx, 0],
+    [-rx, -ky],
+    [-kx, -ry],
+    [0, -ry],
+    [kx, -ry],
+    [rx, -ky],
+    [rx, 0],
+  ];
+  return local.map((q) => {
+    const p: Pt = [cx + q[0], cy + q[1]];
+    return s.r ? rotPt(p, [cx, cy], s.r) : p;
+  });
+}
+
 export interface ArcMark extends Mark {
   /** How far the arc bulges, as a fraction of the chord (default 0.25). */
   bulge?: number;
@@ -370,12 +411,38 @@ function endPaint(p: PDFPage, P: Pt, u: Pt, s: DimMark): void {
 
 export interface EllipseMark extends Mark {
   t: 'ellipse';
+  /** Where the outline sits on the edge, as Illustrator's stroke alignment:
+      centred on it (unset), inside it ('in') or outside it ('out'). */
+  sa?: 'in' | 'out';
+}
+
+/** The ellipse its outline is drawn on: the edge itself, or with the stroke
+    aligned inside or outside, the edge moved in or out by half the width,
+    about the same centre and turn. The fill stays on the edge. */
+export function strokeEllipse<T extends EllipseMark>(s: T): T {
+  if (s.sa !== 'in' && s.sa !== 'out') return s;
+  const b = boxOf(s);
+  const rx = (b.x2 - b.x1) / 2,
+    ry = (b.y2 - b.y1) / 2;
+  const k = ((s.sa === 'out' ? 1 : -1) * (s.w || 0)) / 2;
+  const nx = Math.max(0.01, rx + k),
+    ny = Math.max(0.01, ry + k);
+  const cx = (b.x1 + b.x2) / 2,
+    cy = (b.y1 + b.y2) / 2;
+  return { ...s, a: [cx - nx, cy - ny], b: [cx + nx, cy + ny] };
 }
 
 /** The painters for circle, cloud, arc and the dimensions. getScale is read at
     save time, so the readings match what the editor shows. */
 export function drawPainters(getScale: () => Scale): Record<string, Painter> {
-  const ellipse: Painter = (p, s: EllipseMark) => {
+  const ellipse: Painter = (p, s: EllipseMark, ctx) => {
+    /* the stroke aligned inside or outside: the fill on the edge, then the
+       outline on the ellipse moved in or out by half its width */
+    if ((s.sa === 'in' || s.sa === 'out') && !s.nos && s.w) {
+      if (s.fill) ellipse(p, { ...s, sa: undefined, nos: true }, ctx);
+      ellipse(p, { ...strokeEllipse(s), sa: undefined, fill: null, grad: null }, ctx);
+      return;
+    }
     /* a filled ellipse is one operator and hairline-accurate, so use the
        native call whenever there is no dash pattern to honour and no turn.
        (v1 tested s.dash, which nothing sets; the dash style is s.d.) */

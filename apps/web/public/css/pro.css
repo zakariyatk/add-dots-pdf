@@ -2333,3 +2333,18 @@ body.has-typepanel #markPop #mpText { display: none !important }
 .tpmi.cur { font-weight: 600 }
 .tpmi.cur::before { content: ''; position: absolute; left: 10px; top: 50%; width: 9px; height: 5px; margin-top: -4px;
   border-left: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(-45deg) }
+
+/* the Ellipse tool (js/draw.js): a crosshair, its centre the point drawn from, with a small ellipse */
+body[data-tool="ellipse"] .capture { cursor: image-set(url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M8 1v14M1 8h14' stroke='white' stroke-width='3'/%3E%3Cpath d='M8 1v14M1 8h14' stroke='black' stroke-width='1.1'/%3E%3Cellipse cx='17.5' cy='18' rx='5' ry='3.6' fill='none' stroke='white' stroke-width='3'/%3E%3Cellipse cx='17.5' cy='18' rx='5' ry='3.6' fill='none' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E") 1x, url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' viewBox='0 0 24 24'%3E%3Cpath d='M8 1v14M1 8h14' stroke='white' stroke-width='3'/%3E%3Cpath d='M8 1v14M1 8h14' stroke='black' stroke-width='1.1'/%3E%3Cellipse cx='17.5' cy='18' rx='5' ry='3.6' fill='none' stroke='white' stroke-width='3'/%3E%3Cellipse cx='17.5' cy='18' rx='5' ry='3.6' fill='none' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E") 2x) 8 8, crosshair }
+.ellchk { display: inline-flex; align-items: center; gap: 4px }
+#ellCtl input[type=color] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none }
+#ellCtl input[type=color]:disabled { opacity: .35 }
+#ellOp { width: 52px }
+.mpell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px }
+.mpell .unit input { width: 58px }
+.mpell .ellbtn.on { border-color: var(--accent, #7B5CFF); color: var(--accent, #7B5CFF) }
+.ellwh { align-items: center; gap: 8px }
+.ellwh .wdlabel { margin: 0 }
+.ellwh .unit { display: inline-flex; align-items: center; gap: 4px }
+.ellwh .unit input { width: 90px }
+.ellcircle { margin-top: 12px }

@@ -3405,7 +3405,7 @@
      fall back to the bare word "Mark" */
   const MARK_NAME = {
     rect: 'Box', line: 'Line', arrow: 'Arrow', text: 'Text',
-    ellipse: 'Circle', cloud: 'Cloud', arc: 'Arc', dim: 'Dimension',
+    ellipse: 'Ellipse', cloud: 'Cloud', arc: 'Arc', dim: 'Dimension',
     dimr: 'Radius', dimd: 'Diameter', dima: 'Angle',
     markup: 'Markup', ink: 'Ink', note: 'Note', stamp: 'Stamp', sig: 'Signature',
     redact: 'Redaction', wm: 'Watermark', hf: 'Header / footer', bates: 'Bates',
@@ -10627,7 +10627,8 @@
       case 'p': S.fit = 'page'; relayout(); break;
       case 'v': setTool('select'); break;
       case 'x': setTool('rect'); break;
-      case 'l': setTool('line'); break;
+      /* L is the Ellipse tool, as in Illustrator (js/draw.js); the Line is the backslash, Illustrator's Line Segment key */
+      case '\\': setTool('line'); break;
       case 'a': setTool('arrow'); break;
       case 'e': setTool('text'); break;
       case 'c': setTool('crop'); break;
