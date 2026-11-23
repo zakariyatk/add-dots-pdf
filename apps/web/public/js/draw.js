@@ -1866,7 +1866,7 @@
          the near ones, and capped, because crossing is quadratic. */
       if (K.int || wantDir) {
         it.shapes.forEach(function (s, idx) {
-          if (opts && opts.skip === idx) return;
+          if (skips(opts, idx)) return;
           if (lines.length > 80) return;
           markSegs(s).forEach(function (g) {
             if (lines.length > 80) return;
@@ -1928,7 +1928,7 @@
 
       if (K.mark) {
         it.shapes.forEach(function (s, idx) {
-          if (opts && opts.skip === idx) return;
+          if (skips(opts, idx)) return;
           markPoints(s).forEach(function (m) {
             consider(m[0], m[1] === 'Centre' ? 'cen' : 'mark', m[1]);
           });
@@ -2299,6 +2299,12 @@
        runs through each match. The same lines core.js draws while a mark is
        moved. Reach is in screen pixels, so it is the same at any zoom. */
     const ALIGN_PX = 6;
+    /** Is mark idx left out of the snaps: the one mark, or one of the
+        group, whose own grip is being dragged (opts.skip, one index or a list). */
+    function skips(opts, idx) {
+      if (!opts || opts.skip == null) return false;
+      return Array.isArray(opts.skip) ? opts.skip.indexOf(idx) >= 0 : opts.skip === idx;
+    }
     let alignOn = false;
     function alignHide() { if (alignOn) { alignOn = false; if (X.hideSmartGuide) X.hideSmartGuide(); } }
     function alignFind(it, p, opts) {
@@ -2306,7 +2312,7 @@
       const tol = ALIGN_PX / Math.max(0.05, S.scale);
       let bx = null, bxd = tol, by = null, byd = tol;
       it.shapes.forEach(function (s, idx) {
-        if (opts && opts.skip === idx) return;
+        if (skips(opts, idx)) return;
         markPoints(s).forEach(function (m) {
           const q = m[0];
           const dx = Math.abs(q[0] - p[0]), dy = Math.abs(q[1] - p[1]);
@@ -2320,6 +2326,9 @@
         if (Math.abs(q[0] - p[0]) < bxd) { bxd = Math.abs(q[0] - p[0]); bx = q[0]; }
         if (Math.abs(q[1] - p[1]) < byd) { byd = Math.abs(q[1] - p[1]); by = q[1]; }
       }
+      /* a side being pulled moves on one axis only: the other's guide would mean nothing */
+      if (opts && opts.axis === 'x') by = null;
+      if (opts && opts.axis === 'y') bx = null;
       if (bx === null && by === null) return null;
       return { p: [bx === null ? p[0] : bx, by === null ? p[1] : by], vx: bx, hy: by };
     }

@@ -3211,7 +3211,7 @@
     const d = dragOn; if (!d) return;
     const s = d.it.shapes[d.idx];
     if (!s || !d.it.vp) { dragOn = null; return; }
-    const p = annoPt(d.it, e);
+    let p = annoPt(d.it, e);
     const dx = p[0] - d.from[0], dy = p[1] - d.from[1];
     if (!d.moved) {
       if (Math.abs(dx) < 0.7 && Math.abs(dy) < 0.7) return;   /* a tap, not a drag */
@@ -3219,6 +3219,14 @@
       if (!d.snapped) { snapshot(); d.snapped = true; }        /* nothing is changed yet */
     }
     const o = d.s0;
+    /* a grip being pulled to resize lands on the anchors of the other marks
+       (and the page's own lines), or lines up with them along a smart guide,
+       as a line's end does when it is dragged (js/draw.js snapPt). The grip
+       is where the pointer is, so the edge lands exactly there. */
+    if (RESIZE_SNAP[d.mode] && EXT.snapPt) {
+      const sp = EXT.snapPt(d.it, p, e, { skip: d.group ? d.group.map(function (m) { return m.i; }) : d.idx, axis: resizeAxis(d, o) });
+      if (sp) p = [sp[0], sp[1]];
+    }
     if (d.mode === 'move') {
       let mx = dx, my = dy;
       if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) my = 0; else mx = 0; }   /* along one axis */
@@ -3340,6 +3348,17 @@
     drawShapes(d.it);
   }
   const SIZE_MODES = { corner: 1, side: 1, bscale: 1, bside: 1, gscale: 1, size: 1, tsize: 1 };
+  const RESIZE_SNAP = { corner: 1, side: 1, bscale: 1, bside: 1, gscale: 1 };
+  /* the one page axis a pulled side moves along, where it moves along one */
+  function resizeAxis(d, o) {
+    if (d.mode === 'gscale') {
+      const k = d.extra || {};
+      return k.ax && !k.ay ? 'x' : k.ay && !k.ax ? 'y' : null;
+    }
+    const straight = d.mode === 'side' ? !o.r : d.mode === 'bside' ? !frameOf(o) : false;
+    if (!straight) return null;
+    return d.extra === 0 || d.extra === 2 ? 'y' : 'x';
+  }
 
   function dragEnd(e) {
     const d = dragOn; if (!d) return;
