@@ -33,7 +33,7 @@
       '<button type="button" data-a="last" title="Last page (End)" aria-label="Last page">' + ic('<polyline points="7 18 13 12 7 6"/><line x1="17" y1="6" x2="17" y2="18"/>') + '</button>' +
       '<span class="sbgrow"></span>' +
       '<button type="button" data-a="fitw" title="Fit width (W)" aria-label="Fit width">' + ic('<rect x="6" y="4" width="12" height="16" rx="1.5"/><polyline points="4 9 1.5 12 4 15"/><polyline points="20 9 22.5 12 20 15"/>') + '</button>' +
-      '<button type="button" data-a="fitp" title="Fit page (P)" aria-label="Fit page">' + ic('<rect x="6" y="3" width="12" height="18" rx="1.5"/><line x1="9" y1="8" x2="15" y2="8"/>') + '</button>' +
+      '<button type="button" data-a="fitp" title="Fit page (Ctrl+0)" aria-label="Fit page">' + ic('<rect x="6" y="3" width="12" height="18" rx="1.5"/><line x1="9" y1="8" x2="15" y2="8"/>') + '</button>' +
       '<button type="button" data-a="two" title="Two pages side by side" aria-label="Two pages">' + ic('<rect x="2.5" y="5" width="8.5" height="14" rx="1.2"/><rect x="13" y="5" width="8.5" height="14" rx="1.2"/>') + '</button>' +
       '<span class="sbsep"></span>' +
       '<button type="button" data-a="out" title="Zoom out (−)" aria-label="Zoom out">' + ic('<line x1="5" y1="12" x2="19" y2="12"/>') + '</button>' +

@@ -39,7 +39,7 @@
       { ids: ['tToolsPan', 'tToolsMove', 'tToolsSelect'] },
       { ids: ['tVxDirect', 'tRotate', 'tGradient', 'tShapeBuilder'] },
       /* the Pen (js/pen.js) with its two anchor-point tools, as Illustrator groups them */
-      { ids: ['tPen', 'tVxAdd', 'tVxDel'] }
+      { ids: ['tPen', 'tVxAdd', 'tVxDel', 'tVxConv'] }
     ];
 
     /* What is left on Edit: review marks, and the page tools. Text moved to
