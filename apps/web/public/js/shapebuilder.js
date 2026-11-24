@@ -56,6 +56,7 @@
     /** A closed shape's outline rings, in PDF points; null for anything else. */
     function rings(s) {
       if (!s || !X.closedShape(s)) return null;
+      if (s.t === 'rect' && E.rectRounded(s)) return [E.rectRing(s, 12).slice(0, -1)];
       if (s.t === 'rect') return [X.rectCorners(s).map(function (p) { return [p[0], p[1]]; })];
       if (s.t === 'ellipse') return [E.ellipsePts(s, ELLIPSE_STEPS)];
       if (s.t === 'cloud') return [E.cloudPts(s, 8)];

@@ -14,6 +14,7 @@ import type { Scale } from './measure';
 import { DEFAULT_SCALE } from './measure';
 import { annotateFontNeeds, annotatePainters } from './painters/annotate';
 import { docopsFontNeeds, docopsPainters, docopsPrepare } from './painters/docops';
+import { dimxFontNeeds, dimxPainters } from './painters/dimension';
 import { drawFontNeeds, drawPainters } from './painters/draw';
 import { fieldsFinish, type FieldValues } from './painters/fields';
 import { formsPainters, insertPainters, prepareSignatures, prepareInsert } from './painters/insert';
@@ -87,10 +88,17 @@ export function saveHooks(state: SaveState, env: SaveEnv): SaveHooks {
     measure: env.measure,
     unicode: env.unicode || null,
     fonts: env.fonts || null,
-    fontNeeds: { ...annotateFontNeeds, ...drawFontNeeds, ...docopsFontNeeds, ...ocrFontNeeds },
+    fontNeeds: {
+      ...annotateFontNeeds,
+      ...drawFontNeeds,
+      ...dimxFontNeeds,
+      ...docopsFontNeeds,
+      ...ocrFontNeeds,
+    },
     shapePainters: {
       ...annotatePainters,
       ...drawPainters(() => scale),
+      ...dimxPainters(() => scale),
       ...formsPainters,
       ...insertPainters,
       leader: leaderPainters.leader!,

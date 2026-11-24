@@ -266,6 +266,9 @@
       const p = pdfOf(it, at);
       let hit = hitAt(it, p);
       if (!hit && mode === 'convert') hit = convertShapeAt(it, p);
+      /* Direct Selection on a rounded rectangle's anchor: as Illustrator
+         expands a live shape, it becomes a Pen path and the point is taken */
+      if (!hit && mode === 'direct') hit = convertShapeAt(it, p, true);
       if (!hit) return false;
       const base = { it: it, idx: hit.idx, x: e.clientX, y: e.clientY, moved: false, from: p,
                      orig: copy(it.shapes[hit.idx].pts), open: !!it.shapes[hit.idx].open, shift: e.shiftKey, alt: e.altKey };
@@ -306,10 +309,11 @@
     /** Convert Anchor Point on a line, rectangle or Continuous Line: the
         mark becomes a Pen path in place (its look, layer and place kept) and
         the corner under the pointer is the point to work on. */
-    function convertShapeAt(it, p) {
+    function convertShapeAt(it, p, roundedOnly) {
       for (let i = it.shapes.length - 1; i >= 0; i--) {
         const s = it.shapes[i];
         if (!s || s.hide || s.locked || !(s.t === 'line' || s.t === 'rect' || s.t === 'poly')) continue;
+        if (roundedOnly && !(s.t === 'rect' && window.ADDPDFEngine.rectRounded(s))) continue;
         const pts = asPen(s);
         if (!pts || pts.length < 4) continue;
         const A = G.fromPts(pts).A;
@@ -326,7 +330,7 @@
         place in the stack kept */
     function becomePen(it, idx, A, isClosed) {
       const s = Object.assign({}, it.shapes[idx], { t: 'pen' });
-      delete s.a; delete s.b; delete s.r;
+      delete s.a; delete s.b; delete s.r; delete s.rr; delete s.rc; delete s.sa;
       store(s, A, isClosed);
       it.shapes[idx] = s;
       return s;
@@ -694,7 +698,7 @@
       let Q;
       if (s.t === 'pen') return s.pts;
       if (s.t === 'line') Q = [s.a, s.b];
-      else if (s.t === 'rect') { const q = X.rectCorners(s); Q = [q[0], q[1], q[2], q[3], q[0]]; }
+      else if (s.t === 'rect') return window.ADDPDFEngine.rectBezier(s).map(function (q) { return [q[0], q[1]]; });
       else if (s.t === 'poly') Q = s.pts;
       else return null;
       if (!Q || Q.length < 2) return null;

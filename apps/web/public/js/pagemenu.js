@@ -96,6 +96,7 @@
         item('rot', 'rot', 'Rotate page', 'R') +
         item('blank', 'ins', 'Insert blank page after') +
         item('extract', 'ext', 'Extract this page…') +
+        (X.exportPageSvg ? item('svg', 'ext', 'Export marks as SVG…', '', { title: 'Every mark on this page, dimensions included, as an SVG file' }) : '') +
         item('delpage', 'del', 'Delete page', S.tool === 'select' ? 'Del' : '', { danger: true, off: S.items.length < 2 }) +
         '<hr>' +
         item('zin', 'zin', 'Zoom in here', '+') +
@@ -217,6 +218,9 @@
         case 'text': X.setTool('text'); clickAt(it, c.x, c.y); break;
         case 'rot': X.rotateItem(n - 1, 90); break;
         case 'blank': X.setCurrent(n); X.insertBlank(); break;
+        case 'svg':
+          if (X.exportPageSvg) X.exportPageSvg(it);
+          break;
         case 'extract':
           if (X.organize && X.organize.extractSelected) {
             X.setPicks([n]);

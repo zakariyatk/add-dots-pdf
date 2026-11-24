@@ -38,6 +38,9 @@
     function outline(s) {
       if (s.t === 'poly') return s.pts || [];
       if (s.t === 'line') return [s.a, s.b];
+      /* rounded corners are curves: a rounded rectangle's anchors are the
+         Pen's to edit (js/pen.js, which makes it a Pen path when one is taken) */
+      if (s.t === 'rect' && window.ADDPDFEngine.rectRounded(s)) return [];
       if (s.t === 'rect') {
         const q = X.rectCorners(s);
         return [q[0], q[1], q[2], q[3], q[0]];
@@ -52,7 +55,7 @@
       const p = Object.assign({}, s);
       p.pts = outline(s).map(function (q) { return [q[0], q[1]]; });
       p.t = 'poly';
-      delete p.a; delete p.b; delete p.r;
+      delete p.a; delete p.b; delete p.r; delete p.sa;
       it.shapes[idx] = p;
       return p;
     }

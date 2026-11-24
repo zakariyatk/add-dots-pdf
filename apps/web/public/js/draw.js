@@ -115,40 +115,63 @@
         hint: 'Drag from one end to the other. <b>Bulge</b> sets how far it ' +
               'curves, <b>Alt</b> flips which way, and <b>Shift</b> keeps it level, plumb or at 45°.',
         path: '<path d="M3 19a13 13 0 0 1 18-12"/><circle cx="3" cy="19" r="1.6"/><circle cx="21" cy="7" r="1.6"/>' },
-      { t: 'dim', id: 'tDim', label: 'Dimension', key: 'D', shift: true,
-        hint: 'Click the first point you want measured, then the second (or drag straight between ' +
-              'them) — then move to set how far clear of them the dimension line itself sits, and ' +
-              'click, or drag and let go, to place it. Set the drawing <b>Scale</b> to match the ' +
-              'sheet, or <b>Calibrate</b> against something you already know. Hold <b>Shift</b> to ' +
-              'measure level, plumb or at 45°. Double-click a dimension to retype it.',
+      { t: 'dim', id: 'tDim', label: 'Linear', key: 'D', shift: true,
+        hint: 'Click the <b>first point</b> to measure, then the <b>second</b> (or drag between them) — ' +
+              'then move to place the dimension line: past the points’ sides it measures vertically, ' +
+              'above or below them horizontally (<b>H</b>, <b>V</b>, <b>A</b> fix it horizontal, vertical ' +
+              'or aligned). Points snap, and stay on the objects they snap to. Set the drawing ' +
+              '<b>Scale</b>, or <b>Calibrate</b>. Double-click a dimension to retype it.',
         path: '<line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="7" x2="3" y2="17"/>' +
               '<line x1="21" y1="7" x2="21" y2="17"/><polyline points="7 9 4 12 7 15"/>' +
               '<polyline points="17 9 20 12 17 15"/>' },
+      { t: 'dimal', id: 'tDimAl', label: 'Aligned', key: null,
+        hint: 'Click the <b>first point</b>, then the <b>second</b>: the true distance between them, the ' +
+              'dimension line parallel to it. Move to place it and click. <b>Esc</b> cancels.',
+        path: '<line x1="3" y1="15" x2="15" y2="3"/><line x1="9" y1="21" x2="21" y2="9"/>' +
+              '<line x1="6" y1="12" x2="12" y2="18"/><line x1="12" y1="6" x2="18" y2="12"/>' },
       { t: 'dimc', id: 'tDimC', label: 'Continuous', key: 'Q', shift: true,
-        hint: 'Click the first point, then each next point: every click adds a dimension ' +
-              'that carries on from the last, in line with the first. <b>Enter</b>, <b>Esc</b>, ' +
-              'double-click or right-click ends the chain. Hold <b>Shift</b> to keep the first ' +
-              'one level, plumb or at 45°.',
+        hint: 'Click a linear dimension to carry on from (or place a first one: two points and its line), ' +
+              'then each next point: every click adds a dimension from the last, on the same line. ' +
+              '<b>Enter</b>, <b>Esc</b>, double-click or right-click ends the chain.',
         path: '<line x1="3" y1="6" x2="3" y2="18"/><line x1="12" y1="6" x2="12" y2="18"/>' +
               '<line x1="21" y1="6" x2="21" y2="18"/><line x1="3" y1="11" x2="21" y2="11"/>' +
               '<polyline points="5.6 9.2 3.4 11 5.6 12.8"/><polyline points="9.4 9.2 11.6 11 9.4 12.8"/>' +
               '<polyline points="14.6 9.2 12.4 11 14.6 12.8"/><polyline points="18.4 9.2 20.6 11 18.4 12.8"/>' },
+      { t: 'dimb', id: 'tDimB', label: 'Baseline', key: null,
+        hint: 'Click a linear dimension to work from (or place a first one), then each next point: every ' +
+              'click adds a dimension from the <b>same first point</b>, stacked a step further out. ' +
+              '<b>Enter</b>, <b>Esc</b>, double-click or right-click ends it.',
+        path: '<line x1="3" y1="4" x2="3" y2="20"/><line x1="12" y1="12" x2="12" y2="20"/>' +
+              '<line x1="21" y1="4" x2="21" y2="20"/><line x1="3" y1="15" x2="12" y2="15"/>' +
+              '<line x1="3" y1="8" x2="21" y2="8"/>' },
       { t: 'dimr', id: 'tDimR', label: 'Radius', key: null,
-        hint: 'Click <b>three points</b> on the edge of a circle or arc, then click where the ' +
-              'reading goes. <b>Esc</b> starts again.',
+        hint: 'Click a <b>circle or arc</b> you drew (or three points on the edge of one in the drawing), ' +
+              'then where the dimension goes — inside or outside it. <b>Esc</b> starts again.',
         path: '<circle cx="12" cy="12" r="8.5"/><line x1="12" y1="12" x2="18" y2="6"/>' +
               '<polyline points="14.9 6.1 18 6 17.9 9.1"/>' +
               '<circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>' },
       { t: 'dimd', id: 'tDimD', label: 'Diameter', key: null,
-        hint: 'Click <b>three points</b> on the edge of a circle or arc, then click where the ' +
-              '<b>Ø</b> reading goes. <b>Esc</b> starts again.',
+        hint: 'Click a <b>circle or arc</b> you drew (or three points on the edge of one in the drawing), ' +
+              'then where the <b>Ø</b> dimension goes. <b>Esc</b> starts again.',
         path: '<circle cx="12" cy="12" r="8.5"/><line x1="5" y1="19" x2="19" y2="5"/>' },
       { t: 'dima', id: 'tDimA', label: 'Angular', key: null,
-        hint: 'Click the <b>first line</b>, then the <b>second line</b> — the corner is where they ' +
-              'meet. Move to choose the side and size of the arc, and click to place it. ' +
+        hint: 'Click the <b>first line</b>, then the <b>second</b> — then move into the angle you want (any ' +
+              'of the four) and click. Or click empty space for a <b>vertex</b>, then a point on each arm. ' +
               '<b>Esc</b> starts again.',
         path: '<line x1="3" y1="20" x2="21" y2="20"/><line x1="3" y1="20" x2="14" y2="4"/>' +
               '<path d="M12 20A9 9 0 0 0 8.1 12.6"/>' },
+      { t: 'dimarc', id: 'tDimArc', label: 'Arc Length', key: null,
+        hint: 'Click an <b>Arc</b> you drew (or its start, a point along it and its end, in the drawing), ' +
+              'then where the dimension arc goes. <b>Esc</b> starts again.',
+        path: '<path d="M4 18A10 10 0 0 1 20 18"/><path d="M2 12A12 12 0 0 1 22 12" stroke-dasharray="2 2"/>' +
+              '<path d="M9 5.5a4 4 0 0 1 6 0"/>' },
+      { t: 'dimo', id: 'tDimO', label: 'Ordinate', key: null,
+        hint: 'Click the <b>datum</b> (the origin), then for each feature its point and where its leader ' +
+              'ends — up or down for an X ordinate, sideways for a Y one (<b>X</b> / <b>Y</b> fix it). ' +
+              '<b>O</b> picks a new datum.',
+        path: '<line x1="4" y1="20" x2="4" y2="4"/><line x1="4" y1="20" x2="20" y2="20"/>' +
+              '<line x1="10" y1="20" x2="10" y2="9"/><line x1="17" y1="20" x2="17" y2="6"/>' +
+              '<circle cx="4" cy="20" r="1.6" fill="currentColor" stroke="none"/>' },
       { t: 'fillet', id: 'tFillet', label: 'Fillet', key: null,
         hint: 'Click one <b>Line</b> you have drawn, then <b>another</b> — the corner between them ' +
               'rounds to the <b>Radius</b> set here, trimming both to the curve. Lines made with ' +
@@ -523,7 +546,7 @@
     X.on('tool', function (t) {
       arcCtl.hidden = t !== 'arc';
       cloudCtl.hidden = t !== 'cloud';
-      dimCtl.hidden = !/^dim[crda]?$/.test(t);
+      dimCtl.hidden = !(X.DX_TOOLS && X.DX_TOOLS[t]);
       dimLookCtl.hidden = dimCtl.hidden;
       if (!dimLookCtl.hidden) syncRibbonLook();
       closeTc();
@@ -957,8 +980,6 @@
     /* ---------------- the tools ---------------- */
 
     let drag = null;
-    let dimPend = null;          /* {it, a} — a dimension's first point, placed by a click rather
-                                     than a drag, waiting for the second click to finish it */
 
     function common(t) {
       return {
@@ -1075,17 +1096,31 @@
     X.ellipseBox = ellipseBox;
 
     function ellipseTool() {
-      let d = null;     /* { it, a, raw, shift, alt, space: { from, a0 } | null, moved, at0 } */
-      function geom() {
-        const g = ellipseBox(d.a, d.p, d.shift, d.alt);
-        return g;
-      }
+      return boxTool({
+        t: 'ellipse', label: 'Ellipse',
+        mark: function (g) { return ellipseMark(g.a, g.b); },
+        read: function (it, m, p) { readBox(it, m, p); },
+        ask: askEllipseSize
+      });
+    }
+
+    /* The drag both the Ellipse and the Rectangle tools draw with, as
+       Illustrator's: from one corner of the box to the other, with a live
+       preview and its size by the pointer. Shift keeps it square (a circle),
+       Alt draws it out from its centre (both: a square from its centre),
+       and holding Space moves the whole shape, its size kept, until it is
+       let go and sizing carries on. The modifiers are read as they change,
+       not only when the pointer moves. Esc throws the drawing away and keeps
+       the tool; a click with no drag asks for the size (cfg.ask). cfg.key
+       takes any other key while drawing (the Rectangle's corner radius). */
+    function boxTool(cfg) {
+      let d = null;     /* { it, a, p, shift, alt, space: { from, a0 } | null, moved, at0 } */
+      function geom() { return ellipseBox(d.a, d.p, d.shift, d.alt); }
       function render() {
         if (!d) return;
-        const g = geom();
-        const m = ellipseMark(g.a, g.b);
+        const m = cfg.mark(geom(), d);
         X.drawShapes(d.it, m);
-        readBox(d.it, m, d.p);
+        cfg.read(d.it, m, d.p, d);
       }
       /* where the pointer is, snapped (Shift's proportion beats a snap) */
       function pointer(it, at, e) {
@@ -1104,7 +1139,7 @@
       const tool = {
         colors: true, widths: true,
         down: function (it, at, e) {
-          if (!it.vp) return;
+          if (!it.vp || (e && e.button > 0)) return;
           const a = pdfAt(it, at, e);
           d = { it: it, a: [a[0], a[1]], p: [a[0], a[1]], shift: !!(e && e.shiftKey), alt: !!(e && e.altKey),
                 space: null, moved: false, at0: [at[0], at[1]] };
@@ -1118,7 +1153,7 @@
           d.shift = !!(e && e.shiftKey); d.alt = !!(e && e.altKey);
           const p = pointer(it, at, e);
           if (d.space) {
-            /* Space held: the whole ellipse follows the pointer, its size kept */
+            /* Space held: the whole shape follows the pointer, its size kept */
             const dx = p[0] - d.space.from[0], dy = p[1] - d.space.from[1];
             d.a = [d.space.a0[0] + dx, d.space.a0[1] + dy];
           }
@@ -1134,17 +1169,18 @@
                (its centre with Alt), as Illustrator asks */
             end();
             X.drawShapes(it);
-            askEllipseSize(it, was.a, !!(e && e.altKey));
+            cfg.ask(it, was.a, !!(e && e.altKey));
             return;
           }
           tool.move(it, at, e);
-          const g = geom();
+          const m = cfg.mark(geom(), d);
           end();
-          const m = ellipseMark(g.a, g.b);
           if (m.b[0] - m.a[0] < 0.5 && m.b[1] - m.a[1] < 0.5) { X.drawShapes(it); return; }
           X.snapshot();
           it.shapes.push(m);
           X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+          /* on a phone the tool is put down and the new shape left selected */
+          if (X.isMobile && X.isMobile() && X.endToolOn) X.endToolOn(it);
         },
         /* the modifiers changed with the pointer still: the preview follows */
         key: function (e, down) {
@@ -1156,16 +1192,17 @@
             else if (!down) d.space = null;
             return true;
           }
-          if (e.key === 'Escape' && down) { const it = d.it; end(); X.drawShapes(it); X.toast('Ellipse cancelled'); return true; }
+          if (e.key === 'Escape' && down) { const it = d.it; end(); X.drawShapes(it); X.toast(cfg.label + ' cancelled'); return true; }
+          if (cfg.key && cfg.key(e, down, d)) { render(); return true; }
           return false;
         },
         drawing: function () { return !!d; }
       };
-      /* ahead of Space-to-pan (js/navigate.js) and core's Escape, and only
-         while an ellipse is being drawn */
+      /* ahead of Space-to-pan (js/navigate.js), the arrow keys' page turns
+         and core's Escape, and only while this shape is being drawn */
       ['keydown', 'keyup'].forEach(function (type) {
         window.addEventListener(type, function (e) {
-          if (S.tool !== 'ellipse' || !d) return;
+          if (S.tool !== cfg.t || !d) return;
           if (type === 'keydown' && e.repeat && (e.key === ' ' || e.code === 'Space')) { e.preventDefault(); e.stopImmediatePropagation(); return; }
           if (tool.key(e, type === 'keydown')) { e.preventDefault(); e.stopImmediatePropagation(); }
         }, true);
@@ -1175,13 +1212,13 @@
     }
 
     /** The width and height beside the pointer while an ellipse is drawn. */
-    function readBox(it, m, p) {
+    function readBox(it, m, p, extra) {
       if (!it.anno) return;
       const r = it.anno.getBoundingClientRect();
       const w = m.b[0] - m.a[0], h = m.b[1] - m.a[1];
       if (w < 0.5 && h < 0.5) { readHide(); return; }
       const v = it.vp.convertToViewportPoint(p[0], p[1]);
-      readout.textContent = 'W ' + measureLen(w) + '   H ' + measureLen(h);
+      readout.textContent = 'W ' + measureLen(w) + '   H ' + measureLen(h) + (extra ? '   ' + extra : '');
       readout.style.transform = 'translate(' + Math.round(r.left + v[0] + 14) + 'px,' + Math.round(r.top + v[1] + 34) + 'px)';
       readout.hidden = false;
       if (!startDot.hidden) startDot.hidden = true;
@@ -1215,18 +1252,7 @@
       }).then(function (v) {
         if (!v) return;
         ellLook.lastWH = [v.w, v.h]; keepEllLook();
-        /* the click is its top-left corner as the page is seen, or its centre */
-        const vp = it.vp;
-        const tl = centre ? [at[0] - v.w / 2, at[1] - v.h / 2] : null;
-        let a, b;
-        if (centre) { a = tl; b = [tl[0] + v.w, tl[1] + v.h]; }
-        else {
-          /* down and right on the screen, whatever the page's turn */
-          const o = vp.convertToViewportPoint(at[0], at[1]);
-          const q = vp.convertToPdfPoint(o[0] + 1, o[1] + 1);
-          const sx = q[0] >= at[0] ? 1 : -1, sy = q[1] >= at[1] ? 1 : -1;
-          a = at; b = [at[0] + sx * v.w, at[1] + sy * v.h];
-        }
+        const g = boxAtClick(it, at, centre, v.w, v.h), a = g.a, b = g.b;
         X.snapshot();
         it.shapes.push(ellipseMark(a, b));
         X.drawShapes(it); X.drawThumb(it); X.updateMeta();
@@ -1365,240 +1391,1560 @@
       X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
       X.toast('Converted to a path: Direct Selection (Shift+V) edits its points');
     });
+    /* ---------------- the Rectangle tool (X) ----------------
+       The box tool upgraded to Illustrator's Rectangle tool, drawing core's
+       own 'rect' mark (so selecting, the bounding box's grips, turning,
+       moving, layers, undo, Save and the thumbnails all stay core's). It
+       draws as the Ellipse does (boxTool): from corner to corner with a live
+       preview and its width and height by the pointer; Shift a square, Alt
+       from the centre, both a square from its centre, Space to move it
+       while drawing, Esc to throw it away, a click with no drag to type its
+       size. Its corner point snaps to the Snap Engine and the smart guides.
+
+       Its corners round as Illustrator's live rectangle's do (s.rr, or
+       s.rc one each, engine rect.ts): while drawing ↑ and ↓ round them a
+       point at a time, ← squares them and → rounds them fully; on a
+       selected rectangle the corner widgets inside its corners are dragged
+       to round them all (Alt: that corner alone), and its properties take
+       an exact radius for all four or each. A new rectangle takes the look
+       set in the tool's bar — fill (or none), no stroke, solid or dashed,
+       stroke alignment, opacity and corner radius — kept for next time. */
+    const RECT_KEY = 'adpdf.rectLook';
+    const RECT_DEFAULT = { fill: null, fillC: '#FFFFFF', nos: false, d: 0, o: 1, sa: '', rr: 0 };
+    let rectLook = (function () {
+      try { return Object.assign({}, RECT_DEFAULT, JSON.parse(localStorage.getItem(RECT_KEY) || '{}')); }
+      catch (e) { return Object.assign({}, RECT_DEFAULT); }
+    })();
+    function keepRectLook() { try { localStorage.setItem(RECT_KEY, JSON.stringify(rectLook)); } catch (e) { /* this session only */ } }
+    const rr2 = function (v) { return Math.round(v * 100) / 100; };
+    /** A new rectangle with the tool's look, over box a-b (any two corners). */
+    function rectMark(a, b, rr) {
+      const m = { t: 'rect', a: [Math.min(a[0], b[0]), Math.min(a[1], b[1])], b: [Math.max(a[0], b[0]), Math.max(a[1], b[1])], c: S.color, w: S.width };
+      if (rectLook.fill) m.fill = rectLook.fill;
+      if (rectLook.nos) m.nos = true;
+      if (rectLook.d) m.d = rectLook.d;
+      if (rectLook.o != null && rectLook.o < 1) m.o = rectLook.o;
+      if (rectLook.sa) m.sa = rectLook.sa;
+      const r = rr == null ? rectLook.rr : rr;
+      if (r > 0) m.rr = rr2(r);
+      return m;
+    }
+    X.rectMark = rectMark;
+
+    X.tools.rect = boxTool({
+      t: 'rect', label: 'Rectangle',
+      mark: function (g, d) { return rectMark(g.a, g.b, d && d.rr != null ? d.rr : null); },
+      read: function (it, m, p) {
+        readBox(it, m, p, E.rectRounded(m) ? 'R ' + measureLen(E.rectRadii(m)[0]) : '');
+      },
+      ask: askRectSize,
+      /* ↑ ↓ round the corners a point at a time (Shift: ten), ← squares
+         them, → rounds them as far as the box allows */
+      key: function (e, down, d) {
+        if (!/^Arrow(Up|Down|Left|Right)$/.test(e.key)) return false;
+        if (!down) return true;
+        const g = ellipseBox(d.a, d.p, d.shift, d.alt);
+        const max = E.rectMaxRadius(g);
+        let r = d.rr != null ? d.rr : (rectLook.rr || 0);
+        r = Math.min(r, max);
+        const step = e.shiftKey ? 10 : 1;
+        if (e.key === 'ArrowUp') r = Math.min(max, r + step);
+        else if (e.key === 'ArrowDown') r = Math.max(0, r - step);
+        else if (e.key === 'ArrowLeft') r = 0;
+        else r = max;
+        d.rr = rr2(r);
+        rectLook.rr = d.rr; keepRectLook();
+        if (!rectCtl.hidden) syncRectCtl();
+        return true;
+      }
+    });
+
+    /** Box a-b for a size typed in at a click: the click its top-left corner
+        as the page is seen (down and right on the screen, whatever the page's
+        turn), or with Alt its centre. */
+    function boxAtClick(it, at, centre, w, h) {
+      if (centre) return { a: [at[0] - w / 2, at[1] - h / 2], b: [at[0] + w / 2, at[1] + h / 2] };
+      const o = it.vp.convertToViewportPoint(at[0], at[1]);
+      const q = it.vp.convertToPdfPoint(o[0] + 1, o[1] + 1);
+      const sx = q[0] >= at[0] ? 1 : -1, sy = q[1] >= at[1] ? 1 : -1;
+      return { a: [at[0], at[1]], b: [at[0] + sx * w, at[1] + sy * h] };
+    }
+
+    /** Illustrator's Rectangle dialog: a click with no drag asks for the size
+        and the corner radius. */
+    function askRectSize(it, at, centre) {
+      const last = rectLook.lastWH || [72, 72];
+      X.dialog({
+        title: 'Rectangle',
+        ok: 'OK',
+        width: 380,
+        body:
+          '<div class="wdrow ellwh">' +
+            '<label class="wdlabel" for="rectW">Width</label><span class="unit"><input class="wdin" id="rectW" inputmode="decimal" value="' + last[0] + '"><em>pt</em></span>' +
+            '<label class="wdlabel" for="rectH">Height</label><span class="unit"><input class="wdin" id="rectH" inputmode="decimal" value="' + last[1] + '"><em>pt</em></span>' +
+          '</div>' +
+          '<label class="prchk ellcircle"><input type="checkbox" id="rectLink"> Constrain proportions</label>' +
+          '<div class="wdrow ellwh ellcircle">' +
+            '<label class="wdlabel" for="rectR">Corner radius</label><span class="unit"><input class="wdin" id="rectR" inputmode="decimal" value="' + (rectLook.rr || 0) + '"><em>pt</em></span>' +
+          '</div>',
+        open: function (box) {
+          const W = box.querySelector('#rectW'), H = box.querySelector('#rectH'), L = box.querySelector('#rectLink');
+          let ratio = 1;
+          const num = function (el) { return parseFloat(String(el.value).replace(',', '.')); };
+          L.addEventListener('change', function () { const w = num(W), h = num(H); ratio = w > 0 && h > 0 ? h / w : 1; });
+          W.addEventListener('input', function () { const w = num(W); if (L.checked && w > 0) H.value = rr2(w * ratio); });
+          H.addEventListener('input', function () { const h = num(H); if (L.checked && h > 0) W.value = rr2(h / ratio); });
+        },
+        value: function (box) {
+          const num = function (id) { return parseFloat(String(box.querySelector(id).value).replace(',', '.')); };
+          const w = num('#rectW'), h = num('#rectH'), r = num('#rectR');
+          if (!(w > 0 && w <= 20000)) return { error: 'Width: a size from 0 to 20000 pt', field: '#rectW' };
+          if (!(h > 0 && h <= 20000)) return { error: 'Height: a size from 0 to 20000 pt', field: '#rectH' };
+          if (!(r >= 0 && r <= 10000)) return { error: 'Corner radius: 0 or more, in points', field: '#rectR' };
+          return { w: w, h: h, r: r };
+        }
+      }).then(function (v) {
+        if (!v) return;
+        rectLook.lastWH = [v.w, v.h]; rectLook.rr = v.r; keepRectLook();
+        if (!rectCtl.hidden) syncRectCtl();
+        const g = boxAtClick(it, at, centre, v.w, v.h);
+        X.snapshot();
+        it.shapes.push(rectMark(g.a, g.b, v.r));
+        X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      });
+    }
+
+    /* ---- the tool's bar: the look the next rectangle takes ---- */
+    const rectCtl = ctl('rectCtl',
+      '<span class="anno-lbl">Fill</span>' +
+      '<input type="color" id="rectFill" aria-label="Fill colour">' +
+      '<label class="anno-lbl ellchk"><input type="checkbox" id="rectNoFill"> None</label>' +
+      '<span class="anno-lbl">Stroke</span>' +
+      '<label class="anno-lbl ellchk"><input type="checkbox" id="rectNoStroke"> None</label>' +
+      '<select id="rectDash" aria-label="Stroke style"><option value="0">━━━ Solid</option><option value="1">━ ━ Dashed</option><option value="2">· · · Dotted</option></select>' +
+      '<select id="rectAlign" aria-label="Stroke alignment"><option value="">Align centre</option><option value="in">Align inside</option><option value="out">Align outside</option></select>' +
+      '<span class="anno-lbl" title="Corner radius: ↑ and ↓ change it while drawing">Corners</span>' +
+      '<input type="number" id="rectRad" min="0" step="1" aria-label="Corner radius, in points"><span class="anno-lbl">pt</span>' +
+      '<span class="anno-lbl">Opacity</span>' +
+      '<input type="number" id="rectOp" min="0" max="100" step="1" aria-label="Opacity, in percent"><span class="anno-lbl">%</span>');
+    function syncRectCtl() {
+      $('rectFill').value = rectLook.fill || rectLook.fillC || '#FFFFFF';
+      $('rectNoFill').checked = !rectLook.fill;
+      $('rectFill').disabled = !rectLook.fill;
+      $('rectNoStroke').checked = !!rectLook.nos;
+      $('rectDash').value = String(rectLook.d || 0);
+      $('rectAlign').value = rectLook.sa || '';
+      if (document.activeElement !== $('rectRad')) $('rectRad').value = rr2(rectLook.rr || 0);
+      $('rectOp').value = Math.round((rectLook.o == null ? 1 : rectLook.o) * 100);
+    }
+    rectCtl.addEventListener('change', function (e) {
+      const id = e.target.id;
+      if (id === 'rectFill') { rectLook.fill = e.target.value.toUpperCase(); rectLook.fillC = rectLook.fill; }
+      else if (id === 'rectNoFill') rectLook.fill = e.target.checked ? null : (rectLook.fillC || '#FFFFFF');
+      else if (id === 'rectNoStroke') rectLook.nos = e.target.checked;
+      else if (id === 'rectDash') rectLook.d = +e.target.value || 0;
+      else if (id === 'rectAlign') rectLook.sa = e.target.value;
+      else if (id === 'rectRad') rectLook.rr = Math.max(0, Math.min(10000, parseFloat(e.target.value) || 0));
+      else if (id === 'rectOp') rectLook.o = Math.max(0, Math.min(100, +e.target.value || 0)) / 100;
+      /* never neither: with no fill and no stroke a rectangle could not be seen or picked */
+      if (!rectLook.fill && rectLook.nos) {
+        if (id === 'rectNoStroke') { rectLook.fill = rectLook.fillC || '#FFFFFF'; X.toast('A rectangle needs a fill or a stroke: fill turned on'); }
+        else { rectLook.nos = false; X.toast('A rectangle needs a fill or a stroke: stroke turned on'); }
+      }
+      keepRectLook();
+      syncRectCtl();
+    });
+    X.on('tool', function (t) { rectCtl.hidden = t !== 'rect'; if (t === 'rect') syncRectCtl(); });
+    syncRectCtl();
+
+    /* ---- on the selected rectangle's properties: its exact place and size,
+       its corner radius (all four, or each), stroke alignment, a square at a
+       click, and Convert to Path ---- */
+    const rectPop = document.createElement('div');
+    rectPop.className = 'mpell mprect';
+    rectPop.innerHTML =
+      '<label class="mfield"><span>X</span><span class="unit"><input id="rectPX" inputmode="decimal" aria-label="Left edge, in points"><em>pt</em></span></label>' +
+      '<label class="mfield"><span>Y</span><span class="unit"><input id="rectPY" inputmode="decimal" aria-label="Top edge from the top of the page, in points"><em>pt</em></span></label>' +
+      '<label class="mfield"><span>W</span><span class="unit"><input id="rectPW" inputmode="decimal" aria-label="Width, in points"><em>pt</em></span></label>' +
+      '<label class="mfield"><span>H</span><span class="unit"><input id="rectPH" inputmode="decimal" aria-label="Height, in points"><em>pt</em></span></label>' +
+      '<button class="cbtn ellbtn" id="rectPLock" type="button" title="Keep width and height in proportion" aria-pressed="false">⛓</button>' +
+      '<label class="mfield"><span>Corners</span><span class="unit"><input id="rectPR" inputmode="decimal" aria-label="Corner radius, in points"><em>pt</em></span></label>' +
+      '<button class="cbtn ellbtn" id="rectPEach" type="button" title="A radius for each corner" aria-pressed="false">⌜⌝</button>' +
+      '<div class="rectcorn" id="rectPCorners" hidden>' +
+        [['TL', '↖', 'Top left'], ['TR', '↗', 'Top right'], ['BL', '↙', 'Bottom left'], ['BR', '↘', 'Bottom right']].map(function (c) {
+          return '<label class="mfield"><span>' + c[1] + '</span><span class="unit"><input id="rectPR' + c[0] + '" data-corner="' + c[0] +
+            '" inputmode="decimal" aria-label="' + c[2] + ' corner radius, in points" title="' + c[2] + '"><em>pt</em></span></label>';
+        }).join('') +
+      '</div>' +
+      '<label class="mfield"><span>Align</span><select id="rectPAlign" aria-label="Stroke alignment"><option value="">Centre</option><option value="in">Inside</option><option value="out">Outside</option></select></label>' +
+      '<button class="cbtn ellbtn" id="rectPSquare" type="button" title="Make it a square (its width for both)">Square</button>' +
+      '<button class="cbtn ellbtn" id="rectPPath" type="button" title="Convert to a Pen path: anchor points and handles to edit with Direct Selection">Convert to Path</button>';
+    const rectQ = function (id) { return rectPop.querySelector('#' + id); };
+    let rectLock = false, rectEach = false;
+    function rectSel() {
+      const sh = S.sel && S.sel.it && S.sel.it.shapes[S.sel.i];
+      return sh && sh.t === 'rect' ? sh : null;
+    }
+    /** Which of the rectangle's corners (rectCorners' order) is at the top
+        left, top right, bottom left and bottom right as the page is seen. */
+    function cornerOrder(it, s) {
+      const b = E.boxOf(s), C = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
+      const V = C.map(function (q) { return it.vp.convertToViewportPoint(q[0], q[1]); });
+      const pick = function (f, max) {
+        let best = 0;
+        for (let i = 1; i < 4; i++) if (max ? f(V[i]) > f(V[best]) : f(V[i]) < f(V[best])) best = i;
+        return best;
+      };
+      return {
+        TL: pick(function (v) { return v[0] + v[1]; }, false), BR: pick(function (v) { return v[0] + v[1]; }, true),
+        TR: pick(function (v) { return v[0] - v[1]; }, true), BL: pick(function (v) { return v[0] - v[1]; }, false)
+      };
+    }
+    X.markPop.rect = {
+      el: rectPop,
+      sync: function (sh) {
+        const it = S.sel.it, b = E.boxOf(sh);
+        const set = function (id, v) { const el = rectQ(id); if (document.activeElement !== el) el.value = rr2(v); };
+        set('rectPX', b.x1); set('rectPY', Math.abs(pageTop(it) - b.y2));
+        set('rectPW', b.x2 - b.x1); set('rectPH', b.y2 - b.y1);
+        const R = E.rectRadii(sh), raw = E.rectRadiiRaw(sh);
+        const same = raw[0] === raw[1] && raw[1] === raw[2] && raw[2] === raw[3];
+        if (!same) rectEach = true;
+        const el = rectQ('rectPR');
+        if (document.activeElement !== el) el.value = same ? rr2(R[0]) : '';
+        el.placeholder = same ? '' : 'mixed';
+        rectQ('rectPCorners').hidden = !rectEach;
+        const ord = cornerOrder(it, sh);
+        Object.keys(ord).forEach(function (k) { set('rectPR' + k, R[ord[k]]); });
+        rectQ('rectPAlign').value = sh.sa || '';
+        [['rectPLock', rectLock], ['rectPEach', rectEach]].forEach(function (q) {
+          rectQ(q[0]).classList.toggle('on', q[1]);
+          rectQ(q[0]).setAttribute('aria-pressed', q[1] ? 'true' : 'false');
+        });
+      }
+    };
+    function rectChange(fn) {
+      if (!rectSel()) return;
+      X.snapshot();
+      /* every rectangle selected takes it */
+      const it = S.sel.it;
+      X.selList().forEach(function (i) { const m = it.shapes[i]; if (m && m.t === 'rect' && !m.locked) fn(m, it); });
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+    }
+    /** a rectangle's radius set: all four alike (rr), or one each (rc) */
+    function setRadii(m, R) {
+      const v = R.map(function (r) { return rr2(Math.max(0, r)); });
+      delete m.rr; delete m.rc;
+      if (v[0] === v[1] && v[1] === v[2] && v[2] === v[3]) { if (v[0] > 0) m.rr = v[0]; }
+      else m.rc = v;
+    }
+    X.rectSetRadii = setRadii;
+    function rectNum(id) { const v = parseFloat(String(rectQ(id).value).replace(',', '.')); return isFinite(v) ? v : null; }
+    rectPop.addEventListener('change', function (e) {
+      const id = e.target.id;
+      if (id === 'rectPAlign') { rectChange(function (m) { if (e.target.value) m.sa = e.target.value; else delete m.sa; }); return; }
+      const v = rectNum(id);
+      if (v == null) { X.syncMarkPop(); return; }
+      rectChange(function (m, it) {
+        const b = E.boxOf(m), w = b.x2 - b.x1, h = b.y2 - b.y1;
+        if (id === 'rectPX') { m.a = [v, b.y1]; m.b = [v + w, b.y2]; }
+        else if (id === 'rectPY') { const top = pageTop(it); const y2 = top >= b.y2 ? top - v : top + v; m.a = [b.x1, y2 - h]; m.b = [b.x2, y2]; }
+        else if (id === 'rectPW' || id === 'rectPH') {
+          /* sized about its centre, as Illustrator's W and H do with the centre reference point */
+          let nw = id === 'rectPW' ? Math.max(0.01, v) : w, nh = id === 'rectPH' ? Math.max(0.01, v) : h;
+          if (rectLock && w > 0 && h > 0) { if (id === 'rectPW') nh = h * nw / w; else nw = w * nh / h; }
+          const cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2;
+          m.a = [cx - nw / 2, cy - nh / 2]; m.b = [cx + nw / 2, cy + nh / 2];
+        } else if (id === 'rectPR') setRadii(m, [v, v, v, v]);
+        else if (e.target.dataset.corner) {
+          const R = E.rectRadii(m).slice();
+          R[cornerOrder(it, m)[e.target.dataset.corner]] = v;
+          setRadii(m, R);
+        }
+      });
+    });
+    rectPop.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); e.target.dispatchEvent(new Event('change', { bubbles: true })); e.target.blur(); }
+    });
+    rectQ('rectPLock').addEventListener('click', function () { rectLock = !rectLock; X.syncMarkPop(); });
+    rectQ('rectPEach').addEventListener('click', function () {
+      rectEach = !rectEach;
+      /* back to one for all: the first corner's radius for every one */
+      const sh = rectSel();
+      if (!rectEach && sh && sh.rc) { const r = E.rectRadii(sh)[0]; rectChange(function (m) { setRadii(m, [r, r, r, r]); }); return; }
+      X.syncMarkPop();
+    });
+    rectQ('rectPSquare').addEventListener('click', function () {
+      rectChange(function (m) {
+        const b = E.boxOf(m), side = b.x2 - b.x1, cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2;
+        m.a = [cx - side / 2, cy - side / 2]; m.b = [cx + side / 2, cy + side / 2];
+      });
+    });
+    /** A rectangle as a Pen path, its look kept: the same outline, corners
+        and arcs as anchors and handles (engine rectBezier). */
+    function rectToPen(m) {
+      const pen = { t: 'pen', pts: E.rectBezier(m).map(function (q) { return [q[0], q[1]]; }) };
+      Object.keys(m).forEach(function (k) { if (['t', 'a', 'b', 'r', 'sa', 'rr', 'rc'].indexOf(k) < 0) pen[k] = m[k]; });
+      return pen;
+    }
+    X.rectToPen = rectToPen;
+    rectQ('rectPPath').addEventListener('click', function () {
+      if (!rectSel()) return;
+      const it = S.sel.it;
+      X.snapshot();
+      const made = [];
+      X.selList().forEach(function (i) {
+        const m = it.shapes[i];
+        if (!m || m.t !== 'rect' || m.locked) return;
+        it.shapes[i] = rectToPen(m);
+        made.push(i);
+      });
+      X.setGroup(it, made);
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+      X.toast('Converted to a path: Direct Selection (A) edits its points');
+    });
+
+    /* ---- the live corner widgets: a small circle inside each corner of the
+       selected rectangle, as Illustrator's, dragged in to round the corners
+       (all four; with Alt that one alone) and back out to square them ---- */
+    const CW_MIN = 12;            /* px in from the corner, however small the radius */
+    function cornerFrames(s) {
+      /* each corner, and the inward directions along its two sides, in PDF space before the turn */
+      const b = E.boxOf(s);
+      return [
+        { c: [b.x1, b.y1], u: [1, 0], v: [0, 1] },
+        { c: [b.x2, b.y1], u: [-1, 0], v: [0, 1] },
+        { c: [b.x2, b.y2], u: [-1, 0], v: [0, -1] },
+        { c: [b.x1, b.y2], u: [1, 0], v: [0, -1] }
+      ];
+    }
+    let cwDrag = null;
+    X.afterDraw.push(function (it) {
+      if (S.tool !== 'select' || !S.sel || S.sel.it !== it || X.selList().length > 1) return;
+      const s = it.shapes[S.sel.i];
+      if (!s || s.t !== 'rect' || s.locked || s.hide || !it.vp) return;
+      const vp = it.vp, b = E.boxOf(s);
+      const k = S.scale || 1;
+      /* too small on screen to hold the widgets clear of the grips: none, as Illustrator */
+      if ((b.x2 - b.x1) * k < 4 * CW_MIN || (b.y2 - b.y1) * k < 4 * CW_MIN) return;
+      const R = E.rectRadii(s), mid = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
+      const g = document.createElementNS(SVGNS, 'g');
+      g.setAttribute('class', 'rcwg');
+      cornerFrames(s).forEach(function (f, i) {
+        const off = Math.max(R[i], CW_MIN / k);
+        let q = [f.c[0] + (f.u[0] + f.v[0]) * off, f.c[1] + (f.u[1] + f.v[1]) * off];
+        if (s.r) q = E.rotPt(q, mid, s.r);
+        const v = vp.convertToViewportPoint(q[0], q[1]);
+        const el = document.createElementNS(SVGNS, 'circle');
+        el.setAttribute('class', 'rcw' + (cwDrag && (cwDrag.i === i || !cwDrag.one) ? ' on' : ''));
+        el.setAttribute('cx', v[0]); el.setAttribute('cy', v[1]); el.setAttribute('r', 4.5);
+        el.dataset.corner = String(i);
+        const t = document.createElementNS(SVGNS, 'title');
+        t.textContent = 'Drag to round the corners (Alt: this corner only)';
+        el.appendChild(t);
+        el.addEventListener('pointerdown', function (e) { cornerDown(it, S.sel.i, i, e); });
+        g.appendChild(el);
+      });
+      it.anno.appendChild(g);
+    });
+    function cornerDown(it, idx, i, e) {
+      if (e.button > 0) return;
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      const s = it.shapes[idx];
+      cwDrag = { it: it, idx: idx, i: i, one: e.altKey, moved: false, x: e.clientX, y: e.clientY, R0: E.rectRadii(s).slice() };
+      const move = function (ev) {
+        const d = cwDrag;
+        if (!d) return;
+        if (!d.moved) {
+          if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < 2) return;
+          X.snapshot();
+          d.moved = true;
+        }
+        const m = it.shapes[d.idx];
+        if (!m) return;
+        const r = it.anno.getBoundingClientRect();
+        let p = it.vp.convertToPdfPoint(ev.clientX - r.left, ev.clientY - r.top);
+        const bb = E.boxOf(m), mid = [(bb.x1 + bb.x2) / 2, (bb.y1 + bb.y2) / 2];
+        if (m.r) p = E.rotPt(p, mid, -m.r);
+        const f = cornerFrames(m)[d.i];
+        /* how far in along the corner's diagonal: the radius it asks for */
+        const dx = p[0] - f.c[0], dy = p[1] - f.c[1];
+        let rad = ((dx * f.u[0] + dy * f.u[1]) + (dx * f.v[0] + dy * f.v[1])) / 2;
+        rad = Math.max(0, Math.min(E.rectMaxRadius(m), rad));
+        /* settle on the nearest whole point, as a drag on screen means */
+        rad = Math.round(rad);
+        if (d.one) { const R = d.R0.slice(); R[d.i] = rad; setRadii(m, R); }
+        else setRadii(m, [rad, rad, rad, rad]);
+        X.drawShapes(it);
+        const v = it.vp.convertToViewportPoint(p[0], p[1]);
+        readout.textContent = 'Radius ' + measureLen(rad);
+        readout.style.transform = 'translate(' + Math.round(r.left + v[0] + 14) + 'px,' + Math.round(r.top + v[1] + 18) + 'px)';
+        readout.hidden = false;
+      };
+      const up = function () {
+        window.removeEventListener('pointermove', move, true);
+        window.removeEventListener('pointerup', up, true);
+        window.removeEventListener('pointercancel', up, true);
+        const d = cwDrag;
+        cwDrag = null;
+        readHide();
+        if (d && d.moved) { X.drawThumb(it); X.updateMeta(); }
+        X.drawShapes(it); X.syncMarkPop();
+      };
+      window.addEventListener('pointermove', move, true);
+      window.addEventListener('pointerup', up, true);
+      window.addEventListener('pointercancel', up, true);
+    }
+
     X.tools.cloud = common('cloud');
     X.tools.arc = common('arc');
 
-    /* --- the Dimension tool, placed the way a CAD linear dimension is: pick
-       the first point, the second (either a drag straight between them, or a
-       click and then another), then move clear of that line and click — or
-       drag and release — to say how far off it the dimension line itself
-       sits; a short extension line then runs from each real point out to it
-       (s.off, dimGeom in painters/draw.ts). Leaving the offset at zero keeps
-       today's quick, on-the-line dimension, which is still there for a fast
-       single drag that overshoots nothing. */
-    let dimOff = null;          /* {it, a, b, base} — the two points are set; now
-                                    choosing how far off them the line sits */
+    /* ================= dimensions, as AutoCAD's DIM commands =================
+       Every tool here makes a 'dimx' mark (engine dimension.ts): linear
+       (horizontal or vertical, decided by where the line is placed, as
+       DIMLINEAR does), aligned, angular, radius, diameter, arc length,
+       ordinate, and continuous and baseline chains of linear ones. The
+       engine lays each one out as one display list; it is drawn here (on
+       screen and into SVG) and by the PDF painter from that same list.
 
-    /** The signed distance from line a-b to m, in the direction s.off moves. */
-    function offAt(a, b, m) {
-      const dx = b[0] - a[0], dy = b[1] - a[1], len = Math.hypot(dx, dy) || 1;
-      return ((m[0] - a[0]) * -dy + (m[1] - a[1]) * dx) / len;
+       A dimension's defining points are kept on the geometry they were
+       picked on (s.ref, by that mark's s.gid): moving, resizing or turning
+       it updates the dimension (E.resolveDims, before every draw, core.js).
+       Picked on the page's own drawing (a PDF has no objects), they stay
+       where they were picked. */
+    const DX_TOOLS = { dim: 1, dimal: 1, dima: 1, dimr: 1, dimd: 1, dimarc: 1, dimc: 1, dimb: 1, dimo: 1 };
+    X.DX_TOOLS = DX_TOOLS;
+    const v2 = {
+      sub: function (a, b) { return [a[0] - b[0], a[1] - b[1]]; },
+      dot: function (a, b) { return a[0] * b[0] + a[1] * b[1]; },
+      len: function (a) { return Math.hypot(a[0], a[1]); },
+      unit: function (a) { const l = Math.hypot(a[0], a[1]) || 1; return [a[0] / l, a[1] / l]; },
+      perp: function (a) { return [-a[1], a[0]]; }
+    };
+    const dist = function (a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); };
+
+    /* ---- the current dimension style (AutoCAD's DIMSTYLE): the ribbon's
+       quick controls (arrowhead, size, font, bold, italic, text colour) and
+       the rest kept from the Dimension Style dialog ---- */
+    const DXS_KEY = 'adpdf.dimStyle';
+    let dxStyle = (function () {
+      try { return JSON.parse(localStorage.getItem(DXS_KEY) || '{}') || {}; } catch (e) { return {}; }
+    })();
+    function keepDxStyle() { try { localStorage.setItem(DXS_KEY, JSON.stringify(dxStyle)); } catch (e) { /* this session only */ } }
+    const ARROW_OF = { arrow: 'closed', open: 'open', tick: 'oblique', dot: 'dot', none: 'none' };
+    const ARROW_BACK = { closed: 'arrow', open: 'open', oblique: 'tick', dot: 'dot', none: 'none' };
+    /** a style with only what differs from the engine's own (DIM_STYLE) */
+    function cleanSty(st) {
+      const out = {};
+      Object.keys(st || {}).forEach(function (k) {
+        const v = st[k];
+        if (v === undefined || v === null || !(k in E.DIM_STYLE)) return;
+        if (E.DIM_STYLE[k] === v || (v === '' && (E.DIM_STYLE[k] === '' || E.DIM_STYLE[k] == null))) return;
+        out[k] = v;
+      });
+      return out;
+    }
+    /** what the next dimension takes */
+    function newSty() {
+      const st = Object.assign({}, dxStyle);
+      st.ah = ARROW_OF[dimStyle] || 'closed';
+      st.sc = look.dz; st.tf = look.df; st.tb = look.db; st.ti = look.di; st.tc = look.tc;
+      return cleanSty(st);
+    }
+    /** the current style set: the quick controls on the ribbon and the rest */
+    function setCurrentStyle(st) {
+      const full = Object.assign({}, E.DIM_STYLE, st);
+      dimStyle = ARROW_BACK[full.ah] || 'arrow';
+      $('dimStyle').value = dimStyle;
+      look.dz = full.sc; look.df = full.tf || ''; look.db = !!full.tb; look.di = !!full.ti; look.tc = full.tc || '';
+      const rest = cleanSty(st);
+      ['ah', 'sc', 'tf', 'tb', 'ti', 'tc'].forEach(function (k) { delete rest[k]; });
+      dxStyle = rest; keepDxStyle();
+      syncRibbonLook();
     }
 
-    function dimTool() {
+    /* ---- drawing it: the engine's display list, in the page's own frame ---- */
+    function dxFont(s) {
+      const st = E.dimStyle(s);
+      return { df: st.tf || '', db: st.tb, di: st.ti, label: s.label || '' };
+    }
+    function dxMeasure(s) {
+      const f = dxFont(s);
+      return function (str, size) { return textPx(str, size, f); };
+    }
+    function dxLayout(s) { return E.dimLayout(s, scale, dxMeasure(s)); }
+    X.dimLayout = dxLayout;
+    X.dimText = function (s) { return E.dimText(s, scale); };
+
+    X.shapeRenderers.dimx = function (it, s, vp, idx) {
+      const g = document.createElementNS(SVGNS, 'g');
+      if (s.guide) g.appendChild(X.shapeRenderers.dimguide(it, Object.assign({ c: s.c }, s.guide), vp));
+      if (!s.pts || s.pts.length < 3) return g;
+      const D = dxLayout(s);
+      const f = readingFont(dxFont(s));
+      const art = document.createElementNS(SVGNS, 'g');
+      /* PDF points onto the page as shown: an affine map, so every line,
+         arc and arrowhead keeps its size on paper at any zoom */
+      art.setAttribute('transform', 'matrix(' + vp.transform.join(' ') + ')');
+      art.innerHTML = E.dimSvgMarkup(D, s, { family: f.family, weight: f.weight, style: f.style },
+        0.6 / Math.max(0.05, S.scale));
+      art.style.pointerEvents = 'none';
+      g.appendChild(art);
+      if (idx < 0) return g;
+      /* a dimension is hairlines: an unseen strip along its lines, and its
+         text's box, to take hold of it by */
+      const P = function (q) { return vp.convertToViewportPoint(q[0], q[1]); };
+      const hit = document.createElementNS(SVGNS, 'path');
+      hit.setAttribute('d', D.hit.map(function (l) { const a = P(l[0]), b = P(l[1]); return 'M' + a[0] + ' ' + a[1] + 'L' + b[0] + ' ' + b[1]; }).join(''));
+      hit.setAttribute('class', 'dxhit');
+      const box = document.createElementNS(SVGNS, 'polygon');
+      box.setAttribute('points', D.box.map(function (q) { return P(q).join(','); }).join(' '));
+      box.setAttribute('class', 'dxhit box');
+      [hit, box].forEach(function (el) {
+        el.addEventListener('pointerdown', function (e) { X.beginDrag(it, idx, e, 'move'); });
+        g.appendChild(el);
+      });
+      return g;
+    };
+    /* Select moves a dimension as a whole; its own grips (below) move its
+       points, its line and its text */
+    X.handleKind.dimx = 'point';
+
+    /* ---- association: which mark a point sits on ---- */
+    function newGid() { return 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+    function isDimMark(s) { return s && (s.t === 'dimx' || ALL_DIMS[s.t]); }
+    /** a reference to the mark point q is one of (a corner, an end, an
+        anchor, a centre), or null; `commit` gives that mark its gid */
+    function refAt(it, q, skip, commit) {
+      if (!q) return null;
+      for (let i = it.shapes.length - 1; i >= 0; i--) {
+        const s = it.shapes[i];
+        if (i === skip || !s || s.hide || isDimMark(s)) continue;
+        if (!markPoints(s).some(function (m) { return dist(m[0], q) < 0.02; })) continue;
+        const r = E.makeRef(s, q, s.gid || '?');
+        if (!r) continue;
+        if (commit) { if (!s.gid) s.gid = newGid(); r.g = s.gid; }
+        return r;
+      }
+      return null;
+    }
+    function refOn(s, r) {
+      if (!r) return null;
+      if (!s.gid) s.gid = newGid();
+      return Object.assign({}, r, { g: s.gid });
+    }
+    /** a circle (Ellipse) or Arc mark under p: its centre, and the point of
+        its edge nearest p */
+    function circleAt(it, p, arcsOnly) {
+      const tol = 8 / Math.max(0.05, S.scale);
+      for (let i = it.shapes.length - 1; i >= 0; i--) {
+        const s = it.shapes[i];
+        if (!s || s.hide || !s.a || !Array.isArray(s.b)) continue;
+        if (s.t === 'ellipse' && !arcsOnly) {
+          const b = E.boxOf(s), c = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
+          const rx = (b.x2 - b.x1) / 2, ry = (b.y2 - b.y1) / 2;
+          if (rx < 1 || ry < 1) continue;
+          const q = s.r ? E.rotPt(p, c, -s.r) : p;
+          const t = Math.atan2((q[1] - c[1]) / ry, (q[0] - c[0]) / rx);
+          const on = [c[0] + rx * Math.cos(t), c[1] + ry * Math.sin(t)];
+          if (dist(q, on) > tol) continue;
+          return { idx: i, s: s, kind: 'ell', c: c, e: s.r ? E.rotPt(on, c, s.r) : on };
+        }
+        if (s.t === 'arc') {
+          const k = E.arcMarkCircle(s);
+          if (!k) continue;
+          const A = arcPts(s, 48);
+          let near = Infinity;
+          for (let j = 1; j < A.length; j++) near = Math.min(near, segDist(p, A[j - 1], A[j]));
+          if (near > tol) continue;
+          return { idx: i, s: s, kind: 'arc', c: k.c, e: [s.a[0], s.a[1]], mid: k.mid };
+        }
+      }
+      return null;
+    }
+    function segDist(p, a, b) {
+      const dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy;
+      const t = l2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2)) : 0;
+      return Math.hypot(p[0] - (a[0] + t * dx), p[1] - (a[1] + t * dy));
+    }
+    /** a straight line under p: one of the marks' own (a line, a box's
+        side, a path's straight piece), else one of the page's own */
+    function lineAt(it, p) {
+      const tol = 7 / Math.max(0.05, S.scale);
+      let best = null, bd = tol;
+      it.shapes.forEach(function (s) {
+        if (!s || isDimMark(s)) return;
+        markSegs(s).forEach(function (g) {
+          const d = segDist(p, g[0], g[1]);
+          if (d < bd) { bd = d; best = [[g[0][0], g[0][1]], [g[1][0], g[1][1]]]; }
+        });
+      });
+      if (best) return best;
+      const seg = segAt(it, p);
+      return seg ? [[seg[0][0], seg[0][1]], [seg[1][0], seg[1][1]]] : null;
+    }
+
+    /* the page's level and upright, in PDF points, as it is shown */
+    function screenH(it) {
+      const a = it.vp.convertToPdfPoint(0, 0), b = it.vp.convertToPdfPoint(100, 0);
+      return v2.unit(v2.sub(b, a));
+    }
+
+    /* ---- the tools ---- */
+    let dx = null;        /* the dimension being made: {t, it, step data…} */
+    let dxc = null;       /* a continuous / baseline chain: {t, it, dir, first, last, loc, refs, n} */
+    function hint(msg) { $('modeHint').innerHTML = msg || X.hints[S.tool] || ''; }
+    function dxMark(k, pts, extra) {
+      return Object.assign({ t: 'dimx', k: k, pts: pts, c: S.color, w: S.width, sty: newSty() }, extra || {});
+    }
+    function snapAt(it, at, e, force) {
+      const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+      const sn = X.snapPt(it, raw, e, force ? { force: true } : undefined);
+      return sn ? [sn[0], sn[1]] : [raw[0], raw[1]];
+    }
+    function dxCommit(it, m, refs) {
+      X.snapshot();
+      const nd = E.dimDefCount(m);
+      const R = (refs || []).slice(0, nd);
+      for (let i = 0; i < nd; i++) if (R[i] === undefined) R[i] = refAt(it, m.pts[i], -1, true);
+      if (R.some(Boolean)) m.ref = R.map(function (r) { return r || null; });
+      it.shapes.push(m);
+      trackClear(); snapHide(); readHide();
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      X.toast('<b>' + X.esc(E.dimText(m, scale)) + '</b>');
+      return m;
+    }
+    function dxCancel(quiet) {
+      const it = dx && dx.it;
+      dx = null;
+      trackClear(); snapHide(); readHide();
+      if (it) X.drawShapes(it);
+      if (!quiet) hint();
+    }
+    function chainEnd() {
+      const had = dxc;
+      dxc = null;
+      if (dx && (dx.t === 'dimc' || dx.t === 'dimb')) dxCancel(true);
+      if (had) {
+        X.drawShapes(had.it);
+        if (had.n) X.toast(had.n + ' dimension' + (had.n > 1 ? 's' : '') + (had.t === 'dimb' ? ' from the baseline' : ' in the chain'));
+      }
+      hint();
+    }
+    function guide(o) { return Object.assign({ t: 'dimguide', c: S.color }, o); }
+
+    /* linear and aligned: first point, second point, where the line goes */
+    function linearMark(d, loc) {
+      const p1 = d.pts[0], p2 = d.pts[1];
+      if (d.t === 'dimal' || d.lock === 'a') return dxMark('ali', [p1, p2, loc]);
+      const H = screenH(d.it), V = v2.perp(H);
+      let dir;
+      if (d.lock === 'h') dir = H;
+      else if (d.lock === 'v') dir = V;
+      else {
+        /* as DIMLINEAR: past the points' left or right: vertical; above or below them: horizontal */
+        const x1 = v2.dot(p1, H), x2 = v2.dot(p2, H), y1 = v2.dot(p1, V), y2 = v2.dot(p2, V);
+        const lx = v2.dot(loc, H), ly = v2.dot(loc, V);
+        const ox = Math.max(0, Math.min(x1, x2) - lx, lx - Math.max(x1, x2));
+        const oy = Math.max(0, Math.min(y1, y2) - ly, ly - Math.max(y1, y2));
+        dir = ox > oy ? V : oy > ox ? H : (Math.abs(x2 - x1) >= Math.abs(y2 - y1) ? H : V);
+      }
+      return dxMark('lin', [p1, p2, loc], { dir: [dir[0], dir[1]] });
+    }
+    const PLACE_HINT = 'Move to place the dimension line, and click. <b>Esc</b> cancels.';
+    const LIN_HINT = 'Move to place the dimension line: past the points’ sides it measures vertically, above or ' +
+      'below them horizontally. <b>H</b> horizontal, <b>V</b> vertical, <b>A</b> aligned. Click to place. <b>Esc</b> cancels.';
+
+    /** the linear steps shared by Linear, Aligned and the first of a chain;
+        returns the mark when it is placed */
+    function linearUp(it, at, e, t) {
+      const p = snapAt(it, at, e);
+      if (!dx || dx.it !== it || dx.t !== t) {
+        dxCancel(true);
+        dx = { t: t, it: it, pts: [p], lock: null };
+        trackStart(it, p);
+        hint('Click the <b>second point</b>. <b>Esc</b> cancels.');
+        return null;
+      }
+      if (dx.pts.length === 1) {
+        if (dist(p, dx.pts[0]) < 0.5) return null;
+        dx.pts.push(p);
+        if (calibrating && t === 'dim') {
+          const a = dx.pts[0];
+          dxCancel(true);
+          finishCalibration({ a: a, b: p });
+          return null;
+        }
+        hint(t === 'dimal' ? PLACE_HINT : LIN_HINT);
+        X.drawShapes(it, linearMark(dx, p));
+        return null;
+      }
+      const m = linearMark(dx, snapAt(it, at, e));
+      const refs = dx.refs;
+      dx = null;
+      return dxCommit(it, m, refs);
+    }
+    function linearMove(it, at, e) {
+      if (!dx || dx.it !== it) return;
+      const p = snapAt(it, at, e);
+      dx.last = { at: at, e: e };
+      if (dx.t === '?') {
+        /* pressed and dragging: a drag from the first point to the second */
+        X.drawShapes(it, guide({ marks: [dx.down], lines: [[dx.down, p]] }));
+        readShow(it, dx.down, p);
+        return;
+      }
+      if (dx.pts.length === 1) {
+        X.drawShapes(it, guide({ marks: [dx.pts[0]], lines: [[dx.pts[0], p]] }));
+        readShow(it, dx.pts[0], p);
+      } else {
+        readHide();
+        X.drawShapes(it, linearMark(dx, p));
+      }
+    }
+    function linearTool(t) {
       return {
         colors: true, widths: true,
         down: function (it, at, e) {
-          if (!it.vp || (dimOff && dimOff.it === it)) return;
-          const pinned = dimPend && dimPend.it === it;
-          drag = { it: it, a: pinned ? dimPend.a : pdfAt(it, at, e) };
-          dimPend = null;
+          if (!it.vp || (e && e.button > 0)) return;
+          if (!dx) dx = { t: '?', it: it, down: snapAt(it, at, e), pts: [] };
         },
-        move: function (it, at, e) {
-          if (dimOff && dimOff.it === it) {
-            const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-            X.drawShapes(it, Object.assign({}, dimOff.base, { off: offAt(dimOff.a, dimOff.b, raw) }));
-            return;
-          }
-          if (dimPend && dimPend.it === it && (!drag || drag.it !== it)) {
-            const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-            const sn = X.snapPt(it, raw, e);
-            X.drawShapes(it, ghost('dim', dimPend.a, sn || raw, sn ? null : e));
-            return;
-          }
-          if (!drag || drag.it !== it) return;
-          const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-          const sn = X.snapPt(it, raw, e);
-          drag.snap = sn;
-          X.drawShapes(it, ghost('dim', drag.a, sn || raw, sn ? { altKey: e && e.altKey } : e));
-        },
-        cancel: function (it) {
-          if (dimOff && dimOff.it === it) { dimOff = null; X.drawShapes(it); }
-          if (drag) { drag = null; X.drawShapes(it); }
-          trackClear();
-        },
+        move: linearMove,
+        cancel: function () { dxCancel(); },
         up: function (it, at, e) {
-          if (dimOff && dimOff.it === it) {
-            const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-            const g = Object.assign({}, dimOff.base, { off: offAt(dimOff.a, dimOff.b, raw) });
-            dimOff = null;
-            snapHide();
-            trackClear();         /* this dimension is done; a tracked point is not the next one's */
-            $('modeHint').innerHTML = X.hints.dim;
-            X.snapshot();
-            it.shapes.push(g);
-            X.drawShapes(it); X.drawThumb(it); X.updateMeta();
-            X.toast('<b>' + measure(g) + '</b>');
-            return;
+          if (!it.vp || (e && e.button > 0)) return;
+          const down = dx && dx.t === '?' ? dx.down : null;
+          if (dx && dx.t === '?') dx = null;
+          if (down) {
+            const p = snapAt(it, at, e);
+            if (dist(down, p) > 3 / Math.max(0.05, S.scale) && !calibrating) {
+              /* a drag from the first point to the second */
+              dx = { t: t, it: it, pts: [down, p], lock: null };
+              hint(t === 'dimal' ? PLACE_HINT : LIN_HINT);
+              X.drawShapes(it, linearMark(dx, p));
+              return;
+            }
+            if (calibrating && dist(down, p) > 3 / Math.max(0.05, S.scale)) {
+              finishCalibration({ a: down, b: p });
+              return;
+            }
           }
-          if (!drag || drag.it !== it) return;
-          const a = drag.a, raw = it.vp.convertToPdfPoint(at[0], at[1]);
-          const sn = X.snapPt(it, raw, e);
-          drag = null;
-          const g = ghost('dim', a, sn || raw, sn ? { altKey: e && e.altKey } : e);
-          if (Math.hypot(g.b[0] - g.a[0], g.b[1] - g.a[1]) < 3) {
-            /* that was a click, not a drag: hold this point and wait for the next one */
-            dimPend = { it: it, a: a };
-            $('modeHint').innerHTML = 'Click the <b>second point</b> — then set how far the ' +
-              'dimension line sits off it. <b>Esc</b> cancels.';
-            X.drawShapes(it);
-            return;
-          }
-          snapHide();
-          if (calibrating) {
-            trackClear();
-            $('modeHint').innerHTML = X.hints.dim;
-            X.drawShapes(it); finishCalibration(g); return;
-          }
-          /* both points are down — now how far clear of them does the
-             dimension line itself sit? Move and click, or drag and let go. */
-          dimOff = { it: it, a: g.a, b: g.b, base: g };
-          $('modeHint').innerHTML = 'Move to set how far the dimension line sits off the ' +
-            'line you measured, then click (or let go). <b>Esc</b> cancels.';
-          X.drawShapes(it, g);
+          linearUp(it, at, e, t);
         }
       };
     }
-    X.tools.dim = dimTool();
-    document.addEventListener('keydown', function (e) {
-      if (S.tool !== 'dim' || e.key !== 'Escape' || (!dimPend && !dimOff)) return;
-      e.preventDefault(); e.stopImmediatePropagation();
-      const it = (dimOff || dimPend).it;
-      dimPend = null; dimOff = null;
-      X.drawShapes(it);
-      $('modeHint').innerHTML = X.hints.dim;
-    }, true);
-    X.on('tool', function (t) {
-      if (t === 'dim') return;
-      const pend = dimOff || dimPend;
-      if (pend) { dimPend = null; dimOff = null; X.drawShapes(pend.it); }
-    });
+    X.tools.dim = linearTool('dim');
+    X.tools.dimal = linearTool('dimal');
 
-    /* --- continuous dimensions ---
-       Click, click, click: each click closes one dimension and opens the next
-       from the same point. After the first, each point is brought onto that
-       first dimension's line, so the chain reads as one run: 30 · 20 · 20.
-       The first segment asks, once, how far clear of the run its dimension
-       line sits — same as the plain Dimension tool — and every segment after
-       that reuses that same offset, the way a CAD continued dimension stays
-       on the one line rather than asking again each time. */
-    let chain = null;                              /* {it, last:[x,y], dir:[ux,uy]|null, n, off:number|null} */
-    let chainPend = null;                          /* {it, a, b} — a segment is measured; now choosing its offset */
-
-    function chainEnd(p, e) {
-      const L = chain.last;
-      if (chain.dir) {
-        const d = (p[0] - L[0]) * chain.dir[0] + (p[1] - L[1]) * chain.dir[1];
-        return [L[0] + chain.dir[0] * d, L[1] + chain.dir[1] * d];
-      }
-      return e && e.shiftKey ? X.snapLine(L, p) : [p[0], p[1]];
-    }
-    function endChain() {
-      chainPend = null;
-      if (!chain) return;
-      const it = chain.it, n = chain.n;
-      chain = null;
-      trackClear();            /* the chain is done; a tracked point is not the next one's */
-      X.drawShapes(it);
-      if (S.tool === 'dimc') $('modeHint').innerHTML = X.hints.dimc;
-      if (n) X.toast(n + ' dimension' + (n > 1 ? 's' : '') + ' in the chain');
-    }
-    function commitChainSegment(a, b, off) {
-      const it = chain.it;
-      const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      X.snapshot();
-      it.shapes.push(Object.assign(ghost('dim', a, b, null), { off: off }));
-      if (!chain.dir) chain.dir = [(b[0] - a[0]) / len, (b[1] - a[1]) / len];
-      if (chain.off == null) chain.off = off;
-      chain.last = b; chain.n++;
-      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
-      $('modeHint').innerHTML = 'Click the next point. <b>Enter</b> or <b>Esc</b> ends the chain.';
-    }
-
-    X.tools.dimc = {
+    /* angular: two lines (the angle between them, any of the four), or a
+       vertex and a point on each arm; then where the arc goes */
+    X.tools.dima = {
       colors: true, widths: true,
-      down: function () { /* a click tool: everything happens on release */ },
+      down: function () { /* a click tool */ },
       move: function (it, at, e) {
-        if (chainPend && chainPend.it === it) {
-          const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-          X.drawShapes(it, Object.assign({}, ghost('dim', chainPend.a, chainPend.b, null),
-            { off: offAt(chainPend.a, chainPend.b, raw) }));
+        if (!it.vp) return;
+        const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+        if (!dx || dx.it !== it) {
+          const L = lineAt(it, raw);
+          X.drawShapes(it, L ? guide({ lines: [L] }) : undefined);
           return;
         }
-        if (!chain || chain.it !== it || !it.vp) return;
+        dx.last = { at: at, e: e };
+        if (dx.mode === 'll' && dx.lines.length === 1) {
+          const L = lineAt(it, raw);
+          X.drawShapes(it, guide({ solid: dx.lines, lines: L ? [L] : [] }));
+          return;
+        }
+        if (dx.mode === 'v' && dx.pts.length < 3) {
+          const p = snapAt(it, at, e, true);
+          X.drawShapes(it, guide({ marks: dx.pts, lines: dx.pts.length === 1 ? [[dx.pts[0], p]] : [[dx.pts[0], dx.pts[1]], [dx.pts[0], p]] }));
+          return;
+        }
+        X.drawShapes(it, angMark(dx, raw));
+      },
+      cancel: function () { dxCancel(); },
+      up: async function (it, at, e) {
+        if (!it.vp || (e && e.button > 0)) return;
         const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-        const sn = X.snapPt(it, raw, e);
-        /* a snapped point is still carried onto the chain's line, the way a
-           CAD continued dimension measures to the feature it was snapped to */
-        const b = chainEnd(sn || raw, sn ? null : e);
-        X.drawShapes(it, Object.assign({}, ghost('dim', chain.last, b, null), { off: chain.off || 0 }));
+        if (!dx || dx.it !== it) {
+          dxCancel(true);
+          const job = dx = { t: 'dima', it: it, mode: null, lines: [], pts: [] };
+          await pageSegments(it);
+          if (dx !== job) return;
+          const L = lineAt(it, raw);
+          if (L) {
+            dx.mode = 'll'; dx.lines = [L];
+            hint('Click the <b>second line</b>. <b>Esc</b> cancels.');
+            X.drawShapes(it, guide({ solid: dx.lines }));
+          } else {
+            dx.mode = 'v'; dx.pts = [snapAt(it, at, e, true)];
+            hint('No line there, so that is the <b>vertex</b>. Click a point on the <b>first arm</b>.');
+            X.drawShapes(it, guide({ marks: dx.pts }));
+          }
+          return;
+        }
+        if (dx.mode === 'll' && dx.lines.length === 1) {
+          const L = lineAt(it, raw);
+          if (!L) { X.toast('No line there — click right on the second line'); return; }
+          const A = dx.lines[0];
+          if (dist(L[0], A[0]) + dist(L[1], A[1]) < 0.01) { X.toast('That is the same line — click a second one'); return; }
+          if (!E.lineCross(A[0], A[1], L[0], L[1])) { X.toast('Those lines are parallel — they never meet'); return; }
+          dx.lines.push(L);
+          hint('Move into the angle you want (any of the four between the lines) and click to place the arc. <b>Esc</b> cancels.');
+          X.drawShapes(it, angMark(dx, raw));
+          return;
+        }
+        if (dx.mode === 'v' && dx.pts.length < 3) {
+          const p = snapAt(it, at, e, true);
+          if (dist(p, dx.pts[dx.pts.length - 1]) < 0.5 || dist(p, dx.pts[0]) < 0.5) return;
+          dx.pts.push(p);
+          hint(dx.pts.length < 3 ? 'Click a point on the <b>second arm</b>.' :
+            'Move to choose the side and size of the arc, and click. <b>Esc</b> cancels.');
+          X.drawShapes(it, dx.pts.length < 3 ? guide({ marks: dx.pts, lines: [[dx.pts[0], dx.pts[1]]] }) : angMark(dx, raw));
+          return;
+        }
+        const m = angMark(dx, raw);
+        dx = null;
+        dxCommit(it, m);
+        hint();
+      }
+    };
+    function angMark(d, loc) {
+      if (d.mode === 'll') {
+        const A = d.lines[0], B = d.lines[1];
+        return dxMark('ang', [A[0], A[1], B[0], B[1], loc], { am: 'll' });
+      }
+      return dxMark('ang', [d.pts[0], d.pts[1], d.pts[2], loc]);
+    }
+
+    /* radius and diameter: a circle or arc you drew, or three points on the
+       edge of one in the page's own drawing; then where the text goes */
+    function radialTool(t) {
+      const k = t === 'dimr' ? 'rad' : 'dia';
+      function mark(d, loc) {
+        if (d.circ) return dxMark(k, [d.circ.c, d.circ.e, loc]);
+        const c = circle3(d.pts[0], d.pts[1], d.pts[2]);
+        return c ? dxMark(k, [c.c, d.pts[0], loc]) : null;
+      }
+      return {
+        colors: true, widths: true,
+        down: function () { /* a click tool */ },
+        move: function (it, at, e) {
+          if (!it.vp) return;
+          const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+          if (!dx || dx.it !== it) {
+            const C = circleAt(it, raw);
+            X.drawShapes(it, C ? guide({ circle: { c: C.c, r: dist(C.c, C.e) } }) : undefined);
+            return;
+          }
+          if (!dx.circ && dx.pts.length < 3) {
+            const p = snapAt(it, at, e);
+            const c = dx.pts.length === 2 ? circle3(dx.pts[0], dx.pts[1], p) : null;
+            X.drawShapes(it, guide({ marks: dx.pts.concat([p]), circle: c }));
+            return;
+          }
+          const m = mark(dx, raw);
+          if (m) X.drawShapes(it, m);
+        },
+        cancel: function () { dxCancel(); },
+        up: function (it, at, e) {
+          if (!it.vp || (e && e.button > 0)) return;
+          const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+          if (!dx || dx.it !== it) {
+            dxCancel(true);
+            const C = circleAt(it, raw);
+            if (C) {
+              dx = { t: t, it: it, circ: C, pts: [] };
+              hint('Move to place the dimension — inside or outside the circle — and click. <b>Esc</b> cancels.');
+              X.drawShapes(it, mark(dx, raw));
+            } else {
+              dx = { t: t, it: it, circ: null, pts: [snapAt(it, at, e)] };
+              hint('No circle you drew there: click a <b>second</b> and a <b>third point</b> on the edge.');
+              X.drawShapes(it, guide({ marks: dx.pts }));
+            }
+            return;
+          }
+          if (!dx.circ && dx.pts.length < 3) {
+            const p = snapAt(it, at, e);
+            if (dist(p, dx.pts[dx.pts.length - 1]) < 0.5) return;
+            if (dx.pts.length === 2 && !circle3(dx.pts[0], dx.pts[1], p)) {
+              X.toast('Those points are in a line — pick three spread round the circle');
+              return;
+            }
+            dx.pts.push(p);
+            if (dx.pts.length === 3) hint(PLACE_HINT);
+            X.drawShapes(it, dx.pts.length === 3 ? mark(dx, raw) : guide({ marks: dx.pts }));
+            return;
+          }
+          const m = mark(dx, raw);
+          if (!m) return;
+          const C = dx.circ;
+          dx = null;
+          let refs = null;
+          if (C) {
+            const s = C.s;
+            refs = C.kind === 'arc'
+              ? [refOn(s, { c: 'c' }), refOn(s, { e: 'a' })]
+              : [refOn(s, E.makeRef(s, C.c, '?')), refOn(s, E.makeRef(s, C.e, '?'))];
+          }
+          dxCommit(it, m, refs || undefined);
+          hint();
+        }
+      };
+    }
+    X.tools.dimr = radialTool('dimr');
+    X.tools.dimd = radialTool('dimd');
+
+    /* arc length: an Arc you drew, or the start, a point along and the end
+       of one in the page's own drawing; then where the dimension arc goes */
+    X.tools.dimarc = {
+      colors: true, widths: true,
+      down: function () { /* a click tool */ },
+      move: function (it, at, e) {
+        if (!it.vp) return;
+        const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+        if (!dx || dx.it !== it) {
+          const C = circleAt(it, raw, true);
+          X.drawShapes(it, C ? guide({ lines: [[C.s.a, C.mid], [C.mid, C.s.b]] }) : undefined);
+          return;
+        }
+        if (!dx.arc && dx.pts.length < 3) {
+          const p = snapAt(it, at, e);
+          X.drawShapes(it, guide({ marks: dx.pts.concat([p]) }));
+          return;
+        }
+        const m = arcMark(dx, raw);
+        if (m) X.drawShapes(it, m);
       },
-      cancel: function () {
-        if (chainPend) { chainPend = null; if (chain) X.drawShapes(chain.it); return; }
-        endChain();
-      },
+      cancel: function () { dxCancel(); },
       up: function (it, at, e) {
         if (!it.vp || (e && e.button > 0)) return;
-        if (chainPend && chainPend.it === it) {
-          const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-          const off = offAt(chainPend.a, chainPend.b, raw);
-          const a = chainPend.a, b = chainPend.b;
-          chainPend = null;
-          commitChainSegment(a, b, off);
+        const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+        if (!dx || dx.it !== it) {
+          dxCancel(true);
+          const C = circleAt(it, raw, true);
+          if (C) {
+            dx = { t: 'dimarc', it: it, arc: C, pts: [] };
+            hint(PLACE_HINT);
+            X.drawShapes(it, arcMark(dx, raw));
+          } else {
+            dx = { t: 'dimarc', it: it, arc: null, pts: [snapAt(it, at, e)] };
+            hint('No Arc you drew there: that is the arc’s <b>start</b>. Click a <b>point along it</b>, then its <b>end</b>.');
+            X.drawShapes(it, guide({ marks: dx.pts }));
+          }
+          return;
+        }
+        if (!dx.arc && dx.pts.length < 3) {
+          const p = snapAt(it, at, e);
+          if (dist(p, dx.pts[dx.pts.length - 1]) < 0.5) return;
+          if (dx.pts.length === 2 && !circle3(dx.pts[0], dx.pts[1], p)) {
+            X.toast('Those points are in a line — a point along the arc must be off the chord');
+            return;
+          }
+          dx.pts.push(p);
+          hint(dx.pts.length === 2 ? 'Click the arc’s <b>end</b>.' : PLACE_HINT);
+          X.drawShapes(it, dx.pts.length === 3 ? arcMark(dx, raw) : guide({ marks: dx.pts }));
+          return;
+        }
+        const m = arcMark(dx, raw);
+        if (!m) return;
+        const A = dx.arc;
+        dx = null;
+        dxCommit(it, m, A ? [refOn(A.s, { c: 'c' }), refOn(A.s, { e: 'a' }), refOn(A.s, { e: 'b' }), refOn(A.s, { c: 'm' })] : undefined);
+        hint();
+      }
+    };
+    function arcMark(d, loc) {
+      if (d.arc) {
+        const A = d.arc;
+        return dxMark('arc', [A.c, [A.s.a[0], A.s.a[1]], [A.s.b[0], A.s.b[1]], A.mid, loc]);
+      }
+      const c = circle3(d.pts[0], d.pts[1], d.pts[2]);
+      return c ? dxMark('arc', [c.c, d.pts[0], d.pts[2], d.pts[1], loc]) : null;
+    }
+
+    /* ordinate: a datum first (kept for the page), then for each feature its
+       point and where its leader ends — up or down for an X ordinate, left
+       or right for a Y one, as AutoCAD decides it */
+    function ordAxis(it, f, loc, lock) {
+      if (lock) return lock;
+      const H = screenH(it), V = v2.perp(H), d = v2.sub(loc, f);
+      return Math.abs(v2.dot(d, V)) >= Math.abs(v2.dot(d, H)) ? 'x' : 'y';
+    }
+    function ordMark(d, loc) {
+      const H = screenH(d.it);
+      return dxMark('ord', [d.it._dxOrigin.p, d.f, loc], { dir: [H[0], H[1]], ax: ordAxis(d.it, d.f, loc, d.lock) });
+    }
+    function ordOrigin(it) {
+      if (it._dxOrigin) return it._dxOrigin;
+      /* the datum of the last ordinate dimension on the page, if there is one */
+      for (let i = it.shapes.length - 1; i >= 0; i--) {
+        const s = it.shapes[i];
+        if (s && s.t === 'dimx' && s.k === 'ord') return (it._dxOrigin = { p: s.pts[0] });
+      }
+      return null;
+    }
+    const ORD_HINT = 'Click a <b>feature</b> to measure from the datum. <b>O</b> picks a new datum.';
+    X.tools.dimo = {
+      colors: true, widths: true,
+      down: function () { /* a click tool */ },
+      move: function (it, at, e) {
+        if (!it.vp) return;
+        const O = ordOrigin(it);
+        if (!dx || dx.it !== it) {
+          if (O) X.drawShapes(it, guide({ marks: [O.p] }));
+          return;
+        }
+        dx.last = { at: at, e: e };
+        X.drawShapes(it, ordMark(dx, it.vp.convertToPdfPoint(at[0], at[1])));
+      },
+      cancel: function () { dxCancel(); },
+      up: function (it, at, e) {
+        if (!it.vp || (e && e.button > 0)) return;
+        const p = snapAt(it, at, e);
+        const O = ordOrigin(it);
+        if (!O) {
+          it._dxOrigin = { p: p };
+          hint(ORD_HINT);
+          X.drawShapes(it, guide({ marks: [p] }));
+          X.toast('Datum set — every ordinate on this page measures from it');
+          return;
+        }
+        if (!dx || dx.it !== it) {
+          dxCancel(true);
+          dx = { t: 'dimo', it: it, f: p, lock: null };
+          hint('Move the leader up or down (an <b>X</b> ordinate) or sideways (a <b>Y</b> one) and click. <b>X</b> / <b>Y</b> fix it. <b>Esc</b> cancels.');
           return;
         }
         const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-        const sn = X.snapPt(it, raw, e);
-        const p = sn || raw;
-        if (sn) e = null;                          /* the snap wins over Shift */
-        if (!chain || chain.it !== it) {           /* first point, or a jump to another page */
-          endChain();
-          chain = { it: it, last: p, dir: null, n: 0, off: null };
-          $('modeHint').innerHTML = 'Click the next point. <b>Enter</b> or <b>Esc</b> ends the chain.';
-          return;
-        }
-        const L = chain.last, b = chainEnd(p, e);
-        const len = Math.hypot(b[0] - L[0], b[1] - L[1]);
-        if (len < 3) return;                       /* the second click of a double-click */
-        if (chain.off == null) {
-          /* the first segment: how far clear of it does the chain's line sit? */
-          chainPend = { it: it, a: L, b: b };
-          $('modeHint').innerHTML = 'Move to set how far the dimension line sits off the line ' +
-            'you measured, then click (or let go).';
-          X.drawShapes(it, ghost('dim', L, b, null));
-          return;
-        }
-        commitChainSegment(L, b, chain.off);
+        const m = ordMark(dx, raw);
+        dx = null;
+        dxCommit(it, m);
+        hint(ORD_HINT);
       }
     };
 
-    /* Esc and Enter end the chain but keep the tool, so the next click starts
-       a fresh run; a second Esc puts the tool down as usual. While a segment
-       is still choosing its offset, the first Esc only drops that segment
-       and keeps the chain going from its last committed point. Capture
-       phase, to get there before core's own Esc handling. */
-    document.addEventListener('keydown', function (e) {
-      if (!chain || S.tool !== 'dimc') return;
-      if (e.key === 'Escape' || e.key === 'Enter') {
-        e.preventDefault(); e.stopImmediatePropagation();
-        if (chainPend) {
-          chainPend = null;
-          X.drawShapes(chain.it);
-          $('modeHint').innerHTML = 'Click the next point. <b>Enter</b> or <b>Esc</b> ends the chain.';
-          return;
+    /* continuous and baseline: from a linear dimension (picked, or made
+       first), each click adds one more — continuous from the last point, in
+       line; baseline from the first, each a step further out */
+    function dimxAt(it, p, kinds) {
+      const tol = 6 / Math.max(0.05, S.scale);
+      for (let i = it.shapes.length - 1; i >= 0; i--) {
+        const s = it.shapes[i];
+        if (!s || s.t !== 'dimx' || s.hide || (kinds && !kinds[s.k])) continue;
+        const D = dxLayout(s);
+        if (D.hit.some(function (l) { return segDist(p, l[0], l[1]) <= tol; })) return i;
+      }
+      return -1;
+    }
+    function chainFrom(it, t, s) {
+      const ref = s.ref || [];
+      dxc = { t: t, it: it, dir: E.dimDir(s), first: s.pts[0], firstRef: ref[0] || null, last: s.pts[1], lastRef: ref[1] || null,
+              loc: s.pts[2], n: 0, sty: s.sty, c: s.c, w: s.w };
+      hint('Click the <b>next point</b>. <b>Enter</b>, <b>Esc</b>, double-click or right-click ends it.');
+    }
+    function chainMark(p) {
+      const d = dxc, n = v2.perp(d.dir);
+      let from = d.last, loc = d.loc;
+      if (d.t === 'dimb') {
+        from = d.first;
+        const st = E.dimStyle({ sty: d.sty });
+        const side = v2.dot(d.loc, n) - v2.dot(d.first, n) >= 0 ? 1 : -1;
+        const step = st.th * st.sc * 1.9;
+        loc = [d.loc[0] + n[0] * side * step, d.loc[1] + n[1] * side * step];
+      }
+      return { t: 'dimx', k: 'lin', pts: [from, p, loc], dir: [d.dir[0], d.dir[1]], c: d.c, w: d.w, sty: d.sty ? Object.assign({}, d.sty) : newSty() };
+    }
+    function chainTool(t) {
+      const lin = linearTool(t);
+      return {
+        colors: true, widths: true,
+        down: function (it, at, e) { if (!dxc) lin.down(it, at, e); },
+        move: function (it, at, e) {
+          if (!it.vp) return;
+          if (!dxc || dxc.it !== it) { lin.move(it, at, e); return; }
+          const p = snapAt(it, at, e);
+          X.drawShapes(it, chainMark(p));
+        },
+        cancel: function () { chainEnd(); },
+        up: function (it, at, e) {
+          if (!it.vp || (e && e.button > 0)) return;
+          if (!dxc || dxc.it !== it) {
+            if (dxc) chainEnd();
+            /* on a linear dimension already there: carry on from it */
+            if (!dx || dx.t === '?') {
+              const raw = it.vp.convertToPdfPoint(at[0], at[1]);
+              const i = dimxAt(it, raw, { lin: 1, ali: 1 });
+              if (i >= 0) { dx = null; chainFrom(it, t, it.shapes[i]); X.drawShapes(it); return; }
+            }
+            const before = dx;
+            lin.up(it, at, e);
+            /* the first one placed: the chain carries on from it */
+            if (before && !dx && it.shapes.length && it.shapes[it.shapes.length - 1].t === 'dimx') {
+              chainFrom(it, t, it.shapes[it.shapes.length - 1]);
+            }
+            return;
+          }
+          const p = snapAt(it, at, e);
+          const m = chainMark(p);
+          if (Math.abs(v2.dot(v2.sub(p, m.pts[0]), dxc.dir)) < 1) return;   /* the second click of a double-click */
+          const refs = [t === 'dimb' ? dxc.firstRef : dxc.lastRef, undefined];
+          dxCommit(it, m, refs);
+          dxc.n++;
+          if (t === 'dimc') { dxc.last = p; dxc.lastRef = m.ref ? m.ref[1] : null; }
+          else dxc.loc = m.pts[2];
+          hint('Click the <b>next point</b>. <b>Enter</b>, <b>Esc</b>, double-click or right-click ends it.');
         }
-        endChain();
+      };
+    }
+    X.tools.dimc = chainTool('dimc');
+    X.tools.dimb = chainTool('dimb');
+    $('stage').addEventListener('dblclick', function () { if (dxc && (S.tool === 'dimc' || S.tool === 'dimb')) chainEnd(); });
+    $('stage').addEventListener('contextmenu', function (e) {
+      if (!dxc || (S.tool !== 'dimc' && S.tool !== 'dimb')) return;
+      e.preventDefault();
+      chainEnd();
+    });
+
+    /* the keys, ahead of core's and the tool shortcuts: Esc steps back,
+       Enter ends a chain, H / V / A fix a linear dimension, X / Y an
+       ordinate, O a new datum */
+    document.addEventListener('keydown', function (e) {
+      if (!DX_TOOLS[S.tool]) return;
+      if (e.target && e.target.matches && e.target.matches('input,textarea,select')) return;
+      const stop = function () { e.preventDefault(); e.stopImmediatePropagation(); };
+      if (e.key === 'Escape') {
+        if (dx && dx.t !== '?') { stop(); dxCancel(); if (dxc) hint('Click the <b>next point</b>. <b>Enter</b> or <b>Esc</b> ends it.'); return; }
+        if (dxc) { stop(); chainEnd(); }
+        return;
+      }
+      if (e.key === 'Enter') { if (dxc) { stop(); chainEnd(); } return; }
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      const placing = dx && dx.pts && dx.pts.length === 2 && (dx.t === 'dim' || dx.t === 'dimc' || dx.t === 'dimb');
+      if (placing && (k === 'h' || k === 'v' || k === 'a')) {
+        stop();
+        dx.lock = dx.lock === k ? null : k;
+        if (dx.last) linearMove(dx.it, dx.last.at, dx.last.e);
+        return;
+      }
+      if (S.tool === 'dimo') {
+        if (dx && (k === 'x' || k === 'y')) {
+          stop();
+          dx.lock = dx.lock === k ? null : k;
+          if (dx.last) X.tools.dimo.move(dx.it, dx.last.at, dx.last.e);
+        } else if (k === 'o') {
+          stop();
+          const it = S.items[S.current - 1];
+          dxCancel(true);
+          S.items.forEach(function (x) { x._dxOrigin = null; });
+          hint('Click the <b>datum</b> (the origin) every ordinate measures from.');
+          if (it) X.drawShapes(it);
+        }
       }
     }, true);
-    $('stage').addEventListener('dblclick', function () {
-      if (chain && S.tool === 'dimc') endChain();
+    X.on('tool', function (t) {
+      if (dx && dx.t !== t) dxCancel(true);
+      if (dxc && dxc.t !== t) chainEnd();
+      if (t === 'dima') {
+        const it = S.items[S.current - 1];
+        if (it) pageSegments(it);
+      }
+      if (t === 'dimo') {
+        const it = S.items[S.current - 1];
+        if (it && !ordOrigin(it)) hint('Click the <b>datum</b> (the origin) every ordinate measures from.');
+      }
     });
-    $('stage').addEventListener('contextmenu', function (e) {
-      if (S.tool !== 'dimc' || !chain) return;
-      e.preventDefault();
-      endChain();
+
+    /* ---- the selected dimension's own grips, as AutoCAD's: a square on
+       each defining point (filled when it is held to an object), one on the
+       dimension line and one on the text. A defining point snaps, and is
+       held to what it lands on; the line and the text move on their own.
+       Alt+click on the text's grip puts the text back in its place. ---- */
+    X.afterDraw.push(function (it) {
+      if (S.tool !== 'select' || !S.sel || S.sel.it !== it || X.selList().length > 1) return;
+      const s = it.shapes[S.sel.i];
+      if (!s || s.t !== 'dimx' || s.locked || s.hide || !it.vp || !s.pts) return;
+      const D = dxLayout(s), vp = it.vp, idx = S.sel.i;
+      const g = document.createElementNS(SVGNS, 'g');
+      g.setAttribute('class', 'dxgrips');
+      function grip(q, kind, i, title, cls) {
+        const v = vp.convertToViewportPoint(q[0], q[1]);
+        const el = document.createElementNS(SVGNS, kind === 'def' ? 'rect' : 'circle');
+        if (kind === 'def') {
+          el.setAttribute('x', v[0] - 4); el.setAttribute('y', v[1] - 4);
+          el.setAttribute('width', 8); el.setAttribute('height', 8);
+        } else {
+          el.setAttribute('cx', v[0]); el.setAttribute('cy', v[1]); el.setAttribute('r', 4.5);
+        }
+        el.setAttribute('class', 'dxg ' + kind + (cls ? ' ' + cls : ''));
+        el.dataset.grip = kind + (i != null ? i : '');
+        const t = document.createElementNS(SVGNS, 'title');
+        t.textContent = title;
+        el.appendChild(t);
+        el.addEventListener('pointerdown', function (e) { gripDown(it, idx, kind, i, e); });
+        g.appendChild(el);
+      }
+      D.grips.def.forEach(function (q, i) {
+        const held = !!(s.ref && s.ref[i]);
+        grip(q, 'def', i, held ? 'A defining point, held to the object under it: drag to move it' :
+          'A defining point: drag to move it (it snaps, and holds to the object it lands on)', held ? 'assoc' : '');
+      });
+      grip(D.grips.line, 'line', null, 'Drag to move the dimension line');
+      /* the text's grip kept clear of the line's when the text sits close
+         by: drawn a little off along the text, the drag is the same */
+      let tq = D.grips.text;
+      const lv = vp.convertToViewportPoint(D.grips.line[0], D.grips.line[1]), tv = vp.convertToViewportPoint(tq[0], tq[1]);
+      if (Math.hypot(lv[0] - tv[0], lv[1] - tv[1]) < 14) {
+        const u = [Math.cos(D.text.ang), Math.sin(D.text.ang)], k = 14 / Math.max(0.05, S.scale);
+        tq = [tq[0] + u[0] * k, tq[1] + u[1] * k];
+      }
+      grip(tq, 'text', null, 'Drag to move the text on its own (Alt+click puts it back)');
+      it.anno.appendChild(g);
     });
-    X.on('tool', function (t) { if (t !== 'dimc') endChain(); });
+    let gripDrag = null;
+    function gripDown(it, idx, kind, i, e) {
+      if (e.button > 0) return;
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      const s = it.shapes[idx];
+      if (!s) return;
+      if (kind === 'text' && e.altKey) {
+        if (!s.tm) return;
+        X.snapshot();
+        s.tm = false;
+        s.pts = s.pts.slice(0, E.dimDefCount(s) + 1);
+        X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+        return;
+      }
+      const D = dxLayout(s);
+      const r = it.anno.getBoundingClientRect();
+      const at0 = it.vp.convertToPdfPoint(e.clientX - r.left, e.clientY - r.top);
+      const grab = kind === 'line' ? D.grips.line : kind === 'text' ? D.grips.text : s.pts[i];
+      gripDrag = { it: it, idx: idx, kind: kind, i: i, moved: false, x: e.clientX, y: e.clientY,
+                   off: [grab[0] - at0[0], grab[1] - at0[1]], loc0: s.pts[E.dimLocIndex(s)] };
+      const move = function (ev) {
+        const d = gripDrag;
+        if (!d) return;
+        if (!d.moved) {
+          if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < 2) return;
+          X.snapshot();
+          d.moved = true;
+        }
+        const m = it.shapes[d.idx];
+        if (!m || m.t !== 'dimx') return;
+        const rr = it.anno.getBoundingClientRect();
+        const raw = it.vp.convertToPdfPoint(ev.clientX - rr.left, ev.clientY - rr.top);
+        let p = [raw[0] + d.off[0], raw[1] + d.off[1]];
+        const pts = m.pts.map(function (q) { return [q[0], q[1]]; });
+        const li = E.dimLocIndex(m);
+        if (d.kind === 'def') {
+          const sn = X.snapPt(it, p, ev, { skip: d.idx });
+          if (sn) p = [sn[0], sn[1]];
+          pts[d.i] = p;
+          const ref = (m.ref || []).slice();
+          while (ref.length < E.dimDefCount(m)) ref.push(null);
+          ref[d.i] = refAt(it, p, d.idx, true);
+          m.ref = ref.some(Boolean) ? ref : null;
+        } else if (d.kind === 'line') {
+          /* the line's grip sits where the line is; the location point is
+             what it passes through, carried by the same step */
+          const D0 = dxLayout(m);
+          const step = [p[0] - D0.grips.line[0], p[1] - D0.grips.line[1]];
+          pts[li] = [pts[li][0] + step[0], pts[li][1] + step[1]];
+        } else {
+          while (pts.length < li + 2) pts.push([p[0], p[1]]);
+          pts[li + 1] = p;
+          m.tm = true;
+        }
+        m.pts = pts;
+        X.drawShapes(it);
+        readout.textContent = E.dimText(m, scale);
+        const v = it.vp.convertToViewportPoint(p[0], p[1]);
+        readout.style.transform = 'translate(' + Math.round(rr.left + v[0] + 14) + 'px,' + Math.round(rr.top + v[1] + 18) + 'px)';
+        readout.hidden = false;
+      };
+      const up = function () {
+        window.removeEventListener('pointermove', move, true);
+        window.removeEventListener('pointerup', up, true);
+        window.removeEventListener('pointercancel', up, true);
+        const d = gripDrag;
+        gripDrag = null;
+        readHide(); snapHide();
+        if (d && d.moved) { X.drawThumb(it); X.updateMeta(); }
+        X.drawShapes(it); X.syncMarkPop();
+      };
+      window.addEventListener('pointermove', move, true);
+      window.addEventListener('pointerup', up, true);
+      window.addEventListener('pointercancel', up, true);
+    }
+
+    /* ---- the Dimension Style dialog: every part of the look, for the next
+       dimensions (the ribbon's Style…) or the selected ones ---- */
+    const UNIT_OPTS = '<option value="">Drawing (' + 'as the Scale’s Units' + ')</option>' +
+      ['mm', 'cm', 'm', 'in', 'pt'].map(function (u) { return '<option value="' + u + '">' + UNITS[u].label + '</option>'; }).join('');
+    const DP_OPTS = '<option value="">Auto</option>' + [0, 1, 2, 3, 4, 5, 6].map(function (n) {
+      return '<option value="' + n + '">' + (n ? '0.' + '0'.repeat(n) : '0') + '</option>';
+    }).join('');
+    const AH_OPTS = [['closed', 'Closed filled'], ['open', 'Open'], ['oblique', 'Oblique (architectural tick)'], ['dot', 'Dot'], ['none', 'None']]
+      .map(function (o) { return '<option value="' + o[0] + '">' + o[1] + '</option>'; }).join('');
+    const TP_OPTS = '<option value="above">Above the line</option><option value="center">Centred on the line</option><option value="below">Below the line</option>';
+    const TA_OPTS = '<option value="aligned">Aligned with the line</option><option value="horizontal">Horizontal</option>';
+    function num(id, label, unit, step) {
+      return '<label class="dxf"><span>' + label + '</span><span class="unit"><input id="' + id + '" inputmode="decimal" type="number" step="' + (step || 0.5) + '" min="0">' +
+        (unit ? '<em>' + unit + '</em>' : '') + '</span></label>';
+    }
+    function sel(id, label, opts) { return '<label class="dxf"><span>' + label + '</span><select id="' + id + '">' + opts + '</select></label>'; }
+    function chk(id, label) { return '<label class="dxf chk"><input type="checkbox" id="' + id + '"><span>' + label + '</span></label>'; }
+    function txt(id, label, ph) { return '<label class="dxf"><span>' + label + '</span><input id="' + id + '" placeholder="' + (ph || '') + '"></label>'; }
+    function styleBody() {
+      return '<div class="dxstyle">' +
+        '<fieldset><legend>Text</legend>' + num('dxTh', 'Height', 'pt') + sel('dxTf', 'Font', fontOpts()) +
+          chk('dxTb', 'Bold') + chk('dxTi', 'Italic') +
+          '<label class="dxf"><span>Colour</span><input type="color" id="dxTc"></label>' + chk('dxTcSame', 'Same as the lines') + '</fieldset>' +
+        '<fieldset><legend>Placement</legend>' + sel('dxTp', 'Position', TP_OPTS) + sel('dxTa', 'Alignment', TA_OPTS) + num('dxTg', 'Gap', 'pt') +
+          chk('dxBg', 'Background') + '<label class="dxf"><span>Background colour</span><input type="color" id="dxBgc"></label></fieldset>' +
+        '<fieldset><legend>Arrowheads and lines</legend>' + sel('dxAh', 'Arrowhead', AH_OPTS) + num('dxAs', 'Arrow size', 'pt') +
+          num('dxExo', 'Extension offset', 'pt') + num('dxExe', 'Extend beyond', 'pt') + num('dxExf', 'Fixed length (0: off)', 'pt') +
+          chk('dxCm', 'Centre mark on radius and diameter') + '</fieldset>' +
+        '<fieldset><legend>Values</legend>' + sel('dxU', 'Unit', UNIT_OPTS) + sel('dxDp', 'Precision', DP_OPTS) + sel('dxAdp', 'Angle precision', DP_OPTS) +
+          chk('dxUl', 'Write the unit') + txt('dxPre', 'Prefix', 'e.g. 2×') + txt('dxSuf', 'Suffix', 'e.g. TYP') + '</fieldset>' +
+        '<fieldset><legend>Scale</legend>' + num('dxSc', 'Overall scale', '%', 5) + '</fieldset>' +
+        '</div>';
+    }
+    function styleDialog(title, st0) {
+      const st = Object.assign({}, E.DIM_STYLE, st0 || {});
+      return X.dialog({
+        title: title, ok: 'OK', width: 560,
+        body: styleBody(),
+        open: function (box) {
+          const q = function (id) { return box.querySelector('#' + id); };
+          q('dxTh').value = st.th; q('dxTf').value = st.tf || ''; q('dxTb').checked = !!st.tb; q('dxTi').checked = !!st.ti;
+          q('dxTc').value = st.tc || '#000000'; q('dxTcSame').checked = !st.tc;
+          q('dxTp').value = st.tp; q('dxTa').value = st.ta; q('dxTg').value = st.tg;
+          q('dxBg').checked = !!st.bg; q('dxBgc').value = st.bgc || '#FFFFFF';
+          q('dxAh').value = st.ah; q('dxAs').value = st.as; q('dxExo').value = st.exo; q('dxExe').value = st.exe; q('dxExf').value = st.exf;
+          q('dxCm').checked = !!st.cm;
+          q('dxU').value = st.u || ''; q('dxDp').value = st.dp == null ? '' : String(st.dp); q('dxAdp').value = st.adp == null ? '' : String(st.adp);
+          q('dxUl').checked = !!st.ul; q('dxPre').value = st.pre || ''; q('dxSuf').value = st.suf || '';
+          q('dxSc').value = Math.round(st.sc * 100);
+          q('dxTc').addEventListener('input', function () { q('dxTcSame').checked = false; });
+        },
+        value: function (box) {
+          const q = function (id) { return box.querySelector('#' + id); };
+          const n = function (id, min, max) { const v = parseFloat(q(id).value); return isFinite(v) ? Math.max(min, Math.min(max, v)) : null; };
+          const th = n('dxTh', 1, 500);
+          if (th == null) return { error: 'Text height: a size in points', field: '#dxTh' };
+          const sc = n('dxSc', 5, 5000);
+          if (sc == null) return { error: 'Overall scale: a percentage', field: '#dxSc' };
+          return {
+            th: th, tf: q('dxTf').value, tb: q('dxTb').checked, ti: q('dxTi').checked,
+            tc: q('dxTcSame').checked ? '' : q('dxTc').value.toUpperCase(),
+            tp: q('dxTp').value, ta: q('dxTa').value, tg: n('dxTg', 0, 200) || 0,
+            bg: q('dxBg').checked, bgc: q('dxBgc').value.toUpperCase(),
+            ah: q('dxAh').value, as: n('dxAs', 0, 200) || 0, exo: n('dxExo', 0, 500) || 0, exe: n('dxExe', 0, 500) || 0,
+            exf: n('dxExf', 0, 5000) || 0, cm: q('dxCm').checked,
+            u: q('dxU').value, dp: q('dxDp').value === '' ? null : +q('dxDp').value, adp: q('dxAdp').value === '' ? null : +q('dxAdp').value,
+            ul: q('dxUl').checked, pre: q('dxPre').value, suf: q('dxSuf').value, sc: sc / 100
+          };
+        }
+      });
+    }
+    /* on the ribbon: the style the next dimensions take */
+    $('dimCtl').insertAdjacentHTML('beforeend',
+      '<button class="tg" id="dimStyleBtn" title="Dimension Style: text, arrowheads, extension lines, units, precision, prefix and suffix">Style…</button>');
+    $('dimStyleBtn').addEventListener('click', function () {
+      styleDialog('Dimension Style — for new dimensions', newSty()).then(function (st) { if (st) setCurrentStyle(st); });
+    });
+
+    /* ---- the selected dimension's properties ---- */
+    const dxPop = document.createElement('div');
+    dxPop.className = 'mpdx';
+    dxPop.innerHTML =
+      '<div class="dxrow"><span class="dxval" id="dxVal"></span><span class="dxassoc" id="dxAssoc"></span></div>' +
+      '<div class="dxrow"><label class="mfield dxtext"><span>Text</span><input id="dxText" placeholder="&lt;&gt; is the measured value" ' +
+        'title="What the dimension says; &lt;&gt; stands for the measured value. Empty: the measured value."></label></div>' +
+      '<div class="dxrow">' +
+        '<label class="mfield"><span>Height</span><span class="unit"><input id="dxPTh" type="number" min="1" step="0.5" inputmode="decimal"><em>pt</em></span></label>' +
+        '<label class="mfield"><span>Arrow</span><select id="dxPAh">' + AH_OPTS + '</select></label>' +
+        '<label class="mfield"><span>Size</span><span class="unit"><input id="dxPAs" type="number" min="0" step="0.5" inputmode="decimal"><em>pt</em></span></label>' +
+      '</div><div class="dxrow">' +
+        '<label class="mfield"><span>Unit</span><select id="dxPU">' + UNIT_OPTS + '</select></label>' +
+        '<label class="mfield"><span>Precision</span><select id="dxPDp">' + DP_OPTS + '</select></label>' +
+      '</div><div class="dxrow">' +
+        '<label class="mfield"><span>Prefix</span><input id="dxPPre" class="short"></label>' +
+        '<label class="mfield"><span>Suffix</span><input id="dxPSuf" class="short"></label>' +
+      '</div><div class="dxrow">' +
+        '<label class="mfield"><span>Text</span><select id="dxPTp">' + TP_OPTS + '</select></label>' +
+        '<label class="mfield"><span>Align</span><select id="dxPTa">' + TA_OPTS + '</select></label>' +
+        '<label class="mfield chk"><input type="checkbox" id="dxPBg"><span>Background</span></label>' +
+      '</div><div class="dxrow dxbtns">' +
+        '<button class="cbtn" id="dxPStyle" type="button" title="Every part of its look">Style…</button>' +
+        '<button class="cbtn" id="dxPCur" type="button" title="New dimensions take this one’s look">Make current</button>' +
+        '<button class="cbtn" id="dxPHome" type="button" title="The text back in its own place">Reset text</button>' +
+        '<button class="cbtn" id="dxPFree" type="button" title="Stop following the objects it measures">Disassociate</button>' +
+      '</div><div class="dxrow" id="dxScaleRow"></div>';
+    const dq = function (id) { return dxPop.querySelector('#' + id); };
+    function dxSel() {
+      const sh = S.sel && S.sel.it && S.sel.it.shapes[S.sel.i];
+      return sh && sh.t === 'dimx' ? sh : null;
+    }
+    /** a change to every selected dimension: its points, references and
+        style are copied before they change, so undo keeps the old ones */
+    function dxEdit(fn) {
+      if (!dxSel()) return;
+      X.snapshot();
+      const it = S.sel.it;
+      X.selList().forEach(function (i) {
+        const m = it.shapes[i];
+        if (!m || m.t !== 'dimx' || m.locked) return;
+        m.sty = Object.assign({}, m.sty || {});
+        fn(m, it);
+        m.sty = cleanSty(m.sty);
+        if (!Object.keys(m.sty).length) delete m.sty;
+      });
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+    }
+    X.markPop.dimx = {
+      el: dxPop,
+      sync: function (sh) {
+        if (!sh) return;
+        const st = E.dimStyle(sh);
+        const m = E.dimMeasure(sh);
+        dq('dxVal').innerHTML = 'Measured <b>' + X.esc(E.dimValueText(Object.assign({}, sh, { sty: Object.assign({}, sh.sty, { pre: '', suf: '' }) }), scale)) + '</b>' +
+          (m.angle ? '' : ' <i>(' + (Math.round(m.v * 100) / 100) + ' pt)</i>');
+        const nd = E.dimDefCount(sh), held = (sh.ref || []).slice(0, nd).filter(Boolean).length;
+        dq('dxAssoc').textContent = held ? (held === nd ? 'Associative' : 'Associative (' + held + ' of ' + nd + ' points)') : 'Not associative';
+        dq('dxAssoc').classList.toggle('on', !!held);
+        dq('dxPFree').disabled = !held;
+        dq('dxPHome').disabled = !sh.tm;
+        const set = function (id, v) { const el = dq(id); if (document.activeElement !== el) el.value = v; };
+        set('dxText', sh.label || '');
+        set('dxPTh', st.th); set('dxPAs', st.as);
+        dq('dxPAh').value = st.ah; dq('dxPU').value = st.u || ''; dq('dxPDp').value = m.angle ? (st.adp == null ? '' : String(st.adp)) : (st.dp == null ? '' : String(st.dp));
+        set('dxPPre', st.pre || ''); set('dxPSuf', st.suf || '');
+        dq('dxPTp').value = st.tp; dq('dxPTa').value = st.ta; dq('dxPBg').checked = !!st.bg;
+        dq('dxPU').disabled = m.angle;
+        /* the drawing scale rides along, as for the older dimensions */
+        if (mpScale.parentNode !== dq('dxScaleRow')) dq('dxScaleRow').appendChild(mpScale);
+        $('mpDimStyle').hidden = true; $('mpDimCal').hidden = false;
+        noteScale();
+      }
+    };
+    /* the older dimensions' popover takes the scale row back */
+    const legacySync = X.markPop.dim.sync;
+    X.markPop.dim.sync = function (sh) {
+      if (mpScale.parentNode !== mpDim) mpDim.insertBefore(mpScale, mpDim.firstChild);
+      $('mpDimStyle').hidden = false;
+      legacySync(sh);
+    };
+    dxPop.addEventListener('change', function (e) {
+      const id = e.target.id, v = e.target.value;
+      const fl = function () { const n = parseFloat(v); return isFinite(n) && n >= 0 ? n : null; };
+      if (id === 'dxText') { dxEdit(function (m) { m.label = v.trim() === '' ? null : v; if (m.label == null) delete m.label; }); return; }
+      if (id === 'dxPTh') { const n = fl(); if (n > 0) dxEdit(function (m) { m.sty.th = n; }); else X.syncMarkPop(); return; }
+      if (id === 'dxPAs') { const n = fl(); if (n != null) dxEdit(function (m) { m.sty.as = n; }); else X.syncMarkPop(); return; }
+      if (id === 'dxPAh') { dxEdit(function (m) { m.sty.ah = v; }); return; }
+      if (id === 'dxPU') { dxEdit(function (m) { m.sty.u = v; }); return; }
+      if (id === 'dxPDp') {
+        dxEdit(function (m) {
+          const n = v === '' ? null : +v;
+          if (E.dimMeasure(m).angle) m.sty.adp = n; else m.sty.dp = n;
+        });
+        return;
+      }
+      if (id === 'dxPPre') { dxEdit(function (m) { m.sty.pre = v; }); return; }
+      if (id === 'dxPSuf') { dxEdit(function (m) { m.sty.suf = v; }); return; }
+      if (id === 'dxPTp') { dxEdit(function (m) { m.sty.tp = v; }); return; }
+      if (id === 'dxPTa') { dxEdit(function (m) { m.sty.ta = v; }); return; }
+      if (id === 'dxPBg') { const on = e.target.checked; dxEdit(function (m) { m.sty.bg = on; }); }
+    });
+    dxPop.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); e.target.dispatchEvent(new Event('change', { bubbles: true })); e.target.blur(); }
+      e.stopPropagation();
+    });
+    dq('dxPStyle').addEventListener('click', function () {
+      const sh = dxSel(); if (!sh) return;
+      styleDialog('Dimension Style — for the selected', sh.sty || {}).then(function (st) {
+        if (!st) return;
+        dxEdit(function (m) { m.sty = Object.assign({}, st); });
+      });
+    });
+    dq('dxPCur').addEventListener('click', function () {
+      const sh = dxSel(); if (!sh) return;
+      setCurrentStyle(sh.sty || {});
+      X.toast('New dimensions take this look');
+    });
+    dq('dxPHome').addEventListener('click', function () {
+      dxEdit(function (m) { if (m.tm) { m.tm = false; m.pts = m.pts.slice(0, E.dimDefCount(m) + 1); } });
+    });
+    dq('dxPFree').addEventListener('click', function () {
+      dxEdit(function (m) { delete m.ref; });
+      X.toast('It no longer follows what it measures');
+    });
+
+    /* Double-click a dimension: its text, typed (<> for the measured value) */
+    function editDimText(it, s) {
+      X.ask('What this dimension says. <> stands for the measured value (' + E.dimValueText(s, scale) + ');\n' +
+        'leave it empty for the measured value alone.', s.label || '', { title: 'Dimension text' }).then(function (v) {
+        if (v === null || it.shapes.indexOf(s) < 0) return;
+        X.snapshot();
+        if (v.trim() === '') delete s.label; else s.label = v;
+        X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+      });
+    }
+    /* Double-click a dimension, under Select: its text. Taken from two
+       presses rather than the dblclick event: the first press picks the
+       mark and redraws it, and a browser only sends dblclick when both
+       clicks land on the same element. */
+    let dxPress = null;
+    $('stage').addEventListener('pointerdown', function (e) {
+      if (e.button !== 0 || S.tool !== 'select') { dxPress = null; return; }
+      const now = Date.now();
+      const twice = dxPress && now - dxPress.t < 450 && Math.hypot(e.clientX - dxPress.x, e.clientY - dxPress.y) < 6;
+      dxPress = twice ? null : { t: now, x: e.clientX, y: e.clientY };
+      if (!twice) return;
+      const it = S.items.filter(function (x) {
+        if (!x.anno || !x.vp) return false;
+        const b = x.anno.getBoundingClientRect();
+        return e.clientX >= b.left && e.clientX <= b.right && e.clientY >= b.top && e.clientY <= b.bottom;
+      })[0];
+      if (!it) return;
+      const b = it.anno.getBoundingClientRect();
+      const i = dimxAt(it, it.vp.convertToPdfPoint(e.clientX - b.left, e.clientY - b.top), null);
+      if (i < 0) return;
+      const s = it.shapes[i];
+      /* once this press has finished with the mark */
+      setTimeout(function () { editDimText(it, s); }, 0);
+    }, true);
+
+    /* ---- a page's marks as an SVG file: every mark, dimensions included,
+       drawn as on screen, in points on paper ---- */
+    X.exportPageSvg = function (it) {
+      if (!it || !it.anno || !it.vp) return Promise.resolve(false);
+      const k = Math.max(0.05, S.scale);
+      const W = it.vp.width, H = it.vp.height;
+      const out = document.createElementNS(SVGNS, 'svg');
+      out.setAttribute('xmlns', SVGNS);
+      out.setAttribute('width', (W / k).toFixed(2) + 'pt');
+      out.setAttribute('height', (H / k).toFixed(2) + 'pt');
+      out.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+      const page = document.createElementNS(SVGNS, 'rect');
+      page.setAttribute('width', W); page.setAttribute('height', H);
+      page.setAttribute('fill', '#FFFFFF');
+      out.appendChild(page);
+      Array.prototype.forEach.call(it.anno.children, function (el, i) {
+        const s = it.shapes[i];
+        if (!s || s.hide || el.style.display === 'none') return;
+        const c = el.cloneNode(true);
+        /* what is only there to be taken hold of, or to show a selection, stays behind */
+        Array.prototype.forEach.call(c.querySelectorAll('.dxhit, .grab, .hnd, .dxgrips, .rcwg, title'), function (x) { x.remove(); });
+        c.classList.remove('picked');
+        out.appendChild(c);
+      });
+      const xml = '<?xml version="1.0" encoding="UTF-8"?>\n' + new XMLSerializer().serializeToString(out);
+      const name = String((X.docName && X.docName()) || 'page').replace(/\.pdf$/i, '') + '-p' + (S.items.indexOf(it) + 1) + '.svg';
+      return Promise.resolve(X.download(new TextEncoder().encode(xml), name, 'image/svg+xml')).then(function () { return xml; });
+    };
 
     /* --- continuous line (polyline) ---
        Click, click, click, the same gesture as Continuous Dimension above:
@@ -1713,7 +3059,6 @@
        centre and radius; a corner and a point on each arm give an angle. The
        last click places the reading, the way AutoCAD's does. */
 
-    const RADIAL = { dimr: 1, dimd: 1, dima: 1 };
     const ALL_DIMS = { dim: 1, dimr: 1, dimd: 1, dima: 1 };
 
     const measureCtx = document.createElement('canvas').getContext('2d');
@@ -1880,23 +3225,7 @@
     };
 
     /* --- the picking tools --- */
-    let pick = null;                               /* {t, it, pts} */
     let fpick = null;                              /* {it, first: {idx, s}} — fillet's own two-line pick */
-    const STEP_HINT = {
-      circle: ['Click <b>three points</b> on the edge of the circle or arc.',
-               'Click a <b>second point</b> on the edge.',
-               'Click a <b>third point</b> on the edge.',
-               'Click where the reading goes.'],
-      dima: ['Click the <b>first line</b> of the angle.',
-             'Click the <b>second line</b>.',
-             'Click the <b>second line</b>.',
-             'Move to choose the side and size of the arc, then click to place it.'],
-      /* a scan has no lines to pick, so the first click became the corner */
-      corner: ['Click the <b>corner</b> of the angle.',
-               'No drawn line there, so that is the <b>corner</b>. Click a point on the <b>first line</b>.',
-               'Click a point on the <b>second line</b>.',
-               'Move to choose the side and size of the arc, then click to place it.']
-    };
     /* ---- the drawing's own lines, so Angular can pick them like CAD does ----
        Read once per page from pdf.js's operator list: every straight piece of
        every path, carried through the transforms into page space. Curves are
@@ -2008,13 +3337,14 @@
        Ctrl to ignore it for a moment. */
 
     const SNAP_TOOLS = { rect: 1, line: 1, arrow: 1, ellipse: 1, cloud: 1, arc: 1,
-                         dim: 1, dimc: 1, dimr: 1, dimd: 1, dima: 1, poly: 1, pen: 1 };
+                         dim: 1, dimal: 1, dimc: 1, dimb: 1, dimr: 1, dimd: 1, dima: 1, dimarc: 1, dimo: 1,
+                         poly: 1, pen: 1 };
     const SNAP_KINDS = [['end', 'Endpoint'], ['mid', 'Midpoint'], ['int', 'Intersection'],
                         ['near', 'Nearest'], ['perp', 'Perpendicular'], ['par', 'Parallel'],
                         ['mark', 'Points of your marks'], ['guide', 'Guides']];
     /* Perpendicular and Parallel are about the direction of the line in hand,
        so they only work for tools that draw one from a start point */
-    const DIR_TOOLS = { line: 1, arrow: 1, dim: 1, poly: 1, pen: 1 };
+    const DIR_TOOLS = { line: 1, arrow: 1, dim: 1, dimal: 1, poly: 1, pen: 1 };
     /* A crossing of two real lines is as much a point as an end is, so it
        ranks with them and the nearer of the two wins; the crossings tracking
        and the rulers invent rank below that, and lying along something below
@@ -2122,6 +3452,13 @@
         });
         return out;
       }
+      /* a rectangle with rounded corners: its eight anchors, where each arc
+         meets a side, as Illustrator's anchor points are, and its centre */
+      if (t === 'rect' && s.b && E.rectRounded(s)) {
+        E.rectAnchors(s).forEach(function (q) { out.push([q, 'Anchor']); });
+        out.push([[(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2], 'Centre']);
+        return out;
+      }
       if ((t === 'rect' || t === 'cloud') && s.b && s.r) {
         E.rectCorners(s).forEach(function (q) { out.push([q, 'Anchor']); });
         return out;
@@ -2153,6 +3490,14 @@
       const t = s.t;
       if (s.hide) return [];
       if (s.b && (t === 'line' || t === 'arrow' || t === 'dim')) return [[s.a, s.b]];
+      /* rounded: just its straight sides, between the arcs */
+      if (s.b && t === 'rect' && E.rectRounded(s)) {
+        const P = E.rectBezier(s), out = [];
+        for (let i = 0; i + 3 < P.length; i += 3) {
+          if (P[i][0] === P[i + 1][0] && P[i][1] === P[i + 1][1]) out.push([P[i], P[i + 3]]);
+        }
+        return out;
+      }
       if (s.b && (t === 'rect' || t === 'cloud' || t === 'redact') && !s.r) {
         const a = s.a, b = s.b, c = [s.a[0], s.b[1]], d = [s.b[0], s.a[1]];
         return [[a, d], [d, b], [b, c], [c, a]];
@@ -2381,8 +3726,8 @@
       if (!snap.on || (e && e.ctrlKey)) return false;
       if (opts && opts.skip != null) return true;            /* dragging a mark's end */
       if (!SNAP_TOOLS[S.tool]) return false;
-      /* Angular picks whole lines until it has both; only its last click snaps */
-      if (S.tool === 'dima' && (!pick || (pick.mode === 'lines' && !pick.arm))) return false;
+      /* Angular picks whole lines until it has both (a vertex and its arms snap) */
+      if (S.tool === 'dima' && !(opts && opts.force) && (!dx || dx.it == null || dx.mode !== 'v')) return false;
       return true;
     }
 
@@ -2773,6 +4118,8 @@
     });
     X.on('reset', trackClear);
     X.on('pages', trackClear);
+    /* a tool that does not snap puts down whatever guides were up */
+    X.on('tool', function (t) { if (!SNAP_TOOLS[t]) { opStart = null; trackClear(); } });
 
     /* ---- the switch, in the tool's properties ---- */
     const snapCtl = ctl('snapCtl',
@@ -2829,201 +4176,6 @@
        handlers for what they are drawing; this only drops the guides. */
     document.addEventListener('keydown', function (e) {
       if (e.key === 'Escape' && (acqs.length || parRef)) trackClear();
-    });
-
-    /** Two picked lines to an angle: the corner is where they meet, and each
-        arm points from the corner toward the side of the line that was clicked. */
-    function armsFromLines(L1, L2) {
-      const p1 = L1.seg[0], d1 = [L1.seg[1][0] - p1[0], L1.seg[1][1] - p1[1]];
-      const p2 = L2.seg[0], d2 = [L2.seg[1][0] - p2[0], L2.seg[1][1] - p2[1]];
-      const den = d1[0] * d2[1] - d1[1] * d2[0];
-      if (Math.abs(den) < 0.01 * Math.hypot(d1[0], d1[1]) * Math.hypot(d2[0], d2[1])) return null;
-      const t = ((p2[0] - p1[0]) * d2[1] - (p2[1] - p1[1]) * d2[0]) / den;
-      const V = [p1[0] + t * d1[0], p1[1] + t * d1[1]];
-      function arm(L, d) {
-        const len = Math.hypot(d[0], d[1]), u = [d[0] / len, d[1] / len];
-        let s = (L.click[0] - V[0]) * u[0] + (L.click[1] - V[1]) * u[1];
-        if (Math.abs(s) < 1) {                   /* clicked on the corner itself: take the longer side */
-          const e0 = (L.seg[0][0] - V[0]) * u[0] + (L.seg[0][1] - V[1]) * u[1];
-          const e1 = (L.seg[1][0] - V[0]) * u[0] + (L.seg[1][1] - V[1]) * u[1];
-          s = Math.abs(e0) > Math.abs(e1) ? e0 : e1;
-        }
-        const dir = s < 0 ? [-u[0], -u[1]] : u;
-        let reach = Math.abs(s);
-        L.seg.forEach(function (e) {
-          reach = Math.max(reach, (e[0] - V[0]) * dir[0] + (e[1] - V[1]) * dir[1]);
-        });
-        return { a: Math.atan2(dir[1], dir[0]), l: reach };
-      }
-      const A = arm(L1, d1), B = arm(L2, d2);
-      return { v: V, a1: A.a, l1: A.l, a2: B.a, l2: B.l };
-    }
-    function armsFromPoints(P) {
-      const v = P[0];
-      return {
-        v: v,
-        a1: Math.atan2(P[1][1] - v[1], P[1][0] - v[0]), l1: Math.hypot(P[1][0] - v[0], P[1][1] - v[1]),
-        a2: Math.atan2(P[2][1] - v[1], P[2][0] - v[0]), l2: Math.hypot(P[2][0] - v[0], P[2][1] - v[1])
-      };
-    }
-
-    function stepHint() {
-      if (!pick) return;
-      let msg;
-      if (pick.t !== 'dima') msg = STEP_HINT.circle[Math.min(3, pick.pts.length)];
-      else if (pick.mode === 'corner') msg = STEP_HINT.corner[pick.arm ? 3 : pick.pts.length];
-      else msg = STEP_HINT.dima[pick.arm ? 3 : pick.lines.length];
-      $('modeHint').innerHTML = msg + ' <b>Esc</b> starts again.';
-    }
-    function pickReset() {
-      if (!pick) return;
-      const it = pick.it;
-      pick = null;
-      X.drawShapes(it);
-      trackClear();             /* this reading is done; a tracked point is not the next one's */
-      if (RADIAL[S.tool]) $('modeHint').innerHTML = X.hints[S.tool];
-    }
-    function pickedShape(cur) {
-      const t = pick.t;
-      const base = { t: t, c: S.color, w: S.width };
-      applyLook(base);
-      if (t === 'dima') {
-        const A = pick.arm;
-        if (!A) return null;
-        return Object.assign(base, {
-          a: [A.v[0], A.v[1]], b: [cur[0], cur[1]], a1: A.a1, l1: A.l1, a2: A.a2, l2: A.l2
-        });
-      }
-      const P = pick.pts;
-      const c = circle3(P[0], P[1], P[2]);
-      return c ? Object.assign(base, { a: c.c, rad: c.r, b: [cur[0], cur[1]] }) : null;
-    }
-    function pickGhost(cur) {
-      if (pick.t === 'dima' && pick.arm) return pickedShape(cur);
-      if (pick.t !== 'dima' && pick.pts.length >= 3) return pickedShape(cur);
-      const P = pick.pts;
-      const gh = { t: 'dimguide', c: S.color, marks: P.slice(), lines: [], solid: [] };
-      if (pick.t === 'dima' && pick.mode === 'lines') {
-        pick.lines.forEach(function (L) { gh.solid.push(L.seg); });
-        const hover = segAt(pick.it, cur);                 /* the line a click would take */
-        if (hover && pick.lines.every(function (L) { return L.seg !== hover; })) gh.lines.push(hover);
-      } else if (pick.t === 'dima') {
-        if (P.length >= 1) gh.lines.push([P[0], cur]);
-        if (P.length === 2) gh.lines.push([P[0], P[1]]);
-      } else if (P.length === 2) {
-        gh.circle = circle3(P[0], P[1], cur);
-      }
-      return gh;
-    }
-
-    function commit(it, t, cur) {
-      const g = pickedShape(cur);
-      if (!g) return;
-      X.snapshot();
-      it.shapes.push(g);
-      pick = null;
-      trackClear();              /* this reading is done; a tracked point is not the next one's */
-      $('modeHint').innerHTML = X.hints[t];
-      X.drawShapes(it); X.drawThumb(it); X.updateMeta();
-      X.toast('<b>' + X.esc(dimLabel(g)) + '</b>');
-    }
-
-    function pickTool(t) {
-      return {
-        colors: true, widths: true,
-        down: function () { /* a click tool: everything happens on release */ },
-        move: function (it, at, e) {
-          if (!it.vp) return;
-          const p = it.vp.convertToPdfPoint(at[0], at[1]);
-          if (!pick) {
-            /* before the first click, still show which line would be taken */
-            if (t === 'dima' && it._segs) {
-              const h = segAt(it, p);
-              X.drawShapes(it, h ? { t: 'dimguide', c: S.color, lines: [h] } : undefined);
-            }
-            return;
-          }
-          if (pick.it !== it) return;
-          const g = pickGhost(X.snapPt(it, p, e) || p);
-          if (g) X.drawShapes(it, g);
-        },
-        cancel: function () { pickReset(); },
-        up: async function (it, at, e) {
-          if (!it.vp || (e && e.button > 0)) return;
-          const raw = it.vp.convertToPdfPoint(at[0], at[1]);
-          if (!pick || pick.it !== it || pick.t !== t) {   /* a fresh start, or another page */
-            pickReset();
-            pick = { t: t, it: it, pts: [], lines: [], arm: null, mode: 'lines' };
-          }
-          /* picking Angular's lines uses the raw point; everything else snaps */
-          const lineMode = t === 'dima' && pick.mode === 'lines' && !pick.arm;
-          const p = lineMode ? raw : (X.snapPt(it, raw, e) || raw);
-          if (!lineMode) snapHide();
-          const P = pick.pts;
-
-          if (t === 'dima') {
-            if (pick.arm) { commit(it, t, p); return; }
-            if (pick.mode === 'lines') {
-              const job = pick;
-              await pageSegments(it);
-              if (pick !== job) return;
-              const seg = segAt(it, p);
-              if (!seg) {
-                if (!pick.lines.length) {          /* nothing drawn there: take it as the corner */
-                  pick.mode = 'corner';
-                  P.push(p);
-                } else {
-                  X.toast('No drawn line there — click right on the second line');
-                }
-              } else if (pick.lines.length && pick.lines[0].seg === seg) {
-                X.toast('That is the same line — click the second line');
-              } else {
-                pick.lines.push({ seg: seg, click: p });
-                if (pick.lines.length === 2) {
-                  pick.arm = armsFromLines(pick.lines[0], pick.lines[1]);
-                  if (!pick.arm) {
-                    pick.lines.pop();
-                    X.toast('Those lines are parallel — they never meet in a corner');
-                  }
-                }
-              }
-            } else {                                /* corner mode: corner, arm, arm */
-              const last = P[P.length - 1];
-              if (last && Math.hypot(p[0] - last[0], p[1] - last[1]) < 2) return;
-              if (Math.hypot(p[0] - P[0][0], p[1] - P[0][1]) < 2) return;
-              P.push(p);
-              if (P.length === 3) pick.arm = armsFromPoints(P);
-            }
-            stepHint();
-            X.drawShapes(it, pickGhost(p));
-            return;
-          }
-
-          if (P.length < 3) {
-            const last = P[P.length - 1];
-            if (last && Math.hypot(p[0] - last[0], p[1] - last[1]) < 2) return;   /* a double-click */
-            P.push(p);
-            if (P.length === 3 && !circle3(P[0], P[1], P[2])) {
-              P.pop();
-              X.toast('Those points are in a line — pick three points spread around the circle');
-            }
-            stepHint();
-            X.drawShapes(it, pickGhost(p));
-            return;
-          }
-          commit(it, t, p);
-        }
-      };
-    }
-    X.tools.dimr = pickTool('dimr');
-    X.tools.dimd = pickTool('dimd');
-    X.tools.dima = pickTool('dima');
-    /* read the lines of the page in view as soon as the tool is picked up, so
-       the first click does not wait for them */
-    X.on('tool', function (t) {
-      if (t !== 'dima') return;
-      const it = S.items[S.current - 1];
-      if (it) pageSegments(it);
     });
 
     /* ---------------- fillet ----------------
@@ -3164,13 +4316,6 @@
       filletReset();
     }, true);
 
-    document.addEventListener('keydown', function (e) {
-      if (!pick || !RADIAL[S.tool] || e.key !== 'Escape') return;
-      e.preventDefault(); e.stopImmediatePropagation();
-      pickReset();                                  /* the first Esc starts again; the next puts the tool down */
-    }, true);
-    X.on('tool', function (t) { if (!RADIAL[t] || (pick && pick.t !== t)) pickReset(); });
-
     /* ---------------- editing the reading ---------------- */
 
     /* Which dimension, if any, is under this point on the page. Generous:
@@ -3233,12 +4378,9 @@
 
     X.on('reset', function () {
       drag = null;
-      chain = null;
-      chainPend = null;
-      pick = null;
+      dx = null;
+      dxc = null;
       fpick = null;
-      dimPend = null;
-      dimOff = null;
       calibrating = false;
       $('dimCal').classList.remove('on');
       scale = { unit: 'mm', denom: 1, custom: null };

@@ -1,6 +1,8 @@
 export * from './model';
 export * from './style';
 export * from './geometry';
+export * from './rect';
+export * from './dimension';
 export * from './fonts';
 export * from './text';
 export * from './save';
@@ -24,5 +26,7 @@ export * from './pagefont';
 export * from './painters/vpath';
 export * from './painters/poly';
 export * from './painters/pen';
+export * from './painters/rect';
+export * from './painters/dimension';
 export * from './gradient';
 export * from './painters/gradient';
