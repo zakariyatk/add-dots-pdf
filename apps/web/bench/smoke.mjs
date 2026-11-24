@@ -3909,7 +3909,10 @@ try {
       A.S.items[0].shapes.push({ t: 'rect', a: [60, 60], b: [200, 140], c: '#E2483D', w: 2 });
       A.drawShapes(A.S.items[0]);
     });
+    /* something drawn and never saved: Save asks which kind of PDF first */
     await frameOf().click('#btnQSave');
+    await frameOf().waitForSelector('#savePop:not([hidden])', { timeout: 10000 });
+    await frameOf().click('#saveGo');
     await page
       .waitForFunction(() => window.__STUB.calls.some((c) => c.cmd === 'save_file'), null, { timeout: 20000 })
       .catch(() => {});

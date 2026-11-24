@@ -324,7 +324,13 @@
     font: 'helv', bold: false, ital: false, underline: false, strike: false, size: 11,
     align: 'left', bg: null, bgOp: 1,
     sel: null,           // {it, i} selected mark
-    editing: null        // {it, item, i} open text editor
+    editing: null,       // {it, item, i} open text editor
+    /* the pasteboard round every page, as Illustrator's: on while the
+       document is being drawn on (board), and what Save does next (see
+       saving): the kind of file this is, and where Save writes it again */
+    board: false,
+    fileKind: 'pdf',     // 'pdf' | 'project' (an editable PDF, opened or saved)
+    target: null         // {kind: 'pdf' | 'project', name, handle?, path?}
   };
 
   /* ---------------- helpers ---------------- */
@@ -590,6 +596,24 @@
       catch (e) { showError('The file could not be read from disk. Try again.'); return false; }
     }
     PERF.open.read = performance.now() - t0;
+    /* an editable PDF of this app's (engine project.ts): the document it
+       carries, every object ready to edit, not its painted pages */
+    if (!ranged && E.hasProjectMarker(bytes)) {
+      const pr = await E.readProject(bytes);
+      if (pr && pr.data && pr.data.app === 'add-dots-project' && Array.isArray(pr.data.sources)) {
+        const d = pr.data;
+        d.sources = d.sources.map(function (x) {
+          const got = pr.sources.get(String(x.id));
+          return got ? Object.assign({}, x, { bytes: got.bytes, b64: null }) : x;
+        });
+        if (await openProject(d, false, { file: file })) {
+          addRecent(file, S.items.length);
+          renderIdle().then(function () { SW.usable(); });
+          return true;
+        }
+        /* what it carries could not be restored: it opens as the PDF it also is */
+      }
+    }
     /* in the Windows app PDFium draws the pages: the render worker opens the
        file only when a page needs it (RW.render), not two more copies now */
     if (!ranged) RW.open(bytes, null, file);
@@ -603,6 +627,9 @@
 
     hardReset();
     if (S.tool !== 'select') setTool('select');
+    setBoard(false);
+    S.fileKind = 'pdf';
+    S.target = null;
     const src = { id: ++srcId, name: file.name, bytes: bytes, doc: doc };
     /* opened from Explorer: its place on disk (js/desktop.js) */
     if (file.adddotsPath) src.path = file.adddotsPath;
@@ -1127,6 +1154,8 @@
     it.wrap.style.width = w + 'px';
     it.wrap.style.height = h + 'px';
     boxToWrap(it);
+    clipToCrop(it, w, h, null);
+    applyBoard(it);
     sizeThumb(it, e.w, e.h);
   }
   function applySizes(live) {
@@ -1181,6 +1210,8 @@
     it.inner.style.left = (-it.off.left) + 'px';
     it.inner.style.top = (-it.off.top) + 'px';
     boxToWrap(it);
+    clipToCrop(it, w, h, c);
+    applyBoard(it);
     if (!live) sizeThumb(it, b.c ? b.c.width : b.w, b.c ? b.c.height : b.h);
 
     if (it.trPane) {
@@ -1476,6 +1507,126 @@
     if (it.mounted || !it.box) return;
     it.box.style.width = it.wrap.style.width;
     it.box.style.height = it.wrap.style.height;
+  }
+
+  /* ---------------- the pasteboard ----------------
+     As in Illustrator, the page is the artboard and the space round it the
+     pasteboard: anything can be drawn, moved, pasted or left there, stays in
+     view and editable, and is kept with the document (an editable PDF keeps
+     it too). Only what lies on the artboard goes into a standard PDF
+     (engine artboard.ts). Each page gets room round it, out to at least a
+     good part of its own size and always past the farthest mark, so there
+     is space beyond whatever has been put out there: the page stops cutting
+     its marks off, and the drawing surface (.capture) reaches over it. Every
+     position is still measured from the page's own corner, so nothing that
+     works in page points changes. */
+  const PB_SIDE = 0.6, PB_ENDS = 0.35, PB_SLACK = 80, PB_CAP = 40000;
+  function boardMargins(it) {
+    const W = parseFloat(it.wrap.style.width) || 0, H = parseFloat(it.wrap.style.height) || 0;
+    const side = Math.max(W, H) * PB_SIDE, ends = H * PB_ENDS;
+    let l = side, r = side, t = ends, b = ends;
+    if (it.vp && !it.estimated) {
+      it.shapes.forEach(function (sh) {
+        if (sh.hide) return;
+        const bx = E.markBounds(sh);
+        if (!bx) return;
+        [[bx.x1, bx.y1], [bx.x2, bx.y1], [bx.x2, bx.y2], [bx.x1, bx.y2]].forEach(function (q) {
+          const v = it.vp.convertToViewportPoint(q[0], q[1]);
+          const x = v[0] - it.off.left, y = v[1] - it.off.top;
+          l = Math.max(l, PB_SLACK - x); r = Math.max(r, x - W + PB_SLACK);
+          t = Math.max(t, PB_SLACK - y); b = Math.max(b, y - H + PB_SLACK);
+        });
+      });
+    }
+    /* the same each side, so the page stays in the middle of its own room */
+    const h = Math.round(Math.min(PB_CAP, Math.max(l, r)));
+    return { t: Math.round(Math.min(PB_CAP, t)), b: Math.round(Math.min(PB_CAP, b)), l: h, r: h };
+  }
+  /* room round one page (none with the pasteboard off); grow: only ever
+     more, as marks go further out (a page shrinking under the pointer would
+     move what is being worked on). Answers how far its top and left grew. */
+  function applyBoard(it, grow) {
+    if (!it.box || !it.wrap) return null;
+    const was = it.pb || null;
+    let m = S.board ? boardMargins(it) : null;
+    if (grow) {
+      if (!m || !was) return null;
+      if (m.t <= was.t && m.b <= was.b && m.l <= was.l) return null;
+      m = { t: Math.max(m.t, was.t), b: Math.max(m.b, was.b), l: Math.max(m.l, was.l), r: Math.max(m.r, was.r) };
+    }
+    it.pb = m;
+    it.box.style.margin = m ? m.t + 'px ' + m.r + 'px ' + m.b + 'px ' + m.l + 'px' : '';
+    it.capture.style.inset = m ? (-m.t) + 'px ' + (-m.r) + 'px ' + (-m.b) + 'px ' + (-m.l) + 'px' : '';
+    return { dt: (m ? m.t : 0) - (was ? was.t : 0), dl: (m ? m.l : 0) - (was ? was.l : 0) };
+  }
+  /* a mark put further out than the room there is: more room, the page
+     itself kept where it is on screen */
+  const boardDue = new Set();
+  let boardTimer = 0;
+  function boardLater(it) {
+    if (!S.board) return;
+    boardDue.add(it);
+    if (!boardTimer) boardTimer = setTimeout(boardFlush, 120);
+  }
+  function boardFlush() {
+    boardTimer = 0;
+    if (dragOn || document.body.classList.contains('zooming')) { boardTimer = setTimeout(boardFlush, 250); return; }
+    const sr = stage.getBoundingClientRect();
+    let dy = 0, dx = 0;
+    boardDue.forEach(function (it) {
+      if (!it.box) return;
+      const top = it.box.getBoundingClientRect().top;
+      const d = applyBoard(it, true);
+      if (!d) return;
+      if (top < sr.bottom) dy += d.dt;
+      dx = Math.max(dx, d.dl);
+    });
+    boardDue.clear();
+    /* at once and in one go (the stage scrolls smoothly otherwise, and a
+       second smooth scroll cancels the first) */
+    if (dy || dx) stage.scrollTo({ top: stage.scrollTop + dy, left: stage.scrollLeft + dx, behavior: 'instant' });
+  }
+  /* turned on or off: every page, the one in view kept in its place */
+  function setBoard(on) {
+    on = !!on;
+    const b = $('btnBoard');
+    if (b) { b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+    if (S.board === on) return;
+    S.board = on;
+    document.body.classList.toggle('board', on);
+    const cur = S.items[S.current - 1];
+    const before = cur && cur.box ? cur.box.getBoundingClientRect() : null;
+    S.items.forEach(function (it) { applyBoard(it); });
+    if (before && cur.box) {
+      const after = cur.box.getBoundingClientRect();
+      /* the page where it was, in the middle of the window with its
+         pasteboard either side: at once and in one go (a second smooth
+         scroll would cancel the first) */
+      stage.scrollTo({
+        top: stage.scrollTop + (after.top - before.top),
+        left: stage.scrollLeft + (after.left + after.width / 2) - (before.left + before.width / 2),
+        behavior: 'instant'
+      });
+    }
+    EXT.emit('board', on);
+  }
+  /* a page cut down by a crop: its picture and text keep to the crop while
+     the marks run out over the pasteboard */
+  function clipToCrop(it, w, h, c) {
+    if (!c) { it.inner.style.removeProperty('--pclip'); return; }
+    it.inner.style.setProperty('--pclip', 'inset(' + c.top + 'px ' + Math.max(0, w - c.left - c.width) + 'px ' +
+      Math.max(0, h - c.top - c.height) + 'px ' + c.left + 'px)');
+  }
+  /* the page whose pasteboard holds this point of the screen */
+  function boardItemAt(x, y) {
+    if (!S.board) return null;
+    for (let i = 0; i < S.items.length; i++) {
+      const it = S.items[i];
+      if (!it.box || !it.pb || !it.mounted) continue;
+      const r = it.box.getBoundingClientRect();
+      if (x >= r.left - it.pb.l && x <= r.right + it.pb.r && y >= r.top - it.pb.t && y <= r.bottom + it.pb.b) return it;
+    }
+    return null;
   }
 
   /* Pages holding a bitmap. Only these can be released, so a scroll frame
@@ -2377,6 +2528,8 @@
         }
       }
     }
+    /* a mark further out than the pasteboard reaches: more of it */
+    if (!ghost && S.board) boardLater(it);
     /* what a module draws over the marks (the Rotate tool's pivot, js/rotate.js) */
     if (!ghost) EXT.afterDraw.forEach(function (fn) { try { fn(it); } catch (e) { console.error('[afterDraw]', e); } });
   }
@@ -4301,8 +4454,10 @@
   function bindDraw(it) {
     let start = null, ghost = null;
 
+    /* from the page's own corner: the drawing surface reaches out over the
+       pasteboard (applyBoard), the page's coordinates do not move */
     function pt(e) {
-      const r = it.capture.getBoundingClientRect();
+      const r = it.wrap.getBoundingClientRect();
       return [e.clientX - r.left + it.off.left, e.clientY - r.top + it.off.top];
     }
     function dropGhost() {
@@ -4595,11 +4750,13 @@
     marqueeDone = false;
     const t = e.target;
     const box = t.closest ? t.closest('.pagebox') : null;
-    if (!box) return;
+    /* on the pasteboard round a page: a box drawn there selects as well */
+    const onBoard = !box && t === stage ? boardItemAt(e.clientX, e.clientY) : null;
+    if (!box && !onBoard) return;
     if (t.closest('.anno') && markUnder(t)) return;          /* on a mark: that is a drag */
     if (t.closest('.kn, .texted, input, textarea, select, button, a')) return;
     if (!(e.ctrlKey || e.metaKey) && t.closest('.textLayer span')) return;
-    const it = S.items.filter(function (x) { return x.box === box; })[0];
+    const it = onBoard || S.items.filter(function (x) { return x.box === box; })[0];
     if (!it || !it.anno) return;
     e.preventDefault();
     marquee = { it: it, x: e.clientX, y: e.clientY, add: e.ctrlKey || e.metaKey, id: e.pointerId };
@@ -4696,19 +4853,19 @@
 
   /* A copy of each selected mark, a little down and to the right, selected
      in their place (the page menu's Duplicate). */
-  function duplicateSelected() {
-    if (!S.sel) return false;
-    snapshot();
-    const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
-    const off = 12 / Math.max(0.2, S.scale);                          /* 12 screen pixels, in points */
-    const grpMap = {};        /* a duplicated group becomes its own group, not more members of the old one */
-    const gidMap = {};        /* a copy is an object of its own: dimensions copied with it measure the copy */
-    const made = list.map(function (i) {
-      const o = JSON.parse(JSON.stringify(it.shapes[i]));
+  /* Copies of marks put onto page `it`, moved by (dx, dy) points, on top:
+     each an object of its own (a copied group its own group), and a
+     dimension copied along with what it measures measuring the copy; one
+     copied on its own stays where it was copied to. Wherever they are, on
+     the page or out on the pasteboard. Answers their indexes. */
+  function placeCopies(it, list, dx, dy) {
+    const grpMap = {}, gidMap = {}, stamp = Date.now().toString(36);
+    const made = list.map(function (s0, i) {
+      const o = JSON.parse(JSON.stringify(s0));
       const c = JSON.parse(JSON.stringify(o));
-      moveShape(c, o, off, -off);
-      if (c.id != null) c.id = String(c.id) + '-' + Date.now().toString(36) + i;
-      if (c.gid) { gidMap[c.gid] = c.gid + '-' + Date.now().toString(36) + i; c.gid = gidMap[c.gid]; }
+      moveShape(c, o, dx, dy);
+      if (c.id != null) c.id = String(c.id) + '-' + stamp + i;
+      if (c.gid) { gidMap[c.gid] = c.gid + '-' + stamp + i; c.gid = gidMap[c.gid]; }
       if (c.grp != null) {
         if (!grpMap[c.grp]) grpMap[c.grp] = newGroupId();
         c.grp = grpMap[c.grp];
@@ -4716,17 +4873,50 @@
       it.shapes.push(c);
       return it.shapes.length - 1;
     });
-    /* a copied dimension measures the copy of what it measured, or, copied
-       on its own, stays where it was copied to */
     made.forEach(function (i) {
       const c = it.shapes[i];
       if (!c.ref) return;
       c.ref = c.ref.map(function (r) { return r && gidMap[r.g] ? Object.assign({}, r, { g: gidMap[r.g] }) : null; });
       if (!c.ref.some(Boolean)) delete c.ref;
     });
+    return made;
+  }
+  /* A copy of each selected mark, a little down and to the right, selected
+     in their place (the page menu's Duplicate, Ctrl+D). */
+  function duplicateSelected() {
+    if (!S.sel) return false;
+    snapshot();
+    const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
+    const off = 12 / Math.max(0.2, S.scale);                          /* 12 screen pixels, in points */
+    const made = placeCopies(it, list.map(function (i) { return it.shapes[i]; }), off, -off);
     setGroup(it, made);
     drawShapes(it); updateMeta();
     toast(made.length > 1 ? made.length + ' marks duplicated' : 'Mark duplicated');
+    return true;
+  }
+  /* Copy, cut and paste of marks (Ctrl+C, X, V), on the page and the
+     pasteboard alike. A paste lands where they were copied from, each one
+     after the first a step further down and right, as Illustrator's does;
+     on another page, at the same place on that one. */
+  let markClip = null;            /* {shapes, from: item, n} */
+  function copySelected(cut) {
+    if (!S.sel) return false;
+    const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
+    markClip = { shapes: list.map(function (i) { return JSON.parse(JSON.stringify(it.shapes[i])); }), from: it, n: 0 };
+    if (cut) deleteSelected();
+    return true;
+  }
+  function pasteMarks() {
+    if (!markClip || !markClip.shapes.length) return false;
+    const it = S.items[S.current - 1];
+    if (!it) return false;
+    if (S.tool !== 'select') setTool('select');
+    snapshot();
+    const step = markClip.from === it ? ++markClip.n * 12 / Math.max(0.2, S.scale) : 0;
+    const made = placeCopies(it, markClip.shapes, step, -step);
+    S.sel = { it: it, i: made[made.length - 1] }; S.multi = null;
+    setGroup(it, made);
+    drawShapes(it); updateMeta(); syncMarkPop();
     return true;
   }
   /* The selected marks restacked on their page: the last drawn is the one
@@ -7005,8 +7195,11 @@
 
   /* moved: a tab brought over from another window, which is no project to
      the reader — it keeps its own name and says nothing */
-  async function openProject(d, moved) {
-    if (S.items.length && !okToReplace()) return false;
+  /* from: an editable PDF it came out of ({file}): it opens as that file,
+     its workspace as it was left, and Save writes it again as itself */
+  async function openProject(d, moved, from) {
+    /* (opened as a file, the replacing was asked about already) */
+    if (S.items.length && !from && !okToReplace()) return false;
     if (!moved) toast('Opening the project…');
     let srcs;
     try {
@@ -7038,6 +7231,9 @@
 
     hardReset();
     if (S.tool !== 'select') setTool('select');
+    setBoard(false);
+    S.fileKind = from ? 'project' : 'pdf';
+    S.target = null;
     const byOld = {};
     srcs.forEach(function (s) {
       const src = { id: ++srcId, name: s.name, bytes: s.bytes, doc: s.doc };
@@ -7053,6 +7249,7 @@
       if (!src || i.num < 1 || i.num > src.doc.numPages) return;
       const it = newItem(src, i.num, i.rot || 0, !!i.added);
       it.crop = i.crop || null;
+      if (i.fields && typeof i.fields === 'object') it.fields = i.fields;
       it.shapes = (Array.isArray(i.shapes) ? i.shapes : []).filter(function (sh) {
         return sh && typeof sh === 'object' && typeof sh.t === 'string';
       }).map(cleanShape);
@@ -7067,12 +7264,28 @@
     S.locs = {};
     Object.keys(d.locs || {}).forEach(function (id) { S.locs[id] = cleanLoc(d.locs[id], id); });
 
+    /* the layers, and the workspace as it was left (an editable PDF) */
+    if (Array.isArray(d.layers) && d.layers.length) {
+      S.layers = d.layers.filter(function (l) { return l && typeof l.id === 'string'; }).map(function (l) { return Object.assign({}, l); });
+    }
+    const ws = d.workspace && typeof d.workspace === 'object' ? d.workspace : {};
+    if (ws.board) setBoard(true);
+
     S.baseName = d.baseName || 'project';
     S.baseCount = S.items.length;
     const nPins = livePins().length;
     S.metaBase = '<b>' + esc(S.baseName) + '</b> · project';
     $('meta').innerHTML = S.metaBase;
     $('saveName').value = S.baseName + '-edited.pdf';
+    if (from) {
+      const fname = from.file.name || 'document.pdf';
+      S.baseName = fname.replace(/\.pdf$/i, '');
+      S.metaBase = '<b>' + esc(fname) + '</b> · editable PDF';
+      $('meta').innerHTML = S.metaBase;
+      $('saveName').value = fname;
+      /* Save writes it again as itself: onto the file where the app knows it */
+      S.target = { kind: 'project', name: fname, handle: null, path: from.file.adddotsPath || null };
+    }
 
     $('openPanel').hidden = true;
     $('errMsg').hidden = true;
@@ -7084,6 +7297,18 @@
     stage.focus();
     renderPins();
     if (nPins) showPinPanel();
+    if (from) {
+      /* the drawing scale the dimensions read in, and the zoom it was left at */
+      const sc = ws.scale;
+      if (sc && EXT.draw) {
+        if (sc.custom) EXT.draw.setScale(sc.custom, sc.unit);
+        else if (EXT.draw.setDrawingScale) EXT.draw.setDrawingScale(sc.denom || 1, sc.unit);
+      }
+      EXT.emit('meta');
+      if (ws.zoom > 0 && Math.abs(ws.zoom - S.scale) > 0.01) zoomGlide(ws.zoom);
+      toast('Editable PDF open · <b>' + S.items.length + '</b> page' + (S.items.length > 1 ? 's' : ''));
+      return true;
+    }
     const nPhotos = Object.keys(S.locs).reduce(function (a, k) {
       return a + ((S.locs[k].photos || []).length);
     }, 0);
@@ -8217,57 +8442,97 @@
      comments, which a reader can move and edit. */
   function keepComments() { return !$('saveFlat').checked; }
 
-  async function saveAs(name) {
-    const btn = $('saveGo');
-    btn.disabled = true; btn.textContent = 'Building…';
-    try {
-      const photos = !$('savePhotosRow').hidden && $('savePhotos').checked;
-      if (photos) toast('Building the PDF with photo pages…');
-      /* onto the original where it can be: a few kilobytes appended, and
-         what a rebuild drops (bookmarks, links) kept */
-      const done = await download(await buildPdf(S.items, null, { photos: photos, append: true, annots: keepComments() }, 'blob'), name);
-      /* the Save dialog cancelled: still unsaved, and the popover stays */
-      if (done === false) return;
-      closePops();
-      toast('Saved <b>' + esc(typeof done === 'string' ? done : name) + '</b>');
-      S.baseCount = S.items.length;
-      clearRecovery();
-    } catch (e) {
-      $('saveNote').innerHTML = '<span style="color:var(--danger)">' + esc(saveError(e)) + '</span>';
-    } finally {
-      btn.disabled = false; btn.textContent = 'Save PDF';
+  /* ---------------- Save: a standard PDF or an editable one ----------------
+     Two kinds of PDF, as a design program saves:
+     - standard: the pages with what is on each artboard painted in, for
+       anyone to open; the pasteboard is left out (engine artboard.ts);
+     - editable: the same pages, which any reader shows, carrying the whole
+       document inside (engine project.ts): every object with all its
+       properties, layers, groups, the pasteboard and the workspace. It opens
+       here again ready to edit.
+     Save asks which only when it has to: a document with something drawn
+     on it, not saved yet in either kind. A plain PDF only read, or turned,
+     saves as a PDF; an editable PDF saves as itself; once a kind (and
+     place) is chosen, Save goes straight there. Save as… always asks. */
+  function hasDrawing() { return S.items.some(function (it) { return it.shapes.length > 0; }); }
+  /* the project as it travels inside an editable PDF */
+  function projectData() {
+    const d = buildProject(false);
+    d.version = 3;
+    d.layers = S.layers ? S.layers.map(function (l) { return Object.assign({}, l); }) : null;
+    d.items.forEach(function (x, i) { const f = S.items[i] && S.items[i].fields; if (f) x.fields = f; });
+    d.workspace = {
+      board: !!S.board, zoom: S.scale, fit: S.fit, current: S.current,
+      scale: EXT.saveState && EXT.saveState.scale ? EXT.saveState.scale() : null
+    };
+    return d;
+  }
+  /* how many marks a standard PDF would leave out, or cut, being off their page */
+  function offBoard() {
+    let out = 0, edge = 0;
+    S.items.forEach(function (it) {
+      if (!it.page) return;
+      const v = it.page.view, c = it.crop;
+      const b = c ? { x1: c.x, y1: c.y, x2: c.x + c.w, y2: c.y + c.h } : { x1: v[0], y1: v[1], x2: v[2], y2: v[3] };
+      it.shapes.forEach(function (sh) {
+        if (sh.hide) return;
+        const p = E.markPlace(sh, b);
+        if (p === 'out') out++; else if (p === 'edge') edge++;
+      });
+    });
+    return { out: out, edge: edge };
+  }
+  function buildKind(kind, std) {
+    if (kind === 'project') {
+      return buildPdf(S.items, null, { photos: false, annots: false, project: { json: JSON.stringify(projectData()) } }, 'blob');
     }
+    /* onto the original where it can be: a few kilobytes appended, and what
+       a rebuild drops (bookmarks, links) kept */
+    return buildPdf(S.items, null, Object.assign({ photos: livePins().length > 0, append: true, annots: keepComments() }, std || {}), 'blob');
+  }
+  function pdfName(n) {
+    n = String(n || '').trim() || S.baseName + '-edited.pdf';
+    return /\.pdf$/i.test(n) ? n : n + '.pdf';
   }
 
-  /* Save in one step. Where the browser can (Chrome, Edge), its own Save
-     dialog asks for the folder and the name first — it has to open while
-     the click still counts — and the PDF is built and written there. The
-     Windows and phone apps have their own dialog (EXT.saveFile, in
-     download()); other browsers save it as a download, which goes where
-     the browser keeps them (or asks, if it is set to). */
+  /* Saves the document as `kind` ('pdf' or 'project'). o.ask: asks where
+     (o.download: saved under the name typed, as Save as… always has); else
+     into the place this kind was last saved to, without a
+     dialog, where the platform allows; o.path: a file on disk to write (the
+     one a plain PDF was opened from); o.name, o.std: the name, and the
+     standard PDF's own choices. */
   let saving = false;
-  async function quickSave() {
-    if (!S.items.length || saving) return;
-    closePops();
-    const name = /\.pdf$/i.test($('saveName').value.trim()) ? $('saveName').value.trim() : S.baseName + '-edited.pdf';
-    let handle = null;
-    if (!EXT.saveFile && window.showSaveFilePicker) {
+  async function saveDoc(kind, o) {
+    o = o || {};
+    if (!S.items.length || saving) return false;
+    /* Save as…'s popover stays up until the file is saved: a Save dialog
+       cancelled leaves it there to try again */
+    if (!o.ask) closePops();
+    const name = pdfName(o.name || (S.target && S.target.kind === kind ? S.target.name : $('saveName').value));
+    const reuse = !o.ask && S.target && S.target.kind === kind ? S.target : null;
+    let handle = reuse && reuse.handle ? reuse.handle : null;
+    let path = reuse && reuse.path && EXT.saveFile ? reuse.path : (!o.ask && o.path && EXT.saveFile ? o.path : null);
+    /* where the browser can (Chrome, Edge), its own Save dialog: first, while
+       the click still counts. The Windows and phone apps have their own
+       (EXT.saveFile); other browsers save it as a download. */
+    if (!handle && !path && !EXT.saveFile && window.showSaveFilePicker && !o.download) {
       try {
         handle = await window.showSaveFilePicker({
           suggestedName: name,
-          types: [{ description: 'PDF document', accept: { 'application/pdf': ['.pdf'] } }]
+          types: [{ description: kind === 'project' ? 'Editable PDF' : 'PDF document', accept: { 'application/pdf': ['.pdf'] } }]
         });
       } catch (e) {
-        if (e && e.name === 'AbortError') return;      /* the dialog was cancelled */
-        handle = null;                                  /* not allowed here: a download instead */
+        if (e && e.name === 'AbortError') return false;     /* the dialog was cancelled */
+        handle = null;                                       /* not allowed here: a download instead */
       }
     }
     saving = true;
-    const was = $('btnSave').textContent;
-    $('btnSave').disabled = true; $('btnSave').textContent = 'Saving…';
+    const btn = $('btnSave'), was = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Saving…';
+    $('saveGo').disabled = true;
     try {
-      const photos = livePins().length > 0;
-      const blob = await buildPdf(S.items, null, { photos: photos, append: true, annots: keepComments() }, 'blob');
+      if (kind === 'project') toast('Building the editable PDF…');
+      const blob = await buildKind(kind, o.std);
       let saved = name;
       if (handle) {
         const w = await handle.createWritable();
@@ -8275,19 +8540,78 @@
         await w.close();
         saved = handle.name;
       } else {
-        const done = await download(blob, name);
-        if (done === false) return;                     /* the app's dialog, cancelled */
+        const done = await download(blob, name, 'application/pdf', path ? { path: path } : null);
+        if (done === false) return false;                    /* the app's dialog, cancelled */
         if (typeof done === 'string') saved = done;
+        if (EXT.lastSavedPath) path = EXT.lastSavedPath() || path;
       }
-      toast('Saved <b>' + esc(saved) + '</b>');
+      closePops();
+      /* Save goes there again, in this kind, without asking. A plain save of
+         a document with nothing drawn on it decides nothing for later: once
+         something is drawn, Save asks which kind (o.plain). */
+      S.target = { kind: kind, name: saved, handle: handle, path: handle ? null : path, plain: !!o.plain };
+      if (kind === 'project') S.fileKind = 'project';
+      $('saveName').value = saved;
+      toast('Saved <b>' + esc(saved) + '</b>' + (kind === 'project' ? ' · editable PDF' : ''));
       S.baseCount = S.items.length;
       clearRecovery();
+      EXT.emit('saved', { kind: kind, name: saved });
+      return true;
     } catch (e) {
-      toast(esc(saveError(e)), true);
+      /* said in Save as…'s popover when it is up, else as a notice */
+      if (!$('savePop').hidden) $('saveNote').innerHTML = '<span style="color:var(--danger)">' + esc(saveError(e)) + '</span>';
+      else toast(esc(saveError(e)), true);
+      return false;
     } finally {
       saving = false;
-      $('btnSave').disabled = false; $('btnSave').textContent = was;
+      btn.disabled = false; btn.textContent = was;
+      $('saveGo').disabled = false;
     }
+  }
+
+  /* Save (Ctrl+S): asks only when there is a choice to make */
+  function quickSave() {
+    if (!S.items.length || saving) return;
+    /* a kind already chosen, or an editable PDF: straight there */
+    if (S.target && !(S.target.plain && hasDrawing())) return saveDoc(S.target.kind, { plain: S.target.plain });
+    if (S.fileKind === 'project') return saveDoc('project');
+    /* nothing drawn: a plain PDF save, back onto the file it came from where
+       the app knows it (the Windows app), else where the reader picks */
+    if (!hasDrawing()) {
+      const one = S.sources.length === 1 && S.sources[0].path && !S.sources[0].synthetic ? S.sources[0].path : null;
+      return saveDoc('pdf', one ? { path: one, name: S.sources[0].name, plain: true } : { plain: true });
+    }
+    /* something drawn, and never saved: which kind? (by the Save on show);
+       then where, in the browser's own Save dialog, so Save goes there again */
+    const shown = ['btnQSave', 'btnSave', 'btnSaveAs'].map($).filter(function (b) { return b && b.getClientRects().length; })[0];
+    openSaveDialog(shown, true);
+  }
+  /* Save as…, and Save's question: the name and the kind */
+  let saveAsking = false;        /* the dialog is Save's question, not Save as… */
+  function openSaveDialog(anchor, fromSave) {
+    if (!S.items.length) return;
+    saveAsking = !!fromSave;
+    const kind = S.target && !S.target.plain ? S.target.kind : (S.fileKind === 'project' ? 'project' : 'pdf');
+    if (S.target) $('saveName').value = S.target.name;
+    else if (S.fileKind !== 'project') $('saveName').value = S.baseName + '-edited.pdf';
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="saveFmt"]'), function (r) { r.checked = r.value === kind; });
+    openPop('savePop', anchor || $('btnSaveAs'));
+    syncSaveFmt();
+  }
+  function saveFmt() {
+    const r = document.querySelector('input[name="saveFmt"]:checked');
+    return r ? r.value : 'pdf';
+  }
+  function syncSaveFmt() {
+    const project = saveFmt() === 'project';
+    $('saveFlatRow').hidden = project;
+    $('savePhotosRow').hidden = project || !livePins().length;
+    const off = offBoard();
+    $('saveFmtNote').textContent = project ? 'Everything is kept, the pasteboard too, and it opens here ready to edit.'
+      : off.out || off.edge ? (off.out ? off.out + ' object' + (off.out > 1 ? 's' : '') + ' off the page will be left out' : '') +
+        (off.out && off.edge ? '; ' : '') + (off.edge ? off.edge + ' across the page’s edge will be cut there' : '') + '.'
+      : 'Only what is on each page.';
+    $('saveGo').textContent = project ? 'Save editable PDF' : 'Save PDF';
   }
 
   /* Send a copy (the phone app): the document as it stands, handed to the
@@ -8348,14 +8672,14 @@
 
   /* Resolves false only when the reader turned the save down (the desktop
      app's Save dialog, cancelled); a browser download cannot say. */
-  async function download(bytes, name, type) {
+  async function download(bytes, name, type, where) {
     /* the browser is copying the file out and writing it to disk: thumbnails,
        drawn in a worker alongside, wait until that is done rather than
        compete with it */
     thumbsPause();
     setTimeout(thumbsResume, 1500);
     /* the desktop app asks where, and writes it there (js/desktop.js) */
-    if (EXT.saveFile) return EXT.saveFile(bytes, name, type || 'application/pdf');
+    if (EXT.saveFile) return EXT.saveFile(bytes, name, type || 'application/pdf', where || undefined);
     const url = URL.createObjectURL(new Blob([bytes], { type: type || 'application/pdf' }));
     try {
       const a = document.createElement('a');
@@ -9243,9 +9567,13 @@
 
   var ribOn = 'ribView', ribbonReady = false;   /* var: setTool may run before the ribbon is wired */
 
+  /* tools that only read or mark up the page as it is: they leave the
+     reading layout alone; any other is drawing, and brings the pasteboard */
+  const VIEW_TOOLS = { select: 1, pan: 1, zoombox: 1, highlight: 1, underline: 1, strike: 1, hlarea: 1, crop: 1, pin: 1, note: 1 };
   function setTool(t) {
     if (S.editing) closeEditor(true);
     closePinEditor();
+    if (!S.board && S.items.length && !VIEW_TOOLS[t]) setBoard(true);
     S.tool = t;
     S.sel = null;
     document.body.dataset.tool = t;
@@ -10228,7 +10556,7 @@
       closeEditor(true);
     }
     if (e.target.closest('.pop') || e.target.closest('#btnAdd') ||
-        e.target.closest('#btnSave') || e.target.closest('#btnSaveAs') || e.target.closest('#moreSaveAs') ||
+        e.target.closest('#btnSave') || e.target.closest('#btnQSave') || e.target.closest('#btnSaveAs') || e.target.closest('#moreSaveAs') ||
         e.target.closest('#btnTr') ||
         e.target.closest('#btnExtract') || e.target.closest('#btnJpg') ||
         e.target.closest('#pinExpGo')) return;
@@ -10246,6 +10574,7 @@
   $('btnOut').addEventListener('click', function () { setZoom(1 / 1.2); });
   $('btnFitW').addEventListener('click', function () { S.fit = 'width'; relayout(); });
   $('btnSpread').addEventListener('click', function () { setSpread(!S.spread); });
+  $('btnBoard').addEventListener('click', function () { setBoard(!S.board); });
   $('btnCover').addEventListener('click', function () { setCover(!S.cover); });
   paintSpread();
   $('btnRotL').addEventListener('click', function (e) { e.shiftKey ? rotateAll(-90) : rotateItem(S.current - 1, -90); });
@@ -10331,7 +10660,17 @@
   $('btnQSave').addEventListener('click', quickSave);
   $('btnSaveAs').addEventListener('click', function () {
     if (!S.items.length) return;
-    $('savePop').hidden ? openPop('savePop', $('btnSaveAs')) : closePops();
+    $('savePop').hidden ? openSaveDialog($('btnSaveAs')) : closePops();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="saveFmt"]'), function (r) {
+    r.addEventListener('change', function () {
+      /* the name follows: an editable copy told apart from the plain one */
+      const n = $('saveName').value.trim();
+      if (saveFmt() === 'project' && !/-editable\.pdf$/i.test(n) && !(S.target && S.target.kind === 'project') && S.fileKind !== 'project') {
+        $('saveName').value = n.replace(/(-edited)?\.pdf$/i, '') + '-editable.pdf';
+      }
+      syncSaveFmt();
+    });
   });
   /* phones: Save as… from the More sheet, which shuts as the popover opens */
   $('moreSaveAs').addEventListener('click', function () { $('btnSaveAs').click(); });
@@ -10339,9 +10678,8 @@
   $('btnQPrint').addEventListener('click', printDoc);
   $('saveCancel').addEventListener('click', closePops);
   $('saveGo').addEventListener('click', function () {
-    let n = $('saveName').value.trim() || (S.baseName + '-edited.pdf');
-    if (!/\.pdf$/i.test(n)) n += '.pdf';
-    saveAs(n);
+    const photos = !$('savePhotosRow').hidden && $('savePhotos').checked;
+    saveDoc(saveFmt(), { ask: true, download: !saveAsking, name: pdfName($('saveName').value), std: { photos: photos } });
   });
   $('saveName').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('saveGo').click(); });
 
@@ -10825,6 +11163,14 @@
     }
     if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); pickNew(); return; }
 
+    /* marks: cut and duplicate (copy and paste are js/enhance.js's keys,
+       onto copySelected / pasteMarks here); with words selected, the words */
+    if (mod && !e.altKey && !e.shiftKey && !typing && !S.editing) {
+      const k = e.key.toLowerCase();
+      const marks = S.tool === 'select' && !!S.sel && selectedText() == null;
+      if (k === 'x' && marks) { e.preventDefault(); copySelected(true); return; }
+      if (k === 'd' && marks) { e.preventDefault(); duplicateSelected(); return; }
+    }
     if (mod && e.key.toLowerCase() === 'f') {
       e.preventDefault(); setRail(true); switchTab('find'); return;
     }
@@ -11297,6 +11643,10 @@
     /* a phone puts the tool down once a shape is drawn, the new one selected */
     endToolOn: endToolOn,
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
+    copySelected: copySelected, pasteMarks: pasteMarks,
+    /* the pasteboard, and Save (for the tests and modules) */
+    setBoard: setBoard, board: function () { return S.board; },
+    saveDoc: saveDoc, quickSave: quickSave, openSaveDialog: openSaveDialog,
     stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE,
     /* for Align and Pathfinder (js/arrange.js) */
     visBox: visBox, moveShape: moveShape, copyShape: copyShape, markBox: markBox,

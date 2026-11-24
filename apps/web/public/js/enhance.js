@@ -235,57 +235,27 @@
       });
     });
 
-    /* ================= copy / paste for selected marks ================= */
-
-    let clipboard = null;   /* { shapes: [...] } | null */
-
-    /* every kind of point a mark can carry, offset the same way moveShape
-       does for a drag — so a pasted text keeps its background patch aligned,
-       and a future multi-point mark (e.g. Leader) moves as one piece too */
-    function nudgeShape(s, dx, dy) {
-      if (s.a) s.a = [s.a[0] + dx, s.a[1] + dy];
-      if (s.b) s.b = [s.b[0] + dx, s.b[1] + dy];
-      if (s.m) s.m = [s.m[0] + dx, s.m[1] + dy];
-      if (s.patch) s.patch = Object.assign({}, s.patch, { x: s.patch.x + dx, y: s.patch.y + dy });
-      if (s.pts) s.pts = s.pts.map(function (q) { return [q[0] + dx, q[1] + dy]; });
-    }
-    function freshId(t) { return (t || 'mk') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
-
+    /* ================= copy / paste for selected marks =================
+       Ctrl+C and Ctrl+V on marks: core's own copy and paste (core.js
+       copySelected / pasteMarks), which keeps a copied group its own group,
+       a copied dimension measuring the copy of what it measured, and works
+       on the page and out on the pasteboard alike. Cut (Ctrl+X) and
+       Duplicate (Ctrl+D) are core's own keys. */
     document.addEventListener('keydown', function (e) {
-      if (!(e.ctrlKey || e.metaKey)) return;
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey || e.defaultPrevented) return;
       const key = e.key.toLowerCase();
       if (key !== 'c' && key !== 'v') return;
       if (S.tool !== 'select' || S.editing) return;
       const el = e.target;
       if (el && el.matches && el.matches('input,textarea,select,[contenteditable]')) return;
-
       if (key === 'c') {
-        const it = S.sel && S.sel.it;
-        if (!it) return;
-        const idx = X.selList();
-        const shapes = idx.map(function (i) { return it.shapes[i]; })
-          .filter(function (s) { return s && s.t !== 'pin'; });
-        if (!shapes.length) return;
-        clipboard = { shapes: JSON.parse(JSON.stringify(shapes)) };
-        X.toast(shapes.length > 1 ? (shapes.length + ' marks copied') : 'Mark copied');
-      } else {
-        if (!clipboard || !clipboard.shapes.length) return;
-        const target = (S.sel && S.sel.it) || S.items[S.current - 1];
-        if (!target) return;
+        /* words selected on the page: those are what Ctrl+C copies */
+        if (!S.sel || (X.selectedText && X.selectedText() != null)) return;
+        const n = X.selList().length;
+        if (X.copySelected()) X.toast(n > 1 ? n + ' marks copied' : 'Mark copied');
+      } else if (X.pasteMarks()) {
         e.preventDefault();
-        X.snapshot();
-        const startLen = target.shapes.length;
-        clipboard.shapes.forEach(function (s0) {
-          const s = JSON.parse(JSON.stringify(s0));
-          if (s.id) s.id = freshId(s.t);
-          nudgeShape(s, 14, 14);
-          target.shapes.push(s);
-        });
-        const pasted = [];
-        for (let i = startLen; i < target.shapes.length; i++) pasted.push(i);
-        X.setGroup(target, pasted);
-        X.drawShapes(target); X.drawThumb(target); X.updateMeta();
-        X.toast(pasted.length > 1 ? (pasted.length + ' marks pasted') : 'Mark pasted');
+        X.toast('Pasted');
       }
     });
 

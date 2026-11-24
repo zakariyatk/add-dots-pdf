@@ -17,10 +17,13 @@ import {
   PDFHexString,
   PDFName,
   beginText,
+  clip,
   degrees,
+  endPath,
   endText,
   popGraphicsState,
   pushGraphicsState,
+  rectangle,
   setFillingColor,
   setFontAndSize,
   setGraphicsState,
@@ -61,6 +64,8 @@ import { dashOf, hexToRgb01, shCap, shJoin, shOp } from './style';
 import { drawLine, embedFallbacks, needsUnicode, textIn, textWidth, type UnicodeFontSource } from './text';
 import { readXrefTail, reserveNumbers, snapshot, writeUpdate } from './append';
 import { annotRect, commitAnnot, isAnnotMark, scratchPage } from './annots';
+import { markPlace, type Box4 } from './artboard';
+import { attachProject } from './project';
 import { encodePageFont, markInPageFont } from './pagefont';
 import { fillGradient, ringPath } from './painters/gradient';
 import { paintRoundRect } from './painters/rect';
@@ -182,6 +187,23 @@ export async function buildPdf(
 ): Promise<Uint8Array> {
   const out = await PDFDocument.create();
   await compose(out, items, opts, hooks, () => copyPages(out, items, cache), true);
+  /* an editable PDF: the document itself goes in too, every source untouched
+     (project.ts), so it opens again ready to edit */
+  const proj = opts && (opts.project as { json?: unknown } | undefined);
+  if (proj && typeof proj.json === 'string') {
+    const srcs = new Map<Source['id'], Source>();
+    items.forEach((it) => {
+      if (!srcs.has(it.src.id)) srcs.set(it.src.id, it.src);
+    });
+    attachProject(out, {
+      json: proj.json,
+      sources: [...srcs.values()].map((s) => ({
+        id: s.id,
+        bytes: s.bytes,
+        ...(s.name ? { name: s.name } : {}),
+      })),
+    });
+  }
   return out.save();
 }
 
@@ -344,8 +366,28 @@ async function compose(
   const editable = !!(opts && opts.annots);
   slots.forEach((page, i) => {
     const it = items[i]!;
+    /* The page is the artboard (artboard.ts): a mark wholly off it, on the
+       pasteboard, is left out; one across its edge is cut there, by a clip
+       round all the marks (added only when a mark needs it). */
+    const cb = it.crop
+      ? { x: it.crop.x, y: it.crop.y, width: it.crop.w, height: it.crop.h }
+      : page.getCropBox();
+    const board: Box4 = { x1: cb.x, y1: cb.y, x2: cb.x + cb.width, y2: cb.y + cb.height };
+    const place = new Map<AnyMark, 'in' | 'edge' | 'out'>();
+    it.shapes.forEach((s) => {
+      if (s.t !== 'pin' && !s.hide) place.set(s, markPlace(s, board, measureT));
+    });
+    const cut = [...place.values()].includes('edge');
+    if (cut)
+      page.pushOperators(
+        pushGraphicsState(),
+        rectangle(board.x1, board.y1, board.x2 - board.x1, board.y2 - board.y1),
+        clip(),
+        endPath(),
+      );
     const onto = (s: AnyMark, draw: (p: PDFPage) => void) => {
-      if (!editable || !isAnnotMark(s)) {
+      /* a comment cannot be cut at the edge: one across it is painted in */
+      if (!editable || !isAnnotMark(s) || place.get(s) === 'edge') {
         draw(page);
         return;
       }
@@ -357,10 +399,11 @@ async function compose(
     /* in the order they stack on screen: the last is the one on top, so
        Bring to front and Send to back hold in the saved file. Pins go last. */
     it.shapes.forEach((s) => {
-      if (s.t === 'pin' || s.hide) return;
+      if (s.t === 'pin' || s.hide || place.get(s) === 'out') return;
       if (isText(s)) onto(s, (p) => layerFade(p, s.lo, () => paintText(p, s)));
       else onto(s, (p) => layerFade(p, s.lo, () => paintMark(p, s)));
     });
+    if (cut) page.pushOperators(popGraphicsState());
     function paintText(p: PDFPage, s: TextMark) {
       /* text lifted by Edit Object and retyped within the characters the
          page's own font has: written in that font again (pagefont.ts), if

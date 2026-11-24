@@ -112,12 +112,17 @@
   /* Properties: the printer's own settings, from its driver */
   api.printerProperties = function (printer) { return T.core.invoke('printer_properties', { printer: printer || '' }); };
 
-  api.saveFile = function (data, name, type) {
+  /* where: {path}, a file the app opened or saved before, written again
+     there without the dialog (Save on an editable PDF, core.js saveDoc) */
+  var lastSaved = null;
+  api.lastSavedPath = function () { return lastSaved; };
+  api.saveFile = function (data, name, type, where) {
     return toBytes(data).then(function (body) {
-      return T.core.invoke('save_file', body, {
-        headers: { 'x-name': encodeURIComponent(name), 'x-type': type || '' }
-      });
+      var headers = { 'x-name': encodeURIComponent(name), 'x-type': type || '' };
+      if (where && where.path) headers['x-path'] = encodeURIComponent(where.path);
+      return T.core.invoke('save_file', body, { headers: headers });
     }).then(function (path) {
+      lastSaved = path || null;
       return path ? base(path) : false;
     }, function (e) {
       fail('save', e);

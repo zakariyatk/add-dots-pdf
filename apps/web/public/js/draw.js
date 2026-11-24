@@ -4100,7 +4100,8 @@
       if (!cap) { snapHide(); alignHide(); return; }
       const it = S.items.filter(function (x) { return x.capture === cap; })[0];
       if (!it || !it.vp) return;
-      const r = cap.getBoundingClientRect();
+      /* from the page's corner: the drawing surface reaches over the pasteboard */
+      const r = it.wrap.getBoundingClientRect();
       const at = [e.clientX - r.left + (it.off ? it.off.left : 0), e.clientY - r.top + (it.off ? it.off.top : 0)];
       X.snapPt(it, it.vp.convertToPdfPoint(at[0], at[1]), e);
     }, { passive: true });

@@ -1460,3 +1460,18 @@
      and the photo-measure tip stay in the page for the code that fills them,
      but are never shown. */
   #modeHint,#pmhint{display:none !important}
+
+  /* the pasteboard (core.js applyBoard): the page no longer cuts its marks
+     off, so what is drawn round it stays in view; a crop still trims the
+     page's own picture and text (--pclip) */
+  body.board .page{overflow:visible}
+  body.board .inner > canvas, body.board .inner > .textLayer{clip-path:var(--pclip,none)}
+
+  /* Save as: the two kinds of PDF (core.js saveDoc) */
+  .savefmt{display:flex;flex-direction:column;gap:6px;margin:10px 0 4px}
+  .savefmt .fmt{display:flex;align-items:flex-start;gap:8px;padding:7px 9px;border:1px solid var(--line);border-radius:7px;cursor:pointer}
+  .savefmt .fmt:has(input:checked){border-color:var(--accent,#7B5CFF);background:color-mix(in srgb,var(--accent,#7B5CFF) 8%,transparent)}
+  .savefmt .fmt input{margin-top:3px}
+  .savefmt .fmt span{display:flex;flex-direction:column;gap:2px}
+  .savefmt .fmt i{font-style:normal;font-size:11.5px;color:var(--text-dim);line-height:1.35}
+  #savePop{max-width:340px}
