@@ -30,7 +30,7 @@
       { ids: ['tRect', 'tEllipse', 'tLine', 'tArrow'] },
       { ids: ['tArc', 'tCloud', 'tPoly'] },
       { ids: ['tText'] },
-      { ids: ['tDim', 'tDimC', 'tDimR', 'tDimD', 'tDimA'] }
+      { ids: ['tDim', 'tDimAl', 'tDimC', 'tDimB', 'tDimA', 'tDimR', 'tDimD', 'tDimArc', 'tDimO'] }
     ];
 
     /* The Tools tab, next to Draw: working on what is drawn, point by point,

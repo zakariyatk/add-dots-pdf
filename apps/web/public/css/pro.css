@@ -2445,3 +2445,38 @@ body[data-tool="ellipse"] .capture { cursor: image-set(url("data:image/svg+xml,%
 .rectcorn[hidden] { display: none }
 .rcw { fill: #fff; stroke: var(--accent, #2F6FED); stroke-width: 1.4; cursor: pointer; pointer-events: all }
 .rcw:hover, .rcw.on { fill: var(--accent, #2F6FED); stroke: #fff }
+
+/* dimensions (js/draw.js, engine dimension.ts): a wide unseen strip along
+   their hairlines and their text's box to take hold of, and AutoCAD's grips
+   on the selected one — squares on the defining points (filled when held to
+   an object), a disc on the dimension line and on the text */
+.anno .dxhit { fill: none; stroke: transparent; stroke-width: 12px; stroke-linecap: round; pointer-events: none }
+.anno .dxhit.box { fill: transparent; stroke-width: 4px }
+body[data-tool="select"] .anno .dxhit { pointer-events: stroke; cursor: var(--cur-arrow-obj) }
+body[data-tool="select"] .anno .dxhit.box { pointer-events: all }
+body.move-mode .anno .dxhit { cursor: var(--cur-move) }
+.dxg { fill: #fff; stroke: var(--accent, #2F6FED); stroke-width: 1.4; cursor: move; pointer-events: all }
+.dxg.def { cursor: crosshair }
+.dxg.def.assoc { fill: var(--accent, #2F6FED) }
+.dxg.line { fill: #fff }
+.dxg.text { fill: #FFD64D }
+.dxg:hover { stroke-width: 2.4 }
+.mpdx { display: flex; flex-direction: column; gap: 6px }
+.mpdx .dxrow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px }
+.mpdx .dxval b { font-variant-numeric: tabular-nums }
+.mpdx .dxval i { opacity: .6; font-style: normal }
+.mpdx .dxassoc { font-size: 11px; padding: 1px 7px; border-radius: 9px; border: 1px solid var(--line); opacity: .75 }
+.mpdx .dxassoc.on { border-color: var(--accent, #2F6FED); color: var(--accent, #2F6FED); opacity: 1 }
+.mpdx .dxtext input { width: 210px }
+.mpdx .unit input { width: 52px }
+.mpdx input.short { width: 70px }
+.mpdx .chk { display: inline-flex; align-items: center; gap: 4px }
+.dxstyle { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px }
+.dxstyle fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px 8px; margin: 0; display: flex; flex-direction: column; gap: 6px }
+.dxstyle legend { font-weight: 600; padding: 0 4px }
+.dxstyle .dxf { display: flex; align-items: center; justify-content: space-between; gap: 8px }
+.dxstyle .dxf.chk { justify-content: flex-start }
+.dxstyle .dxf input:not([type=checkbox]):not([type=color]), .dxstyle .dxf select { width: 128px }
+.dxstyle .unit { display: inline-flex; align-items: center; gap: 4px }
+.dxstyle .unit input { width: 80px !important }
+@media (max-width: 600px) { .dxstyle { grid-template-columns: 1fr } }

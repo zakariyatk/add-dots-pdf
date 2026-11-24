@@ -2282,6 +2282,10 @@
 
   /* ---------------- shapes ---------------- */
   function drawShapes(it, ghost) {
+    /* dimensions held to the geometry they measure follow it (engine
+       dimension.ts): whatever just moved, resized or turned, they are
+       brought back onto it before anything is drawn */
+    if (it.shapes && it.shapes.length) E.resolveDims(it.shapes);
     if (!it.anno) return;
     while (it.anno.firstChild) it.anno.removeChild(it.anno.firstChild);
     const vp = it.vp;
@@ -3531,8 +3535,10 @@
        copy, left where it landed, and the mark(s) it came from go back —
        a fresh shape pushed on top at their old place, not a move at all */
     if (d.moved && d.mode === 'move' && e && (e.ctrlKey || e.metaKey)) {
-      if (d.group) d.group.forEach(function (m) { d.it.shapes.push(copyShape(m.s0)); });
-      else d.it.shapes.push(copyShape(d.s0));
+      /* the copy left behind is a new object: the dimensions stay with the one moved */
+      const left = function (s0) { const c = copyShape(s0); delete c.gid; return c; };
+      if (d.group) d.group.forEach(function (m) { d.it.shapes.push(left(m.s0)); });
+      else d.it.shapes.push(left(d.s0));
     }
     if (d.moved && d.join && EXT.vxJoinEnd) {
       EXT.vxJoinEnd(d.it, d.idx, d.mode === 'pv' ? d.extra : d.mode === 'pa' ? 0 : 1, d.join, d.s0);
@@ -3564,7 +3570,7 @@
   const MARK_NAME = {
     rect: 'Rectangle', line: 'Line', arrow: 'Arrow', text: 'Text',
     ellipse: 'Ellipse', cloud: 'Cloud', arc: 'Arc', dim: 'Dimension',
-    dimr: 'Radius', dimd: 'Diameter', dima: 'Angle',
+    dimr: 'Radius', dimd: 'Diameter', dima: 'Angle', dimx: 'Dimension',
     markup: 'Markup', ink: 'Ink', note: 'Note', stamp: 'Stamp', sig: 'Signature',
     redact: 'Redaction', wm: 'Watermark', hf: 'Header / footer', bates: 'Bates',
     image: 'Image', video: 'Video', link: 'Link', table: 'Table', leader: 'Leader',
@@ -4696,17 +4702,27 @@
     const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
     const off = 12 / Math.max(0.2, S.scale);                          /* 12 screen pixels, in points */
     const grpMap = {};        /* a duplicated group becomes its own group, not more members of the old one */
+    const gidMap = {};        /* a copy is an object of its own: dimensions copied with it measure the copy */
     const made = list.map(function (i) {
       const o = JSON.parse(JSON.stringify(it.shapes[i]));
       const c = JSON.parse(JSON.stringify(o));
       moveShape(c, o, off, -off);
       if (c.id != null) c.id = String(c.id) + '-' + Date.now().toString(36) + i;
+      if (c.gid) { gidMap[c.gid] = c.gid + '-' + Date.now().toString(36) + i; c.gid = gidMap[c.gid]; }
       if (c.grp != null) {
         if (!grpMap[c.grp]) grpMap[c.grp] = newGroupId();
         c.grp = grpMap[c.grp];
       }
       it.shapes.push(c);
       return it.shapes.length - 1;
+    });
+    /* a copied dimension measures the copy of what it measured, or, copied
+       on its own, stays where it was copied to */
+    made.forEach(function (i) {
+      const c = it.shapes[i];
+      if (!c.ref) return;
+      c.ref = c.ref.map(function (r) { return r && gidMap[r.g] ? Object.assign({}, r, { g: gidMap[r.g] }) : null; });
+      if (!c.ref.some(Boolean)) delete c.ref;
     });
     setGroup(it, made);
     drawShapes(it); updateMeta();
