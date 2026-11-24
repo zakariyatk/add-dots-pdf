@@ -2435,3 +2435,13 @@ body[data-tool="ellipse"] .capture { cursor: image-set(url("data:image/svg+xml,%
 .cdnum.cdalpha { grid-template-columns: 1fr }
 .cdnum.cdalpha input { width: 100%; accent-color: var(--accent, #7B5CFF) }
 .cdav { font-size: 12px; color: var(--text-dim) }
+
+/* the Rectangle tool (js/draw.js): its bar, its properties, and the live
+   corner widgets inside a selected rectangle's corners, as Illustrator's */
+#rectCtl input[type=color] { width: 28px; height: 24px; padding: 0; border: 1px solid var(--line); border-radius: 4px; background: none }
+#rectCtl input[type=color]:disabled { opacity: .35 }
+#rectOp, #rectRad { width: 52px }
+.rectcorn { display: grid; grid-template-columns: repeat(2, auto); gap: 4px 8px; flex-basis: 100% }
+.rectcorn[hidden] { display: none }
+.rcw { fill: #fff; stroke: var(--accent, #2F6FED); stroke-width: 1.4; cursor: pointer; pointer-events: all }
+.rcw:hover, .rcw.on { fill: var(--accent, #2F6FED); stroke: #fff }

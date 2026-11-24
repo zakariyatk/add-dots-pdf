@@ -63,6 +63,8 @@ import { readXrefTail, reserveNumbers, snapshot, writeUpdate } from './append';
 import { annotRect, commitAnnot, isAnnotMark, scratchPage } from './annots';
 import { encodePageFont, markInPageFont } from './pagefont';
 import { fillGradient, ringPath } from './painters/gradient';
+import { paintRoundRect } from './painters/rect';
+import { rectRounded, type RectMark } from './rect';
 import { layerFade } from './painters/fade';
 
 const PDF_CAP = [LineCapStyle.Butt, LineCapStyle.Round, LineCapStyle.Projecting];
@@ -526,7 +528,9 @@ async function compose(
       const op = shOp(s),
         da = dashOf(s, th);
       const cap = PDF_CAP[shCap(s)];
-      if (s.t === 'rect') {
+      if (s.t === 'rect' && (rectRounded(s as RectMark) || (s as RectMark).sa)) {
+        paintRoundRect(p, s as RectMark);
+      } else if (s.t === 'rect') {
         const bx = boxOf(s),
           mid = [(bx.x1 + bx.x2) / 2, (bx.y1 + bx.y2) / 2];
         /* pdf-lib turns a rectangle about its own x,y, so move that corner first */

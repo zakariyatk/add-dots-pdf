@@ -2538,7 +2538,25 @@
       return el;
     }
 
-    if (s.t === 'rect') {
+    const aligned = s.t === 'rect' && (s.sa === 'in' || s.sa === 'out') && !s.nos && s.w > 0;
+    if (s.t === 'rect' && (aligned || E.rectRounded(s))) {
+      /* rounded corners, or the stroke aligned inside or outside: the same
+         Bézier outline the saved PDF draws (engine rect.ts). The page's turn
+         and zoom are an affine map, which keeps every arc exact on screen. */
+      const fillEl = rectPathEl(s, vp);
+      stroke(fillEl);
+      fillEl.style.fill = 'none';
+      if (aligned) fillEl.style.stroke = 'none';
+      g.appendChild(fillEl);
+      paintFill(g, fillEl, s, vp);
+      if (s.fill || s.nos) fillEl.style.pointerEvents = 'all';
+      if (aligned) {
+        const line = rectPathEl(E.strokeRect(s), vp);
+        stroke(line);
+        line.style.fill = 'none';
+        g.appendChild(line);
+      }
+    } else if (s.t === 'rect') {
       const q = rectCorners(s).map(function (p) { return vp.convertToViewportPoint(p[0], p[1]); });
       const r = document.createElementNS(SVGNS, 'polygon');
       r.setAttribute('points', vpts(q));
@@ -2560,6 +2578,19 @@
       }
     }
     return g;
+  }
+
+  /** A rectangle's outline (E.rectBezier: square or rounded corners, turned)
+      as an SVG path on the page as shown. */
+  function rectPathEl(s, vp) {
+    const P = E.rectBezier(s).map(function (q) { return vp.convertToViewportPoint(q[0], q[1]); });
+    let d = 'M' + P[0][0] + ' ' + P[0][1];
+    for (let i = 1; i + 2 < P.length; i += 3) {
+      d += 'C' + P[i][0] + ' ' + P[i][1] + ' ' + P[i + 1][0] + ' ' + P[i + 1][1] + ' ' + P[i + 2][0] + ' ' + P[i + 2][1];
+    }
+    const el = document.createElementNS(SVGNS, 'path');
+    el.setAttribute('d', d + 'Z');
+    return el;
   }
 
   /* direction of a PDF-space ray once mapped into the viewport (handles page rotation) */
@@ -3531,7 +3562,7 @@
   /* the modules' own marks are named here too, so the popover never has to
      fall back to the bare word "Mark" */
   const MARK_NAME = {
-    rect: 'Box', line: 'Line', arrow: 'Arrow', text: 'Text',
+    rect: 'Rectangle', line: 'Line', arrow: 'Arrow', text: 'Text',
     ellipse: 'Ellipse', cloud: 'Cloud', arc: 'Arc', dim: 'Dimension',
     dimr: 'Radius', dimd: 'Diameter', dima: 'Angle',
     markup: 'Markup', ink: 'Ink', note: 'Note', stamp: 'Stamp', sig: 'Signature',
@@ -9185,7 +9216,8 @@
   /* ---------------- tools & mode bar ---------------- */
   const TOOL_BTN = { select: 'tSelect', rect: 'tRect', line: 'tLine', arrow: 'tArrow', text: 'tText', crop: 'tCrop', pin: 'tPin' };
   const HINTS = {
-    rect: 'Drag on a page to draw a box. Hold <b>Shift</b> for a square.',
+    rect: 'Drag to draw a rectangle. <b>Shift</b>: a square. <b>Alt</b>: from the centre. Hold <b>Space</b> to move it while drawing. ' +
+          '<b>↑</b>/<b>↓</b> round its corners, <b>←</b> squares them, <b>→</b> rounds them fully. <b>Esc</b> cancels. Click without dragging to type its size.',
     line: 'Drag on a page to draw a line. Hold <b>Shift</b> to keep it level, plumb or at 45°.',
     arrow: 'Drag from the tail to the head. Hold <b>Shift</b> to keep it level, plumb or at 45°.',
     pin: 'Click a drawing to drop a numbered <b>photo pin</b>. Drag a pin to move it, tap it to edit and add photos.',
@@ -11246,6 +11278,8 @@
     fitPage: function () { S.fit = 'page'; relayout(); }, print: function () { return printDoc(); },
     /* the system's print dialog, and a PDF printed with it */
     printSystem: printSystem, printFrame: printFrame,
+    /* a phone puts the tool down once a shape is drawn, the new one selected */
+    endToolOn: endToolOn,
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
     stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE,
     /* for Align and Pathfinder (js/arrange.js) */

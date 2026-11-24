@@ -1075,17 +1075,31 @@
     X.ellipseBox = ellipseBox;
 
     function ellipseTool() {
-      let d = null;     /* { it, a, raw, shift, alt, space: { from, a0 } | null, moved, at0 } */
-      function geom() {
-        const g = ellipseBox(d.a, d.p, d.shift, d.alt);
-        return g;
-      }
+      return boxTool({
+        t: 'ellipse', label: 'Ellipse',
+        mark: function (g) { return ellipseMark(g.a, g.b); },
+        read: function (it, m, p) { readBox(it, m, p); },
+        ask: askEllipseSize
+      });
+    }
+
+    /* The drag both the Ellipse and the Rectangle tools draw with, as
+       Illustrator's: from one corner of the box to the other, with a live
+       preview and its size by the pointer. Shift keeps it square (a circle),
+       Alt draws it out from its centre (both: a square from its centre),
+       and holding Space moves the whole shape, its size kept, until it is
+       let go and sizing carries on. The modifiers are read as they change,
+       not only when the pointer moves. Esc throws the drawing away and keeps
+       the tool; a click with no drag asks for the size (cfg.ask). cfg.key
+       takes any other key while drawing (the Rectangle's corner radius). */
+    function boxTool(cfg) {
+      let d = null;     /* { it, a, p, shift, alt, space: { from, a0 } | null, moved, at0 } */
+      function geom() { return ellipseBox(d.a, d.p, d.shift, d.alt); }
       function render() {
         if (!d) return;
-        const g = geom();
-        const m = ellipseMark(g.a, g.b);
+        const m = cfg.mark(geom(), d);
         X.drawShapes(d.it, m);
-        readBox(d.it, m, d.p);
+        cfg.read(d.it, m, d.p, d);
       }
       /* where the pointer is, snapped (Shift's proportion beats a snap) */
       function pointer(it, at, e) {
@@ -1104,7 +1118,7 @@
       const tool = {
         colors: true, widths: true,
         down: function (it, at, e) {
-          if (!it.vp) return;
+          if (!it.vp || (e && e.button > 0)) return;
           const a = pdfAt(it, at, e);
           d = { it: it, a: [a[0], a[1]], p: [a[0], a[1]], shift: !!(e && e.shiftKey), alt: !!(e && e.altKey),
                 space: null, moved: false, at0: [at[0], at[1]] };
@@ -1118,7 +1132,7 @@
           d.shift = !!(e && e.shiftKey); d.alt = !!(e && e.altKey);
           const p = pointer(it, at, e);
           if (d.space) {
-            /* Space held: the whole ellipse follows the pointer, its size kept */
+            /* Space held: the whole shape follows the pointer, its size kept */
             const dx = p[0] - d.space.from[0], dy = p[1] - d.space.from[1];
             d.a = [d.space.a0[0] + dx, d.space.a0[1] + dy];
           }
@@ -1134,17 +1148,18 @@
                (its centre with Alt), as Illustrator asks */
             end();
             X.drawShapes(it);
-            askEllipseSize(it, was.a, !!(e && e.altKey));
+            cfg.ask(it, was.a, !!(e && e.altKey));
             return;
           }
           tool.move(it, at, e);
-          const g = geom();
+          const m = cfg.mark(geom(), d);
           end();
-          const m = ellipseMark(g.a, g.b);
           if (m.b[0] - m.a[0] < 0.5 && m.b[1] - m.a[1] < 0.5) { X.drawShapes(it); return; }
           X.snapshot();
           it.shapes.push(m);
           X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+          /* on a phone the tool is put down and the new shape left selected */
+          if (X.isMobile && X.isMobile() && X.endToolOn) X.endToolOn(it);
         },
         /* the modifiers changed with the pointer still: the preview follows */
         key: function (e, down) {
@@ -1156,16 +1171,17 @@
             else if (!down) d.space = null;
             return true;
           }
-          if (e.key === 'Escape' && down) { const it = d.it; end(); X.drawShapes(it); X.toast('Ellipse cancelled'); return true; }
+          if (e.key === 'Escape' && down) { const it = d.it; end(); X.drawShapes(it); X.toast(cfg.label + ' cancelled'); return true; }
+          if (cfg.key && cfg.key(e, down, d)) { render(); return true; }
           return false;
         },
         drawing: function () { return !!d; }
       };
-      /* ahead of Space-to-pan (js/navigate.js) and core's Escape, and only
-         while an ellipse is being drawn */
+      /* ahead of Space-to-pan (js/navigate.js), the arrow keys' page turns
+         and core's Escape, and only while this shape is being drawn */
       ['keydown', 'keyup'].forEach(function (type) {
         window.addEventListener(type, function (e) {
-          if (S.tool !== 'ellipse' || !d) return;
+          if (S.tool !== cfg.t || !d) return;
           if (type === 'keydown' && e.repeat && (e.key === ' ' || e.code === 'Space')) { e.preventDefault(); e.stopImmediatePropagation(); return; }
           if (tool.key(e, type === 'keydown')) { e.preventDefault(); e.stopImmediatePropagation(); }
         }, true);
@@ -1175,13 +1191,13 @@
     }
 
     /** The width and height beside the pointer while an ellipse is drawn. */
-    function readBox(it, m, p) {
+    function readBox(it, m, p, extra) {
       if (!it.anno) return;
       const r = it.anno.getBoundingClientRect();
       const w = m.b[0] - m.a[0], h = m.b[1] - m.a[1];
       if (w < 0.5 && h < 0.5) { readHide(); return; }
       const v = it.vp.convertToViewportPoint(p[0], p[1]);
-      readout.textContent = 'W ' + measureLen(w) + '   H ' + measureLen(h);
+      readout.textContent = 'W ' + measureLen(w) + '   H ' + measureLen(h) + (extra ? '   ' + extra : '');
       readout.style.transform = 'translate(' + Math.round(r.left + v[0] + 14) + 'px,' + Math.round(r.top + v[1] + 34) + 'px)';
       readout.hidden = false;
       if (!startDot.hidden) startDot.hidden = true;
@@ -1215,18 +1231,7 @@
       }).then(function (v) {
         if (!v) return;
         ellLook.lastWH = [v.w, v.h]; keepEllLook();
-        /* the click is its top-left corner as the page is seen, or its centre */
-        const vp = it.vp;
-        const tl = centre ? [at[0] - v.w / 2, at[1] - v.h / 2] : null;
-        let a, b;
-        if (centre) { a = tl; b = [tl[0] + v.w, tl[1] + v.h]; }
-        else {
-          /* down and right on the screen, whatever the page's turn */
-          const o = vp.convertToViewportPoint(at[0], at[1]);
-          const q = vp.convertToPdfPoint(o[0] + 1, o[1] + 1);
-          const sx = q[0] >= at[0] ? 1 : -1, sy = q[1] >= at[1] ? 1 : -1;
-          a = at; b = [at[0] + sx * v.w, at[1] + sy * v.h];
-        }
+        const g = boxAtClick(it, at, centre, v.w, v.h), a = g.a, b = g.b;
         X.snapshot();
         it.shapes.push(ellipseMark(a, b));
         X.drawShapes(it); X.drawThumb(it); X.updateMeta();
@@ -1365,6 +1370,411 @@
       X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
       X.toast('Converted to a path: Direct Selection (Shift+V) edits its points');
     });
+    /* ---------------- the Rectangle tool (X) ----------------
+       The box tool upgraded to Illustrator's Rectangle tool, drawing core's
+       own 'rect' mark (so selecting, the bounding box's grips, turning,
+       moving, layers, undo, Save and the thumbnails all stay core's). It
+       draws as the Ellipse does (boxTool): from corner to corner with a live
+       preview and its width and height by the pointer; Shift a square, Alt
+       from the centre, both a square from its centre, Space to move it
+       while drawing, Esc to throw it away, a click with no drag to type its
+       size. Its corner point snaps to the Snap Engine and the smart guides.
+
+       Its corners round as Illustrator's live rectangle's do (s.rr, or
+       s.rc one each, engine rect.ts): while drawing ↑ and ↓ round them a
+       point at a time, ← squares them and → rounds them fully; on a
+       selected rectangle the corner widgets inside its corners are dragged
+       to round them all (Alt: that corner alone), and its properties take
+       an exact radius for all four or each. A new rectangle takes the look
+       set in the tool's bar — fill (or none), no stroke, solid or dashed,
+       stroke alignment, opacity and corner radius — kept for next time. */
+    const RECT_KEY = 'adpdf.rectLook';
+    const RECT_DEFAULT = { fill: null, fillC: '#FFFFFF', nos: false, d: 0, o: 1, sa: '', rr: 0 };
+    let rectLook = (function () {
+      try { return Object.assign({}, RECT_DEFAULT, JSON.parse(localStorage.getItem(RECT_KEY) || '{}')); }
+      catch (e) { return Object.assign({}, RECT_DEFAULT); }
+    })();
+    function keepRectLook() { try { localStorage.setItem(RECT_KEY, JSON.stringify(rectLook)); } catch (e) { /* this session only */ } }
+    const rr2 = function (v) { return Math.round(v * 100) / 100; };
+    /** A new rectangle with the tool's look, over box a-b (any two corners). */
+    function rectMark(a, b, rr) {
+      const m = { t: 'rect', a: [Math.min(a[0], b[0]), Math.min(a[1], b[1])], b: [Math.max(a[0], b[0]), Math.max(a[1], b[1])], c: S.color, w: S.width };
+      if (rectLook.fill) m.fill = rectLook.fill;
+      if (rectLook.nos) m.nos = true;
+      if (rectLook.d) m.d = rectLook.d;
+      if (rectLook.o != null && rectLook.o < 1) m.o = rectLook.o;
+      if (rectLook.sa) m.sa = rectLook.sa;
+      const r = rr == null ? rectLook.rr : rr;
+      if (r > 0) m.rr = rr2(r);
+      return m;
+    }
+    X.rectMark = rectMark;
+
+    X.tools.rect = boxTool({
+      t: 'rect', label: 'Rectangle',
+      mark: function (g, d) { return rectMark(g.a, g.b, d && d.rr != null ? d.rr : null); },
+      read: function (it, m, p) {
+        readBox(it, m, p, E.rectRounded(m) ? 'R ' + measureLen(E.rectRadii(m)[0]) : '');
+      },
+      ask: askRectSize,
+      /* ↑ ↓ round the corners a point at a time (Shift: ten), ← squares
+         them, → rounds them as far as the box allows */
+      key: function (e, down, d) {
+        if (!/^Arrow(Up|Down|Left|Right)$/.test(e.key)) return false;
+        if (!down) return true;
+        const g = ellipseBox(d.a, d.p, d.shift, d.alt);
+        const max = E.rectMaxRadius(g);
+        let r = d.rr != null ? d.rr : (rectLook.rr || 0);
+        r = Math.min(r, max);
+        const step = e.shiftKey ? 10 : 1;
+        if (e.key === 'ArrowUp') r = Math.min(max, r + step);
+        else if (e.key === 'ArrowDown') r = Math.max(0, r - step);
+        else if (e.key === 'ArrowLeft') r = 0;
+        else r = max;
+        d.rr = rr2(r);
+        rectLook.rr = d.rr; keepRectLook();
+        if (!rectCtl.hidden) syncRectCtl();
+        return true;
+      }
+    });
+
+    /** Box a-b for a size typed in at a click: the click its top-left corner
+        as the page is seen (down and right on the screen, whatever the page's
+        turn), or with Alt its centre. */
+    function boxAtClick(it, at, centre, w, h) {
+      if (centre) return { a: [at[0] - w / 2, at[1] - h / 2], b: [at[0] + w / 2, at[1] + h / 2] };
+      const o = it.vp.convertToViewportPoint(at[0], at[1]);
+      const q = it.vp.convertToPdfPoint(o[0] + 1, o[1] + 1);
+      const sx = q[0] >= at[0] ? 1 : -1, sy = q[1] >= at[1] ? 1 : -1;
+      return { a: [at[0], at[1]], b: [at[0] + sx * w, at[1] + sy * h] };
+    }
+
+    /** Illustrator's Rectangle dialog: a click with no drag asks for the size
+        and the corner radius. */
+    function askRectSize(it, at, centre) {
+      const last = rectLook.lastWH || [72, 72];
+      X.dialog({
+        title: 'Rectangle',
+        ok: 'OK',
+        width: 380,
+        body:
+          '<div class="wdrow ellwh">' +
+            '<label class="wdlabel" for="rectW">Width</label><span class="unit"><input class="wdin" id="rectW" inputmode="decimal" value="' + last[0] + '"><em>pt</em></span>' +
+            '<label class="wdlabel" for="rectH">Height</label><span class="unit"><input class="wdin" id="rectH" inputmode="decimal" value="' + last[1] + '"><em>pt</em></span>' +
+          '</div>' +
+          '<label class="prchk ellcircle"><input type="checkbox" id="rectLink"> Constrain proportions</label>' +
+          '<div class="wdrow ellwh ellcircle">' +
+            '<label class="wdlabel" for="rectR">Corner radius</label><span class="unit"><input class="wdin" id="rectR" inputmode="decimal" value="' + (rectLook.rr || 0) + '"><em>pt</em></span>' +
+          '</div>',
+        open: function (box) {
+          const W = box.querySelector('#rectW'), H = box.querySelector('#rectH'), L = box.querySelector('#rectLink');
+          let ratio = 1;
+          const num = function (el) { return parseFloat(String(el.value).replace(',', '.')); };
+          L.addEventListener('change', function () { const w = num(W), h = num(H); ratio = w > 0 && h > 0 ? h / w : 1; });
+          W.addEventListener('input', function () { const w = num(W); if (L.checked && w > 0) H.value = rr2(w * ratio); });
+          H.addEventListener('input', function () { const h = num(H); if (L.checked && h > 0) W.value = rr2(h / ratio); });
+        },
+        value: function (box) {
+          const num = function (id) { return parseFloat(String(box.querySelector(id).value).replace(',', '.')); };
+          const w = num('#rectW'), h = num('#rectH'), r = num('#rectR');
+          if (!(w > 0 && w <= 20000)) return { error: 'Width: a size from 0 to 20000 pt', field: '#rectW' };
+          if (!(h > 0 && h <= 20000)) return { error: 'Height: a size from 0 to 20000 pt', field: '#rectH' };
+          if (!(r >= 0 && r <= 10000)) return { error: 'Corner radius: 0 or more, in points', field: '#rectR' };
+          return { w: w, h: h, r: r };
+        }
+      }).then(function (v) {
+        if (!v) return;
+        rectLook.lastWH = [v.w, v.h]; rectLook.rr = v.r; keepRectLook();
+        if (!rectCtl.hidden) syncRectCtl();
+        const g = boxAtClick(it, at, centre, v.w, v.h);
+        X.snapshot();
+        it.shapes.push(rectMark(g.a, g.b, v.r));
+        X.drawShapes(it); X.drawThumb(it); X.updateMeta();
+      });
+    }
+
+    /* ---- the tool's bar: the look the next rectangle takes ---- */
+    const rectCtl = ctl('rectCtl',
+      '<span class="anno-lbl">Fill</span>' +
+      '<input type="color" id="rectFill" aria-label="Fill colour">' +
+      '<label class="anno-lbl ellchk"><input type="checkbox" id="rectNoFill"> None</label>' +
+      '<span class="anno-lbl">Stroke</span>' +
+      '<label class="anno-lbl ellchk"><input type="checkbox" id="rectNoStroke"> None</label>' +
+      '<select id="rectDash" aria-label="Stroke style"><option value="0">━━━ Solid</option><option value="1">━ ━ Dashed</option><option value="2">· · · Dotted</option></select>' +
+      '<select id="rectAlign" aria-label="Stroke alignment"><option value="">Align centre</option><option value="in">Align inside</option><option value="out">Align outside</option></select>' +
+      '<span class="anno-lbl" title="Corner radius: ↑ and ↓ change it while drawing">Corners</span>' +
+      '<input type="number" id="rectRad" min="0" step="1" aria-label="Corner radius, in points"><span class="anno-lbl">pt</span>' +
+      '<span class="anno-lbl">Opacity</span>' +
+      '<input type="number" id="rectOp" min="0" max="100" step="1" aria-label="Opacity, in percent"><span class="anno-lbl">%</span>');
+    function syncRectCtl() {
+      $('rectFill').value = rectLook.fill || rectLook.fillC || '#FFFFFF';
+      $('rectNoFill').checked = !rectLook.fill;
+      $('rectFill').disabled = !rectLook.fill;
+      $('rectNoStroke').checked = !!rectLook.nos;
+      $('rectDash').value = String(rectLook.d || 0);
+      $('rectAlign').value = rectLook.sa || '';
+      if (document.activeElement !== $('rectRad')) $('rectRad').value = rr2(rectLook.rr || 0);
+      $('rectOp').value = Math.round((rectLook.o == null ? 1 : rectLook.o) * 100);
+    }
+    rectCtl.addEventListener('change', function (e) {
+      const id = e.target.id;
+      if (id === 'rectFill') { rectLook.fill = e.target.value.toUpperCase(); rectLook.fillC = rectLook.fill; }
+      else if (id === 'rectNoFill') rectLook.fill = e.target.checked ? null : (rectLook.fillC || '#FFFFFF');
+      else if (id === 'rectNoStroke') rectLook.nos = e.target.checked;
+      else if (id === 'rectDash') rectLook.d = +e.target.value || 0;
+      else if (id === 'rectAlign') rectLook.sa = e.target.value;
+      else if (id === 'rectRad') rectLook.rr = Math.max(0, Math.min(10000, parseFloat(e.target.value) || 0));
+      else if (id === 'rectOp') rectLook.o = Math.max(0, Math.min(100, +e.target.value || 0)) / 100;
+      /* never neither: with no fill and no stroke a rectangle could not be seen or picked */
+      if (!rectLook.fill && rectLook.nos) {
+        if (id === 'rectNoStroke') { rectLook.fill = rectLook.fillC || '#FFFFFF'; X.toast('A rectangle needs a fill or a stroke: fill turned on'); }
+        else { rectLook.nos = false; X.toast('A rectangle needs a fill or a stroke: stroke turned on'); }
+      }
+      keepRectLook();
+      syncRectCtl();
+    });
+    X.on('tool', function (t) { rectCtl.hidden = t !== 'rect'; if (t === 'rect') syncRectCtl(); });
+    syncRectCtl();
+
+    /* ---- on the selected rectangle's properties: its exact place and size,
+       its corner radius (all four, or each), stroke alignment, a square at a
+       click, and Convert to Path ---- */
+    const rectPop = document.createElement('div');
+    rectPop.className = 'mpell mprect';
+    rectPop.innerHTML =
+      '<label class="mfield"><span>X</span><span class="unit"><input id="rectPX" inputmode="decimal" aria-label="Left edge, in points"><em>pt</em></span></label>' +
+      '<label class="mfield"><span>Y</span><span class="unit"><input id="rectPY" inputmode="decimal" aria-label="Top edge from the top of the page, in points"><em>pt</em></span></label>' +
+      '<label class="mfield"><span>W</span><span class="unit"><input id="rectPW" inputmode="decimal" aria-label="Width, in points"><em>pt</em></span></label>' +
+      '<label class="mfield"><span>H</span><span class="unit"><input id="rectPH" inputmode="decimal" aria-label="Height, in points"><em>pt</em></span></label>' +
+      '<button class="cbtn ellbtn" id="rectPLock" type="button" title="Keep width and height in proportion" aria-pressed="false">⛓</button>' +
+      '<label class="mfield"><span>Corners</span><span class="unit"><input id="rectPR" inputmode="decimal" aria-label="Corner radius, in points"><em>pt</em></span></label>' +
+      '<button class="cbtn ellbtn" id="rectPEach" type="button" title="A radius for each corner" aria-pressed="false">⌜⌝</button>' +
+      '<div class="rectcorn" id="rectPCorners" hidden>' +
+        [['TL', '↖', 'Top left'], ['TR', '↗', 'Top right'], ['BL', '↙', 'Bottom left'], ['BR', '↘', 'Bottom right']].map(function (c) {
+          return '<label class="mfield"><span>' + c[1] + '</span><span class="unit"><input id="rectPR' + c[0] + '" data-corner="' + c[0] +
+            '" inputmode="decimal" aria-label="' + c[2] + ' corner radius, in points" title="' + c[2] + '"><em>pt</em></span></label>';
+        }).join('') +
+      '</div>' +
+      '<label class="mfield"><span>Align</span><select id="rectPAlign" aria-label="Stroke alignment"><option value="">Centre</option><option value="in">Inside</option><option value="out">Outside</option></select></label>' +
+      '<button class="cbtn ellbtn" id="rectPSquare" type="button" title="Make it a square (its width for both)">Square</button>' +
+      '<button class="cbtn ellbtn" id="rectPPath" type="button" title="Convert to a Pen path: anchor points and handles to edit with Direct Selection">Convert to Path</button>';
+    const rectQ = function (id) { return rectPop.querySelector('#' + id); };
+    let rectLock = false, rectEach = false;
+    function rectSel() {
+      const sh = S.sel && S.sel.it && S.sel.it.shapes[S.sel.i];
+      return sh && sh.t === 'rect' ? sh : null;
+    }
+    /** Which of the rectangle's corners (rectCorners' order) is at the top
+        left, top right, bottom left and bottom right as the page is seen. */
+    function cornerOrder(it, s) {
+      const b = E.boxOf(s), C = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
+      const V = C.map(function (q) { return it.vp.convertToViewportPoint(q[0], q[1]); });
+      const pick = function (f, max) {
+        let best = 0;
+        for (let i = 1; i < 4; i++) if (max ? f(V[i]) > f(V[best]) : f(V[i]) < f(V[best])) best = i;
+        return best;
+      };
+      return {
+        TL: pick(function (v) { return v[0] + v[1]; }, false), BR: pick(function (v) { return v[0] + v[1]; }, true),
+        TR: pick(function (v) { return v[0] - v[1]; }, true), BL: pick(function (v) { return v[0] - v[1]; }, false)
+      };
+    }
+    X.markPop.rect = {
+      el: rectPop,
+      sync: function (sh) {
+        const it = S.sel.it, b = E.boxOf(sh);
+        const set = function (id, v) { const el = rectQ(id); if (document.activeElement !== el) el.value = rr2(v); };
+        set('rectPX', b.x1); set('rectPY', Math.abs(pageTop(it) - b.y2));
+        set('rectPW', b.x2 - b.x1); set('rectPH', b.y2 - b.y1);
+        const R = E.rectRadii(sh), raw = E.rectRadiiRaw(sh);
+        const same = raw[0] === raw[1] && raw[1] === raw[2] && raw[2] === raw[3];
+        if (!same) rectEach = true;
+        const el = rectQ('rectPR');
+        if (document.activeElement !== el) el.value = same ? rr2(R[0]) : '';
+        el.placeholder = same ? '' : 'mixed';
+        rectQ('rectPCorners').hidden = !rectEach;
+        const ord = cornerOrder(it, sh);
+        Object.keys(ord).forEach(function (k) { set('rectPR' + k, R[ord[k]]); });
+        rectQ('rectPAlign').value = sh.sa || '';
+        [['rectPLock', rectLock], ['rectPEach', rectEach]].forEach(function (q) {
+          rectQ(q[0]).classList.toggle('on', q[1]);
+          rectQ(q[0]).setAttribute('aria-pressed', q[1] ? 'true' : 'false');
+        });
+      }
+    };
+    function rectChange(fn) {
+      if (!rectSel()) return;
+      X.snapshot();
+      /* every rectangle selected takes it */
+      const it = S.sel.it;
+      X.selList().forEach(function (i) { const m = it.shapes[i]; if (m && m.t === 'rect' && !m.locked) fn(m, it); });
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+    }
+    /** a rectangle's radius set: all four alike (rr), or one each (rc) */
+    function setRadii(m, R) {
+      const v = R.map(function (r) { return rr2(Math.max(0, r)); });
+      delete m.rr; delete m.rc;
+      if (v[0] === v[1] && v[1] === v[2] && v[2] === v[3]) { if (v[0] > 0) m.rr = v[0]; }
+      else m.rc = v;
+    }
+    X.rectSetRadii = setRadii;
+    function rectNum(id) { const v = parseFloat(String(rectQ(id).value).replace(',', '.')); return isFinite(v) ? v : null; }
+    rectPop.addEventListener('change', function (e) {
+      const id = e.target.id;
+      if (id === 'rectPAlign') { rectChange(function (m) { if (e.target.value) m.sa = e.target.value; else delete m.sa; }); return; }
+      const v = rectNum(id);
+      if (v == null) { X.syncMarkPop(); return; }
+      rectChange(function (m, it) {
+        const b = E.boxOf(m), w = b.x2 - b.x1, h = b.y2 - b.y1;
+        if (id === 'rectPX') { m.a = [v, b.y1]; m.b = [v + w, b.y2]; }
+        else if (id === 'rectPY') { const top = pageTop(it); const y2 = top >= b.y2 ? top - v : top + v; m.a = [b.x1, y2 - h]; m.b = [b.x2, y2]; }
+        else if (id === 'rectPW' || id === 'rectPH') {
+          /* sized about its centre, as Illustrator's W and H do with the centre reference point */
+          let nw = id === 'rectPW' ? Math.max(0.01, v) : w, nh = id === 'rectPH' ? Math.max(0.01, v) : h;
+          if (rectLock && w > 0 && h > 0) { if (id === 'rectPW') nh = h * nw / w; else nw = w * nh / h; }
+          const cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2;
+          m.a = [cx - nw / 2, cy - nh / 2]; m.b = [cx + nw / 2, cy + nh / 2];
+        } else if (id === 'rectPR') setRadii(m, [v, v, v, v]);
+        else if (e.target.dataset.corner) {
+          const R = E.rectRadii(m).slice();
+          R[cornerOrder(it, m)[e.target.dataset.corner]] = v;
+          setRadii(m, R);
+        }
+      });
+    });
+    rectPop.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); e.target.dispatchEvent(new Event('change', { bubbles: true })); e.target.blur(); }
+    });
+    rectQ('rectPLock').addEventListener('click', function () { rectLock = !rectLock; X.syncMarkPop(); });
+    rectQ('rectPEach').addEventListener('click', function () {
+      rectEach = !rectEach;
+      /* back to one for all: the first corner's radius for every one */
+      const sh = rectSel();
+      if (!rectEach && sh && sh.rc) { const r = E.rectRadii(sh)[0]; rectChange(function (m) { setRadii(m, [r, r, r, r]); }); return; }
+      X.syncMarkPop();
+    });
+    rectQ('rectPSquare').addEventListener('click', function () {
+      rectChange(function (m) {
+        const b = E.boxOf(m), side = b.x2 - b.x1, cx = (b.x1 + b.x2) / 2, cy = (b.y1 + b.y2) / 2;
+        m.a = [cx - side / 2, cy - side / 2]; m.b = [cx + side / 2, cy + side / 2];
+      });
+    });
+    /** A rectangle as a Pen path, its look kept: the same outline, corners
+        and arcs as anchors and handles (engine rectBezier). */
+    function rectToPen(m) {
+      const pen = { t: 'pen', pts: E.rectBezier(m).map(function (q) { return [q[0], q[1]]; }) };
+      Object.keys(m).forEach(function (k) { if (['t', 'a', 'b', 'r', 'sa', 'rr', 'rc'].indexOf(k) < 0) pen[k] = m[k]; });
+      return pen;
+    }
+    X.rectToPen = rectToPen;
+    rectQ('rectPPath').addEventListener('click', function () {
+      if (!rectSel()) return;
+      const it = S.sel.it;
+      X.snapshot();
+      const made = [];
+      X.selList().forEach(function (i) {
+        const m = it.shapes[i];
+        if (!m || m.t !== 'rect' || m.locked) return;
+        it.shapes[i] = rectToPen(m);
+        made.push(i);
+      });
+      X.setGroup(it, made);
+      X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop();
+      X.toast('Converted to a path: Direct Selection (A) edits its points');
+    });
+
+    /* ---- the live corner widgets: a small circle inside each corner of the
+       selected rectangle, as Illustrator's, dragged in to round the corners
+       (all four; with Alt that one alone) and back out to square them ---- */
+    const CW_MIN = 12;            /* px in from the corner, however small the radius */
+    function cornerFrames(s) {
+      /* each corner, and the inward directions along its two sides, in PDF space before the turn */
+      const b = E.boxOf(s);
+      return [
+        { c: [b.x1, b.y1], u: [1, 0], v: [0, 1] },
+        { c: [b.x2, b.y1], u: [-1, 0], v: [0, 1] },
+        { c: [b.x2, b.y2], u: [-1, 0], v: [0, -1] },
+        { c: [b.x1, b.y2], u: [1, 0], v: [0, -1] }
+      ];
+    }
+    let cwDrag = null;
+    X.afterDraw.push(function (it) {
+      if (S.tool !== 'select' || !S.sel || S.sel.it !== it || X.selList().length > 1) return;
+      const s = it.shapes[S.sel.i];
+      if (!s || s.t !== 'rect' || s.locked || s.hide || !it.vp) return;
+      const vp = it.vp, b = E.boxOf(s);
+      const k = S.scale || 1;
+      /* too small on screen to hold the widgets clear of the grips: none, as Illustrator */
+      if ((b.x2 - b.x1) * k < 4 * CW_MIN || (b.y2 - b.y1) * k < 4 * CW_MIN) return;
+      const R = E.rectRadii(s), mid = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
+      const g = document.createElementNS(SVGNS, 'g');
+      g.setAttribute('class', 'rcwg');
+      cornerFrames(s).forEach(function (f, i) {
+        const off = Math.max(R[i], CW_MIN / k);
+        let q = [f.c[0] + (f.u[0] + f.v[0]) * off, f.c[1] + (f.u[1] + f.v[1]) * off];
+        if (s.r) q = E.rotPt(q, mid, s.r);
+        const v = vp.convertToViewportPoint(q[0], q[1]);
+        const el = document.createElementNS(SVGNS, 'circle');
+        el.setAttribute('class', 'rcw' + (cwDrag && (cwDrag.i === i || !cwDrag.one) ? ' on' : ''));
+        el.setAttribute('cx', v[0]); el.setAttribute('cy', v[1]); el.setAttribute('r', 4.5);
+        el.dataset.corner = String(i);
+        const t = document.createElementNS(SVGNS, 'title');
+        t.textContent = 'Drag to round the corners (Alt: this corner only)';
+        el.appendChild(t);
+        el.addEventListener('pointerdown', function (e) { cornerDown(it, S.sel.i, i, e); });
+        g.appendChild(el);
+      });
+      it.anno.appendChild(g);
+    });
+    function cornerDown(it, idx, i, e) {
+      if (e.button > 0) return;
+      e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation();
+      const s = it.shapes[idx];
+      cwDrag = { it: it, idx: idx, i: i, one: e.altKey, moved: false, x: e.clientX, y: e.clientY, R0: E.rectRadii(s).slice() };
+      const move = function (ev) {
+        const d = cwDrag;
+        if (!d) return;
+        if (!d.moved) {
+          if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < 2) return;
+          X.snapshot();
+          d.moved = true;
+        }
+        const m = it.shapes[d.idx];
+        if (!m) return;
+        const r = it.anno.getBoundingClientRect();
+        let p = it.vp.convertToPdfPoint(ev.clientX - r.left, ev.clientY - r.top);
+        const bb = E.boxOf(m), mid = [(bb.x1 + bb.x2) / 2, (bb.y1 + bb.y2) / 2];
+        if (m.r) p = E.rotPt(p, mid, -m.r);
+        const f = cornerFrames(m)[d.i];
+        /* how far in along the corner's diagonal: the radius it asks for */
+        const dx = p[0] - f.c[0], dy = p[1] - f.c[1];
+        let rad = ((dx * f.u[0] + dy * f.u[1]) + (dx * f.v[0] + dy * f.v[1])) / 2;
+        rad = Math.max(0, Math.min(E.rectMaxRadius(m), rad));
+        /* settle on the nearest whole point, as a drag on screen means */
+        rad = Math.round(rad);
+        if (d.one) { const R = d.R0.slice(); R[d.i] = rad; setRadii(m, R); }
+        else setRadii(m, [rad, rad, rad, rad]);
+        X.drawShapes(it);
+        const v = it.vp.convertToViewportPoint(p[0], p[1]);
+        readout.textContent = 'Radius ' + measureLen(rad);
+        readout.style.transform = 'translate(' + Math.round(r.left + v[0] + 14) + 'px,' + Math.round(r.top + v[1] + 18) + 'px)';
+        readout.hidden = false;
+      };
+      const up = function () {
+        window.removeEventListener('pointermove', move, true);
+        window.removeEventListener('pointerup', up, true);
+        window.removeEventListener('pointercancel', up, true);
+        const d = cwDrag;
+        cwDrag = null;
+        readHide();
+        if (d && d.moved) { X.drawThumb(it); X.updateMeta(); }
+        X.drawShapes(it); X.syncMarkPop();
+      };
+      window.addEventListener('pointermove', move, true);
+      window.addEventListener('pointerup', up, true);
+      window.addEventListener('pointercancel', up, true);
+    }
+
     X.tools.cloud = common('cloud');
     X.tools.arc = common('arc');
 
@@ -2122,6 +2532,13 @@
         });
         return out;
       }
+      /* a rectangle with rounded corners: its eight anchors, where each arc
+         meets a side, as Illustrator's anchor points are, and its centre */
+      if (t === 'rect' && s.b && E.rectRounded(s)) {
+        E.rectAnchors(s).forEach(function (q) { out.push([q, 'Anchor']); });
+        out.push([[(s.a[0] + s.b[0]) / 2, (s.a[1] + s.b[1]) / 2], 'Centre']);
+        return out;
+      }
       if ((t === 'rect' || t === 'cloud') && s.b && s.r) {
         E.rectCorners(s).forEach(function (q) { out.push([q, 'Anchor']); });
         return out;
@@ -2153,6 +2570,14 @@
       const t = s.t;
       if (s.hide) return [];
       if (s.b && (t === 'line' || t === 'arrow' || t === 'dim')) return [[s.a, s.b]];
+      /* rounded: just its straight sides, between the arcs */
+      if (s.b && t === 'rect' && E.rectRounded(s)) {
+        const P = E.rectBezier(s), out = [];
+        for (let i = 0; i + 3 < P.length; i += 3) {
+          if (P[i][0] === P[i + 1][0] && P[i][1] === P[i + 1][1]) out.push([P[i], P[i + 3]]);
+        }
+        return out;
+      }
       if (s.b && (t === 'rect' || t === 'cloud' || t === 'redact') && !s.r) {
         const a = s.a, b = s.b, c = [s.a[0], s.b[1]], d = [s.b[0], s.a[1]];
         return [[a, d], [d, b], [b, c], [c, a]];

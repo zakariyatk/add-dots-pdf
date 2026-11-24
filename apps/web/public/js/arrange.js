@@ -190,6 +190,7 @@
     /* a closed shape as its outline rings, in PDF points; null when it is
        not a closed shape Pathfinder can work on */
     function rings(s) {
+      if (s.t === 'rect' && window.ADDPDFEngine.rectRounded(s)) return [window.ADDPDFEngine.rectRing(s, 12).slice(0, -1)];
       if (s.t === 'rect') return [X.rectCorners(s)];
       if (s.t === 'ellipse') {
         const cx = (s.a[0] + s.b[0]) / 2, cy = (s.a[1] + s.b[1]) / 2;
