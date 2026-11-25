@@ -13,16 +13,28 @@
      window, and quits
    - Save, from that tab, writes the file (ADDDOTS_SAVE_TO stands in for the
      Save dialog), a PDF with every page
+   - Save on the PDF it was started with, nothing drawn on it, writes it back
+     onto that file: no dialog, no question
+   - an editable PDF, saved and then opened from Explorer, comes back with
+     its objects ready to edit, and Save writes it back onto that file
 
    Needs apps/web/dist (npx turbo run build --filter=@adddots/web...). */
 
 import { spawn } from 'node:child_process';
-import { copyFileSync, existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  copyFileSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PDFDocument, StandardFonts } from 'pdf-lib';
+import { PDFDocument, PDFName, PDFRawStream, StandardFonts, decodePDFRawStream } from 'pdf-lib';
 import { _electron } from 'playwright-core';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -91,6 +103,16 @@ try {
     }
     return null;
   };
+
+  /* when a file on disk last changed, and the editable project it carries */
+  const mtime = (f) => (existsSync(f) ? statSync(f).mtimeMs : 0);
+  async function projectOf(f) {
+    const d = await PDFDocument.load(readFileSync(f), { ignoreEncryption: true });
+    const st = d.context.lookup(d.catalog.get(PDFName.of('AddDotsProject')));
+    if (!(st instanceof PDFRawStream)) return null;
+    return JSON.parse(new TextDecoder().decode(decodePDFRawStream(st).decode()));
+  }
+  const marksIn = (proj) => (proj ? proj.items.reduce((n, it) => n + it.shapes.length, 0) : -1);
 
   /* ---- started with a PDF ---- */
   const first = await until(() => {
@@ -245,8 +267,34 @@ try {
     { dlg, jobPages, after },
   );
 
+  /* ---- Save on the PDF it was started with, nothing drawn on it: back onto
+     that file, with no dialog (the dialog's stand-in folder stays empty) and
+     no question ---- */
+  const aWas = mtime(A),
+    inSaveTo = readdirSync(saveTo).length;
+  await run(() => {
+    window.ADDDOTS_CONFIG.requireSignIn = false;
+    document.getElementById('btnQSave').click();
+  });
+  for (let i = 0; i < 100 && mtime(A) === aWas; i++) await sleep(200);
+  await sleep(300);
+  const plain = {
+    rewritten: mtime(A) !== aWas,
+    dialogFolder: readdirSync(saveTo).length - inSaveTo,
+    asked: await run(() => !document.getElementById('savePop').hidden),
+    pages: (await PDFDocument.load(readFileSync(A), { ignoreEncryption: true })).getPageCount(),
+  };
+  check(
+    'Save on a PDF only read writes it back onto its own file: no dialog, no question',
+    plain.rewritten && plain.dialogFolder === 0 && !plain.asked && plain.pages === firstPages,
+    plain,
+  );
+
   /* ---- a second double-click, with the app open ---- */
-  const second = spawn(EXE, [...lead, B], { env, stdio: 'ignore' });
+  /* (Chromium refuses to run as root, a container's user, without this;
+     Playwright gives its own launch the same) */
+  const asRoot = process.getuid && process.getuid() === 0 ? ['--no-sandbox'] : [];
+  const second = spawn(EXE, [...asRoot, ...lead, B], { env, stdio: 'ignore' });
   const quit = await new Promise((res) => {
     const t = setTimeout(() => res(null), 20000);
     second.on('exit', (code) => (clearTimeout(t), res(code)));
@@ -334,10 +382,98 @@ try {
     pages: pages1,
   });
 
+  /* ---- an editable PDF: Save as… Editable PDF; then opened from Explorer
+     it comes back ready to edit, and Save writes it back onto that file ---- */
+  const nMarks = await run(() => window.ADDPDF.S.items.reduce((n, it) => n + it.shapes.length, 0));
+  await run(() => document.getElementById('btnSaveAs').click());
+  await sleep(300);
+  await run(() => {
+    const r = document.querySelector('input[name="saveFmt"][value="project"]');
+    r.checked = true;
+    r.dispatchEvent(new Event('change', { bubbles: true }));
+    document.getElementById('saveGo').click();
+  });
+  let editable = null;
+  for (let i = 0; i < 150 && !editable; i++) {
+    const f = readdirSync(saveTo).find((n) => n.endsWith('-editable.pdf'));
+    if (f) editable = join(saveTo, f);
+    else await sleep(200);
+  }
+  await sleep(500);
+  const carried = editable ? await projectOf(editable) : null;
+  check(
+    'Save as… Editable PDF writes a PDF carrying the whole document',
+    !!carried && marksIn(carried) === nMarks,
+    {
+      editable,
+      marks: marksIn(carried),
+      nMarks,
+    },
+  );
+
+  const P = join(dir, 'project.pdf');
+  if (editable) copyFileSync(editable, P);
+  const pStart = spawn(EXE, [...asRoot, ...lead, P], { env, stdio: 'ignore' });
+  await new Promise((res) => {
+    const t = setTimeout(res, 20000);
+    pStart.on('exit', () => (clearTimeout(t), res()));
+  });
+  const reopened = await until(() => {
+    for (const t of window.ADDPDF.tabs.list()) {
+      const f = window.ADDPDF.tabs.frame(t.id);
+      const w = f && f.contentWindow,
+        a = w && w.ADDPDF;
+      const meta = w && w.document.getElementById('meta');
+      if (a && a.S && a.S.items[0] && a.S.items[0].rendered && meta && /project\.pdf/.test(meta.textContent))
+        return {
+          id: t.id,
+          meta: meta.textContent,
+          marks: a.S.items.reduce((n, it) => n + it.shapes.length, 0),
+          board: a.board(),
+        };
+    }
+    return null;
+  });
+  check(
+    'an editable PDF opened from Explorer comes back ready to edit: every object, as an editable PDF',
+    !!reopened && reopened.marks === nMarks && /editable PDF/.test(reopened.meta),
+    reopened,
+  );
+  if (reopened) {
+    const pWas = mtime(P),
+      dialogBefore = readdirSync(saveTo).length;
+    await run((id) => {
+      const w = window.ADDPDF.tabs.frame(id).contentWindow,
+        a = w.ADDPDF;
+      w.ADDDOTS_CONFIG.requireSignIn = false;
+      a.snapshot();
+      a.S.items[0].shapes.push({ t: 'rect', a: [-200, 300], b: [-80, 380], c: '#1F5FBF', w: 2 });
+      a.drawShapes(a.S.items[0]);
+      w.document.getElementById('btnQSave').click();
+    }, reopened.id);
+    for (let i = 0; i < 100 && mtime(P) === pWas; i++) await sleep(200);
+    await sleep(500);
+    const back = {
+      rewritten: mtime(P) !== pWas,
+      dialogFolder: readdirSync(saveTo).length - dialogBefore,
+      asked: await run(
+        (id) => !window.ADDPDF.tabs.frame(id).contentWindow.document.getElementById('savePop').hidden,
+        reopened.id,
+      ),
+      marks: mtime(P) !== pWas ? marksIn(await projectOf(P)) : null,
+    };
+    check(
+      'Save on the reopened editable PDF writes it back onto its own file, editable, with the new object: no dialog',
+      back.rewritten && back.dialogFolder === 0 && !back.asked && back.marks === nMarks + 1,
+      back,
+    );
+    await run((id) => window.ADDPDF.tabs.close(id, true), reopened.id);
+  }
+
   /* ---- Explorer's "Combine files in Add Dots PDF": one start per file ---- */
   await Promise.all(
     [B, A].map((f) => {
-      const c = spawn(EXE, [...lead, '--combine', f], { env, stdio: 'ignore' });
+      const c = spawn(EXE, [...asRoot, ...lead, '--combine', f], { env, stdio: 'ignore' });
       return new Promise((res) => c.on('exit', res));
     }),
   );

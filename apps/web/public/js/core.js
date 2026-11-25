@@ -210,6 +210,11 @@
         };
         return { range: tr, disableAutoFetch: true, disableStream: true };
       },
+      /* its last n bytes (where an editable PDF says it is one, core openFile) */
+      tail: function (id, size, n) {
+        const k = Math.min(size, n);
+        return read(id, size - k, k);
+      },
       /* all of it, a part at a time (one message of 500 MB is a copy too many) */
       all: async function (id, size) {
         const out = new Uint8Array(size);
@@ -597,9 +602,18 @@
     }
     PERF.open.read = performance.now() - t0;
     /* an editable PDF of this app's (engine project.ts): the document it
-       carries, every object ready to edit, not its painted pages */
-    if (!ranged && E.hasProjectMarker(bytes)) {
-      const pr = await E.readProject(bytes);
+       carries, every object ready to edit, not its painted pages. A big file
+       read as needed says so near its end (the project's own stream comes
+       after the sources it carries): only then is it read whole. */
+    let projBytes = !ranged && E.hasProjectMarker(bytes) ? bytes : null;
+    if (ranged) {
+      const tail = await RANGED.tail(file.adddotsRange, file.size, 16 * 1048576).catch(function () { return null; });
+      if (tail && E.hasProjectMarker(tail)) {
+        projBytes = await RANGED.all(file.adddotsRange, file.size).catch(function () { return null; });
+      }
+    }
+    if (projBytes) {
+      const pr = await E.readProject(projBytes);
       if (pr && pr.data && pr.data.app === 'add-dots-project' && Array.isArray(pr.data.sources)) {
         const d = pr.data;
         d.sources = d.sources.map(function (x) {
@@ -607,6 +621,8 @@
           return got ? Object.assign({}, x, { bytes: got.bytes, b64: null }) : x;
         });
         if (await openProject(d, false, { file: file })) {
+          /* what it carries is in memory now: the file need not stay open */
+          if (ranged) RANGED.close(file.adddotsRange);
           addRecent(file, S.items.length);
           renderIdle().then(function () { SW.usable(); });
           return true;
@@ -7234,6 +7250,11 @@
     setBoard(false);
     S.fileKind = from ? 'project' : 'pdf';
     S.target = null;
+    /* a tab moved to a window of its own: Save carries on as it was */
+    if (moved && d.file && typeof d.file === 'object') {
+      S.fileKind = d.file.kind === 'project' ? 'project' : 'pdf';
+      S.target = d.file.target && typeof d.file.target === 'object' ? d.file.target : null;
+    }
     const byOld = {};
     srcs.forEach(function (s) {
       const src = { id: ++srcId, name: s.name, bytes: s.bytes, doc: s.doc };
@@ -7297,7 +7318,7 @@
     stage.focus();
     renderPins();
     if (nPins) showPinPanel();
-    if (from) {
+    if (from || moved) {
       /* the drawing scale the dimensions read in, and the zoom it was left at */
       const sc = ws.scale;
       if (sc && EXT.draw) {
@@ -7306,6 +7327,8 @@
       }
       EXT.emit('meta');
       if (ws.zoom > 0 && Math.abs(ws.zoom - S.scale) > 0.01) zoomGlide(ws.zoom);
+    }
+    if (from) {
       toast('Editable PDF open · <b>' + S.items.length + '</b> page' + (S.items.length > 1 ? 's' : ''));
       return true;
     }
@@ -7313,8 +7336,10 @@
       return a + ((S.locs[k].photos || []).length);
     }, 0);
     if (moved) {
-      S.metaBase = '<b>' + esc(d.name || docName()) + '</b>';
+      S.metaBase = '<b>' + esc(d.name || (S.target && S.target.name) || docName()) + '</b>' +
+        (S.fileKind === 'project' ? ' · editable PDF' : '');
       $('meta').innerHTML = S.metaBase;
+      if (S.target) $('saveName').value = S.target.name;
       return true;
     }
     toast('Project open · <b>' + S.items.length + '</b> pages · <b>' + nPins + '</b> pins · ' +
@@ -11664,7 +11689,10 @@
        with its files' bytes, for a tab moved to a window of its own
        (js/tabs.js); importSession opens it there, editable as it was */
     exportSession: function () {
-      const d = buildProject(false), byId = {};
+      /* as an editable PDF carries it (layers, form values, the workspace),
+         and what Save does next: the kind of file, where it goes */
+      const d = projectData(), byId = {};
+      d.file = { kind: S.fileKind, target: S.target ? Object.assign({}, S.target) : null };
       S.sources.forEach(function (src) { byId[src.id] = src; });
       d.sources.forEach(function (src) {
         const s = byId[src.id];

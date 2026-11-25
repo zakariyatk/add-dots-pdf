@@ -536,6 +536,42 @@ check(
     (await page.evaluate(() => document.querySelector('input[name="saveFmt"]:checked').value)) === 'project',
 );
 await page.keyboard.press('Escape');
+/* moved to a window of its own (a tab dragged out): the same document
+   arrives there through exportSession / importSession, still an editable
+   PDF, its pasteboard and layers as they were, Save still going straight
+   to its file */
+page.on('dialog', (dl) => dl.accept());
+const movedFrom = await page.evaluate(() => ({
+  board: window.ADDPDF.board(),
+  marks: window.ADDPDF.S.items[0].shapes.length,
+  layers: (window.ADDPDF.S.layers || []).length,
+}));
+await page.evaluate(async () => {
+  const X = window.ADDPDF,
+    d = X.exportSession();
+  await X.importSession(d);
+});
+await page.waitForTimeout(600);
+const movedTo = await page.evaluate(() => ({
+  board: window.ADDPDF.board(),
+  marks: window.ADDPDF.S.items[0].shapes.length,
+  layers: (window.ADDPDF.S.layers || []).length,
+  meta: document.getElementById('meta').textContent,
+}));
+n = await saves(page);
+await page.keyboard.press('Control+s');
+got = await waitSave(page, n);
+check(
+  'moved to a window of its own: still an editable PDF, pasteboard and layers kept, Save straight to its file',
+  movedTo.board === movedFrom.board &&
+    movedTo.marks === movedFrom.marks &&
+    movedTo.layers === movedFrom.layers &&
+    /editable PDF/.test(movedTo.meta) &&
+    got &&
+    !(await popOpen(page)) &&
+    hasMarker(await lastSave(page)),
+  { movedFrom, movedTo },
+);
 check('no errors on the page', errors.length === 0, errors);
 await ctx.close();
 
