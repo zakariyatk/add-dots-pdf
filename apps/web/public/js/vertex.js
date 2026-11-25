@@ -573,8 +573,11 @@
         if (!it.vp || (e && e.button > 0)) return;
         /* a double-click on a point: Bézier editing of it (js/pen.js) */
         const now = Date.now();
-        const twice = dlast && now - dlast.t < 500 && Math.hypot(e.clientX - dlast.x, e.clientY - dlast.y) < 6;
-        dlast = twice ? null : { t: now, x: e.clientX, y: e.clientY };
+        /* a Shift-click (adding a point) is never half of one: the next
+           press there is a drag of the points picked */
+        const mod = !!(e.shiftKey || e.altKey || e.ctrlKey || e.metaKey);
+        const twice = !mod && dlast && now - dlast.t < 500 && Math.hypot(e.clientX - dlast.x, e.clientY - dlast.y) < 6;
+        dlast = twice || mod ? null : { t: now, x: e.clientX, y: e.clientY };
         if (twice && curveUnder(it, pdfOf(it, at))) { cur = null; drag = null; return; }
         /* a Pen path's points and handles are the Pen's to edit (js/pen.js) */
         if (X.penEdit && X.penEdit.down(it, at, e)) { cur = null; return; }

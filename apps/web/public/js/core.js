@@ -3290,11 +3290,11 @@
     const c = frameMid(s), b = markBox(turnPts(s, c, -fr));
     return [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]].map(function (q) { return rotPt(q, c, fr); });
   }
-  function scaleMark(s, o, ci, p, uniform) {
-    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleMark(s2, o2, ci, p2, uniform); }); return; }
+  function scaleMark(s, o, ci, p, uniform, mid) {
+    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleMark(s2, o2, ci, p2, uniform, mid); }); return; }
     const b = markBox(o);
     const C = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
-    const pull = C[ci], fix = C[(ci + 2) % 4];
+    const pull = C[ci], fix = mid ? [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2] : C[(ci + 2) % 4];
     const w = pull[0] - fix[0], h = pull[1] - fix[1];
     let sx = w ? (p[0] - fix[0]) / w : 1, sy = h ? (p[1] - fix[1]) / h : 1;
     sx = Math.max(0.05, sx); sy = Math.max(0.05, sy);
@@ -3303,14 +3303,14 @@
   }
   /* A side's grip stretches one way only, the far side staying put. Sides
      go round as the corners do: 0 the one at y1, 1 at x2, 2 at y2, 3 at x1. */
-  function scaleSide(s, o, side, p) {
-    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleSide(s2, o2, side, p2); }); return; }
+  function scaleSide(s, o, side, p, mid) {
+    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleSide(s2, o2, side, p2, mid); }); return; }
     const b = markBox(o);
     if (side === 0 || side === 2) {
-      const pull = side === 0 ? b.y1 : b.y2, f = side === 0 ? b.y2 : b.y1, h = pull - f;
+      const pull = side === 0 ? b.y1 : b.y2, f = mid ? (b.y1 + b.y2) / 2 : side === 0 ? b.y2 : b.y1, h = pull - f;
       scaleBy(s, o, [b.x1, f], 1, h ? Math.max(0.05, (p[1] - f) / h) : 1);
     } else {
-      const pull = side === 1 ? b.x2 : b.x1, f = side === 1 ? b.x1 : b.x2, w = pull - f;
+      const pull = side === 1 ? b.x2 : b.x1, f = mid ? (b.x1 + b.x2) / 2 : side === 1 ? b.x1 : b.x2, w = pull - f;
       scaleBy(s, o, [f, b.y1], w ? Math.max(0.05, (p[0] - f) / w) : 1, 1);
     }
   }
@@ -3420,8 +3420,20 @@
 
   /* ratio: keep the box's own proportions (a signature or a picture), the
      pulled corner deciding how big */
-  function resizeBox(s, o, ci, p, square, ratio) {
+  function resizeBox(s, o, ci, p, square, ratio, mid) {
     const b = boxOf(o), c0 = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2], r = o.r || 0;
+    if (mid) {
+      /* Alt: from the middle, which stays put; worked as the half box from
+         the middle to the pointer, then mirrored */
+      const half = { a: [c0[0], c0[1]], b: [c0[0] + (b.x2 - b.x1) / 2, c0[1] + (b.y2 - b.y1) / 2], r: 0 };
+      const loc0 = rotPt(p, c0, -r), q = [c0[0] + Math.abs(loc0[0] - c0[0]), c0[1] + Math.abs(loc0[1] - c0[1])];
+      const t = {};
+      resizeBox(t, half, 2, q, square, ratio, false);
+      const w = Math.max(1, (t.b[0] - c0[0]) * 2), h = Math.max(1, (t.b[1] - c0[1]) * 2);
+      s.a = [c0[0] - w / 2, c0[1] - h / 2];
+      s.b = [c0[0] + w / 2, c0[1] + h / 2];
+      return;
+    }
     const corners = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
     const fix = corners[(ci + 2) % 4];
     const loc = rotPt(p, c0, -r);                /* the pointer in the box's own frame */
@@ -3445,10 +3457,18 @@
   }
 
   /* a box's side pulled out or in, the opposite side fixed, turned or not */
-  function stretchBox(s, o, side, p) {
+  function stretchBox(s, o, side, p, mid) {
     const b = boxOf(o), c0 = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2], r = o.r || 0;
     const loc = rotPt(p, c0, -r);
     let x1 = b.x1, x2 = b.x2, y1 = b.y1, y2 = b.y2;
+    if (mid) {
+      /* Alt: both sides move, the middle stays */
+      if (side === 0 || side === 2) { const hh = Math.max(0.5, Math.abs(loc[1] - c0[1])); y1 = c0[1] - hh; y2 = c0[1] + hh; }
+      else { const hw = Math.max(0.5, Math.abs(loc[0] - c0[0])); x1 = c0[0] - hw; x2 = c0[0] + hw; }
+      const w0 = x2 - x1, h0 = y2 - y1;
+      s.a = [c0[0] - w0 / 2, c0[1] - h0 / 2]; s.b = [c0[0] + w0 / 2, c0[1] + h0 / 2];
+      return;
+    }
     if (side === 0) y1 = Math.min(loc[1], y2 - 1);
     else if (side === 1) x2 = Math.max(loc[0], x1 + 1);
     else if (side === 2) y2 = Math.max(loc[1], y1 + 1);
@@ -3545,7 +3565,11 @@
     }
     if (d.mode === 'move') {
       let mx = dx, my = dy;
-      if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) my = 0; else mx = 0; }   /* along one axis */
+      if (e.shiftKey) {
+        /* Shift: along 0°, 45° or 90°, as Illustrator keeps a move */
+        const len = Math.hypot(dx, dy), ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+        mx = Math.round(Math.cos(ang) * len * 1e6) / 1e6; my = Math.round(Math.sin(ang) * len * 1e6) / 1e6;
+      }
       const skip = {};
       if (d.group) d.group.forEach(function (m) { skip[m.i] = 1; }); else skip[d.idx] = 1;
       const movedBox = d.group
@@ -3559,7 +3583,7 @@
       showMoveHud(e, mx, my);
       /* held at drop, Ctrl (or Cmd) leaves a copy where the drag started and
          keeps dragging a new one — a plain cursor says so as it is held */
-      document.body.classList.toggle('dragdup', !!(e.ctrlKey || e.metaKey));
+      document.body.classList.toggle('dragdup', dupKey(e));
       if (d.group) {
         d.group.forEach(function (m) {
           const sh = d.it.shapes[m.i];
@@ -3571,8 +3595,10 @@
     } else if (d.mode === 'gscale') {
       if (!d.group) return;
       const k = d.extra;
-      let sx = k.ax ? (p[0] - k.f[0]) / (k.h[0] - k.f[0]) : 1;
-      let sy = k.ay ? (p[1] - k.f[1]) / (k.h[1] - k.f[1]) : 1;
+      /* Alt: about the middle of the selection, the far side moving too */
+      const f = e.altKey ? [(k.f[0] + k.h[0]) / 2, (k.f[1] + k.h[1]) / 2] : k.f;
+      let sx = k.ax ? (p[0] - f[0]) / (k.h[0] - f[0]) : 1;
+      let sy = k.ay ? (p[1] - f[1]) / (k.h[1] - f[1]) : 1;
       /* never flat: a grip pulled right through the far side flips the
          selection over, as in Illustrator, but always keeps some size */
       const keep = function (v) { return Math.abs(v) < 0.02 ? (v < 0 ? -0.02 : 0.02) : v; };
@@ -3581,7 +3607,7 @@
         const m = Math.max(Math.abs(sx), Math.abs(sy));
         sx = sx < 0 ? -m : m; sy = sy < 0 ? -m : m;
       }
-      scaleGroup(d.it, d.group, k.f, sx, sy);
+      scaleGroup(d.it, d.group, f, sx, sy);
     } else if (d.mode === 'gturn') {
       /* the whole selection turned about the middle of its box, each mark
          the way it turns (js/rotate.js) */
@@ -3622,16 +3648,17 @@
       setVertex(s, o, d.extra, p);
     } else if (d.mode === 'corner') {
       /* a mark that keeps its proportions (EXT.keepRatio) frees them with
-         Shift; any other box squares up with Shift */
+         Shift; any other box keeps its proportions with Shift, as in
+         Illustrator (a square stays a square) */
       const kr = EXT.keepRatio[o.t] ? !!EXT.keepRatio[o.t](o) : false;
-      if (EXT.keepRatio[o.t]) resizeBox(s, o, d.extra, p, false, kr !== e.shiftKey);
-      else resizeBox(s, o, d.extra, p, e.shiftKey);
+      if (EXT.keepRatio[o.t]) resizeBox(s, o, d.extra, p, false, kr !== e.shiftKey, e.altKey);
+      else resizeBox(s, o, d.extra, p, false, e.shiftKey, e.altKey);
     } else if (d.mode === 'bscale') {
-      scaleMark(s, o, d.extra, p, e.shiftKey);
+      scaleMark(s, o, d.extra, p, e.shiftKey, e.altKey);
     } else if (d.mode === 'bside') {
-      scaleSide(s, o, d.extra, p);
+      scaleSide(s, o, d.extra, p, e.altKey);
     } else if (d.mode === 'side') {
-      stretchBox(s, o, d.extra, p);
+      stretchBox(s, o, d.extra, p, e.altKey);
     } else if (d.mode === 'turn') {
       turnShape(s, o, d, p, e.shiftKey);
     } else if (d.mode === 'tsize') {
@@ -3691,6 +3718,13 @@
     return d.extra === 0 || d.extra === 2 ? 'y' : 'x';
   }
 
+  /* held at the drop, Alt (Option) as in Illustrator, or Ctrl (Cmd) as
+     before, leaves a copy where the drag started */
+  function dupKey(e) { return !!(e && (e.altKey || e.ctrlKey || e.metaKey)); }
+  /* Alt held in a drag is for that, not the window's menu bar */
+  document.addEventListener('keydown', function (e) { if (dragOn && e.key === 'Alt') e.preventDefault(); });
+  document.addEventListener('keyup', function (e) { if (dragOn && e.key === 'Alt') e.preventDefault(); });
+
   function dragEnd(e) {
     const d = dragOn; if (!d) return;
     dragOn = null;
@@ -3703,7 +3737,7 @@
     /* Ctrl (or Cmd) still held at the drop: what was dragged is the new
        copy, left where it landed, and the mark(s) it came from go back —
        a fresh shape pushed on top at their old place, not a move at all */
-    if (d.moved && d.mode === 'move' && e && (e.ctrlKey || e.metaKey)) {
+    if (d.moved && d.mode === 'move' && e && dupKey(e)) {
       /* the copy left behind is a new object: the dimensions stay with the one moved */
       const left = function (s0) { const c = copyShape(s0); delete c.gid; return c; };
       if (d.group) d.group.forEach(function (m) { d.it.shapes.push(left(m.s0)); });
@@ -4657,6 +4691,13 @@
   /* ---- picking several marks: Ctrl+click, a box drag, Ctrl+A ---- */
 
   /* which page and which mark a pointer event landed on, or null */
+  /* the marks' own elements, in the order of it.shapes: the frame a
+     selection of several puts under them all is not one of them */
+  function markKids(anno) {
+    return Array.prototype.filter.call(anno.children, function (el) {
+      return !(el.classList && el.classList.contains('multi-frame'));
+    });
+  }
   function markUnder(target) {
     const anno = target && target.closest ? target.closest('.anno') : null;
     if (!anno) return null;
@@ -4664,7 +4705,7 @@
     if (!it) return null;
     let el = target;
     while (el && el.parentNode !== anno) el = el.parentNode;
-    const i = el ? Array.prototype.indexOf.call(anno.children, el) : -1;
+    const i = el ? markKids(anno).indexOf(el) : -1;
     if (i < 0 || i >= it.shapes.length || NOT_SELECTABLE[it.shapes[i].t] || it.shapes[i].locked) return null;
     return { it: it, i: i };
   }
@@ -4736,22 +4777,44 @@
     } catch (err) { /* the caret stays at the end */ }
   }
 
-  /* Ctrl+click adds a mark to the selection, or takes it out. Capture phase,
-     so it runs before the mark's own handler starts a drag. */
+  /* Shift+click (as in Illustrator), or Ctrl+click, adds a mark to the
+     selection, or takes it out; a grouped mark brings its group. Capture
+     phase, so it runs before the mark's own handler starts a drag.
+     Shift lets that drag go on, as Illustrator does: the mark is added at
+     once and the whole selection moves with it, and one already picked is
+     taken out only if the pointer comes up where it went down. */
+  let shiftDrop = null;
   stage.addEventListener('pointerdown', function (e) {
-    if (S.tool !== 'select' || !(e.ctrlKey || e.metaKey) || e.button > 0) return;
-    if (e.target.closest && e.target.closest('.kn')) return;
+    shiftDrop = null;
+    const mod = e.ctrlKey || e.metaKey;
+    if (S.tool !== 'select' || !(mod || e.shiftKey) || e.button > 0 || S.editing) return;
+    if (e.target.closest && e.target.closest('.kn, .rotz')) return;
     const hit = markUnder(e.target);
     if (!hit) return;
-    e.preventDefault(); e.stopPropagation();
     const list = S.sel && S.sel.it === hit.it ? selList() : [];
-    const at = list.indexOf(hit.i);
-    if (at >= 0) list.splice(at, 1); else list.push(hit.i);
-    setGroup(hit.it, list);
+    const sh = hit.it.shapes[hit.i];
+    const mates = sh && sh.grp != null ? groupMembers(hit.it, hit.i) : [hit.i];
+    const isIn = list.indexOf(hit.i) >= 0;
+    if (!mod) {
+      if (!isIn) { setGroup(hit.it, list.concat(mates)); redrawAll(); }
+      else shiftDrop = { it: hit.it, mates: mates, at: Date.now() };
+      return;
+    }
+    e.preventDefault(); e.stopPropagation();
+    setGroup(hit.it, isIn
+      ? list.filter(function (i) { return mates.indexOf(i) < 0; })
+      : list.concat(mates));
     redrawAll();
     if (S.sel) syncMarkPop(); else hideMarkPop();
     marqueeDone = true;                            /* swallow the click that follows */
   }, true);
+  document.addEventListener('pointerup', function () {
+    const d = shiftDrop; shiftDrop = null;
+    if (!d || S.draggedAt >= d.at || !S.sel || S.sel.it !== d.it) return;
+    setGroup(d.it, selList().filter(function (i) { return d.mates.indexOf(i) < 0; }));
+    redrawAll();
+    if (S.sel) syncMarkPop(); else hideMarkPop();
+  });
 
   /* A box dragged over empty page selects every mark it touches. Starting on
      the page's own text still selects that text for copying, as before —
@@ -4775,7 +4838,7 @@
     const it = onBoard || S.items.filter(function (x) { return x.box === box; })[0];
     if (!it || !it.anno) return;
     e.preventDefault();
-    marquee = { it: it, x: e.clientX, y: e.clientY, add: e.ctrlKey || e.metaKey, id: e.pointerId };
+    marquee = { it: it, x: e.clientX, y: e.clientY, add: e.ctrlKey || e.metaKey || e.shiftKey, id: e.pointerId };
   });
   document.addEventListener('pointermove', function (e) {
     if (!marquee || e.pointerId !== marquee.id) return;
@@ -4792,14 +4855,18 @@
     const m = marquee; marquee = null;
     mqBox.hidden = true;
     if (!m.live) return;                                     /* a plain click: let it deselect */
+    /* the click this drag may end in is swallowed; when the browser sends
+       none (down and up on different things) the next real click still counts */
     marqueeDone = true;
+    setTimeout(function () { marqueeDone = false; }, 0);
     const it = m.it, r = it.anno.getBoundingClientRect();
     const bx1 = Math.min(m.x, e.clientX) - r.left, by1 = Math.min(m.y, e.clientY) - r.top;
     const bx2 = Math.max(m.x, e.clientX) - r.left, by2 = Math.max(m.y, e.clientY) - r.top;
     const picked = m.add && S.sel && S.sel.it === it ? selList() : [];
+    const kids = markKids(it.anno);
     it.shapes.forEach(function (s, i) {
       if (NOT_SELECTABLE[s.t] || picked.indexOf(i) >= 0) return;
-      const el = it.anno.children[i];
+      const el = kids[i];
       if (!el || !el.getBBox) return;
       let b;
       try { b = el.getBBox(); } catch (err) { return; }
@@ -11603,7 +11670,7 @@
     S: S, SVGNS: SVGNS, COLORS: COLORS, WIDTHS: WIDTHS, FONTS: FONTS,
     $: $, toast: toast, ask: ask, dialog: dialog, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
     snapLine: snapLine, snapBox: snapBox, constrainPt: constrainPt,
-    selList: selList, setGroup: setGroup,
+    selList: selList, setGroup: setGroup, markKids: markKids,
     groupSelected: groupSelected, ungroupSelected: ungroupSelected, groupMembers: groupMembers,
     snapshot: snapshot, setUndoState: setUndoState,
     drawShapes: drawShapes, drawThumb: drawThumb, drawVisibleThumbs: drawVisibleThumbs,

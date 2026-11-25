@@ -308,7 +308,7 @@
         if (!it) continue;
         let top = el;
         while (top && top.parentNode && top.parentNode !== anno) top = top.parentNode;
-        const i = top && top.parentNode === anno ? Array.prototype.indexOf.call(anno.children, top) : -1;
+        const i = top && top.parentNode === anno ? X.markKids(anno).indexOf(top) : -1;
         if (i >= 0 && i < it.shapes.length && it.shapes[i] && it.shapes[i].c != null && it.shapes[i].t !== 'text') return { it: it, i: i };
       }
       return null;

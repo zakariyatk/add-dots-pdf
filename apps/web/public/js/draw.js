@@ -2932,7 +2932,7 @@
       page.setAttribute('width', W); page.setAttribute('height', H);
       page.setAttribute('fill', '#FFFFFF');
       out.appendChild(page);
-      Array.prototype.forEach.call(it.anno.children, function (el, i) {
+      X.markKids(it.anno).forEach(function (el, i) {
         const s = it.shapes[i];
         if (!s || s.hide || el.style.display === 'none') return;
         const c = el.cloneNode(true);

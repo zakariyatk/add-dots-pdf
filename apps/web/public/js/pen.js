@@ -73,7 +73,23 @@
     const dist = function (a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); };
     const copy = function (pts) { return pts.map(function (q) { return [q[0], q[1]]; }); };
     const closed = function (pts, open) { return G.closed(pts, open); };
-    const editable = function (s) { return s && s.t === 'pen' && s.pts && s.pts.length >= 4 && !s.hide && !s.locked; };
+    /* Live shapes, as Illustrator has them: under Direct Selection a line,
+       rectangle, ellipse or Continuous Line shows its anchors (and its arcs'
+       handles), which are picked, added to with Shift or a box, exactly as a
+       Pen path's are. It stays what it is until an edit changes its
+       outline: then it becomes a Pen path in place (store), its look, layer,
+       group and place in the stack kept. */
+    const LIVE = { line: 1, rect: 1, ellipse: 1, poly: 1 };
+    const LIVE_TOOLS = { vdirect: 1, vadd: 1, vdel: 1 };
+    /* a mark's outline in the Pen path's form (its own points, for a path) */
+    function penPts(s) { return s.t === 'pen' ? s.pts : asPen(s); }
+    const editable = function (s) {
+      if (!s || s.hide || s.locked) return false;
+      if (s.t === 'pen') return !!(s.pts && s.pts.length >= 4);
+      if (!LIVE[s.t] || !LIVE_TOOLS[S.tool]) return false;
+      const P = asPen(s);
+      return !!(P && P.length >= 4);
+    };
     const typing = function (t) {
       return !!(t && (t.isContentEditable || (t.matches && t.matches('input,textarea,select,[contenteditable],[contenteditable] *'))));
     };
@@ -81,9 +97,14 @@
     /* a path's anchors, read fresh: the undo snapshot shares each mark's pts
        list, so a list is never changed where it lies — each edit makes its
        own (G.toPts) and puts that on the mark */
-    function anchorsOf(s) { return G.fromPts(s.pts, s.open); }
-    /* an open path whose ends meet says so (s.open), or it would read as closed */
+    function anchorsOf(s) { return G.fromPts(penPts(s), s.t === 'pen' && s.open); }
+    /* an open path whose ends meet says so (s.open), or it would read as
+       closed. A live shape edited becomes a Pen path here, in place. */
     function store(s, A, isClosed) {
+      if (s.t !== 'pen') {
+        ['a', 'b', 'r', 'rr', 'rc', 'sa', 'fr'].forEach(function (k) { delete s[k]; });
+        s.t = 'pen';
+      }
       s.pts = G.toPts(A, isClosed);
       if (G.needsOpen(A, isClosed)) s.open = true; else delete s.open;
     }
@@ -173,7 +194,7 @@
         if (best >= 0) return { kind: 'anchor', idx: list[n], k: best };
       }
       for (let n = 0; n < list.length; n++) {
-        const h = G.nearest(it.shapes[list[n]].pts, p, tol(PX.path));
+        const h = G.nearest(penPts(it.shapes[list[n]]), p, tol(PX.path));
         if (h) return { kind: 'path', idx: list[n], k: h.k, t: h.t, p: h.p };
       }
       return null;
@@ -208,7 +229,7 @@
       const g = el('g', {}, 'penov');
       paths.forEach(function (idx) {
         const s = it.shapes[idx];
-        g.appendChild(el('path', { d: X.penD(s.pts, vp, s.open) }, 'penline'));
+        g.appendChild(el('path', { d: X.penD(penPts(s), vp, s.t === 'pen' && s.open) }, 'penline'));
       });
       shownHandles(it).forEach(function (h) {
         const A = v(h.p), H = v(h.q);
@@ -266,12 +287,9 @@
       const p = pdfOf(it, at);
       let hit = hitAt(it, p);
       if (!hit && mode === 'convert') hit = convertShapeAt(it, p);
-      /* Direct Selection on a rounded rectangle's anchor: as Illustrator
-         expands a live shape, it becomes a Pen path and the point is taken */
-      if (!hit && mode === 'direct') hit = convertShapeAt(it, p, true);
       if (!hit) return false;
       const base = { it: it, idx: hit.idx, x: e.clientX, y: e.clientY, moved: false, from: p,
-                     orig: copy(it.shapes[hit.idx].pts), open: !!it.shapes[hit.idx].open, shift: e.shiftKey, alt: e.altKey };
+                     orig: copy(penPts(it.shapes[hit.idx])), open: !!it.shapes[hit.idx].open, shift: e.shiftKey, alt: e.altKey };
       focus = { it: it, idx: hit.idx };
       if (hit.kind === 'handle') {
         /* Convert, or Alt: the handle alone; otherwise a smooth point's pair move together */
@@ -293,7 +311,7 @@
           }
           if (e.shiftKey && has) { edit = null; drawOverlay(it); return true; }
           edit = Object.assign(base, { kind: 'anchors', k: hit.k,
-            origAll: sel ? Object.keys(sel.m).reduce(function (o, i) { o[i] = { pts: copy(it.shapes[+i].pts), open: !!it.shapes[+i].open }; return o; }, {}) : {} });
+            origAll: sel ? Object.keys(sel.m).reduce(function (o, i) { o[i] = { pts: copy(penPts(it.shapes[+i])), open: !!it.shapes[+i].open }; return o; }, {}) : {} });
         }
       } else {
         /* on the path, off its points: a straight segment moves, a curved one bends */
@@ -431,12 +449,56 @@
         const m = {}; m[ed.idx] = [ed.k]; setSel(it, m);
         done(it);
       } else if (ed.moved) {
+        /* an open end let go on another open end: joined there, or on its
+           own path's other end: closed (as dragging a line's end did) */
+        const said = ed.kind === 'anchors' ? joinOnDrop(it) : null;
         done(it);
+        if (said) X.toast(said, true);
       } else if (ed.kind === 'seg') {
         focus = { it: it, idx: ed.idx };
       }
       X.drawShapes(it);
       return true;
+    }
+
+    /** One open end selected and just dropped: onto the other end of its own
+        path, it closes; onto an open end of another path, the two join into
+        the first one's look and place. Answers what it did, or null. */
+    function joinOnDrop(it) {
+      if (!sel || sel.it !== it) return null;
+      const keys = Object.keys(sel.m);
+      if (keys.length !== 1 || sel.m[keys[0]].length !== 1) return null;
+      const idx = +keys[0], k = sel.m[keys[0]][0], s = it.shapes[idx];
+      if (!editable(s)) return null;
+      const P = anchorsOf(s), n = P.A.length;
+      if (P.closed || (k !== 0 && k !== n - 1)) return null;
+      const p = P.A[k].p, reach = tol(PX.anchor);
+      const far = k === 0 ? n - 1 : 0;
+      if (n >= 3 && dist(P.A[far].p, p) <= reach) {
+        const A = G.copyA(P.A);
+        A[k].p = [P.A[far].p[0], P.A[far].p[1]];
+        if (!G.close(A)) return null;
+        store(s, A, true);
+        clearSel();
+        return 'Path closed';
+      }
+      for (let i = it.shapes.length - 1; i >= 0; i--) {
+        if (i === idx || !editable(it.shapes[i])) continue;
+        const Q = anchorsOf(it.shapes[i]);
+        if (Q.closed || Q.A.length < 2) continue;
+        const ends = [0, Q.A.length - 1].filter(function (e) { return dist(Q.A[e].p, p) <= reach; });
+        if (!ends.length) continue;
+        const keep = Math.min(idx, i), drop = Math.max(idx, i);
+        const mine = { A: G.copyA(P.A), end: k === 0 ? 0 : 1 }, theirs = { A: G.copyA(Q.A), end: ends[0] === 0 ? 0 : 1 };
+        mine.A[k].p = [Q.A[ends[0]].p[0], Q.A[ends[0]].p[1]];
+        const first = keep === idx ? mine : theirs, second = keep === idx ? theirs : mine;
+        becomePen(it, keep, G.join(first.A, first.end, second.A, second.end), false);
+        it.shapes.splice(drop, 1);
+        clearSel();
+        focus = { it: it, idx: keep };
+        return 'Joined into one path';
+      }
+      return null;
     }
 
     /* ---------------- whole-path work ---------------- */
@@ -641,7 +703,7 @@
         const p = pdfOf(it, at), list = order(it, focus && focus.it === it ? focus.idx : null);
         for (let n = 0; n < list.length; n++) {
           const s = it.shapes[list[n]];
-          const h = G.nearest(s.pts, p, tol(PX.path));
+          const h = G.nearest(penPts(s), p, tol(PX.path));
           if (!h) continue;
           X.snapshot();
           const P = anchorsOf(s), k = G.splitSeg(P.A, h.k, h.t);
@@ -699,6 +761,7 @@
       if (s.t === 'pen') return s.pts;
       if (s.t === 'line') Q = [s.a, s.b];
       else if (s.t === 'rect') return window.ADDPDFEngine.rectBezier(s).map(function (q) { return [q[0], q[1]]; });
+      else if (s.t === 'ellipse') return window.ADDPDFEngine.ellipseBezier(s).map(function (q) { return [q[0], q[1]]; });
       else if (s.t === 'poly') Q = s.pts;
       else return null;
       if (!Q || Q.length < 2) return null;
