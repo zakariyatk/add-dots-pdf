@@ -8595,29 +8595,28 @@
   }
 
   /* Save (Ctrl+S): asks only when there is a choice to make */
+  /* Save (Ctrl+S): always the Save dialog, with the kind and the name it
+     would save as already chosen. Its Save then goes back onto the same
+     file, with no second dialog, while the kind and name are unchanged. */
   function quickSave() {
     if (!S.items.length || saving) return;
-    /* a kind already chosen, or an editable PDF: straight there */
-    if (S.target && !(S.target.plain && hasDrawing())) return saveDoc(S.target.kind, { plain: S.target.plain });
-    if (S.fileKind === 'project') return saveDoc('project');
-    /* nothing drawn: a plain PDF save, back onto the file it came from where
-       the app knows it (the Windows app), else where the reader picks */
-    if (!hasDrawing()) {
-      const one = S.sources.length === 1 && S.sources[0].path && !S.sources[0].synthetic ? S.sources[0].path : null;
-      return saveDoc('pdf', one ? { path: one, name: S.sources[0].name, plain: true } : { plain: true });
-    }
-    /* something drawn, and never saved: which kind? (by the Save on show);
-       then where, in the browser's own Save dialog, so Save goes there again */
     const shown = ['btnQSave', 'btnSave', 'btnSaveAs'].map($).filter(function (b) { return b && b.getClientRects().length; })[0];
     openSaveDialog(shown, true);
+  }
+  /* the file a plain PDF was opened from, where the app knows it (the
+     Windows app), to save back onto */
+  function ownFile() {
+    return S.fileKind === 'pdf' && S.sources.length === 1 && S.sources[0].path && !S.sources[0].synthetic ? S.sources[0] : null;
   }
   /* Save as…, and Save's question: the name and the kind */
   let saveAsking = false;        /* the dialog is Save's question, not Save as… */
   function openSaveDialog(anchor, fromSave) {
     if (!S.items.length) return;
     saveAsking = !!fromSave;
-    const kind = S.target && !S.target.plain ? S.target.kind : (S.fileKind === 'project' ? 'project' : 'pdf');
+    const kind = S.target && !(S.target.plain && hasDrawing()) ? S.target.kind : (S.fileKind === 'project' ? 'project' : 'pdf');
+    const own = fromSave && !hasDrawing() ? ownFile() : null;
     if (S.target) $('saveName').value = S.target.name;
+    else if (own) $('saveName').value = own.name;
     else if (S.fileKind !== 'project') $('saveName').value = S.baseName + '-edited.pdf';
     Array.prototype.forEach.call(document.querySelectorAll('input[name="saveFmt"]'), function (r) { r.checked = r.value === kind; });
     openPop('savePop', anchor || $('btnSaveAs'));
@@ -8632,11 +8631,16 @@
     $('saveFlatRow').hidden = project;
     $('savePhotosRow').hidden = project || !livePins().length;
     const off = offBoard();
-    $('saveFmtNote').textContent = project ? 'Everything is kept, the pasteboard too, and it opens here ready to edit.'
-      : off.out || off.edge ? (off.out ? off.out + ' object' + (off.out > 1 ? 's' : '') + ' off the page will be left out' : '') +
-        (off.out && off.edge ? '; ' : '') + (off.edge ? off.edge + ' across the page’s edge will be cut there' : '') + '.'
-      : 'Only what is on each page.';
-    $('saveGo').textContent = project ? 'Save editable PDF' : 'Save PDF';
+    /* a standard PDF that leaves something out says so, as a notice */
+    const warn = !project && (off.out || off.edge);
+    const n = function (k, one) { return k + ' ' + one + (k > 1 ? 's' : ''); };
+    $('saveFmtNote').textContent = !warn ? '' :
+      [off.out ? n(off.out, 'object') + ' outside the page will be left out' : '',
+       off.edge ? n(off.edge, 'object') + ' crossing the page edge will be trimmed' : '']
+        .filter(Boolean).join('; ') + '. Choose Editable PDF to keep everything.';
+    $('saveFmtNote').classList.toggle('warn', !!warn);
+    $('saveTitle').textContent = saveAsking ? 'Save' : 'Save as';
+    $('saveGo').textContent = 'Save';
   }
 
   /* Send a copy (the phone app): the document as it stands, handed to the
@@ -10563,12 +10567,12 @@
       return a + it.shapes.filter(function (s) { return s.t === 'text'; }).length;
     }, 0);
     const removed = Math.max(0, S.baseCount - (n - added));
-    const bits = [n + ' pages'];
+    const bits = [n + (n === 1 ? ' page' : ' pages')];
     if (removed) bits.push(removed + ' removed');
     if (added) bits.push(added + ' added');
     if (rot) bits.push(rot + ' rotated');
     if (cropped) bits.push(cropped + ' cropped');
-    if (marks) bits.push(marks + ' marks');
+    if (marks) bits.push(marks + (marks === 1 ? ' mark' : ' marks'));
     const pins = livePins().length;
     if (pins) bits.push(pins + ' photo pins');
     if (texts) bits.push(texts + ' text edits');
@@ -10704,7 +10708,14 @@
   $('saveCancel').addEventListener('click', closePops);
   $('saveGo').addEventListener('click', function () {
     const photos = !$('savePhotosRow').hidden && $('savePhotos').checked;
-    saveDoc(saveFmt(), { ask: true, download: !saveAsking, name: pdfName($('saveName').value), std: { photos: photos } });
+    const kind = saveFmt(), name = pdfName($('saveName').value), std = { photos: photos };
+    /* Save, the kind and name as before: back onto the same file */
+    const t = S.target, own = ownFile();
+    if (saveAsking && t && t.kind === kind && t.name === name) return saveDoc(kind, { name: name, std: std, plain: t.plain });
+    if (saveAsking && !t && kind === 'pdf' && own && own.name === name) return saveDoc('pdf', { path: own.path, name: name, std: std, plain: true });
+    /* a new kind or name: where, in the browser's own Save dialog (Save), or
+       as a download under that name (Save as…, as it always has) */
+    saveDoc(kind, { ask: true, download: !saveAsking, name: name, std: std, plain: kind === 'pdf' && !hasDrawing() });
   });
   $('saveName').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('saveGo').click(); });
 

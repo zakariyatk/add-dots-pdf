@@ -13,8 +13,8 @@
      window, and quits
    - Save, from that tab, writes the file (ADDDOTS_SAVE_TO stands in for the
      Save dialog), a PDF with every page
-   - Save on the PDF it was started with, nothing drawn on it, writes it back
-     onto that file: no dialog, no question
+   - Save on the PDF it was started with, nothing drawn on it: the Save
+     dialog, then back onto that file with no system dialog
    - an editable PDF, saved and then opened from Explorer, comes back with
      its objects ready to edit, and Save writes it back onto that file
 
@@ -113,6 +113,24 @@ try {
     return JSON.parse(new TextDecoder().decode(decodePDFRawStream(st).decode()));
   }
   const marksIn = (proj) => (proj ? proj.items.reduce((n, it) => n + it.shapes.length, 0) : -1);
+  /* Save: the Save dialog comes up, its kind and name chosen; what it
+     showed, then its Save pressed (in a tab's frame, by its tab id) */
+  const saveDialog = (tab) =>
+    run(async (tab) => {
+      const w = tab == null ? window : window.ADDPDF.tabs.frame(tab).contentWindow,
+        d = w.document;
+      w.ADDDOTS_CONFIG.requireSignIn = false;
+      d.getElementById('btnQSave').click();
+      for (let i = 0; i < 50 && d.getElementById('savePop').hidden; i++)
+        await new Promise((r) => setTimeout(r, 100));
+      const shown = {
+        open: !d.getElementById('savePop').hidden,
+        kind: (d.querySelector('input[name="saveFmt"]:checked') || {}).value,
+        name: d.getElementById('saveName').value,
+      };
+      d.getElementById('saveGo').click();
+      return shown;
+    }, tab);
 
   /* ---- started with a PDF ---- */
   const first = await until(() => {
@@ -267,26 +285,30 @@ try {
     { dlg, jobPages, after },
   );
 
-  /* ---- Save on the PDF it was started with, nothing drawn on it: back onto
-     that file, with no dialog (the dialog's stand-in folder stays empty) and
-     no question ---- */
+  /* ---- Save on the PDF it was started with, nothing drawn on it: the Save
+     dialog, its own name chosen; Save writes back onto that file, with no
+     system dialog (its stand-in folder stays empty) ---- */
   const aWas = mtime(A),
     inSaveTo = readdirSync(saveTo).length;
-  await run(() => {
-    window.ADDDOTS_CONFIG.requireSignIn = false;
-    document.getElementById('btnQSave').click();
-  });
+  const plainDlg = await saveDialog();
   for (let i = 0; i < 100 && mtime(A) === aWas; i++) await sleep(200);
   await sleep(300);
   const plain = {
+    dialog: plainDlg,
     rewritten: mtime(A) !== aWas,
     dialogFolder: readdirSync(saveTo).length - inSaveTo,
     asked: await run(() => !document.getElementById('savePop').hidden),
     pages: (await PDFDocument.load(readFileSync(A), { ignoreEncryption: true })).getPageCount(),
   };
   check(
-    'Save on a PDF only read writes it back onto its own file: no dialog, no question',
-    plain.rewritten && plain.dialogFolder === 0 && !plain.asked && plain.pages === firstPages,
+    'Save on a PDF only read: the Save dialog with its own name, then back onto its own file, no system dialog',
+    plain.dialog.open &&
+      plain.dialog.kind === 'pdf' &&
+      plain.dialog.name === basename(A) &&
+      plain.rewritten &&
+      plain.dialogFolder === 0 &&
+      !plain.asked &&
+      plain.pages === firstPages,
     plain,
   );
 
@@ -449,11 +471,12 @@ try {
       a.snapshot();
       a.S.items[0].shapes.push({ t: 'rect', a: [-200, 300], b: [-80, 380], c: '#1F5FBF', w: 2 });
       a.drawShapes(a.S.items[0]);
-      w.document.getElementById('btnQSave').click();
     }, reopened.id);
+    const projDlg = await saveDialog(reopened.id);
     for (let i = 0; i < 100 && mtime(P) === pWas; i++) await sleep(200);
     await sleep(500);
     const back = {
+      dialog: projDlg,
       rewritten: mtime(P) !== pWas,
       dialogFolder: readdirSync(saveTo).length - dialogBefore,
       asked: await run(
@@ -463,8 +486,14 @@ try {
       marks: mtime(P) !== pWas ? marksIn(await projectOf(P)) : null,
     };
     check(
-      'Save on the reopened editable PDF writes it back onto its own file, editable, with the new object: no dialog',
-      back.rewritten && back.dialogFolder === 0 && !back.asked && back.marks === nMarks + 1,
+      'Save on the reopened editable PDF: the Save dialog, Editable chosen; back onto its own file with the new object, no system dialog',
+      back.dialog.open &&
+        back.dialog.kind === 'project' &&
+        back.dialog.name === 'project.pdf' &&
+        back.rewritten &&
+        back.dialogFolder === 0 &&
+        !back.asked &&
+        back.marks === nMarks + 1,
       back,
     );
     await run((id) => window.ADDPDF.tabs.close(id, true), reopened.id);

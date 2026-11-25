@@ -3595,7 +3595,7 @@ try {
     await ctx.close();
   }
 
-  /* ---- Save goes straight to the system's Save dialog, with no popover first ---- */
+  /* ---- Save: the Save dialog, then the system's Save dialog for where ---- */
   {
     const { ctx, page, errors } = await fresh(browser);
     await open(page, MIXED);
@@ -3614,6 +3614,11 @@ try {
       };
     });
     await page.click('#btnQSave');
+    const popover = await page.waitForSelector('#savePop:not([hidden])', { timeout: 10000 }).then(
+      () => true,
+      () => false,
+    );
+    await page.click('#saveGo');
     await page.waitForFunction(() => window.__saved, null, { timeout: 30000 }).catch(() => {});
     const q = await page.evaluate(() => ({
       asked: window.__asked,
@@ -3621,9 +3626,9 @@ try {
       popover: !document.getElementById('savePop').hidden,
     }));
     check(
-      'Save opens the system Save dialog at once and writes the PDF there, no popover',
-      q.asked === 'smoke-mixed-60p-edited.pdf' && q.bytes > 1000 && !q.popover,
-      q,
+      'Save asks in the Save dialog, then the system Save dialog writes the PDF there, the dialog closed',
+      popover && q.asked === 'smoke-mixed-60p-edited.pdf' && q.bytes > 1000 && !q.popover,
+      Object.assign({ popoverFirst: popover }, q),
     );
     check('no errors on the page', errors.length === 0, errors);
     await ctx.close();

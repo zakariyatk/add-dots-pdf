@@ -644,22 +644,35 @@
   </button>
 </div>
 
-<div class="pop" id="savePop" role="dialog" aria-label="Save" hidden="">
-  <label for="saveName">File name</label>
-  <input id="saveName" value="document.pdf">
+<div class="pop savedlg" id="savePop" role="dialog" aria-labelledby="saveTitle" hidden="">
+  <div class="sd-head">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3"/><rect x="8" y="13" width="8" height="5" rx="1"/></svg>
+    <span id="saveTitle">Save</span>
+  </div>
+  <label class="sd-lbl" for="saveName">File name</label>
+  <input id="saveName" value="document.pdf" spellcheck="false" autocomplete="off">
   <!-- the two kinds of PDF (core.js saveDoc): only what is on the pages, or
        the whole document carried inside, to open here again ready to edit -->
-  <div class="savefmt" role="radiogroup" aria-label="Save as">
-    <label class="fmt"><input type="radio" name="saveFmt" value="pdf" checked="">
-      <span><b>Standard PDF</b><i>What is on each page, for anyone to open</i></span></label>
-    <label class="fmt"><input type="radio" name="saveFmt" value="project">
-      <span><b>Editable PDF</b><i>Any reader shows the pages; here it opens again with every object, layer and the pasteboard, ready to edit</i></span></label>
+  <div class="sd-lbl" id="saveFmtLbl">Format</div>
+  <div class="savefmt" role="radiogroup" aria-labelledby="saveFmtLbl">
+    <label class="fmt">
+      <input type="radio" name="saveFmt" value="pdf" checked="">
+      <span class="fmt-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M14 2.5V7h5"/><path d="M9 12h7M9 15h7M9 18h4"/></svg></span>
+      <span class="fmt-txt"><b>Standard PDF</b><i>The content of each page, ready to share and print</i></span>
+    </label>
+    <label class="fmt">
+      <input type="radio" name="saveFmt" value="project">
+      <span class="fmt-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M14 2.5V7h5"/><path d="M9 17.5l1-3.2 4.6-4.6 2.2 2.2-4.6 4.6z"/></svg></span>
+      <span class="fmt-txt"><b>Editable PDF</b><i>Opens here with every object, layer and the pasteboard; other readers show the pages</i></span>
+    </label>
   </div>
-  <div class="note" id="saveFmtNote"></div>
-  <label class="chk" id="savePhotosRow" hidden=""><input type="checkbox" id="savePhotos" checked="">
-    Add linked photo pages for the pins</label>
-  <label class="chk" id="saveFlatRow" title="On: text, drawings and measurements are painted into the page, so they stay fixed in every PDF reader, in the order you stacked them. Off: highlights, notes, ink, boxes, lines, text boxes and stamps are saved as PDF comments, which other readers can move and edit, and they always sit above the page."><input type="checkbox" id="saveFlat" checked="">
-    Fix marks into the page</label>
+  <div class="sd-notice" id="saveFmtNote" role="status"></div>
+  <div class="sd-opts">
+    <label class="chk" id="saveFlatRow" title="On: text, drawings and measurements are painted into the page, so they stay fixed in every PDF reader, in the order you stacked them. Off: highlights, notes, ink, boxes, lines, text boxes and stamps are saved as PDF comments, which other readers can move and edit, and they always sit above the page."><input type="checkbox" id="saveFlat" checked="">
+      Flatten marks into the page</label>
+    <label class="chk" id="savePhotosRow" hidden=""><input type="checkbox" id="savePhotos" checked="">
+      Add linked photo pages for the pins</label>
+  </div>
   <!-- the site-photo extras, once the drawing has pins; a saved project opens
        again with Open, like any file -->
   <div class="savepins" id="savePinsRow" hidden="">
@@ -669,10 +682,12 @@
       <button class="btn" id="pinExpGo" style="flex:1" title="Export the pins and photos as a PDF or a web viewer" disabled="">Export report</button>
     </div>
   </div>
-  <div class="note" id="saveNote"></div>
-  <div class="row" style="margin-top:10px">
-    <button class="btn primary" id="saveGo" style="flex:1">Save PDF</button>
-    <button class="btn" id="saveCancel">Cancel</button>
+  <div class="sd-foot">
+    <div class="sd-sum" id="saveNote"></div>
+    <div class="sd-btns">
+      <button class="btn" id="saveCancel">Cancel</button>
+      <button class="btn primary" id="saveGo">Save</button>
+    </div>
   </div>
 </div>
 

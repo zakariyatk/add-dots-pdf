@@ -86,6 +86,22 @@ const waitSave = (page, n) =>
     );
 const shapes = (page) => page.evaluate(() => JSON.parse(JSON.stringify(window.ADDPDF.S.items[0].shapes)));
 const popOpen = (page) => page.evaluate(() => !document.getElementById('savePop').hidden);
+/* Save (Ctrl+S, or the button): the Save dialog always comes up, its kind
+   and name already chosen; what it showed, then its Save pressed */
+async function saveDialog(page, how) {
+  if (how === 'button') await page.click('#btnQSave');
+  else await page.keyboard.press('Control+s');
+  const open = await page.waitForSelector('#savePop:not([hidden])', { timeout: 10000 }).then(
+    () => true,
+    () => false,
+  );
+  const shown = await page.evaluate(() => ({
+    kind: (document.querySelector('input[name="saveFmt"]:checked') || {}).value,
+    name: document.getElementById('saveName').value,
+  }));
+  if (open) await page.click('#saveGo');
+  return Object.assign({ open }, shown);
+}
 async function pageOps(bytes) {
   const d = await PDFDocument.load(bytes);
   const c = d.getPage(0).node.Contents();
@@ -132,14 +148,16 @@ check(
   'a plain PDF opens to read: no pasteboard round the pages',
   await page.evaluate(() => !window.ADDPDF.board() && window.ADDPDF.S.items[0].box.style.margin === ''),
 );
-await page.click('#btnQSave');
+let dlgShown = await saveDialog(page, 'button');
 let got = await waitSave(page, 0);
 check(
-  'Save on a plain PDF only read: saved at once as a PDF, no question',
-  got &&
+  'Save on a plain PDF: the Save dialog, Standard PDF chosen, then saved where picked',
+  dlgShown.open &&
+    dlgShown.kind === 'pdf' &&
+    got &&
     !(await popOpen(page)) &&
     (await page.evaluate(() => window.__asked[0])) === 'small-text-12p-edited.pdf',
-  await page.evaluate(() => window.__asked),
+  { dlgShown, asked: await page.evaluate(() => window.__asked) },
 );
 check('…a standard PDF', !hasMarker(await lastSave(page)));
 
@@ -351,7 +369,8 @@ check(
 );
 check(
   '…and says what a standard PDF leaves out',
-  /off the page will be left out/.test(dlg.note) && /cut there/.test(dlg.note),
+  /outside the page will be left out/.test(dlg.note) &&
+    /crossing the page edge will be trimmed/.test(dlg.note),
   dlg.note,
 );
 await page.click('#saveGo');
@@ -373,12 +392,17 @@ check(
   JSON.stringify(noLayer(await shapes(page))) === JSON.stringify(noLayer(marks)),
 );
 n = await saves(page);
-await page.keyboard.press('Control+s');
+dlgShown = await saveDialog(page);
 got = await waitSave(page, n);
 check(
-  'Ctrl+S again: saved straight to the same file, the same kind, no dialog',
-  got && !(await popOpen(page)) && (await page.evaluate(() => window.__asked.length)) === 2,
-  await page.evaluate(() => window.__asked),
+  'Ctrl+S again: the Save dialog again, as it was saved; Save writes the same file, no second dialog',
+  dlgShown.open &&
+    dlgShown.kind === 'pdf' &&
+    got &&
+    !(await popOpen(page)) &&
+    /* the first save chose the file; every save since went back onto it */
+    (await page.evaluate(() => window.__asked.length)) === 1,
+  { dlgShown, asked: await page.evaluate(() => window.__asked) },
 );
 
 /* Save as…: the editable kind */
@@ -510,22 +534,25 @@ check(
   (await shapes(page))[C].w,
 );
 n = await saves(page);
-await page.keyboard.press('Control+s');
+dlgShown = await saveDialog(page);
 got = await waitSave(page, n);
 check(
-  'Ctrl+S on an editable PDF: saved as one, no question',
-  got &&
+  'Ctrl+S on an editable PDF: the Save dialog, Editable PDF and its name chosen; saved as one',
+  dlgShown.open &&
+    dlgShown.kind === 'project' &&
+    dlgShown.name === 'editable.pdf' &&
+    got &&
     !(await popOpen(page)) &&
     hasMarker(await lastSave(page)) &&
     (await page.evaluate(() => window.__asked[0])) === 'editable.pdf',
-  await page.evaluate(() => window.__asked),
+  { dlgShown, asked: await page.evaluate(() => window.__asked) },
 );
 n = await saves(page);
-await page.keyboard.press('Control+s');
+dlgShown = await saveDialog(page);
 got = await waitSave(page, n);
 check(
-  '…and again: straight to the same file',
-  got && (await page.evaluate(() => window.__asked.length)) === 1,
+  '…and again: the dialog, then the same file, no second dialog',
+  dlgShown.open && got && (await page.evaluate(() => window.__asked.length)) === 1,
 );
 writeFileSync(join(OUT, 'editable-2.pdf'), await lastSave(page));
 await page.evaluate(() => document.getElementById('btnSaveAs').click());
@@ -559,14 +586,15 @@ const movedTo = await page.evaluate(() => ({
   meta: document.getElementById('meta').textContent,
 }));
 n = await saves(page);
-await page.keyboard.press('Control+s');
+dlgShown = await saveDialog(page);
 got = await waitSave(page, n);
 check(
-  'moved to a window of its own: still an editable PDF, pasteboard and layers kept, Save straight to its file',
+  'moved to a window of its own: still an editable PDF, pasteboard and layers kept, Save to its file',
   movedTo.board === movedFrom.board &&
     movedTo.marks === movedFrom.marks &&
     movedTo.layers === movedFrom.layers &&
     /editable PDF/.test(movedTo.meta) &&
+    dlgShown.kind === 'project' &&
     got &&
     !(await popOpen(page)) &&
     hasMarker(await lastSave(page)),
