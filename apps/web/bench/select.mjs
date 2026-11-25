@@ -423,12 +423,14 @@ before = (await shapes())[0];
 await dragFrom([120, 625], 60, 0, ['Alt']);
 after = await shapes();
 check(
-  'Alt-drag: the copy dragged, the original left in its place',
+  'Alt-drag: one stays in its place and its turn in the stack, the one dragged just above it',
   after.length === count + 1 &&
-    nearP(after[count].a, before.a, 0.001) &&
-    near(after[0].a[0] - before.a[0], D(60)) &&
-    after[count].fill === before.fill,
-  { n: after.length },
+    nearP(after[0].a, before.a, 0.001) &&
+    near(after[1].a[0] - before.a[0], D(60)) &&
+    after[0].fill === before.fill &&
+    after[2].t === 'ellipse' &&
+    (await sel()).join() === '1',
+  { n: after.length, t: after.map((x) => x.t), sel: await sel() },
 );
 await undo();
 check(

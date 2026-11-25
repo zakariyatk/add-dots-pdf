@@ -1255,6 +1255,7 @@
     const hold = opts && opts.hold ? holdMiddle() : null;
     applySizes();
     if (hold) hold();
+    EXT.emit('layout');                  /* the pages' new size: what is drawn to scale over them follows */
     DETAILED.forEach(dropDetail);
     S.items.forEach(function (it) {
       if (!it.canvas) return;
@@ -2999,7 +3000,7 @@
   function setGroup(it, idx) {
     idx = idx.filter(function (i, k) {
       const s = it.shapes[i];
-      return s && !NOT_SELECTABLE[s.t] && !s.locked && idx.indexOf(i) === k;
+      return s && !NOT_SELECTABLE[s.t] && !s.locked && !s.hide && idx.indexOf(i) === k;
     });
     if (!idx.length) { S.sel = null; S.multi = null; return; }
     S.sel = { it: it, i: idx[idx.length - 1] };
@@ -3007,11 +3008,34 @@
   }
   /* the selected marks moved by an arrow key, `step` points on the page as
      it is seen (turned with it); a run of presses is one undo */
-  let nudgedAt = 0;
-  function nudgeSelected(key, step) {
+  let nudgedAt = 0, nudgeTop = null;
+  /* the Keyboard Increment, as Illustrator's preference: how far one press
+     of an arrow moves the selection, in points (Shift: ten of them) */
+  let nudgePt = 1;
+  try { const v = parseFloat(localStorage.getItem('adpdf.nudge')); if (v > 0 && v < 10000) nudgePt = v; } catch (e) { /* 1 pt */ }
+  function nudgeIncrement(v) {
+    if (v == null) return nudgePt;
+    if (!(v > 0) || !isFinite(v)) return nudgePt;
+    nudgePt = Math.round(v * 1e6) / 1e6;
+    try { localStorage.setItem('adpdf.nudge', String(nudgePt)); } catch (e) { /* this session only */ }
+    return nudgePt;
+  }
+  /* copy: Alt held, as in Illustrator, a copy of the selection stays behind
+     at each press and the selection moves on (one undo each) */
+  function nudgeSelected(key, step, copy) {
     const it = S.sel.it, vp = it.vp;
-    const idx = selList().filter(function (i) { return it.shapes[i] && !NOT_SELECTABLE[it.shapes[i].t]; });
+    const idx = selList().filter(function (i) { return it.shapes[i] && !NOT_SELECTABLE[it.shapes[i].t] && !it.shapes[i].locked; });
     if (!idx.length || !vp) return;
+    step = step * nudgePt;
+    if (copy) {
+      snapshot();
+      nudgedAt = Date.now();                        /* this press's own undo step, taken just now */
+      nudgeTop = S.undo[S.undo.length - 1];
+      copiesUnder(it, idx.map(function (i) { return { i: i, s0: copyShape(it.shapes[i]) }; }));
+      nudgeSelected(key, step / nudgePt, false);
+      nudgedAt = 0;                                 /* the next press is its own step */
+      return;
+    }
     const dx = key === 'ArrowLeft' ? -1 : key === 'ArrowRight' ? 1 : 0;
     const dy = key === 'ArrowUp' ? -1 : key === 'ArrowDown' ? 1 : 0;
     /* the screen's direction in page points, whatever the page's turn */
@@ -3019,8 +3043,11 @@
     /* exact steps: the conversion's last-digit noise would build up */
     const r6 = function (n) { return Math.round(n * 1e6) / 1e6; };
     const mx = r6((o1[0] - o0[0]) * step), my = r6((o1[1] - o0[1]) * step);
-    if (Date.now() - nudgedAt > 800) snapshot();
+    /* a run goes on only while its own undo step is still the last one:
+       an undo, or any other change, in between starts a new step */
+    if (Date.now() - nudgedAt > 800 || S.undo[S.undo.length - 1] !== nudgeTop) snapshot();
     nudgedAt = Date.now();
+    nudgeTop = S.undo[S.undo.length - 1];
     idx.forEach(function (i) {
       const s = it.shapes[i];
       moveShape(s, JSON.parse(JSON.stringify(s)), mx, my);
@@ -3409,6 +3436,8 @@
     };
     const fresh = !S.sel || S.sel.it !== it || S.sel.i !== idx;
     if (!group && mode === 'move') S.multi = null;
+    /* the point that leads a move onto anchors, guides and the grid (dragMove) */
+    if (mode === 'move') dragOn.ref = moveRef(it, group ? group.map(function (m) { return m.i; }) : [idx], at);
     S.sel = { it: it, i: idx };
     try { it.anno.setPointerCapture(e.pointerId); } catch (err) { /* mouse works without it */ }
     if (fresh) redrawAll(); else drawShapes(it);
@@ -3543,6 +3572,34 @@
     }
   }
 
+  /** The point of what is being moved that snaps, as Illustrator's Snap
+      to Point has it: the anchor, centre or box corner of the selection
+      nearest where it was grabbed, when one is close; otherwise the very
+      point grabbed. */
+  function moveRef(it, list, at) {
+    const reach = 12 / Math.max(0.05, S.scale);
+    let best = null, bd = reach;
+    const take = function (q) {
+      const d = Math.hypot(q[0] - at[0], q[1] - at[1]);
+      if (d <= bd) { bd = d; best = [q[0], q[1]]; }
+    };
+    const boxes = [];
+    list.forEach(function (i) {
+      const s = it.shapes[i];
+      if (!s) return;
+      if (EXT.markPoints) EXT.markPoints(s).forEach(function (m) { take(m[0]); });
+      boxes.push(markBox(s));
+    });
+    if (boxes.length) {
+      const b = unionBox(boxes);
+      [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2], [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2]].forEach(take);
+    }
+    return best || [at[0], at[1]];
+  }
+  /* how far the pointer goes before a press on a mark becomes a move: a
+     click that wobbles a pixel never shifts anything (more for a finger) */
+  const MOVE_DEAD_PX = 3, MOVE_DEAD_TOUCH = 8;
+
   function dragMove(e) {
     const d = dragOn; if (!d) return;
     const s = d.it.shapes[d.idx];
@@ -3551,6 +3608,7 @@
     const dx = p[0] - d.from[0], dy = p[1] - d.from[1];
     if (!d.moved) {
       if (Math.abs(dx) < 0.7 && Math.abs(dy) < 0.7) return;   /* a tap, not a drag */
+      if (d.mode === 'move' && Math.hypot(dx, dy) * S.scale < (e.pointerType === 'touch' ? MOVE_DEAD_TOUCH : MOVE_DEAD_PX)) return;
       d.moved = true;
       if (!d.snapped) { snapshot(); d.snapped = true; }        /* nothing is changed yet */
     }
@@ -3572,15 +3630,24 @@
       }
       const skip = {};
       if (d.group) d.group.forEach(function (m) { skip[m.i] = 1; }); else skip[d.idx] = 1;
+      /* the point grabbed lands on an anchor, a guide or the grid (object
+         snap, F3; Snap to Grid): that wins over lining the box up. Not with
+         Shift, whose angle comes first. */
+      let pinned = null;
+      if (EXT.snapPt && d.ref && !e.shiftKey) {
+        pinned = EXT.snapPt(d.it, [d.ref[0] + mx, d.ref[1] + my], e, { skip: Object.keys(skip).map(Number), move: true });
+        if (pinned) { mx = pinned[0] - d.ref[0]; my = pinned[1] - d.ref[1]; }
+      }
       const movedBox = d.group
         ? unionBox(d.group.map(function (m) { return offsetBox(markBox(m.s0), mx, my); }))
         : offsetBox(markBox(o), mx, my);
-      const guide = smartGuide(d.it, movedBox, skip);
+      const guide = pinned ? { dx: 0, dy: 0, vx: null, hy: null } : smartGuide(d.it, movedBox, skip);
       mx += guide.dx; my += guide.dy;
       const snappedBox = offsetBox(movedBox, guide.dx, guide.dy);
       showSmartGuide(d.it, guide.vx, guide.hy, snappedBox);
       showDistanceHuds(d.it, snappedBox, skip);
       showMoveHud(e, mx, my);
+      d.mv = [mx, my];
       /* held at drop, Ctrl (or Cmd) leaves a copy where the drag started and
          keeps dragging a new one — a plain cursor says so as it is held */
       document.body.classList.toggle('dragdup', dupKey(e));
@@ -3725,6 +3792,44 @@
   document.addEventListener('keydown', function (e) { if (dragOn && e.key === 'Alt') e.preventDefault(); });
   document.addEventListener('keyup', function (e) { if (dragOn && e.key === 'Alt') e.preventDefault(); });
 
+  /** An Alt-drag's drop: a copy of each mark moved stays where it was,
+      in the very place it held in the stack (its layer and its order), and
+      the moved one sits just above it, as Illustrator lays a copy over its
+      original. The copy left behind is a new object: the dimensions stay
+      with the one moved, and a group's copies are a group of their own. */
+  function leaveCopies(d) {
+    copiesUnder(d.it, d.group ? d.group.map(function (m) { return { i: m.i, s0: m.s0 }; }) : [{ i: d.idx, s0: d.s0 }]);
+  }
+  /** moved: [{i, s0}], each mark's index and how it was before it moved */
+  function copiesUnder(it, moved) {
+    const byI = {};
+    moved.forEach(function (m) { byI[m.i] = m.s0; });
+    const was = S.sel && S.sel.it === it ? selList() : null, last = was ? S.sel.i : null;
+    const grpMap = {}, out = [], map = {};
+    const copyOf = function (s0) {
+      const c = copyShape(s0);
+      delete c.gid;
+      if (c.grp != null) { if (!grpMap[c.grp]) grpMap[c.grp] = newGroupId(); c.grp = grpMap[c.grp]; }
+      return c;
+    };
+    /* a run of marks next to one another in the stack (a group drawn
+       together) gets its copies as one run just under it, not each one
+       threaded between, so the copy stacks as a whole as Illustrator's does */
+    it.shapes.forEach(function (s, i) {
+      if (byI[i] && !byI[i - 1]) {
+        for (let k = i; byI[k]; k++) out.push(copyOf(byI[k]));
+      }
+      map[i] = out.length;
+      out.push(s);
+    });
+    it.shapes.splice.apply(it.shapes, [0, it.shapes.length].concat(out));
+    if (was) {
+      const idx = was.map(function (i) { return map[i]; });
+      S.sel = { it: it, i: map[last] };
+      S.multi = idx.length > 1 ? { it: it, idx: idx, n: it.shapes.length } : null;
+    }
+  }
+
   function dragEnd(e) {
     const d = dragOn; if (!d) return;
     dragOn = null;
@@ -3737,12 +3842,9 @@
     /* Ctrl (or Cmd) still held at the drop: what was dragged is the new
        copy, left where it landed, and the mark(s) it came from go back —
        a fresh shape pushed on top at their old place, not a move at all */
-    if (d.moved && d.mode === 'move' && e && dupKey(e)) {
-      /* the copy left behind is a new object: the dimensions stay with the one moved */
-      const left = function (s0) { const c = copyShape(s0); delete c.gid; return c; };
-      if (d.group) d.group.forEach(function (m) { d.it.shapes.push(left(m.s0)); });
-      else d.it.shapes.push(left(d.s0));
-    }
+    if (d.moved && d.mode === 'move' && e && dupKey(e)) leaveCopies(d);
+    /* the Move dialog opens on the last move made (js/move.js), as Illustrator's does */
+    if (d.moved && d.mode === 'move' && d.mv) EXT.lastMove = { it: d.it, p: d.mv.slice() };
     if (d.moved && d.join && EXT.vxJoinEnd) {
       EXT.vxJoinEnd(d.it, d.idx, d.mode === 'pv' ? d.extra : d.mode === 'pa' ? 0 : 1, d.join, d.s0);
     }
@@ -11315,9 +11417,9 @@
 
     /* a mark selected: the arrow keys move it, 1 pt a press (10 with
        Shift), as Acrobat nudges an object; one undo takes back a run */
-    if (/^Arrow/.test(e.key) && S.sel && S.sel.it && S.tool === 'select' && !e.altKey) {
+    if (/^Arrow/.test(e.key) && S.sel && S.sel.it && S.tool === 'select') {
       e.preventDefault();
-      nudgeSelected(e.key, e.shiftKey ? 10 : 1);
+      nudgeSelected(e.key, e.shiftKey ? 10 : 1, e.altKey);
       return;
     }
 
@@ -11671,6 +11773,7 @@
     $: $, toast: toast, ask: ask, dialog: dialog, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
     snapLine: snapLine, snapBox: snapBox, constrainPt: constrainPt,
     selList: selList, setGroup: setGroup, markKids: markKids,
+    nudgeIncrement: nudgeIncrement, copiesUnder: copiesUnder,
     groupSelected: groupSelected, ungroupSelected: ungroupSelected, groupMembers: groupMembers,
     snapshot: snapshot, setUndoState: setUndoState,
     drawShapes: drawShapes, drawThumb: drawThumb, drawVisibleThumbs: drawVisibleThumbs,
