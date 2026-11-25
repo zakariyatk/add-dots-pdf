@@ -156,7 +156,9 @@
       const vp = it.vp, k = vp.scale || 1;
       let x1 = Infinity, y1 = Infinity, x2 = -Infinity, y2 = -Infinity;
       idx.forEach(function (i) {
-        const b = X.markBox(it.shapes[i]);
+        /* its own shape, turned as it is, without its stroke: text by its
+           lines, a turned box by its corners (core visBox) */
+        const b = X.visBox(it.shapes[i]);
         [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]].forEach(function (p) {
           const v = vp.convertToViewportPoint(p[0], p[1]);
           x1 = Math.min(x1, v[0] / k); y1 = Math.min(y1, v[1] / k);
@@ -200,6 +202,8 @@
     /* ---------------- Position: X, Y and the reference point ---------------- */
 
     const REFS = ['tl', 'tc', 'tr', 'ml', 'mc', 'mr', 'bl', 'bc', 'br'];
+    const LINK_KEY = 'adpdf.tfLink';
+    let linked = get(LINK_KEY) === '1';
     let ref = REFS.indexOf(get(REF_KEY)) >= 0 ? get(REF_KEY) : 'mc';
     function refAt(b) {
       const h = ref[1], v = ref[0];
@@ -211,7 +215,7 @@
     sec.className = 'mpmove'; sec.id = 'mpMove';
     sec.innerHTML =
       '<div class="arsec mvsec">' +
-        '<div class="arhd">Position</div>' +
+        '<div class="arhd">Transform</div>' +
         '<div class="mvrow">' +
           '<div class="mvref" role="radiogroup" aria-label="Reference point" title="Reference point: the point of the selection X and Y give">' +
             REFS.map(function (r) {
@@ -224,10 +228,23 @@
             '<label class="mfield"><span>Y</span><span class="unit"><input id="mvY" inputmode="decimal" autocomplete="off" aria-label="Y: down from the zero point"><em class="mvu"></em></span></label>' +
           '</div>' +
         '</div>' +
-        '<div class="mvsize" id="mvSize" aria-live="polite"></div>' +
+        '<div class="mvrow mvwh">' +
+          '<button type="button" class="mvlink" id="mvLink" aria-pressed="false" title="Constrain width and height proportions">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7V5.5a3 3 0 0 1 6 0V7M9 17v1.5a3 3 0 0 0 6 0V17M12 9v6"/></svg></button>' +
+          '<div class="mvxy">' +
+            '<label class="mfield"><span>W</span><span class="unit"><input id="mvW" inputmode="decimal" autocomplete="off" aria-label="Width: of the selection, scaled from the reference point"><em class="mvu"></em></span></label>' +
+            '<label class="mfield"><span>H</span><span class="unit"><input id="mvH" inputmode="decimal" autocomplete="off" aria-label="Height: of the selection, scaled from the reference point"><em class="mvu"></em></span></label>' +
+          '</div>' +
+        '</div>' +
+        '<div class="mvsize" id="mvSize" hidden></div>' +
+        '<div class="mvrow mvrot">' +
+          '<div class="mvrotslot" id="mvRotSlot"></div>' +
+          '<button type="button" class="mvflip" id="mvFlipH" title="Flip horizontal: mirrored across, about its middle" aria-label="Flip horizontal">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18"/><path d="M9 7L3 17h6z"/><path d="M15 7l6 10h-6z" fill="currentColor" fill-opacity=".35"/></svg></button>' +
+          '<button type="button" class="mvflip" id="mvFlipV" title="Flip vertical: mirrored up and down, about its middle" aria-label="Flip vertical">' +
+            '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18"/><path d="M7 9L17 3v6z"/><path d="M7 15l10 6v-6z" fill="currentColor" fill-opacity=".35"/></svg></button>' +
+        '</div>' +
         '<div class="mvrow mvfoot">' +
-          '<label class="mfield mvinc" title="Keyboard Increment: how far an arrow key moves the selection (Shift: ten times, Alt: a copy)"><span>Arrow keys</span>' +
-            '<span class="unit"><input id="mvInc" inputmode="decimal" autocomplete="off" aria-label="Keyboard increment"><em class="mvu"></em></span></label>' +
           '<button type="button" class="cbtn mvdlg" id="mvOpen" title="Move by a distance, or a copy (Enter, Ctrl+Shift+M)">Move…</button>' +
         '</div>' +
       '</div>';
@@ -244,9 +261,18 @@
       const b = seenBox(sel.it, sel.idx), z = zero(), at = refAt(b);
       const put = function (id, v) { const el = q(id); if (document.activeElement !== el) el.value = show(v); };
       put('mvX', at[0] - z.x); put('mvY', at[1] - z.y);
-      q('mvSize').textContent = 'W ' + show(b.x2 - b.x1) + '  ×  H ' + show(b.y2 - b.y1) + ' ' + unit();
+      put('mvW', b.x2 - b.x1); put('mvH', b.y2 - b.y1);
       q('mvSize').dataset.w = String(b.x2 - b.x1); q('mvSize').dataset.h = String(b.y2 - b.y1);
-      put('mvInc', X.nudgeIncrement());
+      q('mvLink').classList.toggle('on', linked);
+      q('mvLink').setAttribute('aria-pressed', linked ? 'true' : 'false');
+      /* a line has no height to give: sizing it is its length's business */
+      const flat = b.x2 - b.x1 < 1e-6 || b.y2 - b.y1 < 1e-6;
+      q('mvLink').disabled = flat;
+      const canFlip = sel.idx.every(function (i) { return FLIP[sel.it.shapes[i].t]; });
+      ['mvFlipH', 'mvFlipV'].forEach(function (id) {
+        q(id).disabled = !canFlip;
+        q(id).title = canFlip ? q(id).getAttribute('aria-label') + ': mirrored about its middle' : 'Only shapes and paths flip: text and pictures keep their way round';
+      });
       sec.querySelectorAll('.mvu').forEach(function (u) { u.textContent = unit(); });
       sec.querySelectorAll('[data-ref]').forEach(function (bt) {
         const on = bt.dataset.ref === ref;
@@ -256,20 +282,75 @@
     }
     X.on('markpop', function () { sync(); });
     X.on('tool', function () { sync(); });
+    X.on('units', function () { sync(); });
 
     sec.addEventListener('click', function (e) {
       const r = e.target.closest('[data-ref]');
       if (r) { ref = r.dataset.ref; set(REF_KEY, ref); sync(); return; }
       if (e.target.closest('#mvOpen')) openMove();
+      else if (e.target.closest('#mvLink')) { linked = !linked; set(LINK_KEY, linked ? '1' : '0'); sync(); }
+      else if (e.target.closest('#mvFlipH')) flip(true);
+      else if (e.target.closest('#mvFlipV')) flip(false);
     });
+
+    /* ---------------- W and H, and flipping ---------------- */
+
+    /** a scale of the selection as the page is seen, about a point as the
+        page is seen, done in page points (a page turned a quarter swaps
+        the two ways) */
+    function scaleSeen(sel, fixSeen, sx, sy) {
+      const it = sel.it, vp = it.vp, k = vp.scale || 1;
+      const f = vp.convertToPdfPoint(fixSeen[0] * k, fixSeen[1] * k);
+      const quarter = Math.round(((vp.rotation || 0) % 180 + 180) % 180) === 90;
+      const px = quarter ? sy : sx, py = quarter ? sx : sy;
+      X.snapshot();
+      const group = sel.idx.map(function (i) { return { i: i, s0: X.copyShape(it.shapes[i]) }; });
+      X.scaleGroup(it, group, f, px, py);
+      return { it: it, group: group, px: px, py: py };
+    }
+    function resize(el) {
+      const sel = selection();
+      if (!sel) return;
+      const b = seenBox(sel.it, sel.idx), w = b.x2 - b.x1, h = b.y2 - b.y1;
+      const isW = el.id === 'mvW', cur = isW ? w : h;
+      const v = parseLen(el.value, cur);
+      if (v == null || !(v > 0)) { X.toast(v != null ? 'A size above 0' : 'Give a number, a sum, or a length such as 25 mm', true); sync(); return; }
+      if (cur < 1e-6) { X.toast(isW ? 'It has no width to scale' : 'It has no height to scale', true); sync(); return; }
+      if (Math.abs(v - cur) < 1e-9) { sync(); return; }
+      let sx = isW ? v / w : 1, sy = isW ? 1 : v / h;
+      if (linked) { if (isW) sy = sx; else sx = sy; }
+      /* lines have one way only: the other stays */
+      if (w < 1e-6) sx = 1;
+      if (h < 1e-6) sy = 1;
+      scaleSeen(sel, refAt(b), sx, sy);
+      done(sel.it);
+    }
+    /* what mirrors truly: shapes and paths; text and pictures would only
+       come out back to front */
+    const FLIP = { rect: 1, ellipse: 1, line: 1, arrow: 1, poly: 1, pen: 1, vpath: 1, cloud: 1, arc: 1, ink: 1, markup: 0 };
+    function flip(across) {
+      const sel = selection();
+      if (!sel || !sel.idx.every(function (i) { return FLIP[sel.it.shapes[i].t]; })) return;
+      const b = seenBox(sel.it, sel.idx), mid = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
+      const r = scaleSeen(sel, mid, across ? -1 : 1, across ? 1 : -1);
+      /* a box turned by an angle mirrors its angle; an arc bulges the other way */
+      r.group.forEach(function (m) {
+        const s = r.it.shapes[m.i];
+        if (!s) return;
+        if (s.r) { const a = ((-s.r % 360) + 360) % 360; if (a) s.r = Math.round(a * 1e6) / 1e6; else delete s.r; }
+        if (s.t === 'arc') s.bulge = -(s.bulge == null ? 0.25 : s.bulge);
+        /* a box keeps its corners in order */
+        if (s.a && s.b && !s.pts && s.t !== 'line' && s.t !== 'arrow' && s.t !== 'arc') {
+          const x1 = Math.min(s.a[0], s.b[0]), x2 = Math.max(s.a[0], s.b[0]), y1 = Math.min(s.a[1], s.b[1]), y2 = Math.max(s.a[1], s.b[1]);
+          s.a = [x1, y1]; s.b = [x2, y2];
+        }
+      });
+      done(r.it);
+    }
+    function done(it) { X.drawShapes(it); X.drawThumb(it); X.updateMeta(); X.syncMarkPop(); }
     function commit(el) {
       const id = el.id;
-      if (id === 'mvInc') {
-        const v = parseLen(el.value, X.nudgeIncrement());
-        if (v != null && v > 0) X.nudgeIncrement(v);
-        sync();
-        return;
-      }
+      if (id === 'mvW' || id === 'mvH') { resize(el); return; }
       if (id !== 'mvX' && id !== 'mvY') return;
       const sel = selection();
       if (!sel) return;
@@ -300,7 +381,6 @@
         const step = (e.shiftKey ? 10 : 1) / per() * (e.key === 'ArrowUp' ? 1 : -1);
         const cur = parseLen(e.target.value, 0);
         if (cur == null) return;
-        if (e.target.id === 'mvInc') { e.target.value = show(Math.max(0.001 / per(), cur + step)); commit(e.target); return; }
         e.target.value = show(cur + step);
         commit(e.target);
       }

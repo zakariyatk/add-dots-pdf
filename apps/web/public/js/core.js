@@ -3934,8 +3934,13 @@
     $('mpFont').addEventListener('change', function () {
       const v = this.value; markEdit(function (s) { s.f = v; });
     });
-    $('mpBold').addEventListener('click', function () { markEdit(function (s) { s.b = !s.b; }); });
-    $('mpItal').addEventListener('click', function () { markEdit(function (s) { s.i = !s.i; }); });
+    /* with some bold and some not, the first press makes them all bold */
+    const allOf = function (k) {
+      const it = S.sel && S.sel.it;
+      return !!it && selList().every(function (i) { const m = it.shapes[i]; return !m || m.t !== 'text' || !!m[k]; });
+    };
+    $('mpBold').addEventListener('click', function () { const on = !allOf('b'); markEdit(function (s) { s.b = on; }); });
+    $('mpItal').addEventListener('click', function () { const on = !allOf('i'); markEdit(function (s) { s.i = on; }); });
     $('mpSize').addEventListener('change', function () {
       const v = parseFloat(this.value);
       if (isNaN(v)) { syncMarkPop(); return; }
@@ -3944,6 +3949,8 @@
     $('mpAngle').addEventListener('change', function () {
       const v = parseFloat(this.value);
       if (isNaN(v)) { syncMarkPop(); return; }
+      /* several: they turn together by the number typed (it reads 0 again after) */
+      if (selList().length > 1) { turnSelection(v); return; }
       markEdit(function (s) { setMarkAngle(s, v); });
     });
     ['mpOpacity', 'mpWidth', 'mpSize', 'mpAngle'].forEach(function (id) {
@@ -4133,56 +4140,134 @@
     const p = $('markPop');
     return !!(p && p.closest && p.closest('.rprops'));
   }
+  /* a value the selection does not share (syncMarkPop) */
+  const MIXED = { mixed: true };
+  function sameVal(a, b) {
+    if (a === b) return true;
+    if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) < 1e-6;
+    return false;
+  }
+  /** an input showing v, or empty with "Mixed" in grey; never while it is
+      being typed in */
+  function mixedInput(el, v) {
+    if (!el) return;
+    const mixed = v === MIXED;
+    el.classList.toggle('mixed', mixed);
+    el.placeholder = mixed ? 'Mixed' : '';
+    if (document.activeElement !== el) el.value = mixed ? '' : String(v);
+  }
+  /** a menu on v, or on a "Mixed" entry of its own that cannot be picked */
+  function mixedSelect(el, v) {
+    if (!el) return;
+    let o = el.querySelector('option[data-mixed]');
+    if (v === MIXED) {
+      if (!o) {
+        o = document.createElement('option');
+        o.dataset.mixed = '1'; o.value = ''; o.textContent = 'Mixed'; o.disabled = true; o.hidden = true;
+        el.insertBefore(o, el.firstChild);
+      }
+      el.value = '';
+      o.selected = true;
+      el.classList.add('mixed');
+    } else {
+      if (o) o.remove();
+      el.classList.remove('mixed');
+      el.value = String(v);
+    }
+  }
+  /** the whole selection turned by deg about the middle of its box, each
+      mark the way it turns, as Illustrator's Rotate field does for several */
+  function turnSelection(deg) {
+    if (!S.sel || !EXT.turnMark || !deg) return;
+    const it = S.sel.it, list = selList().filter(function (i) { const m = it.shapes[i]; return m && !m.locked; });
+    if (!list.length) return;
+    const b = unionBox(list.map(function (i) { return visBox(it.shapes[i]); }));
+    const c = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
+    snapshot();
+    list.forEach(function (i) {
+      const m = it.shapes[i], s0 = copyShape(m);
+      EXT.turnMark(m, s0, c, deg);
+    });
+    drawShapes(it); drawThumb(it); updateMeta(); syncMarkPop();
+  }
   function syncMarkPop() {
     const pop = $('markPop'), s = selShape();
     if (!s || (dragOn && !markPopDocked())) { pop.hidden = true; closeSwatches(); EXT.emit('markpop', null); return; }
     buildMarkPop();
-    const isText = s.t === 'text';
+    /* Everything selected, not only the mark last touched, as Illustrator's
+       Properties panel: a control shows only when it means something for
+       every one of them, and a value they do not share reads "Mixed". */
+    const it0 = S.sel.it;
+    const all = selList().map(function (i) { return it0.shapes[i]; }).filter(function (m) { return m && m.t !== 'pin'; });
+    if (!all.length) all.push(s);
+    const every = function (f) { return all.every(f); };
+    const shared = function (f) {
+      const v = f(all[0]);
+      return all.every(function (m) { return sameVal(f(m), v); }) ? v : MIXED;
+    };
+    const isText = every(function (m) { return m.t === 'text'; });
+    const anyText = all.some(function (m) { return m.t === 'text'; });
     /* a shape off the page fills too — a Continuous Line only once it is
        snapped shut back onto its own first point */
-    const isBox = closedShape(s);
+    const isBox = every(closedShape);
     /* a picture: no line to style (a signature, or a stamp made from one) */
-    const isPic = s.t === 'sig' || s.t === 'istamp';
-    const count = selList().length;
-    $('mpTitle').textContent = count > 1 ? count + ' marks' : (MARK_NAME[s.t] || 'Mark');
+    const pic = function (m) { return m.t === 'sig' || m.t === 'istamp'; };
+    const isPic = all.some(pic);
+    const count = all.length;
+    const oneType = every(function (m) { return m.t === s.t; });
+    const grouped = count > 1 && s.grp != null && every(function (m) { return m.grp === s.grp; }) &&
+      groupMembers(it0, S.sel.i).length === count;
+    $('mpTitle').textContent = count === 1 ? (MARK_NAME[s.t] || 'Mark')
+      : grouped ? 'Group' : count + ' objects';
+    $('markPop').dataset.count = String(count);
+    $('markPop').dataset.kind = count === 1 ? s.t : grouped ? 'group' : oneType ? s.t : 'mixed';
 
-    $('mpFillBtn').hidden = !isBox;
-    $('mpFillChip').className = s.fill ? '' : 'none';
-    $('mpFillChip').style.background = s.fill ? (s.grad ? gradCss(s.grad) : s.fill) : '';
-    $('mpStrokeChip').style.background = s.nos ? '' : s.c;
-    $('mpStrokeChip').className = s.nos ? 'none' : '';
-    $('mpStrokeLbl').textContent = isText ? 'Text' : isBox ? 'Border' : 'Colour';
+    $('mpFillBtn').hidden = !isBox || anyText;
+    const fillV = shared(function (m) { return m.fill ? (m.grad ? 'grad' : String(m.fill).toUpperCase()) : null; });
+    $('mpFillChip').className = fillV === MIXED ? 'mixed' : s.fill ? '' : 'none';
+    $('mpFillChip').style.background = fillV === MIXED ? '' : s.fill ? (s.grad ? gradCss(s.grad) : s.fill) : '';
+    const strokeV = shared(function (m) { return m.nos ? null : String(m.c).toUpperCase(); });
+    $('mpStrokeChip').style.background = strokeV === MIXED || s.nos ? '' : s.c;
+    $('mpStrokeChip').className = strokeV === MIXED ? 'mixed' : s.nos ? 'none' : '';
+    $('mpStrokeLbl').textContent = isText ? 'Text' : isBox || every(function (m) { return m.t === 'image'; }) ? 'Border' : 'Colour';
 
     /* marks with no line of their own to style (a highlight, a note, a
        stamp) and marks that do not turn (those, and a pen stroke) */
-    const noLine = isPic || s.t === 'markup' || s.t === 'note' || s.t === 'stamp';
-    const noTurn = s.t === 'markup' || s.t === 'note' || s.t === 'stamp' || s.t === 'ink' || s.t === 'vpath';
-    $('mpStrokeBtn').hidden = isPic || s.t === 'stamp';
-    $('mpStyleWrap').hidden = isText || noLine;
-    $('mpWidthWrap').hidden = isText || noLine;
-    $('mpCapWrap').hidden = isText || noLine;
-    $('mpAngle').closest('.mfield').hidden = noTurn;
-    $('mpJoinWrap').hidden = !isBox;
+    const noLineOf = function (m) { return pic(m) || m.t === 'markup' || m.t === 'note' || m.t === 'stamp' || m.t === 'text'; };
+    const noTurnOf = function (m) { return m.t === 'markup' || m.t === 'note' || m.t === 'stamp' || m.t === 'ink' || m.t === 'vpath'; };
+    const noLine = all.some(noLineOf);
+    const noTurn = all.some(noTurnOf);
+    $('mpStrokeBtn').hidden = isPic || all.some(function (m) { return m.t === 'stamp'; }) || (anyText && !isText);
+    $('mpStyleWrap').hidden = noLine;
+    $('mpWidthWrap').hidden = noLine;
+    $('mpCapWrap').hidden = noLine;
+    /* several at once turn about the middle of them all (mpAngle's change) */
+    $('mpAngle').closest('.mfield').hidden = count === 1 ? noTurn : !EXT.turnMark || noTurn;
+    $('mpJoinWrap').hidden = !isBox || noLine;
     $('mpText').hidden = !isText;
 
-    if (!isText) {
-      $('mpStyle').value = String(s.d || 0);
-      $('mpCap').value = String(shCap(s));
-      if (document.activeElement !== $('mpWidth')) $('mpWidth').value = (Math.round(s.w * 10) / 10);
-      if (isBox) $('mpJoin').value = String(shJoin(s));
-    } else {
-      $('mpFont').value = s.f || 'helv';
-      $('mpBold').classList.toggle('on', !!s.b);
-      $('mpItal').classList.toggle('on', !!s.i);
-      if (document.activeElement !== $('mpSize')) $('mpSize').value = (Math.round(s.size * 10) / 10);
+    if (!noLine) {
+      mixedSelect($('mpStyle'), shared(function (m) { return String(m.d || 0); }));
+      mixedSelect($('mpCap'), shared(function (m) { return String(shCap(m)); }));
+      mixedInput($('mpWidth'), shared(function (m) { return Math.round(m.w * 10) / 10; }));
+      if (isBox) mixedSelect($('mpJoin'), shared(function (m) { return String(shJoin(m)); }));
     }
-    if (document.activeElement !== $('mpOpacity')) $('mpOpacity').value = Math.round(shOp(s) * 100);
-    if (document.activeElement !== $('mpAngle')) $('mpAngle').value = Math.round(markAngle(s) * 10) / 10;
+    if (isText) {
+      mixedSelect($('mpFont'), shared(function (m) { return m.f || 'helv'; }));
+      $('mpBold').classList.toggle('on', every(function (m) { return !!m.b; }));
+      $('mpItal').classList.toggle('on', every(function (m) { return !!m.i; }));
+      mixedInput($('mpSize'), shared(function (m) { return Math.round(m.size * 10) / 10; }));
+    }
+    mixedInput($('mpOpacity'), shared(function (m) { return Math.round(shOp(m) * 100); }));
+    /* one: its own angle; several: 0, and a number typed turns them all by it */
+    if (count === 1) mixedInput($('mpAngle'), Math.round(markAngle(s) * 10) / 10);
+    else mixedInput($('mpAngle'), 0);
 
     /* whatever the module that owns this mark type wants alongside: for a
        dimension that is the drawing scale, which otherwise leaves with the
-       ribbon the moment the tool is put down */
-    const extra = EXT.markPop[s.t];
+       ribbon the moment the tool is put down. Only when everything selected
+       is of that one kind: its controls act on each of them. */
+    const extra = oneType ? EXT.markPop[s.t] : null;
     $('mpExtDiv').hidden = !extra;
     $('mpExt').hidden = !extra;
     if (extra) {
@@ -11853,7 +11938,7 @@
     /* the pasteboard, and Save (for the tests and modules) */
     setBoard: setBoard, board: function () { return S.board; },
     saveDoc: saveDoc, quickSave: quickSave, openSaveDialog: openSaveDialog,
-    stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE,
+    stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE, turnSelection: turnSelection, scaleGroup: scaleGroup,
     /* for Align and Pathfinder (js/arrange.js) */
     visBox: visBox, moveShape: moveShape, copyShape: copyShape, markBox: markBox,
     /* for the Rotate tool (js/rotate.js) */

@@ -1271,7 +1271,29 @@
       }
       run(b.dataset.pa);
     });
-    if (!X.markPop.pen) X.markPop.pen = { el: sec, sync: function () {} };
+    /* what Illustrator's Properties says of a path: how many points, and
+       whether it is open or closed */
+    const info = document.createElement('div');
+    info.className = 'mppathinfo';
+    info.innerHTML = '<div class="pprow"><span>Anchor points</span><b id="mpPathPts"></b></div>' +
+      '<div class="pprow"><span>Path</span><b id="mpPathKind"></b></div>';
+    sec.insertBefore(info, sec.firstChild);
+    function paintInfo(s) {
+      const it = S.sel && S.sel.it;
+      const list = it ? X.selList().map(function (i) { return it.shapes[i]; }).filter(function (m) { return m && m.t === 'pen'; }) : [s];
+      let n = 0, open = 0, shut = 0;
+      list.forEach(function (m) {
+        if (!m.pts || m.pts.length < 4) return;
+        const P = anchorsOf(m);
+        n += P.A.length;
+        if (P.closed) shut++; else open++;
+      });
+      $('mpPathPts').textContent = String(n);
+      $('mpPathKind').textContent = list.length > 1
+        ? (open && shut ? open + ' open, ' + shut + ' closed' : (open ? 'All open' : 'All closed'))
+        : (shut ? 'Closed' : 'Open');
+    }
+    if (!X.markPop.pen) X.markPop.pen = { el: sec, sync: paintInfo };
 
     /* ---------------- the buttons, on the Tools tab ---------------- */
 

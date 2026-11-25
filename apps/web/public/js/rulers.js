@@ -340,7 +340,7 @@
         return b;
       }
       Object.keys(UNITS).forEach(function (k) {
-        item(UNITS[k].name, function () { unit = k; set('adpdf.rulerUnit', k); redraw(); if (X.grid) X.grid.paint(); }, k === unit);
+        item(UNITS[k].name, function () { X.rulers.setUnit(k); }, k === unit);
       });
       menu.appendChild(document.createElement('hr'));
       item('Reset zero point', function () { zero = { x: 0, y: 0 }; redraw(); if (X.grid) X.grid.paint(); });
@@ -621,7 +621,17 @@
       unit: function () { return unit; },
       per: function () { return UNITS[unit].per; },
       /* the zero point, in points from the page's top-left corner as seen */
-      zero: function () { return { x: zero.x, y: zero.y }; }
+      zero: function () { return { x: zero.x, y: zero.y }; },
+      units: function () { return Object.keys(UNITS).map(function (k) { return { id: k, name: UNITS[k].name }; }); },
+      setUnit: function (k) {
+        if (!UNITS[k]) return;
+        unit = k; set('adpdf.rulerUnit', k); redraw();
+        if (X.grid) X.grid.paint();
+        X.emit('units', k);
+      },
+      clearGuides: function (it) {
+        (it ? [it] : S.items).forEach(function (p) { if (p.guides && p.guides.length) { p.guides = []; paintGuides(p); } });
+      }
     };
 
     apply();

@@ -374,11 +374,50 @@
        would use for its own scale control */
     (function () {
       const el = document.createElement('div');
-      el.innerHTML = '<button class="btn" id="mpCropImg" style="width:100%">Crop image…</button>';
-      X.markPop.image = {
-        el: el,
-        sync: function () { /* nothing to reflect — border colour/width already ride mpStroke/mpWidth */ }
-      };
+      el.className = 'mpimg';
+      el.innerHTML =
+        '<div class="pprow"><span>Pixels</span><b id="mpImgPx">—</b></div>' +
+        '<div class="pprow" title="Effective resolution: the picture\'s pixels over the size it is placed at"><span>Resolution</span><b id="mpImgPpi">—</b></div>' +
+        '<div class="ppbtns">' +
+          '<button class="btn ppb" id="mpCropImg" type="button">Crop image…</button>' +
+          '<button class="btn ppb" id="mpImgRatio" type="button" title="Back to the picture\'s own proportions: its height from its width">Original proportions</button>' +
+        '</div>';
+      /* the picture's own size, once per picture */
+      const natural = {};
+      function sizeOf(url, then) {
+        if (!url) return;
+        if (natural[url]) { if (natural[url].w) then(natural[url]); return; }
+        natural[url] = {};
+        const im = new Image();
+        im.onload = function () { natural[url] = { w: im.naturalWidth, h: im.naturalHeight }; then(natural[url]); };
+        im.src = url;
+      }
+      function paint(s) {
+        const w = Math.abs(s.b[0] - s.a[0]), h = Math.abs(s.b[1] - s.a[1]);
+        $('mpImgPx').textContent = '…';
+        $('mpImgPpi').textContent = '…';
+        sizeOf(s.url, function (n) {
+          if (!n.w) return;
+          $('mpImgPx').textContent = n.w + ' × ' + n.h + ' px';
+          /* the lower of the two ways, as a print check reads it */
+          const ppi = Math.min(n.w / Math.max(1e-6, w / 72), n.h / Math.max(1e-6, h / 72));
+          $('mpImgPpi').textContent = Math.round(ppi) + ' ppi';
+          $('mpImgRatio').disabled = Math.abs(w / h - n.w / n.h) < 0.002;
+        });
+      }
+      X.markPop.image = { el: el, sync: paint };
+      el.querySelector('#mpImgRatio').addEventListener('click', function () {
+        const s = S.sel && S.sel.it.shapes[S.sel.i];
+        const n = s && natural[s.url];
+        if (!s || s.t !== 'image' || !n || !n.w) return;
+        X.markEdit(function (m) {
+          if (m.t !== 'image' || m !== s) return;
+          const x1 = Math.min(m.a[0], m.b[0]), x2 = Math.max(m.a[0], m.b[0]), top = Math.max(m.a[1], m.b[1]);
+          const h = (x2 - x1) * n.h / n.w;
+          m.a = [x1, top - h]; m.b = [x2, top];
+        });
+        X.drawThumb(S.sel.it);
+      });
       el.querySelector('#mpCropImg').addEventListener('click', function (e) {
         e.stopPropagation();
         if (!S.sel) return;

@@ -2519,3 +2519,100 @@ body.move-mode .anno .dxhit { cursor: var(--cur-move) }
 .mvnote { margin: 0; font-size: 12px; color: var(--text-dim); line-height: 1.45 }
 .mvgrid { display: flex; flex-direction: column; gap: 10px }
 .wdbox.mvbox .wdfoot { grid-template-columns: 1fr 1fr 1fr }
+
+/* ---------------- the Properties panel, in Illustrator's sections (js/propspanel.js) ---------------- */
+.rprops .markpop.pp { display: block; padding: 0 0 14px }
+.markpop.pp .ppgone { display: none !important }
+.markpop.pp .pphead { display: flex; align-items: baseline; gap: 8px; padding: 10px 12px 4px }
+.markpop.pp .pphead .mtitle { display: block !important; font-size: 13px; font-weight: 600; color: var(--text) }
+.markpop.pp .pphead[data-sub]:not([data-sub=""])::after { content: attr(data-sub); font-size: 11.5px; color: var(--text-dim) }
+.rprops .markpop.pp .pphead { display: none }  /* the panel's own heading names it there */
+.ppsec { padding: 10px 12px 12px; border-top: 1px solid var(--line) }
+.ppsec[hidden] { display: none }
+.markpop.pp .ppsec:first-of-type, .ppdoc .ppsec:first-child { border-top: 0 }
+.pphd { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 8px; display: flex; align-items: baseline; gap: 6px }
+.pphd[hidden] { display: none }
+.pphd .ppsub { font-weight: 400; color: var(--text-dim); font-size: 11.5px }
+.ppbody { display: flex; flex-direction: column; gap: 8px; min-width: 0 }
+.ppbody > * { min-width: 0; max-width: 100% }
+.ppbody > [hidden] { display: none !important }
+.markpop.pp .ppsec .arsec { padding-top: 0; border-top: 0 }
+.markpop.pp #ppAlign .arsec + .arsec { padding-top: 10px; border-top: 1px solid var(--line) }
+.markpop.pp .mvrot { align-items: center }
+.markpop.pp .mvrotslot { flex: 1; min-width: 0 }
+.markpop.pp .mvrotslot .mfield { display: flex; align-items: center; justify-content: space-between; gap: 6px }
+.markpop.pp .mvrotslot .unit input { width: 56px }
+.mvflip, .mvlink { flex: none; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 4px; background: transparent; color: var(--text); cursor: pointer; display: grid; place-items: center }
+.mvflip svg, .mvlink svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round }
+.mvflip:hover:not(:disabled), .mvlink:hover:not(:disabled) { background: var(--chrome-2); border-color: var(--line) }
+.mvflip:disabled, .mvlink:disabled { opacity: .35; cursor: default }
+.mvlink.on { color: var(--accent, #1a73e8); background: color-mix(in srgb, var(--accent, #1a73e8) 12%, transparent) }
+.markpop.pp .mvwh { align-items: center }
+/* the rectangle's and ellipse's own X and Y: Transform has them */
+#markPop.pp .mfield:has(#rectPX), #markPop.pp .mfield:has(#rectPY),
+#markPop.pp .mfield:has(#ellPX), #markPop.pp .mfield:has(#ellPY) { display: none }
+/* Quick Actions: arrange on one row, grouping on the next */
+.ppqrow { display: flex; flex-direction: column; gap: 6px }
+.ppqgrp { display: flex; align-items: center; gap: 4px }
+.ppqgrp [hidden] { display: none }
+.ppqgrp .del { margin-left: auto }
+.markpop.pp .ppq svg, .markpop.pp .ppqgrp .mpstack svg { width: 18px; height: 18px }
+
+/* a value the selection does not share */
+.markpop input.mixed::placeholder { color: var(--text-dim); font-style: italic }
+.markpop select.mixed { color: var(--text-dim); font-style: italic }
+.markpop .cbtn i.mixed, .fsq.mixed i {
+  background: repeating-linear-gradient(135deg, #bbb 0 3px, #fff 3px 6px) !important; border-color: var(--line) !important }
+.fsq.mixed::after { content: '?'; position: absolute; inset: 0; display: grid; place-items: center; font: 600 13px/1 system-ui, sans-serif; color: var(--text) }
+.fsq.fsstroke.mixed i { background: transparent !important; border: 5px solid #bbb !important }
+
+/* nothing selected: the document */
+.ppdoc[hidden] { display: none }
+.pprow { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; min-width: 0 }
+.pprow > span:first-child { color: var(--text-dim); font-size: 12px; flex: none }
+.pprow > b { font-weight: 500; color: var(--text); text-align: right; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-variant-numeric: tabular-nums }
+.pprow select { height: 28px; border: 1px solid var(--line); border-radius: 4px; background: var(--chrome-2); color: var(--text); font: inherit; font-size: 12px; padding: 0 6px; min-width: 0 }
+.pprow .unit { display: flex; align-items: center; gap: 4px }
+.pprow .unit input { width: 64px; height: 28px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 4px; background: var(--chrome-2); color: var(--text); font: inherit; font-size: 12px; text-align: right; padding: 0 6px }
+.pprow .unit em { font-style: normal; font-size: 11px; color: var(--text-dim) }
+.ppbtns { display: flex; flex-wrap: wrap; gap: 6px }
+.ppb { height: 28px; padding: 0 10px; font-size: 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--chrome-2); color: var(--text) }
+.ppb:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, var(--chrome-2)) }
+.ppb:disabled { opacity: .45 }
+.ppnote { margin: 0; font-size: 11.5px; line-height: 1.4; color: var(--text-dim) }
+/* a switch: the label, and the switch at the right */
+.ppsw { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12.5px; cursor: pointer; position: relative }
+.ppsw input { position: absolute; opacity: 0; width: 34px; height: 20px; right: 0; margin: 0; cursor: pointer }
+.ppsw i { flex: none; width: 32px; height: 18px; border-radius: 9px; background: color-mix(in srgb, var(--text) 22%, transparent); position: relative; transition: background .15s }
+.ppsw i::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: transform .15s }
+.ppsw input:checked + i { background: var(--accent, #1a73e8) }
+.ppsw input:checked + i::after { transform: translateX(14px) }
+.ppsw input:focus-visible + i { outline: 2px solid var(--text); outline-offset: 2px }
+.ppsw input:disabled + i { opacity: .4 }
+.ppcanvas { display: flex; gap: 6px }
+.ppcanvas button { width: 22px; height: 22px; padding: 0; border-radius: 4px; border: 1px solid var(--line); cursor: pointer }
+.ppcanvas button[data-canvas=""] { background: linear-gradient(135deg, var(--chrome) 50%, var(--chrome-2) 50%) }
+.ppcanvas button[data-canvas="white"] { background: #fff }
+.ppcanvas button[data-canvas="light"] { background: #d4d4d4 }
+.ppcanvas button[data-canvas="dark"] { background: #404040 }
+.ppcanvas button.on { box-shadow: 0 0 0 2px var(--accent, #1a73e8) }
+/* the canvas round the pages (Background) */
+body[data-canvas="white"] #stage { background: #ffffff }
+body[data-canvas="light"] #stage { background: #d4d4d4 }
+body[data-canvas="dark"] #stage { background: #404040 }
+#markPop.pp.pp-fs #mpFillBtn, #markPop.pp.pp-fs #mpStrokeBtn { display: none }
+#markPop.pp.pp-named #ppKind .mpverts-lbl { display: none }
+.ppqgrp .ppql { width: 52px; flex: none; font-size: 11.5px; color: var(--text-dim) }
+.markpop.pp .mvwh .mvlink { margin: 0 12px }   /* in the reference point's column, so W and H line up under X and Y */
+.markpop.pp .mvwh .mfield > span:first-child, .markpop.pp .mvxy .mfield > span:first-child { width: 12px }
+.markpop.pp .mvrot { padding-left: 0 }
+.markpop.pp .mprect .ellbtn, .markpop.pp .mpell .ellbtn { width: auto }
+.markpop.pp #rectPLock, .markpop.pp #rectPEach, .markpop.pp #ellPLock { width: 32px; flex: none; justify-content: center }
+.markpop.pp .mppathinfo, .markpop.pp .mpimg { display: flex; flex-direction: column; gap: 8px; width: 100% }
+.pprow .unit input#mvInc { width: 54px }
+.ppqgrp .btn { width: 30px; height: 30px; min-width: 30px; padding: 0; display: grid; place-items: center; flex: none }
+.ppqgrp .btn svg { width: 18px !important; height: 18px !important }
+.rprops #mpExt > .mpimg { flex-direction: column; flex-wrap: nowrap; align-items: stretch }
+.rprops #mpExt > .mpimg .pprow { width: 100% }
+.ppsw i { pointer-events: none }
+.ppsw input { z-index: 1 }

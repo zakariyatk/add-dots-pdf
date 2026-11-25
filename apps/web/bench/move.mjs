@@ -280,8 +280,8 @@ check(
   (await shapes())[0].a,
 );
 
-/* the Keyboard Increment, in the Position section */
-/* the Properties panel, where the selection's Position is */
+/* the Properties panel: the selection's Transform; with nothing selected,
+   the document's Preferences, where the Keyboard Increment is */
 await clickAt([120, 625]);
 await page.evaluate(() => {
   window.ADDPDF.setRail(true);
@@ -289,8 +289,15 @@ await page.evaluate(() => {
 });
 await page.waitForTimeout(150);
 await page.locator('#mpMove').scrollIntoViewIfNeeded();
+check('the Transform section is there for the selection', await page.locator('#mpMove').isVisible());
+await key('Escape');
+await page.waitForTimeout(150);
 const incField = page.locator('#mvInc');
-check('the Position section is there for the selection', await page.locator('#mpMove').isVisible());
+await incField.scrollIntoViewIfNeeded();
+check(
+  "with nothing selected, the Keyboard Increment is in the document's Preferences",
+  await incField.isVisible(),
+);
 await incField.fill('5');
 await incField.press('Enter');
 await page.mouse.move(10, 10);
