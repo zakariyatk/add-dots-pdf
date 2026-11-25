@@ -34,6 +34,20 @@
   'use strict';
 
   const X = window.ADDPDF;
+
+  /* Where a file handed over by the desktop app is on disk (f.adddotsPath,
+     js/desktop.js): a File's own fields survive being posted to another
+     frame, an extra one does not, so the paths travel beside the files and
+     are put back on the far side. Saving back onto the file it came from,
+     and PDFium reading it from disk, need them. */
+  function pathsOf(files) { return (files || []).map(function (f) { return (f && f.adddotsPath) || null; }); }
+  function withPaths(files, paths) {
+    (files || []).forEach(function (f, i) {
+      const p = paths && paths[i];
+      if (p && f && !f.adddotsPath) { try { f.adddotsPath = p; } catch (e) { /* a frozen stand-in: it has its own */ } }
+    });
+    return files || [];
+  }
   if (!X) { console.error('[tabs] core bridge missing'); return; }
 
   const tabParam = /[?&]tab=(\d+)/.exec(location.search);
@@ -55,13 +69,13 @@
     /* another file, from in here: a tab of its own, made by the bar */
     X.tabs = {
       available: function () { return true; },
-      openFiles: function (files) { up({ t: 'adpdf-tab-open', files: files }); },
-      openMerged: function (files) { up({ t: 'adpdf-tab-open', files: files, merge: true }); }
+      openFiles: function (files) { up({ t: 'adpdf-tab-open', files: files, paths: pathsOf(files) }); },
+      openMerged: function (files) { up({ t: 'adpdf-tab-open', files: files, merge: true, paths: pathsOf(files) }); }
     };
 
     window.addEventListener('message', function (e) {
       if (e.origin !== location.origin || !e.data || e.data.t !== 'adpdf-tab-files') return;
-      const files = e.data.files || [];
+      const files = withPaths(e.data.files || [], e.data.paths);
       if (files.length && X.openFiles) X.openFiles(files, { merge: !!e.data.merge });
     });
 
@@ -373,8 +387,9 @@
       if (e.origin !== location.origin || !e.data || !e.data.t) return;
       const t = byId(e.data.tabId);
       if (e.data.t === 'adpdf-tab-open') {
-        if (e.data.merge) newTab(e.data.files || [], true);
-        else (e.data.files || []).forEach(function (f) { newTab([f]); });
+        const got = withPaths(e.data.files || [], e.data.paths);
+        if (e.data.merge) newTab(got, true);
+        else got.forEach(function (f) { newTab([f]); });
         return;
       }
       if (!t) return;
@@ -382,7 +397,7 @@
       if (e.data.t === 'adpdf-tab-ready') {
         t.ready = true;
         if (t.files && t.files.length) {
-          t.frame.contentWindow.postMessage({ t: 'adpdf-tab-files', files: t.files, merge: t.merge }, location.origin);
+          t.frame.contentWindow.postMessage({ t: 'adpdf-tab-files', files: t.files, merge: t.merge, paths: pathsOf(t.files) }, location.origin);
           t.files = null;
         }
       } else if (e.data.t === 'adpdf-tab-state') {

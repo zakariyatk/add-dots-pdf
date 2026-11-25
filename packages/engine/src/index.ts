@@ -2,6 +2,8 @@ export * from './model';
 export * from './style';
 export * from './geometry';
 export * from './rect';
+export * from './artboard';
+export * from './project';
 export * from './dimension';
 export * from './fonts';
 export * from './text';

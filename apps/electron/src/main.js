@@ -318,8 +318,13 @@ const COMMANDS = {
   save_file: async ({ body, headers }, win) => {
     if (!body) throw new Error("expected the file's bytes");
     const name = safeName(header(headers, 'x-name') || 'document.pdf');
+    /* Save again onto a file this app was handed or saved itself: written
+       there, no dialog. Any other path is asked for, as a new save. */
+    const again = header(headers, 'x-path');
     let file;
-    if (process.env.ADDDOTS_SAVE_TO) {
+    if (again && path.isAbsolute(again) && /\.pdf$/i.test(again) && opened.allowed.has(opened.key(again))) {
+      file = again;
+    } else if (process.env.ADDDOTS_SAVE_TO) {
       file = path.join(process.env.ADDDOTS_SAVE_TO, name);
     } else {
       const ext = path.extname(name).slice(1);
@@ -332,6 +337,7 @@ const COMMANDS = {
     }
     writeAtomic(file, body);
     saveDir = path.dirname(file);
+    opened.remember([file]);
     return file;
   },
 

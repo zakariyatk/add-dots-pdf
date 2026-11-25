@@ -106,26 +106,43 @@
     }
     const closed = function (s) { return !!(X.closedShape && X.closedShape(s)); };
 
+    /** what is selected that takes a fill or stroke here: every one (text
+        has its own colour in its own section), or none of them */
+    function sels() {
+      if (!S.sel || !S.sel.it) return [];
+      const it = S.sel.it;
+      const list = X.selList().map(function (i) { return it.shapes[i]; }).filter(Boolean);
+      return list.every(function (m) { return m.t !== 'text' && m.t !== 'pin' && m.c != null; }) ? list : [];
+    }
     function paint() {
       const s = sel();
-      sec.hidden = !s;
-      if (!s) return;
-      const canFill = closed(s);
+      const list = s ? sels() : [];
+      sec.hidden = !s || !list.length;
+      if (sec.hidden) return;
+      const canFill = list.every(closed);
+      /* a colour they do not share: shown as mixed, as Illustrator's "?" */
+      const fillKey = function (m) { return m.fill ? (m.grad ? 'g' + JSON.stringify(m.grad) : String(m.fill).toUpperCase()) : ''; };
+      const strokeKey = function (m) { return m.nos ? '' : String(m.c).toUpperCase(); };
+      const fillMixed = list.some(function (m) { return fillKey(m) !== fillKey(list[0]); });
+      const strokeMixed = list.some(function (m) { return strokeKey(m) !== strokeKey(list[0]); });
+      $('fsFill').classList.toggle('mixed', fillMixed);
+      $('fsStroke').classList.toggle('mixed', strokeMixed);
       if (!canFill && side === 'fill') side = 'stroke';
       sec.classList.toggle('stroke-on', side === 'stroke');
       const fi = $('fsFill').querySelector('i'), st = $('fsStroke').querySelector('i');
-      fi.style.background = s.grad && X.gradCss ? X.gradCss(s.grad) : (s.fill || '');
-      $('fsFill').classList.toggle('none', !s.fill);
+      fi.style.background = fillMixed ? '' : s.grad && X.gradCss ? X.gradCss(s.grad) : (s.fill || '');
+      $('fsFill').classList.toggle('none', !fillMixed && !s.fill);
       $('fsFill').disabled = !canFill;
-      st.style.borderColor = s.nos ? 'transparent' : s.c;
-      $('fsStroke').classList.toggle('none', !!s.nos);
+      st.style.borderColor = strokeMixed ? '' : s.nos ? 'transparent' : s.c;
+      $('fsStroke').classList.toggle('none', !strokeMixed && !!s.nos);
       $('fsFill').classList.toggle('on', side === 'fill');
       $('fsStroke').classList.toggle('on', side === 'stroke');
       $('fsFill').setAttribute('aria-pressed', side === 'fill' ? 'true' : 'false');
       $('fsStroke').setAttribute('aria-pressed', side === 'stroke' ? 'true' : 'false');
       $('fsSwap').disabled = !canFill;
       $('fsSide').textContent = side === 'fill' ? 'Fill' : 'Stroke';
-      if (document.activeElement !== $('fsHex')) $('fsHex').value = current(s) || 'None';
+      const mixedNow = side === 'fill' ? fillMixed : strokeMixed;
+      if (document.activeElement !== $('fsHex')) $('fsHex').value = mixedNow ? 'Mixed' : current(s) || 'None';
       paintSwatches();
     }
     /* the active one's colour: a gradient's first colour; null for none */
@@ -308,7 +325,7 @@
         if (!it) continue;
         let top = el;
         while (top && top.parentNode && top.parentNode !== anno) top = top.parentNode;
-        const i = top && top.parentNode === anno ? Array.prototype.indexOf.call(anno.children, top) : -1;
+        const i = top && top.parentNode === anno ? X.markKids(anno).indexOf(top) : -1;
         if (i >= 0 && i < it.shapes.length && it.shapes[i] && it.shapes[i].c != null && it.shapes[i].t !== 'text') return { it: it, i: i };
       }
       return null;

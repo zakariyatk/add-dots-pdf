@@ -1460,3 +1460,61 @@
      and the photo-measure tip stay in the page for the code that fills them,
      but are never shown. */
   #modeHint,#pmhint{display:none !important}
+
+  /* the pasteboard (core.js applyBoard): the page no longer cuts its marks
+     off, so what is drawn round it stays in view; a crop still trims the
+     page's own picture and text (--pclip) */
+  body.board .page{overflow:visible}
+  body.board .inner > canvas, body.board .inner > .textLayer{clip-path:var(--pclip,none)}
+
+  /* Save and Save as: the file name, the two kinds of PDF (core.js saveDoc)
+     as cards, a notice when a standard PDF leaves something out, the
+     options, and the buttons in a footer. Its labels and fields opt out of
+     the stacked-form .pop label / .pop input styling. */
+  .pop.savedlg{width:min(372px,calc(100vw - 16px));max-width:none;padding:14px 14px 12px}
+  .savedlg .sd-head{display:flex;align-items:center;gap:8px;font-size:14px;font-weight:650;color:var(--text);margin:0 0 12px}
+  .savedlg .sd-head svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linejoin:round;opacity:.8}
+  .savedlg .sd-lbl{display:block;margin:0 0 6px;font-family:var(--sans);font-size:11.5px;font-weight:600;letter-spacing:0;
+                   text-transform:none;color:var(--text-dim)}
+  .savedlg #saveName{height:34px;margin-bottom:14px}
+  .savedlg #saveName:focus{outline:none;border-color:var(--accent,#7B5CFF);box-shadow:0 0 0 3px color-mix(in srgb,var(--accent,#7B5CFF) 22%,transparent)}
+  .savefmt{display:flex;flex-direction:column;gap:8px;margin:0 0 10px}
+  .savedlg .savefmt .fmt{position:relative;display:grid;grid-template-columns:32px 1fr 18px;align-items:center;gap:10px;margin:0;
+                         padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--chrome);cursor:pointer;
+                         font-family:var(--sans);font-size:13px;letter-spacing:0;text-transform:none;color:var(--text);
+                         transition:border-color .12s,background .12s}
+  .savedlg .savefmt .fmt:hover{border-color:color-mix(in srgb,var(--accent,#7B5CFF) 45%,var(--line))}
+  .savedlg .savefmt .fmt:has(input:checked){border-color:var(--accent,#7B5CFF);
+                         background:color-mix(in srgb,var(--accent,#7B5CFF) 7%,var(--chrome))}
+  .savedlg .savefmt .fmt:has(input:focus-visible){box-shadow:0 0 0 3px color-mix(in srgb,var(--accent,#7B5CFF) 25%,transparent)}
+  /* the radio, small and to the right, drawn here so it is the same everywhere */
+  .savedlg .savefmt .fmt input{grid-column:3;grid-row:1;width:16px;height:16px;min-width:16px;margin:0;padding:0;appearance:none;
+                         -webkit-appearance:none;border:1.5px solid var(--text-dim);border-radius:50%;background:transparent;cursor:pointer}
+  .savedlg .savefmt .fmt input:checked{border-color:var(--accent,#7B5CFF);
+                         background:radial-gradient(circle,var(--accent,#7B5CFF) 0 4px,transparent 4.5px)}
+  .savedlg .savefmt .fmt-ico{grid-column:1;grid-row:1;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;
+                         background:var(--chrome-2);color:var(--text-dim)}
+  .savedlg .savefmt .fmt:has(input:checked) .fmt-ico{color:var(--accent,#7B5CFF);
+                         background:color-mix(in srgb,var(--accent,#7B5CFF) 14%,var(--chrome-2))}
+  .savedlg .savefmt .fmt-ico svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.5;stroke-linejoin:round;stroke-linecap:round}
+  .savedlg .savefmt .fmt-txt{grid-column:2;grid-row:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+  .savedlg .savefmt .fmt-txt b{font-size:13px;font-weight:600}
+  .savedlg .savefmt .fmt-txt i{font-style:normal;font-size:11.5px;line-height:1.4;color:var(--text-dim)}
+  /* what a standard PDF leaves out: a quiet notice, amber when it matters */
+  .savedlg .sd-notice{font-size:11.5px;line-height:1.45;color:var(--text-dim);margin:0 2px 10px}
+  .savedlg .sd-notice:empty{display:none}
+  .savedlg .sd-notice.warn{display:flex;gap:8px;align-items:flex-start;color:var(--text);margin:0 0 10px;padding:8px 10px;
+                           border-radius:8px;border:1px solid color-mix(in srgb,#E0A100 45%,transparent);
+                           background:color-mix(in srgb,#E0A100 10%,transparent)}
+  .savedlg .sd-notice.warn::before{content:"!";flex:none;width:16px;height:16px;border-radius:50%;display:grid;place-items:center;
+                           font-size:11px;font-weight:700;color:#1a1300;background:#E0A100;margin-top:1px}
+  .savedlg .sd-opts{display:flex;flex-direction:column;gap:2px}
+  .savedlg .sd-opts .chk{margin:4px 2px 0}
+  .savedlg .sd-opts:not(:has(.chk:not([hidden]))){display:none}
+  .savedlg .sd-foot{display:flex;align-items:center;gap:10px;margin:14px -14px -12px;padding:10px 14px;border-top:1px solid var(--line)}
+  .savedlg .sd-sum{flex:1;min-width:0;margin:0;font-size:11.5px;color:var(--text-dim);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .savedlg .sd-sum:has(span[style]){white-space:normal}
+  .savedlg .sd-btns{display:flex;gap:8px;flex:none}
+  .savedlg .sd-btns .btn{min-width:78px;height:32px;padding:0 14px}
+  /* on a phone the popover is a sheet across the bottom: full width */
+  @media (max-width:640px){ .pop.savedlg{width:auto} }

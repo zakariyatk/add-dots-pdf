@@ -304,6 +304,7 @@
         if (it && ev.type !== 'pointercancel') {
           const r = it.wrap.getBoundingClientRect(), s = S.scale || 1;
           zero = { x: (ev.clientX - r.left) / s, y: (ev.clientY - r.top) / s };
+          if (X.grid) X.grid.paint();
         }
         redraw();
       }
@@ -313,7 +314,7 @@
     });
     /* from the keyboard (Enter or Space), the corner opens its menu */
     corner.addEventListener('click', function (e) { if (e.detail === 0) openMenu(); });
-    corner.addEventListener('dblclick', function () { zero = { x: 0, y: 0 }; closeMenu(); redraw(); });
+    corner.addEventListener('dblclick', function () { zero = { x: 0, y: 0 }; closeMenu(); redraw(); if (X.grid) X.grid.paint(); });
 
     /* ---------------- the corner's menu: units, and clearing guides ---------------- */
 
@@ -339,10 +340,10 @@
         return b;
       }
       Object.keys(UNITS).forEach(function (k) {
-        item(UNITS[k].name, function () { unit = k; set('adpdf.rulerUnit', k); redraw(); }, k === unit);
+        item(UNITS[k].name, function () { X.rulers.setUnit(k); }, k === unit);
       });
       menu.appendChild(document.createElement('hr'));
-      item('Reset zero point', function () { zero = { x: 0, y: 0 }; redraw(); });
+      item('Reset zero point', function () { zero = { x: 0, y: 0 }; redraw(); if (X.grid) X.grid.paint(); });
       const m = measured();
       const here = m && m.it.guides && m.it.guides.length;
       item('Clear guides on this page', function () { m.it.guides = []; paintGuides(m.it); }).disabled = !here;
@@ -350,6 +351,10 @@
       item('Clear all guides', function () {
         S.items.forEach(function (it) { if (it.guides && it.guides.length) { it.guides = []; paintGuides(it); } });
       }).disabled = !any;
+      menu.appendChild(document.createElement('hr'));
+      item('Show grid (Ctrl+\')', function () { showGrid(); }, grid.show);
+      item('Snap to grid (Ctrl+Shift+\')', function () { snapGrid(); }, grid.snap);
+      item('Grid spacing…', askGrid);
       item('Hide rulers (Ctrl+R)', function () { toggle(false); });
       document.body.appendChild(menu);
       const r = corner.getBoundingClientRect();
@@ -447,10 +452,186 @@
     X.on('pages', function () { paintAllGuides(); redraw(); });
     X.on('reset', function () { zero = { x: 0, y: 0 }; pointer = null; closeMenu(); redraw(); });
 
+    /* ---------------- the grid ----------------
+       As Illustrator's: a gridline every so many units with lighter
+       subdivisions between, from the ruler's zero point, behind the marks.
+       View > Grid (Ctrl+') shows it; Snap to Grid (Ctrl+Shift+') makes
+       points and moved objects land on it (js/draw.js snapPt), whether it
+       shows or not. Only an aid on screen: nothing of it is saved. */
+    const GRID_DEFAULT = { mm: [10, 5], cm: [1, 5], in: [1, 8], pt: [72, 8] };
+    const grid = {
+      show: get('adpdf.grid') === '1',
+      snap: get('adpdf.gridSnap') === '1',
+      every: null,          /* in the ruler's unit; null: that unit's default */
+      sub: null
+    };
+    try {
+      const g = JSON.parse(get('adpdf.gridStep') || 'null');
+      if (g && g.unit && isFinite(g.every) && g.every > 0) { grid.every = g; }
+    } catch (e) { /* the default */ }
+    /** the gridline spacing and the subdivision's, in points */
+    function gridStep() {
+      const g = grid.every && grid.every.unit && UNITS[grid.every.unit] ? grid.every : null;
+      const every = g ? g.every / UNITS[g.unit].per : GRID_DEFAULT[unit][0] / UNITS[unit].per;
+      const sub = Math.max(1, Math.round(g ? g.sub : GRID_DEFAULT[unit][1]));
+      return { every: every, sub: sub, fine: every / sub };
+    }
+    function gridLayer(it) {
+      if (!it.wrap) return null;
+      let g = it.gridLayer;
+      if (!g || g.parentNode !== it.wrap) {
+        g = it.gridLayer = document.createElement('div');
+        g.className = 'pgrid';
+        g.setAttribute('aria-hidden', 'true');
+        it.wrap.insertBefore(g, it.wrap.firstChild);
+      }
+      return g;
+    }
+    function paintGrid(it) {
+      const g = gridLayer(it);
+      if (!g) return;
+      g.hidden = !grid.show;
+      if (!grid.show) return;
+      const st = gridStep(), k = S.scale || 1;
+      const big = st.every * k, fine = st.fine * k;
+      const ox = zero.x * k, oy = zero.y * k;
+      const line = 'rgba(0, 140, 220, .42)', thin = 'rgba(0, 140, 220, .16)';
+      const L = [
+        'linear-gradient(to right, ' + line + ' 1px, transparent 1px)',
+        'linear-gradient(to bottom, ' + line + ' 1px, transparent 1px)'
+      ];
+      const sizes = [big + 'px ' + big + 'px', big + 'px ' + big + 'px'];
+      const pos = [ox + 'px ' + oy + 'px', ox + 'px ' + oy + 'px'];
+      /* the subdivisions, when they would not crowd into a tint */
+      if (st.sub > 1 && fine >= 5) {
+        L.push('linear-gradient(to right, ' + thin + ' 1px, transparent 1px)', 'linear-gradient(to bottom, ' + thin + ' 1px, transparent 1px)');
+        sizes.push(fine + 'px ' + fine + 'px', fine + 'px ' + fine + 'px');
+        pos.push(ox + 'px ' + oy + 'px', ox + 'px ' + oy + 'px');
+      }
+      g.style.backgroundImage = L.join(', ');
+      g.style.backgroundSize = sizes.join(', ');
+      g.style.backgroundPosition = pos.join(', ');
+    }
+    function paintAllGrids() { S.items.forEach(paintGrid); }
+    /** p (page points) on the nearest grid crossing, or on the gridline
+        near it on one axis, as the page is seen; null when snapping to the
+        grid is off or nothing is within tol (points) */
+    function gridSnap(it, p, tol) {
+      if (!grid.snap || !it || !it.vp) return null;
+      const st = gridStep(), k = it.vp.scale || 1;
+      const v = it.vp.convertToViewportPoint(p[0], p[1]);
+      const fx = v[0] / k - zero.x, fy = v[1] / k - zero.y;    /* points from the zero point */
+      const gx = Math.round(fx / st.fine) * st.fine, gy = Math.round(fy / st.fine) * st.fine;
+      const okx = Math.abs(gx - fx) <= tol, oky = Math.abs(gy - fy) <= tol;
+      if (!okx && !oky) return null;
+      const q = it.vp.convertToPdfPoint(((okx ? gx : fx) + zero.x) * k, ((oky ? gy : fy) + zero.y) * k);
+      const r6 = function (n) { return Math.round(n * 1e6) / 1e6; };
+      return { p: [r6(q[0]), r6(q[1])], both: okx && oky };
+    }
+    function showGrid(want) {
+      grid.show = want == null ? !grid.show : !!want;
+      set('adpdf.grid', grid.show ? '1' : '0');
+      paintAllGrids(); paintGridBtns();
+      X.toast(grid.show ? 'Grid shown (Ctrl+\')' : 'Grid hidden', true);
+    }
+    function snapGrid(want) {
+      grid.snap = want == null ? !grid.snap : !!want;
+      set('adpdf.gridSnap', grid.snap ? '1' : '0');
+      paintGridBtns();
+      X.toast(grid.snap ? 'Snap to Grid on (Ctrl+Shift+\')' : 'Snap to Grid off', true);
+    }
+    async function askGrid() {
+      const st = gridStep(), per = UNITS[unit].per;
+      const r6 = function (n) { return Math.round(n * 1e4) / 1e4; };
+      const v = await X.dialog({
+        title: 'Grid',
+        ok: 'OK',
+        width: 360,
+        body: '<div class="mvgrid">' +
+          '<label class="mvf"><span>Gridline every</span><span class="unit"><input id="grEvery" inputmode="decimal" value="' + r6(st.every * per) + '"><em>' + unit + '</em></span></label>' +
+          '<label class="mvf"><span>Subdivisions</span><input id="grSub" inputmode="numeric" value="' + st.sub + '"></label>' +
+          '<label class="mvck"><input type="checkbox" id="grShow"' + (grid.show ? ' checked' : '') + '> Show grid</label>' +
+          '<label class="mvck"><input type="checkbox" id="grSnap"' + (grid.snap ? ' checked' : '') + '> Snap to grid</label>' +
+          '</div>',
+        value: function (box) {
+          const every = parseFloat(String(box.querySelector('#grEvery').value).replace(',', '.'));
+          const sub = parseInt(box.querySelector('#grSub').value, 10);
+          if (!(every > 0)) return { error: 'Give the spacing as a number above 0', field: '#grEvery' };
+          if (!(sub >= 1 && sub <= 100)) return { error: 'Subdivisions: a whole number from 1 to 100', field: '#grSub' };
+          return { every: every, sub: sub, show: box.querySelector('#grShow').checked, snap: box.querySelector('#grSnap').checked };
+        }
+      });
+      if (!v) return;
+      grid.every = { unit: unit, every: v.every, sub: v.sub };
+      set('adpdf.gridStep', JSON.stringify(grid.every));
+      grid.show = v.show; grid.snap = v.snap;
+      set('adpdf.grid', grid.show ? '1' : '0'); set('adpdf.gridSnap', grid.snap ? '1' : '0');
+      paintAllGrids(); paintGridBtns();
+    }
+    function paintGridBtns() {
+      [['btnGrid', grid.show], ['btnGridSnap', grid.snap]].forEach(function (q) {
+        const el = $(q[0]);
+        if (!el) return;
+        el.classList.toggle('on', q[1]);
+        el.setAttribute('aria-pressed', q[1] ? 'true' : 'false');
+      });
+    }
+    /* View: next to the pasteboard, as Illustrator's View menu has them */
+    (function () {
+      const after = $('btnBoard');
+      if (!after) return;
+      const mk = function (id, label, title, svg, act) {
+        const b = document.createElement('button');
+        b.className = 'btn'; b.id = id; b.type = 'button';
+        b.title = title; b.setAttribute('aria-label', label); b.dataset.label = label;
+        b.setAttribute('aria-pressed', 'false');
+        b.innerHTML = '<svg viewBox="0 0 24 24">' + svg + '</svg><span class="lbl">' + label + '</span>';
+        b.addEventListener('click', act);
+        b.addEventListener('contextmenu', function (e) { e.preventDefault(); askGrid(); });
+        return b;
+      };
+      const snapB = mk('btnGridSnap', 'Snap to Grid', 'Snap to Grid (Ctrl+Shift+\'): points and moved objects land on the grid. Right-click for the spacing',
+        '<path d="M4 4v16M10 4v16M16 4v4M4 4h16M4 10h12M4 16h6"/><path d="M14 13l6 2-3 1-1 3z"/>', function () { snapGrid(); });
+      const showB = mk('btnGrid', 'Grid', 'Grid (Ctrl+\'): gridlines behind the marks, from the ruler\'s zero point. Right-click for the spacing',
+        '<rect x="3" y="3" width="18" height="18" rx="1"/><path d="M9 3v18M15 3v18M3 9h18M3 15h18"/>', function () { showGrid(); });
+      after.parentNode.insertBefore(snapB, after.nextSibling);
+      after.parentNode.insertBefore(showB, after.nextSibling);
+      paintGridBtns();
+    })();
+    /* Ctrl+' and Ctrl+Shift+', as in Illustrator (the key reads " with Shift on most layouts) */
+    document.addEventListener('keydown', function (e) {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      if (e.code !== 'Quote' && e.key !== "'" && e.key !== '"') return;
+      if (!S.items.length || (e.target.matches && e.target.matches('input,textarea,select'))) return;
+      e.preventDefault();
+      if (e.shiftKey) snapGrid(); else showGrid();
+    });
+    X.on('pages', paintAllGrids);
+    X.on('layout', function () { if (grid.show) paintAllGrids(); });
+    X.grid = {
+      shown: function () { return grid.show; },
+      snapping: function () { return grid.snap; },
+      show: showGrid, setSnap: snapGrid, settings: askGrid,
+      step: gridStep, snap: gridSnap, paint: paintAllGrids
+    };
+
     X.rulers = {
       on: function () { return on; },
       toggle: toggle,
-      unit: function () { return unit; }
+      unit: function () { return unit; },
+      per: function () { return UNITS[unit].per; },
+      /* the zero point, in points from the page's top-left corner as seen */
+      zero: function () { return { x: zero.x, y: zero.y }; },
+      units: function () { return Object.keys(UNITS).map(function (k) { return { id: k, name: UNITS[k].name }; }); },
+      setUnit: function (k) {
+        if (!UNITS[k]) return;
+        unit = k; set('adpdf.rulerUnit', k); redraw();
+        if (X.grid) X.grid.paint();
+        X.emit('units', k);
+      },
+      clearGuides: function (it) {
+        (it ? [it] : S.items).forEach(function (p) { if (p.guides && p.guides.length) { p.guides = []; paintGuides(p); } });
+      }
     };
 
     apply();

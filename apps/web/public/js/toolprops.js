@@ -83,7 +83,7 @@
     ppanel.innerHTML =
       '<div class="laybar"><b>Properties</b><span class="laycount" id="propsName"></span></div>' +
       '<div class="rtool" id="propsTool" hidden></div>' +
-      '<p class="props-empty" id="propsEmpty">Select an object on the page to edit it here, or pick a tool to set how it draws.</p>' +
+      '<p class="props-empty" id="propsEmpty">Open a document: its properties, then those of what you select or the tool you pick, show here.</p>' +
       '<div class="rprops" id="propsHost"></div>';
     if (railHost) railHost.appendChild(ppanel);
     const propsHost = ppanel.querySelector('#propsHost');
@@ -105,13 +105,21 @@
     });
     function railOpen() { return !!$('rail') && !$('rail').hidden; }
     function propsSpot() { return propsHost; }
+    /* Three things it can show, as Illustrator's Properties panel: the tool
+       in hand's options, the selection's properties, or, with neither,
+       the document's (js/propspanel.js) */
     function paintProps() {
       const on = pop && !pop.hidden;
       const tool = !toolSec.hidden;
-      const name = tool ? (badge.dataset.label || '') : ($('mpTitle') && $('mpTitle').textContent) || '';
-      $('propsEmpty').hidden = tool || (on && pop.parentNode === propsHost);
-      $('propsName').textContent = tool || on ? name : '';
+      const mark = on && pop.parentNode === propsHost;
+      const docView = !tool && !mark && S.items.length > 0 && !!$('propsDoc');
+      const name = tool ? (badge.dataset.label || '') : mark ? ($('mpTitle') && $('mpTitle').textContent) || '' : docView ? 'Document' : '';
+      $('propsEmpty').hidden = tool || mark || docView;
+      if ($('propsDoc')) $('propsDoc').hidden = !docView;
+      $('propsName').textContent = name;
+      ppanel.dataset.view = tool ? 'tool' : mark ? 'selection' : docView ? 'document' : 'empty';
     }
+    X.paintProps = paintProps;
 
     let fromTab = 'ribDraw';                    /* the tab to go back to */
     let mode = null;                            /* 'tool', 'mark' or null */
@@ -195,6 +203,7 @@
        round it is clicked, or Esc is pressed (core setTool, closeEditor). */
 
     X.on('tool', sync);
+    X.on('pages', function () { setTimeout(sync, 0); });
     /* core shows and hides the mark panel as marks are selected; follow it */
     if (pop && window.MutationObserver) {
       new MutationObserver(sync)

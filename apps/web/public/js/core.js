@@ -210,6 +210,11 @@
         };
         return { range: tr, disableAutoFetch: true, disableStream: true };
       },
+      /* its last n bytes (where an editable PDF says it is one, core openFile) */
+      tail: function (id, size, n) {
+        const k = Math.min(size, n);
+        return read(id, size - k, k);
+      },
       /* all of it, a part at a time (one message of 500 MB is a copy too many) */
       all: async function (id, size) {
         const out = new Uint8Array(size);
@@ -324,7 +329,13 @@
     font: 'helv', bold: false, ital: false, underline: false, strike: false, size: 11,
     align: 'left', bg: null, bgOp: 1,
     sel: null,           // {it, i} selected mark
-    editing: null        // {it, item, i} open text editor
+    editing: null,       // {it, item, i} open text editor
+    /* the pasteboard round every page, as Illustrator's: on while the
+       document is being drawn on (board), and what Save does next (see
+       saving): the kind of file this is, and where Save writes it again */
+    board: false,
+    fileKind: 'pdf',     // 'pdf' | 'project' (an editable PDF, opened or saved)
+    target: null         // {kind: 'pdf' | 'project', name, handle?, path?}
   };
 
   /* ---------------- helpers ---------------- */
@@ -590,6 +601,35 @@
       catch (e) { showError('The file could not be read from disk. Try again.'); return false; }
     }
     PERF.open.read = performance.now() - t0;
+    /* an editable PDF of this app's (engine project.ts): the document it
+       carries, every object ready to edit, not its painted pages. A big file
+       read as needed says so near its end (the project's own stream comes
+       after the sources it carries): only then is it read whole. */
+    let projBytes = !ranged && E.hasProjectMarker(bytes) ? bytes : null;
+    if (ranged) {
+      const tail = await RANGED.tail(file.adddotsRange, file.size, 16 * 1048576).catch(function () { return null; });
+      if (tail && E.hasProjectMarker(tail)) {
+        projBytes = await RANGED.all(file.adddotsRange, file.size).catch(function () { return null; });
+      }
+    }
+    if (projBytes) {
+      const pr = await E.readProject(projBytes);
+      if (pr && pr.data && pr.data.app === 'add-dots-project' && Array.isArray(pr.data.sources)) {
+        const d = pr.data;
+        d.sources = d.sources.map(function (x) {
+          const got = pr.sources.get(String(x.id));
+          return got ? Object.assign({}, x, { bytes: got.bytes, b64: null }) : x;
+        });
+        if (await openProject(d, false, { file: file })) {
+          /* what it carries is in memory now: the file need not stay open */
+          if (ranged) RANGED.close(file.adddotsRange);
+          addRecent(file, S.items.length);
+          renderIdle().then(function () { SW.usable(); });
+          return true;
+        }
+        /* what it carries could not be restored: it opens as the PDF it also is */
+      }
+    }
     /* in the Windows app PDFium draws the pages: the render worker opens the
        file only when a page needs it (RW.render), not two more copies now */
     if (!ranged) RW.open(bytes, null, file);
@@ -603,6 +643,9 @@
 
     hardReset();
     if (S.tool !== 'select') setTool('select');
+    setBoard(false);
+    S.fileKind = 'pdf';
+    S.target = null;
     const src = { id: ++srcId, name: file.name, bytes: bytes, doc: doc };
     /* opened from Explorer: its place on disk (js/desktop.js) */
     if (file.adddotsPath) src.path = file.adddotsPath;
@@ -1127,6 +1170,8 @@
     it.wrap.style.width = w + 'px';
     it.wrap.style.height = h + 'px';
     boxToWrap(it);
+    clipToCrop(it, w, h, null);
+    applyBoard(it);
     sizeThumb(it, e.w, e.h);
   }
   function applySizes(live) {
@@ -1181,6 +1226,8 @@
     it.inner.style.left = (-it.off.left) + 'px';
     it.inner.style.top = (-it.off.top) + 'px';
     boxToWrap(it);
+    clipToCrop(it, w, h, c);
+    applyBoard(it);
     if (!live) sizeThumb(it, b.c ? b.c.width : b.w, b.c ? b.c.height : b.h);
 
     if (it.trPane) {
@@ -1208,6 +1255,7 @@
     const hold = opts && opts.hold ? holdMiddle() : null;
     applySizes();
     if (hold) hold();
+    EXT.emit('layout');                  /* the pages' new size: what is drawn to scale over them follows */
     DETAILED.forEach(dropDetail);
     S.items.forEach(function (it) {
       if (!it.canvas) return;
@@ -1476,6 +1524,126 @@
     if (it.mounted || !it.box) return;
     it.box.style.width = it.wrap.style.width;
     it.box.style.height = it.wrap.style.height;
+  }
+
+  /* ---------------- the pasteboard ----------------
+     As in Illustrator, the page is the artboard and the space round it the
+     pasteboard: anything can be drawn, moved, pasted or left there, stays in
+     view and editable, and is kept with the document (an editable PDF keeps
+     it too). Only what lies on the artboard goes into a standard PDF
+     (engine artboard.ts). Each page gets room round it, out to at least a
+     good part of its own size and always past the farthest mark, so there
+     is space beyond whatever has been put out there: the page stops cutting
+     its marks off, and the drawing surface (.capture) reaches over it. Every
+     position is still measured from the page's own corner, so nothing that
+     works in page points changes. */
+  const PB_SIDE = 0.6, PB_ENDS = 0.35, PB_SLACK = 80, PB_CAP = 40000;
+  function boardMargins(it) {
+    const W = parseFloat(it.wrap.style.width) || 0, H = parseFloat(it.wrap.style.height) || 0;
+    const side = Math.max(W, H) * PB_SIDE, ends = H * PB_ENDS;
+    let l = side, r = side, t = ends, b = ends;
+    if (it.vp && !it.estimated) {
+      it.shapes.forEach(function (sh) {
+        if (sh.hide) return;
+        const bx = E.markBounds(sh);
+        if (!bx) return;
+        [[bx.x1, bx.y1], [bx.x2, bx.y1], [bx.x2, bx.y2], [bx.x1, bx.y2]].forEach(function (q) {
+          const v = it.vp.convertToViewportPoint(q[0], q[1]);
+          const x = v[0] - it.off.left, y = v[1] - it.off.top;
+          l = Math.max(l, PB_SLACK - x); r = Math.max(r, x - W + PB_SLACK);
+          t = Math.max(t, PB_SLACK - y); b = Math.max(b, y - H + PB_SLACK);
+        });
+      });
+    }
+    /* the same each side, so the page stays in the middle of its own room */
+    const h = Math.round(Math.min(PB_CAP, Math.max(l, r)));
+    return { t: Math.round(Math.min(PB_CAP, t)), b: Math.round(Math.min(PB_CAP, b)), l: h, r: h };
+  }
+  /* room round one page (none with the pasteboard off); grow: only ever
+     more, as marks go further out (a page shrinking under the pointer would
+     move what is being worked on). Answers how far its top and left grew. */
+  function applyBoard(it, grow) {
+    if (!it.box || !it.wrap) return null;
+    const was = it.pb || null;
+    let m = S.board ? boardMargins(it) : null;
+    if (grow) {
+      if (!m || !was) return null;
+      if (m.t <= was.t && m.b <= was.b && m.l <= was.l) return null;
+      m = { t: Math.max(m.t, was.t), b: Math.max(m.b, was.b), l: Math.max(m.l, was.l), r: Math.max(m.r, was.r) };
+    }
+    it.pb = m;
+    it.box.style.margin = m ? m.t + 'px ' + m.r + 'px ' + m.b + 'px ' + m.l + 'px' : '';
+    it.capture.style.inset = m ? (-m.t) + 'px ' + (-m.r) + 'px ' + (-m.b) + 'px ' + (-m.l) + 'px' : '';
+    return { dt: (m ? m.t : 0) - (was ? was.t : 0), dl: (m ? m.l : 0) - (was ? was.l : 0) };
+  }
+  /* a mark put further out than the room there is: more room, the page
+     itself kept where it is on screen */
+  const boardDue = new Set();
+  let boardTimer = 0;
+  function boardLater(it) {
+    if (!S.board) return;
+    boardDue.add(it);
+    if (!boardTimer) boardTimer = setTimeout(boardFlush, 120);
+  }
+  function boardFlush() {
+    boardTimer = 0;
+    if (dragOn || document.body.classList.contains('zooming')) { boardTimer = setTimeout(boardFlush, 250); return; }
+    const sr = stage.getBoundingClientRect();
+    let dy = 0, dx = 0;
+    boardDue.forEach(function (it) {
+      if (!it.box) return;
+      const top = it.box.getBoundingClientRect().top;
+      const d = applyBoard(it, true);
+      if (!d) return;
+      if (top < sr.bottom) dy += d.dt;
+      dx = Math.max(dx, d.dl);
+    });
+    boardDue.clear();
+    /* at once and in one go (the stage scrolls smoothly otherwise, and a
+       second smooth scroll cancels the first) */
+    if (dy || dx) stage.scrollTo({ top: stage.scrollTop + dy, left: stage.scrollLeft + dx, behavior: 'instant' });
+  }
+  /* turned on or off: every page, the one in view kept in its place */
+  function setBoard(on) {
+    on = !!on;
+    const b = $('btnBoard');
+    if (b) { b.classList.toggle('on', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); }
+    if (S.board === on) return;
+    S.board = on;
+    document.body.classList.toggle('board', on);
+    const cur = S.items[S.current - 1];
+    const before = cur && cur.box ? cur.box.getBoundingClientRect() : null;
+    S.items.forEach(function (it) { applyBoard(it); });
+    if (before && cur.box) {
+      const after = cur.box.getBoundingClientRect();
+      /* the page where it was, in the middle of the window with its
+         pasteboard either side: at once and in one go (a second smooth
+         scroll would cancel the first) */
+      stage.scrollTo({
+        top: stage.scrollTop + (after.top - before.top),
+        left: stage.scrollLeft + (after.left + after.width / 2) - (before.left + before.width / 2),
+        behavior: 'instant'
+      });
+    }
+    EXT.emit('board', on);
+  }
+  /* a page cut down by a crop: its picture and text keep to the crop while
+     the marks run out over the pasteboard */
+  function clipToCrop(it, w, h, c) {
+    if (!c) { it.inner.style.removeProperty('--pclip'); return; }
+    it.inner.style.setProperty('--pclip', 'inset(' + c.top + 'px ' + Math.max(0, w - c.left - c.width) + 'px ' +
+      Math.max(0, h - c.top - c.height) + 'px ' + c.left + 'px)');
+  }
+  /* the page whose pasteboard holds this point of the screen */
+  function boardItemAt(x, y) {
+    if (!S.board) return null;
+    for (let i = 0; i < S.items.length; i++) {
+      const it = S.items[i];
+      if (!it.box || !it.pb || !it.mounted) continue;
+      const r = it.box.getBoundingClientRect();
+      if (x >= r.left - it.pb.l && x <= r.right + it.pb.r && y >= r.top - it.pb.t && y <= r.bottom + it.pb.b) return it;
+    }
+    return null;
   }
 
   /* Pages holding a bitmap. Only these can be released, so a scroll frame
@@ -2377,6 +2545,8 @@
         }
       }
     }
+    /* a mark further out than the pasteboard reaches: more of it */
+    if (!ghost && S.board) boardLater(it);
     /* what a module draws over the marks (the Rotate tool's pivot, js/rotate.js) */
     if (!ghost) EXT.afterDraw.forEach(function (fn) { try { fn(it); } catch (e) { console.error('[afterDraw]', e); } });
   }
@@ -2830,7 +3000,7 @@
   function setGroup(it, idx) {
     idx = idx.filter(function (i, k) {
       const s = it.shapes[i];
-      return s && !NOT_SELECTABLE[s.t] && !s.locked && idx.indexOf(i) === k;
+      return s && !NOT_SELECTABLE[s.t] && !s.locked && !s.hide && idx.indexOf(i) === k;
     });
     if (!idx.length) { S.sel = null; S.multi = null; return; }
     S.sel = { it: it, i: idx[idx.length - 1] };
@@ -2838,11 +3008,34 @@
   }
   /* the selected marks moved by an arrow key, `step` points on the page as
      it is seen (turned with it); a run of presses is one undo */
-  let nudgedAt = 0;
-  function nudgeSelected(key, step) {
+  let nudgedAt = 0, nudgeTop = null;
+  /* the Keyboard Increment, as Illustrator's preference: how far one press
+     of an arrow moves the selection, in points (Shift: ten of them) */
+  let nudgePt = 1;
+  try { const v = parseFloat(localStorage.getItem('adpdf.nudge')); if (v > 0 && v < 10000) nudgePt = v; } catch (e) { /* 1 pt */ }
+  function nudgeIncrement(v) {
+    if (v == null) return nudgePt;
+    if (!(v > 0) || !isFinite(v)) return nudgePt;
+    nudgePt = Math.round(v * 1e6) / 1e6;
+    try { localStorage.setItem('adpdf.nudge', String(nudgePt)); } catch (e) { /* this session only */ }
+    return nudgePt;
+  }
+  /* copy: Alt held, as in Illustrator, a copy of the selection stays behind
+     at each press and the selection moves on (one undo each) */
+  function nudgeSelected(key, step, copy) {
     const it = S.sel.it, vp = it.vp;
-    const idx = selList().filter(function (i) { return it.shapes[i] && !NOT_SELECTABLE[it.shapes[i].t]; });
+    const idx = selList().filter(function (i) { return it.shapes[i] && !NOT_SELECTABLE[it.shapes[i].t] && !it.shapes[i].locked; });
     if (!idx.length || !vp) return;
+    step = step * nudgePt;
+    if (copy) {
+      snapshot();
+      nudgedAt = Date.now();                        /* this press's own undo step, taken just now */
+      nudgeTop = S.undo[S.undo.length - 1];
+      copiesUnder(it, idx.map(function (i) { return { i: i, s0: copyShape(it.shapes[i]) }; }));
+      nudgeSelected(key, step / nudgePt, false);
+      nudgedAt = 0;                                 /* the next press is its own step */
+      return;
+    }
     const dx = key === 'ArrowLeft' ? -1 : key === 'ArrowRight' ? 1 : 0;
     const dy = key === 'ArrowUp' ? -1 : key === 'ArrowDown' ? 1 : 0;
     /* the screen's direction in page points, whatever the page's turn */
@@ -2850,8 +3043,11 @@
     /* exact steps: the conversion's last-digit noise would build up */
     const r6 = function (n) { return Math.round(n * 1e6) / 1e6; };
     const mx = r6((o1[0] - o0[0]) * step), my = r6((o1[1] - o0[1]) * step);
-    if (Date.now() - nudgedAt > 800) snapshot();
+    /* a run goes on only while its own undo step is still the last one:
+       an undo, or any other change, in between starts a new step */
+    if (Date.now() - nudgedAt > 800 || S.undo[S.undo.length - 1] !== nudgeTop) snapshot();
     nudgedAt = Date.now();
+    nudgeTop = S.undo[S.undo.length - 1];
     idx.forEach(function (i) {
       const s = it.shapes[i];
       moveShape(s, JSON.parse(JSON.stringify(s)), mx, my);
@@ -3121,11 +3317,11 @@
     const c = frameMid(s), b = markBox(turnPts(s, c, -fr));
     return [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]].map(function (q) { return rotPt(q, c, fr); });
   }
-  function scaleMark(s, o, ci, p, uniform) {
-    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleMark(s2, o2, ci, p2, uniform); }); return; }
+  function scaleMark(s, o, ci, p, uniform, mid) {
+    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleMark(s2, o2, ci, p2, uniform, mid); }); return; }
     const b = markBox(o);
     const C = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
-    const pull = C[ci], fix = C[(ci + 2) % 4];
+    const pull = C[ci], fix = mid ? [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2] : C[(ci + 2) % 4];
     const w = pull[0] - fix[0], h = pull[1] - fix[1];
     let sx = w ? (p[0] - fix[0]) / w : 1, sy = h ? (p[1] - fix[1]) / h : 1;
     sx = Math.max(0.05, sx); sy = Math.max(0.05, sy);
@@ -3134,14 +3330,14 @@
   }
   /* A side's grip stretches one way only, the far side staying put. Sides
      go round as the corners do: 0 the one at y1, 1 at x2, 2 at y2, 3 at x1. */
-  function scaleSide(s, o, side, p) {
-    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleSide(s2, o2, side, p2); }); return; }
+  function scaleSide(s, o, side, p, mid) {
+    if (frameOf(o)) { inFrame(s, o, p, function (s2, o2, p2) { scaleSide(s2, o2, side, p2, mid); }); return; }
     const b = markBox(o);
     if (side === 0 || side === 2) {
-      const pull = side === 0 ? b.y1 : b.y2, f = side === 0 ? b.y2 : b.y1, h = pull - f;
+      const pull = side === 0 ? b.y1 : b.y2, f = mid ? (b.y1 + b.y2) / 2 : side === 0 ? b.y2 : b.y1, h = pull - f;
       scaleBy(s, o, [b.x1, f], 1, h ? Math.max(0.05, (p[1] - f) / h) : 1);
     } else {
-      const pull = side === 1 ? b.x2 : b.x1, f = side === 1 ? b.x1 : b.x2, w = pull - f;
+      const pull = side === 1 ? b.x2 : b.x1, f = mid ? (b.x1 + b.x2) / 2 : side === 1 ? b.x1 : b.x2, w = pull - f;
       scaleBy(s, o, [f, b.y1], w ? Math.max(0.05, (p[0] - f) / w) : 1, 1);
     }
   }
@@ -3240,6 +3436,8 @@
     };
     const fresh = !S.sel || S.sel.it !== it || S.sel.i !== idx;
     if (!group && mode === 'move') S.multi = null;
+    /* the point that leads a move onto anchors, guides and the grid (dragMove) */
+    if (mode === 'move') dragOn.ref = moveRef(it, group ? group.map(function (m) { return m.i; }) : [idx], at);
     S.sel = { it: it, i: idx };
     try { it.anno.setPointerCapture(e.pointerId); } catch (err) { /* mouse works without it */ }
     if (fresh) redrawAll(); else drawShapes(it);
@@ -3251,8 +3449,20 @@
 
   /* ratio: keep the box's own proportions (a signature or a picture), the
      pulled corner deciding how big */
-  function resizeBox(s, o, ci, p, square, ratio) {
+  function resizeBox(s, o, ci, p, square, ratio, mid) {
     const b = boxOf(o), c0 = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2], r = o.r || 0;
+    if (mid) {
+      /* Alt: from the middle, which stays put; worked as the half box from
+         the middle to the pointer, then mirrored */
+      const half = { a: [c0[0], c0[1]], b: [c0[0] + (b.x2 - b.x1) / 2, c0[1] + (b.y2 - b.y1) / 2], r: 0 };
+      const loc0 = rotPt(p, c0, -r), q = [c0[0] + Math.abs(loc0[0] - c0[0]), c0[1] + Math.abs(loc0[1] - c0[1])];
+      const t = {};
+      resizeBox(t, half, 2, q, square, ratio, false);
+      const w = Math.max(1, (t.b[0] - c0[0]) * 2), h = Math.max(1, (t.b[1] - c0[1]) * 2);
+      s.a = [c0[0] - w / 2, c0[1] - h / 2];
+      s.b = [c0[0] + w / 2, c0[1] + h / 2];
+      return;
+    }
     const corners = [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2]];
     const fix = corners[(ci + 2) % 4];
     const loc = rotPt(p, c0, -r);                /* the pointer in the box's own frame */
@@ -3276,10 +3486,18 @@
   }
 
   /* a box's side pulled out or in, the opposite side fixed, turned or not */
-  function stretchBox(s, o, side, p) {
+  function stretchBox(s, o, side, p, mid) {
     const b = boxOf(o), c0 = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2], r = o.r || 0;
     const loc = rotPt(p, c0, -r);
     let x1 = b.x1, x2 = b.x2, y1 = b.y1, y2 = b.y2;
+    if (mid) {
+      /* Alt: both sides move, the middle stays */
+      if (side === 0 || side === 2) { const hh = Math.max(0.5, Math.abs(loc[1] - c0[1])); y1 = c0[1] - hh; y2 = c0[1] + hh; }
+      else { const hw = Math.max(0.5, Math.abs(loc[0] - c0[0])); x1 = c0[0] - hw; x2 = c0[0] + hw; }
+      const w0 = x2 - x1, h0 = y2 - y1;
+      s.a = [c0[0] - w0 / 2, c0[1] - h0 / 2]; s.b = [c0[0] + w0 / 2, c0[1] + h0 / 2];
+      return;
+    }
     if (side === 0) y1 = Math.min(loc[1], y2 - 1);
     else if (side === 1) x2 = Math.max(loc[0], x1 + 1);
     else if (side === 2) y2 = Math.max(loc[1], y1 + 1);
@@ -3354,6 +3572,34 @@
     }
   }
 
+  /** The point of what is being moved that snaps, as Illustrator's Snap
+      to Point has it: the anchor, centre or box corner of the selection
+      nearest where it was grabbed, when one is close; otherwise the very
+      point grabbed. */
+  function moveRef(it, list, at) {
+    const reach = 12 / Math.max(0.05, S.scale);
+    let best = null, bd = reach;
+    const take = function (q) {
+      const d = Math.hypot(q[0] - at[0], q[1] - at[1]);
+      if (d <= bd) { bd = d; best = [q[0], q[1]]; }
+    };
+    const boxes = [];
+    list.forEach(function (i) {
+      const s = it.shapes[i];
+      if (!s) return;
+      if (EXT.markPoints) EXT.markPoints(s).forEach(function (m) { take(m[0]); });
+      boxes.push(markBox(s));
+    });
+    if (boxes.length) {
+      const b = unionBox(boxes);
+      [[b.x1, b.y1], [b.x2, b.y1], [b.x2, b.y2], [b.x1, b.y2], [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2]].forEach(take);
+    }
+    return best || [at[0], at[1]];
+  }
+  /* how far the pointer goes before a press on a mark becomes a move: a
+     click that wobbles a pixel never shifts anything (more for a finger) */
+  const MOVE_DEAD_PX = 3, MOVE_DEAD_TOUCH = 8;
+
   function dragMove(e) {
     const d = dragOn; if (!d) return;
     const s = d.it.shapes[d.idx];
@@ -3362,6 +3608,7 @@
     const dx = p[0] - d.from[0], dy = p[1] - d.from[1];
     if (!d.moved) {
       if (Math.abs(dx) < 0.7 && Math.abs(dy) < 0.7) return;   /* a tap, not a drag */
+      if (d.mode === 'move' && Math.hypot(dx, dy) * S.scale < (e.pointerType === 'touch' ? MOVE_DEAD_TOUCH : MOVE_DEAD_PX)) return;
       d.moved = true;
       if (!d.snapped) { snapshot(); d.snapped = true; }        /* nothing is changed yet */
     }
@@ -3376,21 +3623,34 @@
     }
     if (d.mode === 'move') {
       let mx = dx, my = dy;
-      if (e.shiftKey) { if (Math.abs(dx) > Math.abs(dy)) my = 0; else mx = 0; }   /* along one axis */
+      if (e.shiftKey) {
+        /* Shift: along 0°, 45° or 90°, as Illustrator keeps a move */
+        const len = Math.hypot(dx, dy), ang = Math.round(Math.atan2(dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+        mx = Math.round(Math.cos(ang) * len * 1e6) / 1e6; my = Math.round(Math.sin(ang) * len * 1e6) / 1e6;
+      }
       const skip = {};
       if (d.group) d.group.forEach(function (m) { skip[m.i] = 1; }); else skip[d.idx] = 1;
+      /* the point grabbed lands on an anchor, a guide or the grid (object
+         snap, F3; Snap to Grid): that wins over lining the box up. Not with
+         Shift, whose angle comes first. */
+      let pinned = null;
+      if (EXT.snapPt && d.ref && !e.shiftKey) {
+        pinned = EXT.snapPt(d.it, [d.ref[0] + mx, d.ref[1] + my], e, { skip: Object.keys(skip).map(Number), move: true });
+        if (pinned) { mx = pinned[0] - d.ref[0]; my = pinned[1] - d.ref[1]; }
+      }
       const movedBox = d.group
         ? unionBox(d.group.map(function (m) { return offsetBox(markBox(m.s0), mx, my); }))
         : offsetBox(markBox(o), mx, my);
-      const guide = smartGuide(d.it, movedBox, skip);
+      const guide = pinned ? { dx: 0, dy: 0, vx: null, hy: null } : smartGuide(d.it, movedBox, skip);
       mx += guide.dx; my += guide.dy;
       const snappedBox = offsetBox(movedBox, guide.dx, guide.dy);
       showSmartGuide(d.it, guide.vx, guide.hy, snappedBox);
       showDistanceHuds(d.it, snappedBox, skip);
       showMoveHud(e, mx, my);
+      d.mv = [mx, my];
       /* held at drop, Ctrl (or Cmd) leaves a copy where the drag started and
          keeps dragging a new one — a plain cursor says so as it is held */
-      document.body.classList.toggle('dragdup', !!(e.ctrlKey || e.metaKey));
+      document.body.classList.toggle('dragdup', dupKey(e));
       if (d.group) {
         d.group.forEach(function (m) {
           const sh = d.it.shapes[m.i];
@@ -3402,8 +3662,10 @@
     } else if (d.mode === 'gscale') {
       if (!d.group) return;
       const k = d.extra;
-      let sx = k.ax ? (p[0] - k.f[0]) / (k.h[0] - k.f[0]) : 1;
-      let sy = k.ay ? (p[1] - k.f[1]) / (k.h[1] - k.f[1]) : 1;
+      /* Alt: about the middle of the selection, the far side moving too */
+      const f = e.altKey ? [(k.f[0] + k.h[0]) / 2, (k.f[1] + k.h[1]) / 2] : k.f;
+      let sx = k.ax ? (p[0] - f[0]) / (k.h[0] - f[0]) : 1;
+      let sy = k.ay ? (p[1] - f[1]) / (k.h[1] - f[1]) : 1;
       /* never flat: a grip pulled right through the far side flips the
          selection over, as in Illustrator, but always keeps some size */
       const keep = function (v) { return Math.abs(v) < 0.02 ? (v < 0 ? -0.02 : 0.02) : v; };
@@ -3412,7 +3674,7 @@
         const m = Math.max(Math.abs(sx), Math.abs(sy));
         sx = sx < 0 ? -m : m; sy = sy < 0 ? -m : m;
       }
-      scaleGroup(d.it, d.group, k.f, sx, sy);
+      scaleGroup(d.it, d.group, f, sx, sy);
     } else if (d.mode === 'gturn') {
       /* the whole selection turned about the middle of its box, each mark
          the way it turns (js/rotate.js) */
@@ -3453,16 +3715,17 @@
       setVertex(s, o, d.extra, p);
     } else if (d.mode === 'corner') {
       /* a mark that keeps its proportions (EXT.keepRatio) frees them with
-         Shift; any other box squares up with Shift */
+         Shift; any other box keeps its proportions with Shift, as in
+         Illustrator (a square stays a square) */
       const kr = EXT.keepRatio[o.t] ? !!EXT.keepRatio[o.t](o) : false;
-      if (EXT.keepRatio[o.t]) resizeBox(s, o, d.extra, p, false, kr !== e.shiftKey);
-      else resizeBox(s, o, d.extra, p, e.shiftKey);
+      if (EXT.keepRatio[o.t]) resizeBox(s, o, d.extra, p, false, kr !== e.shiftKey, e.altKey);
+      else resizeBox(s, o, d.extra, p, false, e.shiftKey, e.altKey);
     } else if (d.mode === 'bscale') {
-      scaleMark(s, o, d.extra, p, e.shiftKey);
+      scaleMark(s, o, d.extra, p, e.shiftKey, e.altKey);
     } else if (d.mode === 'bside') {
-      scaleSide(s, o, d.extra, p);
+      scaleSide(s, o, d.extra, p, e.altKey);
     } else if (d.mode === 'side') {
-      stretchBox(s, o, d.extra, p);
+      stretchBox(s, o, d.extra, p, e.altKey);
     } else if (d.mode === 'turn') {
       turnShape(s, o, d, p, e.shiftKey);
     } else if (d.mode === 'tsize') {
@@ -3522,6 +3785,51 @@
     return d.extra === 0 || d.extra === 2 ? 'y' : 'x';
   }
 
+  /* held at the drop, Alt (Option) as in Illustrator, or Ctrl (Cmd) as
+     before, leaves a copy where the drag started */
+  function dupKey(e) { return !!(e && (e.altKey || e.ctrlKey || e.metaKey)); }
+  /* Alt held in a drag is for that, not the window's menu bar */
+  document.addEventListener('keydown', function (e) { if (dragOn && e.key === 'Alt') e.preventDefault(); });
+  document.addEventListener('keyup', function (e) { if (dragOn && e.key === 'Alt') e.preventDefault(); });
+
+  /** An Alt-drag's drop: a copy of each mark moved stays where it was,
+      in the very place it held in the stack (its layer and its order), and
+      the moved one sits just above it, as Illustrator lays a copy over its
+      original. The copy left behind is a new object: the dimensions stay
+      with the one moved, and a group's copies are a group of their own. */
+  function leaveCopies(d) {
+    copiesUnder(d.it, d.group ? d.group.map(function (m) { return { i: m.i, s0: m.s0 }; }) : [{ i: d.idx, s0: d.s0 }]);
+  }
+  /** moved: [{i, s0}], each mark's index and how it was before it moved */
+  function copiesUnder(it, moved) {
+    const byI = {};
+    moved.forEach(function (m) { byI[m.i] = m.s0; });
+    const was = S.sel && S.sel.it === it ? selList() : null, last = was ? S.sel.i : null;
+    const grpMap = {}, out = [], map = {};
+    const copyOf = function (s0) {
+      const c = copyShape(s0);
+      delete c.gid;
+      if (c.grp != null) { if (!grpMap[c.grp]) grpMap[c.grp] = newGroupId(); c.grp = grpMap[c.grp]; }
+      return c;
+    };
+    /* a run of marks next to one another in the stack (a group drawn
+       together) gets its copies as one run just under it, not each one
+       threaded between, so the copy stacks as a whole as Illustrator's does */
+    it.shapes.forEach(function (s, i) {
+      if (byI[i] && !byI[i - 1]) {
+        for (let k = i; byI[k]; k++) out.push(copyOf(byI[k]));
+      }
+      map[i] = out.length;
+      out.push(s);
+    });
+    it.shapes.splice.apply(it.shapes, [0, it.shapes.length].concat(out));
+    if (was) {
+      const idx = was.map(function (i) { return map[i]; });
+      S.sel = { it: it, i: map[last] };
+      S.multi = idx.length > 1 ? { it: it, idx: idx, n: it.shapes.length } : null;
+    }
+  }
+
   function dragEnd(e) {
     const d = dragOn; if (!d) return;
     dragOn = null;
@@ -3534,12 +3842,9 @@
     /* Ctrl (or Cmd) still held at the drop: what was dragged is the new
        copy, left where it landed, and the mark(s) it came from go back —
        a fresh shape pushed on top at their old place, not a move at all */
-    if (d.moved && d.mode === 'move' && e && (e.ctrlKey || e.metaKey)) {
-      /* the copy left behind is a new object: the dimensions stay with the one moved */
-      const left = function (s0) { const c = copyShape(s0); delete c.gid; return c; };
-      if (d.group) d.group.forEach(function (m) { d.it.shapes.push(left(m.s0)); });
-      else d.it.shapes.push(left(d.s0));
-    }
+    if (d.moved && d.mode === 'move' && e && dupKey(e)) leaveCopies(d);
+    /* the Move dialog opens on the last move made (js/move.js), as Illustrator's does */
+    if (d.moved && d.mode === 'move' && d.mv) EXT.lastMove = { it: d.it, p: d.mv.slice() };
     if (d.moved && d.join && EXT.vxJoinEnd) {
       EXT.vxJoinEnd(d.it, d.idx, d.mode === 'pv' ? d.extra : d.mode === 'pa' ? 0 : 1, d.join, d.s0);
     }
@@ -3629,8 +3934,13 @@
     $('mpFont').addEventListener('change', function () {
       const v = this.value; markEdit(function (s) { s.f = v; });
     });
-    $('mpBold').addEventListener('click', function () { markEdit(function (s) { s.b = !s.b; }); });
-    $('mpItal').addEventListener('click', function () { markEdit(function (s) { s.i = !s.i; }); });
+    /* with some bold and some not, the first press makes them all bold */
+    const allOf = function (k) {
+      const it = S.sel && S.sel.it;
+      return !!it && selList().every(function (i) { const m = it.shapes[i]; return !m || m.t !== 'text' || !!m[k]; });
+    };
+    $('mpBold').addEventListener('click', function () { const on = !allOf('b'); markEdit(function (s) { s.b = on; }); });
+    $('mpItal').addEventListener('click', function () { const on = !allOf('i'); markEdit(function (s) { s.i = on; }); });
     $('mpSize').addEventListener('change', function () {
       const v = parseFloat(this.value);
       if (isNaN(v)) { syncMarkPop(); return; }
@@ -3639,6 +3949,8 @@
     $('mpAngle').addEventListener('change', function () {
       const v = parseFloat(this.value);
       if (isNaN(v)) { syncMarkPop(); return; }
+      /* several: they turn together by the number typed (it reads 0 again after) */
+      if (selList().length > 1) { turnSelection(v); return; }
       markEdit(function (s) { setMarkAngle(s, v); });
     });
     ['mpOpacity', 'mpWidth', 'mpSize', 'mpAngle'].forEach(function (id) {
@@ -3828,56 +4140,134 @@
     const p = $('markPop');
     return !!(p && p.closest && p.closest('.rprops'));
   }
+  /* a value the selection does not share (syncMarkPop) */
+  const MIXED = { mixed: true };
+  function sameVal(a, b) {
+    if (a === b) return true;
+    if (typeof a === 'number' && typeof b === 'number') return Math.abs(a - b) < 1e-6;
+    return false;
+  }
+  /** an input showing v, or empty with "Mixed" in grey; never while it is
+      being typed in */
+  function mixedInput(el, v) {
+    if (!el) return;
+    const mixed = v === MIXED;
+    el.classList.toggle('mixed', mixed);
+    el.placeholder = mixed ? 'Mixed' : '';
+    if (document.activeElement !== el) el.value = mixed ? '' : String(v);
+  }
+  /** a menu on v, or on a "Mixed" entry of its own that cannot be picked */
+  function mixedSelect(el, v) {
+    if (!el) return;
+    let o = el.querySelector('option[data-mixed]');
+    if (v === MIXED) {
+      if (!o) {
+        o = document.createElement('option');
+        o.dataset.mixed = '1'; o.value = ''; o.textContent = 'Mixed'; o.disabled = true; o.hidden = true;
+        el.insertBefore(o, el.firstChild);
+      }
+      el.value = '';
+      o.selected = true;
+      el.classList.add('mixed');
+    } else {
+      if (o) o.remove();
+      el.classList.remove('mixed');
+      el.value = String(v);
+    }
+  }
+  /** the whole selection turned by deg about the middle of its box, each
+      mark the way it turns, as Illustrator's Rotate field does for several */
+  function turnSelection(deg) {
+    if (!S.sel || !EXT.turnMark || !deg) return;
+    const it = S.sel.it, list = selList().filter(function (i) { const m = it.shapes[i]; return m && !m.locked; });
+    if (!list.length) return;
+    const b = unionBox(list.map(function (i) { return visBox(it.shapes[i]); }));
+    const c = [(b.x1 + b.x2) / 2, (b.y1 + b.y2) / 2];
+    snapshot();
+    list.forEach(function (i) {
+      const m = it.shapes[i], s0 = copyShape(m);
+      EXT.turnMark(m, s0, c, deg);
+    });
+    drawShapes(it); drawThumb(it); updateMeta(); syncMarkPop();
+  }
   function syncMarkPop() {
     const pop = $('markPop'), s = selShape();
     if (!s || (dragOn && !markPopDocked())) { pop.hidden = true; closeSwatches(); EXT.emit('markpop', null); return; }
     buildMarkPop();
-    const isText = s.t === 'text';
+    /* Everything selected, not only the mark last touched, as Illustrator's
+       Properties panel: a control shows only when it means something for
+       every one of them, and a value they do not share reads "Mixed". */
+    const it0 = S.sel.it;
+    const all = selList().map(function (i) { return it0.shapes[i]; }).filter(function (m) { return m && m.t !== 'pin'; });
+    if (!all.length) all.push(s);
+    const every = function (f) { return all.every(f); };
+    const shared = function (f) {
+      const v = f(all[0]);
+      return all.every(function (m) { return sameVal(f(m), v); }) ? v : MIXED;
+    };
+    const isText = every(function (m) { return m.t === 'text'; });
+    const anyText = all.some(function (m) { return m.t === 'text'; });
     /* a shape off the page fills too — a Continuous Line only once it is
        snapped shut back onto its own first point */
-    const isBox = closedShape(s);
+    const isBox = every(closedShape);
     /* a picture: no line to style (a signature, or a stamp made from one) */
-    const isPic = s.t === 'sig' || s.t === 'istamp';
-    const count = selList().length;
-    $('mpTitle').textContent = count > 1 ? count + ' marks' : (MARK_NAME[s.t] || 'Mark');
+    const pic = function (m) { return m.t === 'sig' || m.t === 'istamp'; };
+    const isPic = all.some(pic);
+    const count = all.length;
+    const oneType = every(function (m) { return m.t === s.t; });
+    const grouped = count > 1 && s.grp != null && every(function (m) { return m.grp === s.grp; }) &&
+      groupMembers(it0, S.sel.i).length === count;
+    $('mpTitle').textContent = count === 1 ? (MARK_NAME[s.t] || 'Mark')
+      : grouped ? 'Group' : count + ' objects';
+    $('markPop').dataset.count = String(count);
+    $('markPop').dataset.kind = count === 1 ? s.t : grouped ? 'group' : oneType ? s.t : 'mixed';
 
-    $('mpFillBtn').hidden = !isBox;
-    $('mpFillChip').className = s.fill ? '' : 'none';
-    $('mpFillChip').style.background = s.fill ? (s.grad ? gradCss(s.grad) : s.fill) : '';
-    $('mpStrokeChip').style.background = s.nos ? '' : s.c;
-    $('mpStrokeChip').className = s.nos ? 'none' : '';
-    $('mpStrokeLbl').textContent = isText ? 'Text' : isBox ? 'Border' : 'Colour';
+    $('mpFillBtn').hidden = !isBox || anyText;
+    const fillV = shared(function (m) { return m.fill ? (m.grad ? 'grad' : String(m.fill).toUpperCase()) : null; });
+    $('mpFillChip').className = fillV === MIXED ? 'mixed' : s.fill ? '' : 'none';
+    $('mpFillChip').style.background = fillV === MIXED ? '' : s.fill ? (s.grad ? gradCss(s.grad) : s.fill) : '';
+    const strokeV = shared(function (m) { return m.nos ? null : String(m.c).toUpperCase(); });
+    $('mpStrokeChip').style.background = strokeV === MIXED || s.nos ? '' : s.c;
+    $('mpStrokeChip').className = strokeV === MIXED ? 'mixed' : s.nos ? 'none' : '';
+    $('mpStrokeLbl').textContent = isText ? 'Text' : isBox || every(function (m) { return m.t === 'image'; }) ? 'Border' : 'Colour';
 
     /* marks with no line of their own to style (a highlight, a note, a
        stamp) and marks that do not turn (those, and a pen stroke) */
-    const noLine = isPic || s.t === 'markup' || s.t === 'note' || s.t === 'stamp';
-    const noTurn = s.t === 'markup' || s.t === 'note' || s.t === 'stamp' || s.t === 'ink' || s.t === 'vpath';
-    $('mpStrokeBtn').hidden = isPic || s.t === 'stamp';
-    $('mpStyleWrap').hidden = isText || noLine;
-    $('mpWidthWrap').hidden = isText || noLine;
-    $('mpCapWrap').hidden = isText || noLine;
-    $('mpAngle').closest('.mfield').hidden = noTurn;
-    $('mpJoinWrap').hidden = !isBox;
+    const noLineOf = function (m) { return pic(m) || m.t === 'markup' || m.t === 'note' || m.t === 'stamp' || m.t === 'text'; };
+    const noTurnOf = function (m) { return m.t === 'markup' || m.t === 'note' || m.t === 'stamp' || m.t === 'ink' || m.t === 'vpath'; };
+    const noLine = all.some(noLineOf);
+    const noTurn = all.some(noTurnOf);
+    $('mpStrokeBtn').hidden = isPic || all.some(function (m) { return m.t === 'stamp'; }) || (anyText && !isText);
+    $('mpStyleWrap').hidden = noLine;
+    $('mpWidthWrap').hidden = noLine;
+    $('mpCapWrap').hidden = noLine;
+    /* several at once turn about the middle of them all (mpAngle's change) */
+    $('mpAngle').closest('.mfield').hidden = count === 1 ? noTurn : !EXT.turnMark || noTurn;
+    $('mpJoinWrap').hidden = !isBox || noLine;
     $('mpText').hidden = !isText;
 
-    if (!isText) {
-      $('mpStyle').value = String(s.d || 0);
-      $('mpCap').value = String(shCap(s));
-      if (document.activeElement !== $('mpWidth')) $('mpWidth').value = (Math.round(s.w * 10) / 10);
-      if (isBox) $('mpJoin').value = String(shJoin(s));
-    } else {
-      $('mpFont').value = s.f || 'helv';
-      $('mpBold').classList.toggle('on', !!s.b);
-      $('mpItal').classList.toggle('on', !!s.i);
-      if (document.activeElement !== $('mpSize')) $('mpSize').value = (Math.round(s.size * 10) / 10);
+    if (!noLine) {
+      mixedSelect($('mpStyle'), shared(function (m) { return String(m.d || 0); }));
+      mixedSelect($('mpCap'), shared(function (m) { return String(shCap(m)); }));
+      mixedInput($('mpWidth'), shared(function (m) { return Math.round(m.w * 10) / 10; }));
+      if (isBox) mixedSelect($('mpJoin'), shared(function (m) { return String(shJoin(m)); }));
     }
-    if (document.activeElement !== $('mpOpacity')) $('mpOpacity').value = Math.round(shOp(s) * 100);
-    if (document.activeElement !== $('mpAngle')) $('mpAngle').value = Math.round(markAngle(s) * 10) / 10;
+    if (isText) {
+      mixedSelect($('mpFont'), shared(function (m) { return m.f || 'helv'; }));
+      $('mpBold').classList.toggle('on', every(function (m) { return !!m.b; }));
+      $('mpItal').classList.toggle('on', every(function (m) { return !!m.i; }));
+      mixedInput($('mpSize'), shared(function (m) { return Math.round(m.size * 10) / 10; }));
+    }
+    mixedInput($('mpOpacity'), shared(function (m) { return Math.round(shOp(m) * 100); }));
+    /* one: its own angle; several: 0, and a number typed turns them all by it */
+    if (count === 1) mixedInput($('mpAngle'), Math.round(markAngle(s) * 10) / 10);
+    else mixedInput($('mpAngle'), 0);
 
     /* whatever the module that owns this mark type wants alongside: for a
        dimension that is the drawing scale, which otherwise leaves with the
-       ribbon the moment the tool is put down */
-    const extra = EXT.markPop[s.t];
+       ribbon the moment the tool is put down. Only when everything selected
+       is of that one kind: its controls act on each of them. */
+    const extra = oneType ? EXT.markPop[s.t] : null;
     $('mpExtDiv').hidden = !extra;
     $('mpExt').hidden = !extra;
     if (extra) {
@@ -4301,8 +4691,10 @@
   function bindDraw(it) {
     let start = null, ghost = null;
 
+    /* from the page's own corner: the drawing surface reaches out over the
+       pasteboard (applyBoard), the page's coordinates do not move */
     function pt(e) {
-      const r = it.capture.getBoundingClientRect();
+      const r = it.wrap.getBoundingClientRect();
       return [e.clientX - r.left + it.off.left, e.clientY - r.top + it.off.top];
     }
     function dropGhost() {
@@ -4486,6 +4878,13 @@
   /* ---- picking several marks: Ctrl+click, a box drag, Ctrl+A ---- */
 
   /* which page and which mark a pointer event landed on, or null */
+  /* the marks' own elements, in the order of it.shapes: the frame a
+     selection of several puts under them all is not one of them */
+  function markKids(anno) {
+    return Array.prototype.filter.call(anno.children, function (el) {
+      return !(el.classList && el.classList.contains('multi-frame'));
+    });
+  }
   function markUnder(target) {
     const anno = target && target.closest ? target.closest('.anno') : null;
     if (!anno) return null;
@@ -4493,7 +4892,7 @@
     if (!it) return null;
     let el = target;
     while (el && el.parentNode !== anno) el = el.parentNode;
-    const i = el ? Array.prototype.indexOf.call(anno.children, el) : -1;
+    const i = el ? markKids(anno).indexOf(el) : -1;
     if (i < 0 || i >= it.shapes.length || NOT_SELECTABLE[it.shapes[i].t] || it.shapes[i].locked) return null;
     return { it: it, i: i };
   }
@@ -4565,22 +4964,44 @@
     } catch (err) { /* the caret stays at the end */ }
   }
 
-  /* Ctrl+click adds a mark to the selection, or takes it out. Capture phase,
-     so it runs before the mark's own handler starts a drag. */
+  /* Shift+click (as in Illustrator), or Ctrl+click, adds a mark to the
+     selection, or takes it out; a grouped mark brings its group. Capture
+     phase, so it runs before the mark's own handler starts a drag.
+     Shift lets that drag go on, as Illustrator does: the mark is added at
+     once and the whole selection moves with it, and one already picked is
+     taken out only if the pointer comes up where it went down. */
+  let shiftDrop = null;
   stage.addEventListener('pointerdown', function (e) {
-    if (S.tool !== 'select' || !(e.ctrlKey || e.metaKey) || e.button > 0) return;
-    if (e.target.closest && e.target.closest('.kn')) return;
+    shiftDrop = null;
+    const mod = e.ctrlKey || e.metaKey;
+    if (S.tool !== 'select' || !(mod || e.shiftKey) || e.button > 0 || S.editing) return;
+    if (e.target.closest && e.target.closest('.kn, .rotz')) return;
     const hit = markUnder(e.target);
     if (!hit) return;
-    e.preventDefault(); e.stopPropagation();
     const list = S.sel && S.sel.it === hit.it ? selList() : [];
-    const at = list.indexOf(hit.i);
-    if (at >= 0) list.splice(at, 1); else list.push(hit.i);
-    setGroup(hit.it, list);
+    const sh = hit.it.shapes[hit.i];
+    const mates = sh && sh.grp != null ? groupMembers(hit.it, hit.i) : [hit.i];
+    const isIn = list.indexOf(hit.i) >= 0;
+    if (!mod) {
+      if (!isIn) { setGroup(hit.it, list.concat(mates)); redrawAll(); }
+      else shiftDrop = { it: hit.it, mates: mates, at: Date.now() };
+      return;
+    }
+    e.preventDefault(); e.stopPropagation();
+    setGroup(hit.it, isIn
+      ? list.filter(function (i) { return mates.indexOf(i) < 0; })
+      : list.concat(mates));
     redrawAll();
     if (S.sel) syncMarkPop(); else hideMarkPop();
     marqueeDone = true;                            /* swallow the click that follows */
   }, true);
+  document.addEventListener('pointerup', function () {
+    const d = shiftDrop; shiftDrop = null;
+    if (!d || S.draggedAt >= d.at || !S.sel || S.sel.it !== d.it) return;
+    setGroup(d.it, selList().filter(function (i) { return d.mates.indexOf(i) < 0; }));
+    redrawAll();
+    if (S.sel) syncMarkPop(); else hideMarkPop();
+  });
 
   /* A box dragged over empty page selects every mark it touches. Starting on
      the page's own text still selects that text for copying, as before —
@@ -4595,14 +5016,16 @@
     marqueeDone = false;
     const t = e.target;
     const box = t.closest ? t.closest('.pagebox') : null;
-    if (!box) return;
+    /* on the pasteboard round a page: a box drawn there selects as well */
+    const onBoard = !box && t === stage ? boardItemAt(e.clientX, e.clientY) : null;
+    if (!box && !onBoard) return;
     if (t.closest('.anno') && markUnder(t)) return;          /* on a mark: that is a drag */
     if (t.closest('.kn, .texted, input, textarea, select, button, a')) return;
     if (!(e.ctrlKey || e.metaKey) && t.closest('.textLayer span')) return;
-    const it = S.items.filter(function (x) { return x.box === box; })[0];
+    const it = onBoard || S.items.filter(function (x) { return x.box === box; })[0];
     if (!it || !it.anno) return;
     e.preventDefault();
-    marquee = { it: it, x: e.clientX, y: e.clientY, add: e.ctrlKey || e.metaKey, id: e.pointerId };
+    marquee = { it: it, x: e.clientX, y: e.clientY, add: e.ctrlKey || e.metaKey || e.shiftKey, id: e.pointerId };
   });
   document.addEventListener('pointermove', function (e) {
     if (!marquee || e.pointerId !== marquee.id) return;
@@ -4619,14 +5042,18 @@
     const m = marquee; marquee = null;
     mqBox.hidden = true;
     if (!m.live) return;                                     /* a plain click: let it deselect */
+    /* the click this drag may end in is swallowed; when the browser sends
+       none (down and up on different things) the next real click still counts */
     marqueeDone = true;
+    setTimeout(function () { marqueeDone = false; }, 0);
     const it = m.it, r = it.anno.getBoundingClientRect();
     const bx1 = Math.min(m.x, e.clientX) - r.left, by1 = Math.min(m.y, e.clientY) - r.top;
     const bx2 = Math.max(m.x, e.clientX) - r.left, by2 = Math.max(m.y, e.clientY) - r.top;
     const picked = m.add && S.sel && S.sel.it === it ? selList() : [];
+    const kids = markKids(it.anno);
     it.shapes.forEach(function (s, i) {
       if (NOT_SELECTABLE[s.t] || picked.indexOf(i) >= 0) return;
-      const el = it.anno.children[i];
+      const el = kids[i];
       if (!el || !el.getBBox) return;
       let b;
       try { b = el.getBBox(); } catch (err) { return; }
@@ -4696,19 +5123,19 @@
 
   /* A copy of each selected mark, a little down and to the right, selected
      in their place (the page menu's Duplicate). */
-  function duplicateSelected() {
-    if (!S.sel) return false;
-    snapshot();
-    const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
-    const off = 12 / Math.max(0.2, S.scale);                          /* 12 screen pixels, in points */
-    const grpMap = {};        /* a duplicated group becomes its own group, not more members of the old one */
-    const gidMap = {};        /* a copy is an object of its own: dimensions copied with it measure the copy */
-    const made = list.map(function (i) {
-      const o = JSON.parse(JSON.stringify(it.shapes[i]));
+  /* Copies of marks put onto page `it`, moved by (dx, dy) points, on top:
+     each an object of its own (a copied group its own group), and a
+     dimension copied along with what it measures measuring the copy; one
+     copied on its own stays where it was copied to. Wherever they are, on
+     the page or out on the pasteboard. Answers their indexes. */
+  function placeCopies(it, list, dx, dy) {
+    const grpMap = {}, gidMap = {}, stamp = Date.now().toString(36);
+    const made = list.map(function (s0, i) {
+      const o = JSON.parse(JSON.stringify(s0));
       const c = JSON.parse(JSON.stringify(o));
-      moveShape(c, o, off, -off);
-      if (c.id != null) c.id = String(c.id) + '-' + Date.now().toString(36) + i;
-      if (c.gid) { gidMap[c.gid] = c.gid + '-' + Date.now().toString(36) + i; c.gid = gidMap[c.gid]; }
+      moveShape(c, o, dx, dy);
+      if (c.id != null) c.id = String(c.id) + '-' + stamp + i;
+      if (c.gid) { gidMap[c.gid] = c.gid + '-' + stamp + i; c.gid = gidMap[c.gid]; }
       if (c.grp != null) {
         if (!grpMap[c.grp]) grpMap[c.grp] = newGroupId();
         c.grp = grpMap[c.grp];
@@ -4716,17 +5143,50 @@
       it.shapes.push(c);
       return it.shapes.length - 1;
     });
-    /* a copied dimension measures the copy of what it measured, or, copied
-       on its own, stays where it was copied to */
     made.forEach(function (i) {
       const c = it.shapes[i];
       if (!c.ref) return;
       c.ref = c.ref.map(function (r) { return r && gidMap[r.g] ? Object.assign({}, r, { g: gidMap[r.g] }) : null; });
       if (!c.ref.some(Boolean)) delete c.ref;
     });
+    return made;
+  }
+  /* A copy of each selected mark, a little down and to the right, selected
+     in their place (the page menu's Duplicate, Ctrl+D). */
+  function duplicateSelected() {
+    if (!S.sel) return false;
+    snapshot();
+    const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
+    const off = 12 / Math.max(0.2, S.scale);                          /* 12 screen pixels, in points */
+    const made = placeCopies(it, list.map(function (i) { return it.shapes[i]; }), off, -off);
     setGroup(it, made);
     drawShapes(it); updateMeta();
     toast(made.length > 1 ? made.length + ' marks duplicated' : 'Mark duplicated');
+    return true;
+  }
+  /* Copy, cut and paste of marks (Ctrl+C, X, V), on the page and the
+     pasteboard alike. A paste lands where they were copied from, each one
+     after the first a step further down and right, as Illustrator's does;
+     on another page, at the same place on that one. */
+  let markClip = null;            /* {shapes, from: item, n} */
+  function copySelected(cut) {
+    if (!S.sel) return false;
+    const it = S.sel.it, list = selList().sort(function (a, b) { return a - b; });
+    markClip = { shapes: list.map(function (i) { return JSON.parse(JSON.stringify(it.shapes[i])); }), from: it, n: 0 };
+    if (cut) deleteSelected();
+    return true;
+  }
+  function pasteMarks() {
+    if (!markClip || !markClip.shapes.length) return false;
+    const it = S.items[S.current - 1];
+    if (!it) return false;
+    if (S.tool !== 'select') setTool('select');
+    snapshot();
+    const step = markClip.from === it ? ++markClip.n * 12 / Math.max(0.2, S.scale) : 0;
+    const made = placeCopies(it, markClip.shapes, step, -step);
+    S.sel = { it: it, i: made[made.length - 1] }; S.multi = null;
+    setGroup(it, made);
+    drawShapes(it); updateMeta(); syncMarkPop();
     return true;
   }
   /* The selected marks restacked on their page: the last drawn is the one
@@ -7005,8 +7465,11 @@
 
   /* moved: a tab brought over from another window, which is no project to
      the reader — it keeps its own name and says nothing */
-  async function openProject(d, moved) {
-    if (S.items.length && !okToReplace()) return false;
+  /* from: an editable PDF it came out of ({file}): it opens as that file,
+     its workspace as it was left, and Save writes it again as itself */
+  async function openProject(d, moved, from) {
+    /* (opened as a file, the replacing was asked about already) */
+    if (S.items.length && !from && !okToReplace()) return false;
     if (!moved) toast('Opening the project…');
     let srcs;
     try {
@@ -7038,6 +7501,14 @@
 
     hardReset();
     if (S.tool !== 'select') setTool('select');
+    setBoard(false);
+    S.fileKind = from ? 'project' : 'pdf';
+    S.target = null;
+    /* a tab moved to a window of its own: Save carries on as it was */
+    if (moved && d.file && typeof d.file === 'object') {
+      S.fileKind = d.file.kind === 'project' ? 'project' : 'pdf';
+      S.target = d.file.target && typeof d.file.target === 'object' ? d.file.target : null;
+    }
     const byOld = {};
     srcs.forEach(function (s) {
       const src = { id: ++srcId, name: s.name, bytes: s.bytes, doc: s.doc };
@@ -7053,6 +7524,7 @@
       if (!src || i.num < 1 || i.num > src.doc.numPages) return;
       const it = newItem(src, i.num, i.rot || 0, !!i.added);
       it.crop = i.crop || null;
+      if (i.fields && typeof i.fields === 'object') it.fields = i.fields;
       it.shapes = (Array.isArray(i.shapes) ? i.shapes : []).filter(function (sh) {
         return sh && typeof sh === 'object' && typeof sh.t === 'string';
       }).map(cleanShape);
@@ -7067,12 +7539,28 @@
     S.locs = {};
     Object.keys(d.locs || {}).forEach(function (id) { S.locs[id] = cleanLoc(d.locs[id], id); });
 
+    /* the layers, and the workspace as it was left (an editable PDF) */
+    if (Array.isArray(d.layers) && d.layers.length) {
+      S.layers = d.layers.filter(function (l) { return l && typeof l.id === 'string'; }).map(function (l) { return Object.assign({}, l); });
+    }
+    const ws = d.workspace && typeof d.workspace === 'object' ? d.workspace : {};
+    if (ws.board) setBoard(true);
+
     S.baseName = d.baseName || 'project';
     S.baseCount = S.items.length;
     const nPins = livePins().length;
     S.metaBase = '<b>' + esc(S.baseName) + '</b> · project';
     $('meta').innerHTML = S.metaBase;
     $('saveName').value = S.baseName + '-edited.pdf';
+    if (from) {
+      const fname = from.file.name || 'document.pdf';
+      S.baseName = fname.replace(/\.pdf$/i, '');
+      S.metaBase = '<b>' + esc(fname) + '</b> · editable PDF';
+      $('meta').innerHTML = S.metaBase;
+      $('saveName').value = fname;
+      /* Save writes it again as itself: onto the file where the app knows it */
+      S.target = { kind: 'project', name: fname, handle: null, path: from.file.adddotsPath || null };
+    }
 
     $('openPanel').hidden = true;
     $('errMsg').hidden = true;
@@ -7084,12 +7572,28 @@
     stage.focus();
     renderPins();
     if (nPins) showPinPanel();
+    if (from || moved) {
+      /* the drawing scale the dimensions read in, and the zoom it was left at */
+      const sc = ws.scale;
+      if (sc && EXT.draw) {
+        if (sc.custom) EXT.draw.setScale(sc.custom, sc.unit);
+        else if (EXT.draw.setDrawingScale) EXT.draw.setDrawingScale(sc.denom || 1, sc.unit);
+      }
+      EXT.emit('meta');
+      if (ws.zoom > 0 && Math.abs(ws.zoom - S.scale) > 0.01) zoomGlide(ws.zoom);
+    }
+    if (from) {
+      toast('Editable PDF open · <b>' + S.items.length + '</b> page' + (S.items.length > 1 ? 's' : ''));
+      return true;
+    }
     const nPhotos = Object.keys(S.locs).reduce(function (a, k) {
       return a + ((S.locs[k].photos || []).length);
     }, 0);
     if (moved) {
-      S.metaBase = '<b>' + esc(d.name || docName()) + '</b>';
+      S.metaBase = '<b>' + esc(d.name || (S.target && S.target.name) || docName()) + '</b>' +
+        (S.fileKind === 'project' ? ' · editable PDF' : '');
       $('meta').innerHTML = S.metaBase;
+      if (S.target) $('saveName').value = S.target.name;
       return true;
     }
     toast('Project open · <b>' + S.items.length + '</b> pages · <b>' + nPins + '</b> pins · ' +
@@ -8217,57 +8721,97 @@
      comments, which a reader can move and edit. */
   function keepComments() { return !$('saveFlat').checked; }
 
-  async function saveAs(name) {
-    const btn = $('saveGo');
-    btn.disabled = true; btn.textContent = 'Building…';
-    try {
-      const photos = !$('savePhotosRow').hidden && $('savePhotos').checked;
-      if (photos) toast('Building the PDF with photo pages…');
-      /* onto the original where it can be: a few kilobytes appended, and
-         what a rebuild drops (bookmarks, links) kept */
-      const done = await download(await buildPdf(S.items, null, { photos: photos, append: true, annots: keepComments() }, 'blob'), name);
-      /* the Save dialog cancelled: still unsaved, and the popover stays */
-      if (done === false) return;
-      closePops();
-      toast('Saved <b>' + esc(typeof done === 'string' ? done : name) + '</b>');
-      S.baseCount = S.items.length;
-      clearRecovery();
-    } catch (e) {
-      $('saveNote').innerHTML = '<span style="color:var(--danger)">' + esc(saveError(e)) + '</span>';
-    } finally {
-      btn.disabled = false; btn.textContent = 'Save PDF';
+  /* ---------------- Save: a standard PDF or an editable one ----------------
+     Two kinds of PDF, as a design program saves:
+     - standard: the pages with what is on each artboard painted in, for
+       anyone to open; the pasteboard is left out (engine artboard.ts);
+     - editable: the same pages, which any reader shows, carrying the whole
+       document inside (engine project.ts): every object with all its
+       properties, layers, groups, the pasteboard and the workspace. It opens
+       here again ready to edit.
+     Save asks which only when it has to: a document with something drawn
+     on it, not saved yet in either kind. A plain PDF only read, or turned,
+     saves as a PDF; an editable PDF saves as itself; once a kind (and
+     place) is chosen, Save goes straight there. Save as… always asks. */
+  function hasDrawing() { return S.items.some(function (it) { return it.shapes.length > 0; }); }
+  /* the project as it travels inside an editable PDF */
+  function projectData() {
+    const d = buildProject(false);
+    d.version = 3;
+    d.layers = S.layers ? S.layers.map(function (l) { return Object.assign({}, l); }) : null;
+    d.items.forEach(function (x, i) { const f = S.items[i] && S.items[i].fields; if (f) x.fields = f; });
+    d.workspace = {
+      board: !!S.board, zoom: S.scale, fit: S.fit, current: S.current,
+      scale: EXT.saveState && EXT.saveState.scale ? EXT.saveState.scale() : null
+    };
+    return d;
+  }
+  /* how many marks a standard PDF would leave out, or cut, being off their page */
+  function offBoard() {
+    let out = 0, edge = 0;
+    S.items.forEach(function (it) {
+      if (!it.page) return;
+      const v = it.page.view, c = it.crop;
+      const b = c ? { x1: c.x, y1: c.y, x2: c.x + c.w, y2: c.y + c.h } : { x1: v[0], y1: v[1], x2: v[2], y2: v[3] };
+      it.shapes.forEach(function (sh) {
+        if (sh.hide) return;
+        const p = E.markPlace(sh, b);
+        if (p === 'out') out++; else if (p === 'edge') edge++;
+      });
+    });
+    return { out: out, edge: edge };
+  }
+  function buildKind(kind, std) {
+    if (kind === 'project') {
+      return buildPdf(S.items, null, { photos: false, annots: false, project: { json: JSON.stringify(projectData()) } }, 'blob');
     }
+    /* onto the original where it can be: a few kilobytes appended, and what
+       a rebuild drops (bookmarks, links) kept */
+    return buildPdf(S.items, null, Object.assign({ photos: livePins().length > 0, append: true, annots: keepComments() }, std || {}), 'blob');
+  }
+  function pdfName(n) {
+    n = String(n || '').trim() || S.baseName + '-edited.pdf';
+    return /\.pdf$/i.test(n) ? n : n + '.pdf';
   }
 
-  /* Save in one step. Where the browser can (Chrome, Edge), its own Save
-     dialog asks for the folder and the name first — it has to open while
-     the click still counts — and the PDF is built and written there. The
-     Windows and phone apps have their own dialog (EXT.saveFile, in
-     download()); other browsers save it as a download, which goes where
-     the browser keeps them (or asks, if it is set to). */
+  /* Saves the document as `kind` ('pdf' or 'project'). o.ask: asks where
+     (o.download: saved under the name typed, as Save as… always has); else
+     into the place this kind was last saved to, without a
+     dialog, where the platform allows; o.path: a file on disk to write (the
+     one a plain PDF was opened from); o.name, o.std: the name, and the
+     standard PDF's own choices. */
   let saving = false;
-  async function quickSave() {
-    if (!S.items.length || saving) return;
-    closePops();
-    const name = /\.pdf$/i.test($('saveName').value.trim()) ? $('saveName').value.trim() : S.baseName + '-edited.pdf';
-    let handle = null;
-    if (!EXT.saveFile && window.showSaveFilePicker) {
+  async function saveDoc(kind, o) {
+    o = o || {};
+    if (!S.items.length || saving) return false;
+    /* Save as…'s popover stays up until the file is saved: a Save dialog
+       cancelled leaves it there to try again */
+    if (!o.ask) closePops();
+    const name = pdfName(o.name || (S.target && S.target.kind === kind ? S.target.name : $('saveName').value));
+    const reuse = !o.ask && S.target && S.target.kind === kind ? S.target : null;
+    let handle = reuse && reuse.handle ? reuse.handle : null;
+    let path = reuse && reuse.path && EXT.saveFile ? reuse.path : (!o.ask && o.path && EXT.saveFile ? o.path : null);
+    /* where the browser can (Chrome, Edge), its own Save dialog: first, while
+       the click still counts. The Windows and phone apps have their own
+       (EXT.saveFile); other browsers save it as a download. */
+    if (!handle && !path && !EXT.saveFile && window.showSaveFilePicker && !o.download) {
       try {
         handle = await window.showSaveFilePicker({
           suggestedName: name,
-          types: [{ description: 'PDF document', accept: { 'application/pdf': ['.pdf'] } }]
+          types: [{ description: kind === 'project' ? 'Editable PDF' : 'PDF document', accept: { 'application/pdf': ['.pdf'] } }]
         });
       } catch (e) {
-        if (e && e.name === 'AbortError') return;      /* the dialog was cancelled */
-        handle = null;                                  /* not allowed here: a download instead */
+        if (e && e.name === 'AbortError') return false;     /* the dialog was cancelled */
+        handle = null;                                       /* not allowed here: a download instead */
       }
     }
     saving = true;
-    const was = $('btnSave').textContent;
-    $('btnSave').disabled = true; $('btnSave').textContent = 'Saving…';
+    const btn = $('btnSave'), was = btn.textContent;
+    btn.disabled = true; btn.textContent = 'Saving…';
+    $('saveGo').disabled = true;
     try {
-      const photos = livePins().length > 0;
-      const blob = await buildPdf(S.items, null, { photos: photos, append: true, annots: keepComments() }, 'blob');
+      if (kind === 'project') toast('Building the editable PDF…');
+      const blob = await buildKind(kind, o.std);
       let saved = name;
       if (handle) {
         const w = await handle.createWritable();
@@ -8275,19 +8819,82 @@
         await w.close();
         saved = handle.name;
       } else {
-        const done = await download(blob, name);
-        if (done === false) return;                     /* the app's dialog, cancelled */
+        const done = await download(blob, name, 'application/pdf', path ? { path: path } : null);
+        if (done === false) return false;                    /* the app's dialog, cancelled */
         if (typeof done === 'string') saved = done;
+        if (EXT.lastSavedPath) path = EXT.lastSavedPath() || path;
       }
-      toast('Saved <b>' + esc(saved) + '</b>');
+      closePops();
+      /* Save goes there again, in this kind, without asking. A plain save of
+         a document with nothing drawn on it decides nothing for later: once
+         something is drawn, Save asks which kind (o.plain). */
+      S.target = { kind: kind, name: saved, handle: handle, path: handle ? null : path, plain: !!o.plain };
+      if (kind === 'project') S.fileKind = 'project';
+      $('saveName').value = saved;
+      toast('Saved <b>' + esc(saved) + '</b>' + (kind === 'project' ? ' · editable PDF' : ''));
       S.baseCount = S.items.length;
       clearRecovery();
+      EXT.emit('saved', { kind: kind, name: saved });
+      return true;
     } catch (e) {
-      toast(esc(saveError(e)), true);
+      /* said in Save as…'s popover when it is up, else as a notice */
+      if (!$('savePop').hidden) $('saveNote').innerHTML = '<span style="color:var(--danger)">' + esc(saveError(e)) + '</span>';
+      else toast(esc(saveError(e)), true);
+      return false;
     } finally {
       saving = false;
-      $('btnSave').disabled = false; $('btnSave').textContent = was;
+      btn.disabled = false; btn.textContent = was;
+      $('saveGo').disabled = false;
     }
+  }
+
+  /* Save (Ctrl+S): asks only when there is a choice to make */
+  /* Save (Ctrl+S): always the Save dialog, with the kind and the name it
+     would save as already chosen. Its Save then goes back onto the same
+     file, with no second dialog, while the kind and name are unchanged. */
+  function quickSave() {
+    if (!S.items.length || saving) return;
+    const shown = ['btnQSave', 'btnSave', 'btnSaveAs'].map($).filter(function (b) { return b && b.getClientRects().length; })[0];
+    openSaveDialog(shown, true);
+  }
+  /* the file a plain PDF was opened from, where the app knows it (the
+     Windows app), to save back onto */
+  function ownFile() {
+    return S.fileKind === 'pdf' && S.sources.length === 1 && S.sources[0].path && !S.sources[0].synthetic ? S.sources[0] : null;
+  }
+  /* Save as…, and Save's question: the name and the kind */
+  let saveAsking = false;        /* the dialog is Save's question, not Save as… */
+  function openSaveDialog(anchor, fromSave) {
+    if (!S.items.length) return;
+    saveAsking = !!fromSave;
+    const kind = S.target && !(S.target.plain && hasDrawing()) ? S.target.kind : (S.fileKind === 'project' ? 'project' : 'pdf');
+    const own = fromSave && !hasDrawing() ? ownFile() : null;
+    if (S.target) $('saveName').value = S.target.name;
+    else if (own) $('saveName').value = own.name;
+    else if (S.fileKind !== 'project') $('saveName').value = S.baseName + '-edited.pdf';
+    Array.prototype.forEach.call(document.querySelectorAll('input[name="saveFmt"]'), function (r) { r.checked = r.value === kind; });
+    openPop('savePop', anchor || $('btnSaveAs'));
+    syncSaveFmt();
+  }
+  function saveFmt() {
+    const r = document.querySelector('input[name="saveFmt"]:checked');
+    return r ? r.value : 'pdf';
+  }
+  function syncSaveFmt() {
+    const project = saveFmt() === 'project';
+    $('saveFlatRow').hidden = project;
+    $('savePhotosRow').hidden = project || !livePins().length;
+    const off = offBoard();
+    /* a standard PDF that leaves something out says so, as a notice */
+    const warn = !project && (off.out || off.edge);
+    const n = function (k, one) { return k + ' ' + one + (k > 1 ? 's' : ''); };
+    $('saveFmtNote').textContent = !warn ? '' :
+      [off.out ? n(off.out, 'object') + ' outside the page will be left out' : '',
+       off.edge ? n(off.edge, 'object') + ' crossing the page edge will be trimmed' : '']
+        .filter(Boolean).join('; ') + '. Choose Editable PDF to keep everything.';
+    $('saveFmtNote').classList.toggle('warn', !!warn);
+    $('saveTitle').textContent = saveAsking ? 'Save' : 'Save as';
+    $('saveGo').textContent = 'Save';
   }
 
   /* Send a copy (the phone app): the document as it stands, handed to the
@@ -8348,14 +8955,14 @@
 
   /* Resolves false only when the reader turned the save down (the desktop
      app's Save dialog, cancelled); a browser download cannot say. */
-  async function download(bytes, name, type) {
+  async function download(bytes, name, type, where) {
     /* the browser is copying the file out and writing it to disk: thumbnails,
        drawn in a worker alongside, wait until that is done rather than
        compete with it */
     thumbsPause();
     setTimeout(thumbsResume, 1500);
     /* the desktop app asks where, and writes it there (js/desktop.js) */
-    if (EXT.saveFile) return EXT.saveFile(bytes, name, type || 'application/pdf');
+    if (EXT.saveFile) return EXT.saveFile(bytes, name, type || 'application/pdf', where || undefined);
     const url = URL.createObjectURL(new Blob([bytes], { type: type || 'application/pdf' }));
     try {
       const a = document.createElement('a');
@@ -9243,9 +9850,13 @@
 
   var ribOn = 'ribView', ribbonReady = false;   /* var: setTool may run before the ribbon is wired */
 
+  /* tools that only read or mark up the page as it is: they leave the
+     reading layout alone; any other is drawing, and brings the pasteboard */
+  const VIEW_TOOLS = { select: 1, pan: 1, zoombox: 1, highlight: 1, underline: 1, strike: 1, hlarea: 1, crop: 1, pin: 1, note: 1 };
   function setTool(t) {
     if (S.editing) closeEditor(true);
     closePinEditor();
+    if (!S.board && S.items.length && !VIEW_TOOLS[t]) setBoard(true);
     S.tool = t;
     S.sel = null;
     document.body.dataset.tool = t;
@@ -10210,12 +10821,12 @@
       return a + it.shapes.filter(function (s) { return s.t === 'text'; }).length;
     }, 0);
     const removed = Math.max(0, S.baseCount - (n - added));
-    const bits = [n + ' pages'];
+    const bits = [n + (n === 1 ? ' page' : ' pages')];
     if (removed) bits.push(removed + ' removed');
     if (added) bits.push(added + ' added');
     if (rot) bits.push(rot + ' rotated');
     if (cropped) bits.push(cropped + ' cropped');
-    if (marks) bits.push(marks + ' marks');
+    if (marks) bits.push(marks + (marks === 1 ? ' mark' : ' marks'));
     const pins = livePins().length;
     if (pins) bits.push(pins + ' photo pins');
     if (texts) bits.push(texts + ' text edits');
@@ -10228,7 +10839,7 @@
       closeEditor(true);
     }
     if (e.target.closest('.pop') || e.target.closest('#btnAdd') ||
-        e.target.closest('#btnSave') || e.target.closest('#btnSaveAs') || e.target.closest('#moreSaveAs') ||
+        e.target.closest('#btnSave') || e.target.closest('#btnQSave') || e.target.closest('#btnSaveAs') || e.target.closest('#moreSaveAs') ||
         e.target.closest('#btnTr') ||
         e.target.closest('#btnExtract') || e.target.closest('#btnJpg') ||
         e.target.closest('#pinExpGo')) return;
@@ -10246,6 +10857,7 @@
   $('btnOut').addEventListener('click', function () { setZoom(1 / 1.2); });
   $('btnFitW').addEventListener('click', function () { S.fit = 'width'; relayout(); });
   $('btnSpread').addEventListener('click', function () { setSpread(!S.spread); });
+  $('btnBoard').addEventListener('click', function () { setBoard(!S.board); });
   $('btnCover').addEventListener('click', function () { setCover(!S.cover); });
   paintSpread();
   $('btnRotL').addEventListener('click', function (e) { e.shiftKey ? rotateAll(-90) : rotateItem(S.current - 1, -90); });
@@ -10331,7 +10943,17 @@
   $('btnQSave').addEventListener('click', quickSave);
   $('btnSaveAs').addEventListener('click', function () {
     if (!S.items.length) return;
-    $('savePop').hidden ? openPop('savePop', $('btnSaveAs')) : closePops();
+    $('savePop').hidden ? openSaveDialog($('btnSaveAs')) : closePops();
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name="saveFmt"]'), function (r) {
+    r.addEventListener('change', function () {
+      /* the name follows: an editable copy told apart from the plain one */
+      const n = $('saveName').value.trim();
+      if (saveFmt() === 'project' && !/-editable\.pdf$/i.test(n) && !(S.target && S.target.kind === 'project') && S.fileKind !== 'project') {
+        $('saveName').value = n.replace(/(-edited)?\.pdf$/i, '') + '-editable.pdf';
+      }
+      syncSaveFmt();
+    });
   });
   /* phones: Save as… from the More sheet, which shuts as the popover opens */
   $('moreSaveAs').addEventListener('click', function () { $('btnSaveAs').click(); });
@@ -10339,9 +10961,15 @@
   $('btnQPrint').addEventListener('click', printDoc);
   $('saveCancel').addEventListener('click', closePops);
   $('saveGo').addEventListener('click', function () {
-    let n = $('saveName').value.trim() || (S.baseName + '-edited.pdf');
-    if (!/\.pdf$/i.test(n)) n += '.pdf';
-    saveAs(n);
+    const photos = !$('savePhotosRow').hidden && $('savePhotos').checked;
+    const kind = saveFmt(), name = pdfName($('saveName').value), std = { photos: photos };
+    /* Save, the kind and name as before: back onto the same file */
+    const t = S.target, own = ownFile();
+    if (saveAsking && t && t.kind === kind && t.name === name) return saveDoc(kind, { name: name, std: std, plain: t.plain });
+    if (saveAsking && !t && kind === 'pdf' && own && own.name === name) return saveDoc('pdf', { path: own.path, name: name, std: std, plain: true });
+    /* a new kind or name: where, in the browser's own Save dialog (Save), or
+       as a download under that name (Save as…, as it always has) */
+    saveDoc(kind, { ask: true, download: !saveAsking, name: name, std: std, plain: kind === 'pdf' && !hasDrawing() });
   });
   $('saveName').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('saveGo').click(); });
 
@@ -10825,6 +11453,14 @@
     }
     if (mod && e.key.toLowerCase() === 'o') { e.preventDefault(); pickNew(); return; }
 
+    /* marks: cut and duplicate (copy and paste are js/enhance.js's keys,
+       onto copySelected / pasteMarks here); with words selected, the words */
+    if (mod && !e.altKey && !e.shiftKey && !typing && !S.editing) {
+      const k = e.key.toLowerCase();
+      const marks = S.tool === 'select' && !!S.sel && selectedText() == null;
+      if (k === 'x' && marks) { e.preventDefault(); copySelected(true); return; }
+      if (k === 'd' && marks) { e.preventDefault(); duplicateSelected(); return; }
+    }
     if (mod && e.key.toLowerCase() === 'f') {
       e.preventDefault(); setRail(true); switchTab('find'); return;
     }
@@ -10866,9 +11502,9 @@
 
     /* a mark selected: the arrow keys move it, 1 pt a press (10 with
        Shift), as Acrobat nudges an object; one undo takes back a run */
-    if (/^Arrow/.test(e.key) && S.sel && S.sel.it && S.tool === 'select' && !e.altKey) {
+    if (/^Arrow/.test(e.key) && S.sel && S.sel.it && S.tool === 'select') {
       e.preventDefault();
-      nudgeSelected(e.key, e.shiftKey ? 10 : 1);
+      nudgeSelected(e.key, e.shiftKey ? 10 : 1, e.altKey);
       return;
     }
 
@@ -11221,7 +11857,8 @@
     S: S, SVGNS: SVGNS, COLORS: COLORS, WIDTHS: WIDTHS, FONTS: FONTS,
     $: $, toast: toast, ask: ask, dialog: dialog, esc: esc, icon: icon, refreshHello: refreshHello, ICON: ICON, download: download, zipStore: zipStore,
     snapLine: snapLine, snapBox: snapBox, constrainPt: constrainPt,
-    selList: selList, setGroup: setGroup,
+    selList: selList, setGroup: setGroup, markKids: markKids,
+    nudgeIncrement: nudgeIncrement, copiesUnder: copiesUnder,
     groupSelected: groupSelected, ungroupSelected: ungroupSelected, groupMembers: groupMembers,
     snapshot: snapshot, setUndoState: setUndoState,
     drawShapes: drawShapes, drawThumb: drawThumb, drawVisibleThumbs: drawVisibleThumbs,
@@ -11297,7 +11934,11 @@
     /* a phone puts the tool down once a shape is drawn, the new one selected */
     endToolOn: endToolOn,
     deleteSelected: deleteSelected, duplicateSelected: duplicateSelected, frontSelected: frontSelected,
-    stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE,
+    copySelected: copySelected, pasteMarks: pasteMarks,
+    /* the pasteboard, and Save (for the tests and modules) */
+    setBoard: setBoard, board: function () { return S.board; },
+    saveDoc: saveDoc, quickSave: quickSave, openSaveDialog: openSaveDialog,
+    stackSelected: stackSelected, NOT_SELECTABLE: NOT_SELECTABLE, turnSelection: turnSelection, scaleGroup: scaleGroup,
     /* for Align and Pathfinder (js/arrange.js) */
     visBox: visBox, moveShape: moveShape, copyShape: copyShape, markBox: markBox,
     /* for the Rotate tool (js/rotate.js) */
@@ -11314,7 +11955,10 @@
        with its files' bytes, for a tab moved to a window of its own
        (js/tabs.js); importSession opens it there, editable as it was */
     exportSession: function () {
-      const d = buildProject(false), byId = {};
+      /* as an editable PDF carries it (layers, form values, the workspace),
+         and what Save does next: the kind of file, where it goes */
+      const d = projectData(), byId = {};
+      d.file = { kind: S.fileKind, target: S.target ? Object.assign({}, S.target) : null };
       S.sources.forEach(function (src) { byId[src.id] = src; });
       d.sources.forEach(function (src) {
         const s = byId[src.id];

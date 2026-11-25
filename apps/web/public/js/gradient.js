@@ -749,7 +749,7 @@
         /* a press on another mark picks that one, as Select would */
         let top = tg;
         while (top && top.parentNode && top.parentNode !== t.it.anno) top = top.parentNode;
-        const i = top && top.parentNode === t.it.anno ? Array.prototype.indexOf.call(t.it.anno.children, top) : -1;
+        const i = top && top.parentNode === t.it.anno ? X.markKids(t.it.anno).indexOf(top) : -1;
         if (i >= 0 && i < t.it.shapes.length && t.idx.indexOf(i) < 0) return;
       }
       if (hit && doublePress(hit, e)) { e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation(); return; }

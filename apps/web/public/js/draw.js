@@ -2932,7 +2932,7 @@
       page.setAttribute('width', W); page.setAttribute('height', H);
       page.setAttribute('fill', '#FFFFFF');
       out.appendChild(page);
-      Array.prototype.forEach.call(it.anno.children, function (el, i) {
+      X.markKids(it.anno).forEach(function (el, i) {
         const s = it.shapes[i];
         if (!s || s.hide || el.style.display === 'none') return;
         const c = el.cloneNode(true);
@@ -3350,7 +3350,7 @@
        and the rulers invent rank below that, and lying along something below
        that again. */
     const SNAP_RANK = { end: 0, mark: 0, cen: 0, int: 0, gint: 1, tcross: 1, tseg: 1, txg: 1,
-                        perp: 1, mid: 2, guide: 2, ton: 2, par: 2, near: 3 };
+                        perp: 1, mid: 2, guide: 2, ton: 2, par: 2, near: 3, grid: 1, gline: 2 };
     const snap = { on: true, kinds: { end: 1, mid: 1, int: 1, near: 1, perp: 1, par: 1, mark: 1, guide: 1 } };
     try {
       const pref = JSON.parse(localStorage.getItem('adpdf.snap') || 'null');
@@ -3431,6 +3431,7 @@
     /* the points a mark offers, as Illustrator's anchor points: its ends, a
        box's corners (turned with it), a circle's four quadrant points and
        its centre, every anchor of a path */
+    X.markPoints = function (s) { return markPoints(s); };
     function markPoints(s) {
       const out = [];
       if (!s || s.hide) return out;
@@ -3691,6 +3692,8 @@
       startDot.hidden = false;
     }
     const MARK_SVG = {
+      grid: '<path d="M9 2v14M2 9h14"/><rect x="6" y="6" width="6" height="6"/>',
+      gline: '<path d="M2 9h14M9 5v8"/>',
       end: '<rect x="3.5" y="3.5" width="11" height="11"/>',
       mark: '<rect x="3.5" y="3.5" width="11" height="11"/><circle cx="9" cy="9" r="1.2" class="dot"/>',
       cen: '<circle cx="9" cy="9" r="5.5"/><path d="M9 6.5v5M6.5 9h5"/>',
@@ -4053,19 +4056,51 @@
     document.addEventListener('pointerup', function () { setTimeout(alignHide, 0); });
 
     /** The snap point for p on this page, showing the marker — or null. */
+    /* Snap to Grid (js/rulers.js) is its own switch, as in Illustrator: it
+       works with object snap off too, for the same tools and drags, and
+       Ctrl still lets go of it for a moment */
+    function gridOK(e, opts) {
+      if (!X.grid || !X.grid.snapping() || (e && e.ctrlKey)) return false;
+      return (opts && opts.skip != null) || !!SNAP_TOOLS[S.tool];
+    }
+    function gridHit(it, p, hit) {
+      const tol = 7 / Math.max(0.05, S.scale);
+      const g = X.grid.snap(it, p, tol);
+      if (!g) return hit;
+      const r = g.both ? SNAP_RANK.grid : SNAP_RANK.gline;
+      const d = Math.hypot(g.p[0] - p[0], g.p[1] - p[1]);
+      if (hit && (hit.r < r || (hit.r === r && hit.d <= d))) return hit;
+      return { p: g.p, kind: g.both ? 'grid' : 'gline', label: g.both ? 'Grid' : 'Gridline', d: d, r: r };
+    }
+    /** The snap point for p on this page, showing the marker — or null.
+        opts.move: p is the point of an object being moved (core.js): it
+        lands on points, guides and the grid, not anywhere along a line,
+        and lining up with other marks is the moved box's own smart guide. */
     X.snapPt = function (it, p, e, opts) {
-      if (!it || !it.vp || !snapActive(e, opts)) { snapHide(); trackClear(); alignHide(); return null; }
+      const move = !!(opts && opts.move);
+      const objects = !!(it && it.vp && snapActive(e, opts));
+      const onGrid = !!(it && it.vp && gridOK(e, opts));
+      if (!objects && !onGrid) { snapHide(); trackClear(); alignHide(); return null; }
+      if (!objects) {
+        const g = gridHit(it, p, null);
+        alignHide(); trackPaint(it, null);
+        if (!g) { snapHide(); return null; }
+        snapShow(it, g);
+        return [g.p[0], g.p[1]];
+      }
       if (!it._segs) pageSegments(it);                        /* the lines arrive shortly */
       let hit = snapFind(it, p, opts);
-      const tr = trackFind(it, p, opts);
+      if (move && hit && (hit.kind === 'near' || hit.kind === 'perp' || hit.kind === 'par')) hit = null;
+      const tr = move ? null : trackFind(it, p, opts);
       /* an ordinary catch of the same rank or better wins: a real endpoint
          beats riding a guide past it */
       if (tr && (!hit || SNAP_RANK[tr.kind] < hit.r)) hit = tr;
-      const pr = parFind(it, p, opts);
+      const pr = move ? null : parFind(it, p, opts);
       if (pr && (!hit || SNAP_RANK.par < hit.r)) hit = pr;
+      if (onGrid) hit = gridHit(it, p, hit);
       if (!opts || opts.skip == null) { dwellWatch(it, hit); parWatch(it); }
       /* nothing better than somewhere along a line: line up with the marks instead */
-      if (!hit || hit.kind === 'near') {
+      if (!move && (!hit || hit.kind === 'near')) {
         const al = alignFind(it, p, opts);
         if (al) {
           trackPaint(it, null);
@@ -4100,7 +4135,8 @@
       if (!cap) { snapHide(); alignHide(); return; }
       const it = S.items.filter(function (x) { return x.capture === cap; })[0];
       if (!it || !it.vp) return;
-      const r = cap.getBoundingClientRect();
+      /* from the page's corner: the drawing surface reaches over the pasteboard */
+      const r = it.wrap.getBoundingClientRect();
       const at = [e.clientX - r.left + (it.off ? it.off.left : 0), e.clientY - r.top + (it.off ? it.off.top : 0)];
       X.snapPt(it, it.vp.convertToPdfPoint(at[0], at[1]), e);
     }, { passive: true });

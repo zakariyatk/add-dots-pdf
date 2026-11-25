@@ -113,6 +113,7 @@
         <button class="btn" id="btnIn" title="Zoom in (+)" aria-label="Zoom in" data-label="Zoom in"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"></circle><line x1="8" y1="11" x2="14" y2="11"></line><line x1="11" y1="8" x2="11" y2="14"></line><line x1="16" y1="16" x2="21" y2="21"></line></svg></button>
         <button class="btn" id="btnFitW" title="Fit width (W)" data-label="Fit width"><svg viewBox="0 0 24 24"><rect x="6" y="4" width="12" height="16" rx="1.5"></rect><polyline points="4 9 1.5 12 4 15"></polyline><polyline points="20 9 22.5 12 20 15"></polyline></svg><span class="lbl">Width</span></button>
         <button class="btn" id="btnSpread" title="Two pages side by side" aria-label="Two pages" aria-pressed="false" data-label="Two pages"><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="8.5" height="14" rx="1.2"></rect><rect x="13" y="5" width="8.5" height="14" rx="1.2"></rect></svg><span class="lbl">Two pages</span></button>
+        <button class="btn" id="btnBoard" title="Pasteboard: room around each page to draw on and keep objects, as in Illustrator. A standard PDF takes only what is on the page" aria-label="Pasteboard" aria-pressed="false" data-label="Pasteboard"><svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="18" rx="1.5" stroke-dasharray="2.5 2"></rect><rect x="7" y="7" width="10" height="10" rx="1"></rect></svg><span class="lbl">Pasteboard</span></button>
         <button class="btn" id="btnCover" title="Two pages: page 1 alone, as a book's cover" aria-label="Cover page" aria-pressed="false" data-label="Cover page" disabled=""><svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="8.5" height="14" rx="1.2" stroke-dasharray="2 2"></rect><rect x="13" y="5" width="8.5" height="14" rx="1.2"></rect><line x1="15.5" y1="9" x2="19" y2="9"></line></svg><span class="lbl">Cover</span></button>
       </div>
       <span class="sep"></span>
@@ -643,13 +644,35 @@
   </button>
 </div>
 
-<div class="pop" id="savePop" role="dialog" aria-label="Save" hidden="">
-  <label for="saveName">File name</label>
-  <input id="saveName" value="document.pdf">
-  <label class="chk" id="savePhotosRow" hidden=""><input type="checkbox" id="savePhotos" checked="">
-    Add linked photo pages for the pins</label>
-  <label class="chk" id="saveFlatRow" title="On: text, drawings and measurements are painted into the page, so they stay fixed in every PDF reader, in the order you stacked them. Off: highlights, notes, ink, boxes, lines, text boxes and stamps are saved as PDF comments, which other readers can move and edit, and they always sit above the page."><input type="checkbox" id="saveFlat" checked="">
-    Fix marks into the page</label>
+<div class="pop savedlg" id="savePop" role="dialog" aria-labelledby="saveTitle" hidden="">
+  <div class="sd-head">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 3h11l3 3v15H5z"/><path d="M8 3v5h7V3"/><rect x="8" y="13" width="8" height="5" rx="1"/></svg>
+    <span id="saveTitle">Save</span>
+  </div>
+  <label class="sd-lbl" for="saveName">File name</label>
+  <input id="saveName" value="document.pdf" spellcheck="false" autocomplete="off">
+  <!-- the two kinds of PDF (core.js saveDoc): only what is on the pages, or
+       the whole document carried inside, to open here again ready to edit -->
+  <div class="sd-lbl" id="saveFmtLbl">Format</div>
+  <div class="savefmt" role="radiogroup" aria-labelledby="saveFmtLbl">
+    <label class="fmt">
+      <input type="radio" name="saveFmt" value="pdf" checked="">
+      <span class="fmt-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M14 2.5V7h5"/><path d="M9 12h7M9 15h7M9 18h4"/></svg></span>
+      <span class="fmt-txt"><b>Standard PDF</b><i>The content of each page, ready to share and print</i></span>
+    </label>
+    <label class="fmt">
+      <input type="radio" name="saveFmt" value="project">
+      <span class="fmt-ico" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M14 2.5V7h5"/><path d="M9 17.5l1-3.2 4.6-4.6 2.2 2.2-4.6 4.6z"/></svg></span>
+      <span class="fmt-txt"><b>Editable PDF</b><i>Opens here with every object, layer and the pasteboard; other readers show the pages</i></span>
+    </label>
+  </div>
+  <div class="sd-notice" id="saveFmtNote" role="status"></div>
+  <div class="sd-opts">
+    <label class="chk" id="saveFlatRow" title="On: text, drawings and measurements are painted into the page, so they stay fixed in every PDF reader, in the order you stacked them. Off: highlights, notes, ink, boxes, lines, text boxes and stamps are saved as PDF comments, which other readers can move and edit, and they always sit above the page."><input type="checkbox" id="saveFlat" checked="">
+      Flatten marks into the page</label>
+    <label class="chk" id="savePhotosRow" hidden=""><input type="checkbox" id="savePhotos" checked="">
+      Add linked photo pages for the pins</label>
+  </div>
   <!-- the site-photo extras, once the drawing has pins; a saved project opens
        again with Open, like any file -->
   <div class="savepins" id="savePinsRow" hidden="">
@@ -659,10 +682,12 @@
       <button class="btn" id="pinExpGo" style="flex:1" title="Export the pins and photos as a PDF or a web viewer" disabled="">Export report</button>
     </div>
   </div>
-  <div class="note" id="saveNote"></div>
-  <div class="row" style="margin-top:10px">
-    <button class="btn primary" id="saveGo" style="flex:1">Save PDF</button>
-    <button class="btn" id="saveCancel">Cancel</button>
+  <div class="sd-foot">
+    <div class="sd-sum" id="saveNote"></div>
+    <div class="sd-btns">
+      <button class="btn" id="saveCancel">Cancel</button>
+      <button class="btn primary" id="saveGo">Save</button>
+    </div>
   </div>
 </div>
 
@@ -1174,7 +1199,9 @@
 <script src="js/layers.js"></script>
 <script src="js/vendor/polygon-clipping.umd.min.js"></script>
 <script src="js/toolprops.js"></script>
+<script src="js/move.js"></script>
 <script src="js/arrange.js"></script>
+<script src="js/propspanel.js"></script>
 <script src="js/rotate.js"></script>
 <script src="js/gradient.js"></script>
 <script src="js/colorpanel.js"></script>
