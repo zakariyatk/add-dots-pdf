@@ -83,12 +83,19 @@ await page.evaluate((png) => {
   X.drawShapes(it);
   X.setTool('select');
 }, PNG);
-await page.click('#sTabProps').catch(() =>
-  page.evaluate(() => {
-    window.ADDPDF.setRail(true);
-    document.getElementById('tabProps').click();
-  }),
-);
+/* open by default when a document opens (toolprops.js); a press on its
+   icon would close it then, so it is only pressed when it is not showing */
+if (
+  !(await page.evaluate(
+    () => !document.getElementById('rail').hidden && !document.getElementById('railProps').hidden,
+  ))
+)
+  await page.click('#sTabProps').catch(() =>
+    page.evaluate(() => {
+      window.ADDPDF.setRail(true);
+      document.getElementById('tabProps').click();
+    }),
+  );
 await page.waitForTimeout(200);
 
 const shapes = () => page.evaluate(() => JSON.parse(JSON.stringify(window.ADDPDF.S.items[0].shapes)));

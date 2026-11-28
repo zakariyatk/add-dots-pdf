@@ -44,6 +44,10 @@ await page.waitForFunction(() => window.ADDPDF.S.items[0] && window.ADDPDF.S.ite
   timeout: 60000,
 });
 await page.waitForTimeout(600);
+/* the page across the whole width, as these drags were measured: the
+   Properties panel opens with each document (toolprops.js) */
+await page.evaluate(() => window.ADDPDF.setRail(false));
+await page.waitForTimeout(400);
 
 let fails = 0;
 const check = (name, ok, info) => {
