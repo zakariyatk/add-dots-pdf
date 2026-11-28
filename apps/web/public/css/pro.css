@@ -2482,8 +2482,8 @@ body.move-mode .anno .dxhit { cursor: var(--cur-move) }
 @media (max-width: 600px) { .dxstyle { grid-template-columns: 1fr } }
 
 /* the grid (js/rulers.js): over the page's picture, under the marks */
-.pgrid { position: absolute; inset: 0; z-index: 1; pointer-events: none; background-repeat: repeat }
-.pgrid[hidden] { display: none }
+.pagegrid { position: absolute; inset: 0; z-index: 1; pointer-events: none; background-repeat: repeat }
+.pagegrid[hidden] { display: none }
 
 /* Position and Move… (js/move.js) */
 .markpop .mpmove { flex: 1 1 100%; min-width: 0 }

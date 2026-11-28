@@ -350,6 +350,25 @@ d = await page.evaluate(() => ({
   flip: document.getElementById('mvFlipH').disabled,
 }));
 check('…its Transform has its real size, and it does not flip', d.w > 50 && d.h > 10 && d.flip, d);
+/* its colour and its background, picked from the palette with the mouse */
+const textOf = (k) => page.evaluate((k) => window.ADDPDF.S.items[0].shapes[2][k], k);
+await page.click('#mpStrokeBtn');
+await page.click('#mpSwatches .pgrid.base .psq:nth-child(3)');
+d = await textOf('c');
+check('…its Text colour picked from the palette', d === '#E2483D', d);
+check('…and Background shows beside it', await shows('#mpBgBtn'));
+await page.click('#mpBgBtn');
+await page.click('#mpSwatches .pgrid.base .psq:nth-child(5)');
+d = await textOf('bg');
+check('…its Background picked from the palette', d === '#F2C14E', d);
+await page.click('#mpBgBtn');
+await page.click('#mpSwatches .pnofill');
+check('…and No background takes it off', (await textOf('bg')) === undefined);
+await undo();
+check('…which undoes in one step', !!(await textOf('bg')));
+await undo();
+await undo();
+check('…and undo puts the colour back', (await textOf('c')) === '#333333');
 await none();
 
 /* a path */
