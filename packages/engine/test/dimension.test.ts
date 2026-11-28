@@ -329,18 +329,45 @@ describe('the text', () => {
     /* still above the line (y 20), clear of it */
     expect(Math.min(...b.box.map((p) => p[1]))).toBeGreaterThan(20);
     /* level text turned too, and 0 is as it was */
-    expect(dimLayout({ ...s, sty: { ta: 'horizontal', tr: 45 } }, PT, measure).text.ang).toBeCloseTo(45 * DEG);
+    expect(dimLayout({ ...s, sty: { ta: 'horizontal', tr: 45 } }, PT, measure).text.ang).toBeCloseTo(
+      45 * DEG,
+    );
     expect(dimLayout({ ...s, sty: { tr: 0 } }, PT, measure).text).toEqual(a.text);
   });
   it('every kind takes the rotation', () => {
     const C: Pt = [100, 100];
     const kinds: DimXMark[] = [
-      dim({ k: 'ali', pts: [[0, 0], [60, 30], [20, 40]] }),
+      dim({
+        k: 'ali',
+        pts: [
+          [0, 0],
+          [60, 30],
+          [20, 40],
+        ],
+      }),
       dim({ k: 'ang', pts: [C, [150, 100], [100, 150], [130, 130]] }),
       dim({ k: 'rad', pts: [C, [140, 100], [120, 100]] }),
       dim({ k: 'dia', pts: [C, [140, 100], [200, 100]] }),
-      dim({ k: 'arc', pts: [[0, 0], [50, 0], [0, 50], [35.36, 35.36], [60, 60]] }),
-      dim({ k: 'ord', pts: [[0, 0], [100, 50], [130, 150]], dir: [1, 0], ax: 'x' }),
+      dim({
+        k: 'arc',
+        pts: [
+          [0, 0],
+          [50, 0],
+          [0, 50],
+          [35.36, 35.36],
+          [60, 60],
+        ],
+      }),
+      dim({
+        k: 'ord',
+        pts: [
+          [0, 0],
+          [100, 50],
+          [130, 150],
+        ],
+        dir: [1, 0],
+        ax: 'x',
+      }),
     ];
     for (const k of kinds) {
       const a = dimLayout(k, PT, measure).text.ang,
