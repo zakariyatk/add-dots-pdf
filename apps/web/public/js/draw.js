@@ -1175,7 +1175,8 @@
           tool.move(it, at, e);
           const m = cfg.mark(geom(), d);
           end();
-          if (m.b[0] - m.a[0] < 0.5 && m.b[1] - m.a[1] < 0.5) { X.drawShapes(it); return; }
+          /* too small to keep: a box under half a point, or the tool's own test (a path has no box) */
+          if (cfg.tiny ? cfg.tiny(m) : m.b[0] - m.a[0] < 0.5 && m.b[1] - m.a[1] < 0.5) { X.drawShapes(it); return; }
           X.snapshot();
           it.shapes.push(m);
           X.drawShapes(it); X.drawThumb(it); X.updateMeta();
@@ -1430,6 +1431,20 @@
       return m;
     }
     X.rectMark = rectMark;
+    /* what the other shape tools (js/shapetools.js) draw with: the same drag,
+       snapping, modifiers, live size and click-to-type-a-size as these */
+    X.drawKit = {
+      boxTool: boxTool, readBox: readBox, boxAtClick: boxAtClick, ctl: ctl,
+      rectMark: rectMark, rr2: rr2,
+      /** the Rectangle tool's look (fill, no stroke, dash, opacity) on a new shape */
+      look: function (m) {
+        if (rectLook.fill) m.fill = rectLook.fill;
+        if (rectLook.nos) m.nos = true;
+        if (rectLook.d) m.d = rectLook.d;
+        if (rectLook.o != null && rectLook.o < 1) m.o = rectLook.o;
+        return m;
+      }
+    };
 
     X.tools.rect = boxTool({
       t: 'rect', label: 'Rectangle',
@@ -2696,12 +2711,21 @@
     function sel(id, label, opts) { return '<label class="dxf"><span>' + label + '</span><select id="' + id + '">' + opts + '</select></label>'; }
     function chk(id, label) { return '<label class="dxf chk"><input type="checkbox" id="' + id + '"><span>' + label + '</span></label>'; }
     function txt(id, label, ph) { return '<label class="dxf"><span>' + label + '</span><input id="' + id + '" placeholder="' + (ph || '') + '"></label>'; }
+    /** a text rotation in degrees, as it is written: -180 to 180, to a hundredth */
+    function trDeg(v) {
+      v = +v || 0;
+      v = ((v % 360) + 360) % 360;
+      if (v > 180) v -= 360;
+      return Math.round(v * 100) / 100 || 0;
+    }
     function styleBody() {
       return '<div class="dxstyle">' +
         '<fieldset><legend>Text</legend>' + num('dxTh', 'Height', 'pt') + sel('dxTf', 'Font', fontOpts()) +
           chk('dxTb', 'Bold') + chk('dxTi', 'Italic') +
           '<label class="dxf"><span>Colour</span><input type="color" id="dxTc"></label>' + chk('dxTcSame', 'Same as the lines') + '</fieldset>' +
-        '<fieldset><legend>Placement</legend>' + sel('dxTp', 'Position', TP_OPTS) + sel('dxTa', 'Alignment', TA_OPTS) + num('dxTg', 'Gap', 'pt') +
+        '<fieldset><legend>Placement</legend>' + sel('dxTp', 'Position', TP_OPTS) + sel('dxTa', 'Alignment', TA_OPTS) +
+          '<label class="dxf"><span>Rotation</span><span class="unit"><input id="dxTr" inputmode="decimal" type="number" step="1" min="-360" max="360"><em>°</em></span></label>' +
+          num('dxTg', 'Gap', 'pt') +
           chk('dxBg', 'Background') + '<label class="dxf"><span>Background colour</span><input type="color" id="dxBgc"></label></fieldset>' +
         '<fieldset><legend>Arrowheads and lines</legend>' + sel('dxAh', 'Arrowhead', AH_OPTS) + num('dxAs', 'Arrow size', 'pt') +
           num('dxExo', 'Extension offset', 'pt') + num('dxExe', 'Extend beyond', 'pt') + num('dxExf', 'Fixed length (0: off)', 'pt') +
@@ -2720,7 +2744,7 @@
           const q = function (id) { return box.querySelector('#' + id); };
           q('dxTh').value = st.th; q('dxTf').value = st.tf || ''; q('dxTb').checked = !!st.tb; q('dxTi').checked = !!st.ti;
           q('dxTc').value = st.tc || '#000000'; q('dxTcSame').checked = !st.tc;
-          q('dxTp').value = st.tp; q('dxTa').value = st.ta; q('dxTg').value = st.tg;
+          q('dxTp').value = st.tp; q('dxTa').value = st.ta; q('dxTr').value = trDeg(st.tr); q('dxTg').value = st.tg;
           q('dxBg').checked = !!st.bg; q('dxBgc').value = st.bgc || '#FFFFFF';
           q('dxAh').value = st.ah; q('dxAs').value = st.as; q('dxExo').value = st.exo; q('dxExe').value = st.exe; q('dxExf').value = st.exf;
           q('dxCm').checked = !!st.cm;
@@ -2739,7 +2763,7 @@
           return {
             th: th, tf: q('dxTf').value, tb: q('dxTb').checked, ti: q('dxTi').checked,
             tc: q('dxTcSame').checked ? '' : q('dxTc').value.toUpperCase(),
-            tp: q('dxTp').value, ta: q('dxTa').value, tg: n('dxTg', 0, 200) || 0,
+            tp: q('dxTp').value, ta: q('dxTa').value, tr: trDeg(parseFloat(q('dxTr').value) || 0), tg: n('dxTg', 0, 200) || 0,
             bg: q('dxBg').checked, bgc: q('dxBgc').value.toUpperCase(),
             ah: q('dxAh').value, as: n('dxAs', 0, 200) || 0, exo: n('dxExo', 0, 500) || 0, exe: n('dxExe', 0, 500) || 0,
             exf: n('dxExf', 0, 5000) || 0, cm: q('dxCm').checked,
@@ -2777,6 +2801,13 @@
         '<label class="mfield"><span>Text</span><select id="dxPTp">' + TP_OPTS + '</select></label>' +
         '<label class="mfield"><span>Align</span><select id="dxPTa">' + TA_OPTS + '</select></label>' +
         '<label class="mfield chk"><input type="checkbox" id="dxPBg"><span>Background</span></label>' +
+      '</div><div class="dxrow dxrot">' +
+        '<label class="mfield"><span>Rotation</span><span class="unit"><input id="dxPTr" inputmode="decimal" aria-label="Text rotation in degrees, anticlockwise, on top of its alignment"><em>°</em></span></label>' +
+        '<span class="dxturns">' +
+        '<button class="cbtn" id="dxPTrL" type="button" title="Turn the text a quarter to the left (anticlockwise)" aria-label="Turn the text 90 degrees anticlockwise">⟲ 90°</button>' +
+        '<button class="cbtn" id="dxPTrR" type="button" title="Turn the text a quarter to the right (clockwise)" aria-label="Turn the text 90 degrees clockwise">⟳ 90°</button>' +
+        '<button class="cbtn" id="dxPTr0" type="button" title="The text back as its alignment puts it">0°</button>' +
+        '</span>' +
       '</div><div class="dxrow dxbtns">' +
         '<button class="cbtn" id="dxPStyle" type="button" title="Every part of its look">Style…</button>' +
         '<button class="cbtn" id="dxPCur" type="button" title="New dimensions take this one’s look">Make current</button>' +
@@ -2823,6 +2854,8 @@
         dq('dxPAh').value = st.ah; dq('dxPU').value = st.u || ''; dq('dxPDp').value = m.angle ? (st.adp == null ? '' : String(st.adp)) : (st.dp == null ? '' : String(st.dp));
         set('dxPPre', st.pre || ''); set('dxPSuf', st.suf || '');
         dq('dxPTp').value = st.tp; dq('dxPTa').value = st.ta; dq('dxPBg').checked = !!st.bg;
+        set('dxPTr', trDeg(st.tr));
+        dq('dxPTr0').disabled = !trDeg(st.tr);
         dq('dxPU').disabled = m.angle;
         /* the drawing scale rides along, as for the older dimensions */
         if (mpScale.parentNode !== dq('dxScaleRow')) dq('dxScaleRow').appendChild(mpScale);
@@ -2856,12 +2889,22 @@
       if (id === 'dxPSuf') { dxEdit(function (m) { m.sty.suf = v; }); return; }
       if (id === 'dxPTp') { dxEdit(function (m) { m.sty.tp = v; }); return; }
       if (id === 'dxPTa') { dxEdit(function (m) { m.sty.ta = v; }); return; }
+      if (id === 'dxPTr') {
+        const n = parseFloat(String(v).replace(',', '.'));
+        if (isFinite(n)) dxEdit(function (m) { m.sty.tr = trDeg(n); }); else X.syncMarkPop();
+        return;
+      }
       if (id === 'dxPBg') { const on = e.target.checked; dxEdit(function (m) { m.sty.bg = on; }); }
     });
     dxPop.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); e.target.dispatchEvent(new Event('change', { bubbles: true })); e.target.blur(); }
       e.stopPropagation();
     });
+    /* the quarter turns, each dimension selected from its own rotation */
+    function turnText(by) { dxEdit(function (m) { m.sty.tr = trDeg(E.dimStyle(m).tr + by); }); }
+    dq('dxPTrL').addEventListener('click', function () { turnText(90); });
+    dq('dxPTrR').addEventListener('click', function () { turnText(-90); });
+    dq('dxPTr0').addEventListener('click', function () { dxEdit(function (m) { m.sty.tr = 0; }); });
     dq('dxPStyle').addEventListener('click', function () {
       const sh = dxSel(); if (!sh) return;
       styleDialog('Dimension Style — for the selected', sh.sty || {}).then(function (st) {
@@ -3338,7 +3381,7 @@
 
     const SNAP_TOOLS = { rect: 1, line: 1, arrow: 1, ellipse: 1, cloud: 1, arc: 1,
                          dim: 1, dimal: 1, dimc: 1, dimb: 1, dimr: 1, dimd: 1, dima: 1, dimarc: 1, dimo: 1,
-                         poly: 1, pen: 1 };
+                         poly: 1, pen: 1, rrect: 1, polygon: 1, star: 1, spiral: 1 };
     const SNAP_KINDS = [['end', 'Endpoint'], ['mid', 'Midpoint'], ['int', 'Intersection'],
                         ['near', 'Nearest'], ['perp', 'Perpendicular'], ['par', 'Parallel'],
                         ['mark', 'Points of your marks'], ['guide', 'Guides']];

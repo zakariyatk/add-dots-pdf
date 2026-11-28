@@ -147,11 +147,12 @@ const open = async (page, path) => {
     null,
     { timeout: 60000 },
   );
-  /* the sidebar opens only when pressed now (toolpanel.js): open its Pages,
-     as every check here was written with the thumbnails in view */
+  /* a document opens with Properties in the sidebar (toolprops.js): show
+     its Pages, as every check here was written with the thumbnails in view */
   await page.evaluate(() => {
     const b = document.getElementById('sTabPages');
-    if (b && document.getElementById('rail').hidden) b.click();
+    const pages = document.getElementById('railPages');
+    if (b && (document.getElementById('rail').hidden || !pages || pages.hidden)) b.click();
   });
 };
 /* a document tab's frame, once the browser has it: the tab list has the tab
@@ -3027,7 +3028,7 @@ try {
     const first = await state();
     await page.click('#ribEdit');
     const edit = await state();
-    await page.click('#qtDim');
+    await page.click('#qg-measure');
     const measuring = await state();
     await page.click('#ribEdit');
     const picked = await state();

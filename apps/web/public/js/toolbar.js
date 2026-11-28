@@ -27,8 +27,9 @@
        reach for most sit first, and grouped by what they are for. */
     const DRAW_GROUPS = [
       { ids: ['tDrawPan', 'tDrawMove', 'tDrawSelect'] },
-      { ids: ['tRect', 'tEllipse', 'tLine', 'tArrow'] },
-      { ids: ['tArc', 'tCloud', 'tPoly'] },
+      /* Illustrator's Rectangle group (js/toolgroups.js has it as one button) */
+      { ids: ['tRect', 'tRRect', 'tEllipse', 'tPolygon', 'tStar', 'tLine', 'tArc', 'tSpiral'] },
+      { ids: ['tArrow', 'tPoly', 'tCloud'] },
       { ids: ['tText'] },
       { ids: ['tDim', 'tDimAl', 'tDimC', 'tDimB', 'tDimA', 'tDimR', 'tDimD', 'tDimArc', 'tDimO'] }
     ];

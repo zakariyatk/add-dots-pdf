@@ -3911,6 +3911,9 @@
     $('mpStrokeBtn').addEventListener('click', function (e) {
       e.stopPropagation(); openSwatches('c', this);
     });
+    $('mpBgBtn').addEventListener('click', function (e) {
+      e.stopPropagation(); openSwatches('bg', this);
+    });
     $('mpOpacity').addEventListener('change', function () {
       const v = parseFloat(this.value);
       if (isNaN(v)) { syncMarkPop(); return; }
@@ -4088,6 +4091,17 @@
       pop.appendChild(n);
     }
     /* any closed shape can drop its outline and keep just the fill */
+    /* text: no background, just the letters */
+    if (key === 'bg') {
+      const n = document.createElement('button');
+      n.type = 'button';
+      n.className = 'pnofill' + (s.bg ? '' : ' on');
+      n.title = 'No background'; n.setAttribute('aria-label', 'No background');
+      n.addEventListener('click', function (e) {
+        e.stopPropagation(); markEdit(function (x) { delete x.bg; delete x.bgOp; }); closeSwatches();
+      });
+      pop.appendChild(n);
+    }
     if (key === 'c' && closedShape(s)) {
       const n = document.createElement('button');
       n.type = 'button';
@@ -4229,6 +4243,12 @@
     const strokeV = shared(function (m) { return m.nos ? null : String(m.c).toUpperCase(); });
     $('mpStrokeChip').style.background = strokeV === MIXED || s.nos ? '' : s.c;
     $('mpStrokeChip').className = strokeV === MIXED ? 'mixed' : s.nos ? 'none' : '';
+    $('mpBgBtn').hidden = !isText;
+    if (isText) {
+      const bgV = shared(function (m) { return m.bg ? String(m.bg).toUpperCase() : null; });
+      $('mpBgChip').className = bgV === MIXED ? 'mixed' : s.bg ? '' : 'none';
+      $('mpBgChip').style.background = bgV === MIXED || !s.bg ? '' : s.bg;
+    }
     $('mpStrokeLbl').textContent = isText ? 'Text' : isBox || every(function (m) { return m.t === 'image'; }) ? 'Border' : 'Colour';
 
     /* marks with no line of their own to style (a highlight, a note, a

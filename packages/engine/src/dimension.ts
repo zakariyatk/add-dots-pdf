@@ -58,6 +58,9 @@ export interface DimStyle {
   tp?: 'above' | 'center' | 'below';
   ta?: 'aligned' | 'horizontal';
   tg?: number;
+  /** the text turned further by this many degrees, anticlockwise, from
+      where its alignment puts it (0: as aligned) */
+  tr?: number;
   /** decimal places for lengths and angles (unset: the unit's own) */
   dp?: number | null;
   adp?: number | null;
@@ -133,6 +136,7 @@ export const DIM_STYLE: Readonly<Required<DimStyle>> = {
   tp: 'above',
   ta: 'aligned',
   tg: 1.5,
+  tr: 0,
   dp: null,
   adp: null,
   u: '',
@@ -474,6 +478,14 @@ export function dimLayout(s: DimXMark, scale: Scale, measure: DimMeasureText): D
   const moved = ti >= 0 ? P[ti]! : null;
   const str = dimText(s, scale);
   const tw = Math.max(th * 0.5, measure(str, th));
+  /* the text's own turn on top of its alignment, in radians */
+  const rot = isFinite(st.tr) ? (st.tr * Math.PI) / 180 : 0;
+  /* how far the text's box, turned to a, reaches out along unit o from its middle */
+  const reach = (o: Pt, a: number) => {
+    const u: Pt = [Math.cos(a), Math.sin(a)],
+      v = perp(u);
+    return Math.abs(dot(o, u)) * (tw / 2) + Math.abs(dot(o, v)) * (th / 2);
+  };
 
   const D: DimDraw = {
     lines: [],
@@ -531,9 +543,9 @@ export function dimLayout(s: DimXMark, scale: Scale, measure: DimMeasureText): D
     if (st.tp !== 'center') {
       const u: Pt = [Math.cos(ang), Math.sin(ang)],
         v = perp(u);
-      /* the text box's half-extent across the line */
+      /* the text box's half-extent across the line, as it is turned */
       const o = unit(out);
-      const h = Math.abs(dot(o, u)) * (tw / 2) + Math.abs(dot(o, v)) * (th / 2);
+      const h = reach(o, ang + rot);
       /* above: on the side the text's own "up" is (or outward, round an arc) */
       let dir = o;
       if (!radial && st.ta !== 'horizontal' && dot(o, v) < 0) dir = mul(o, -1);
@@ -541,7 +553,7 @@ export function dimLayout(s: DimXMark, scale: Scale, measure: DimMeasureText): D
       at = add(M, mul(dir, tg + h));
     }
     D.text.at = at;
-    D.text.ang = ang;
+    D.text.ang = ang + rot;
   };
   const extLine = (from: Pt, to: Pt, dir: Pt, gap: number, over: number) => {
     /* from the measured point (plus a gap) to past the dimension line */
@@ -675,12 +687,12 @@ export function dimLayout(s: DimXMark, scale: Scale, measure: DimMeasureText): D
         const end: Pt = [loc[0] + sx * land, loc[1]];
         D.lines.push([loc, end]);
         D.hit.push([loc, end]);
-        if (st.tp === 'center') D.text.at = [end[0] + sx * (tg + tw / 2), end[1]];
+        if (st.tp === 'center') D.text.at = [end[0] + sx * (tg + reach([1, 0], rot)), end[1]];
         else {
           const mid: Pt = [loc[0] + (sx * land) / 2, loc[1]];
-          D.text.at = [mid[0], mid[1] + (st.tp === 'below' ? -1 : 1) * (tg + th / 2)];
+          D.text.at = [mid[0], mid[1] + (st.tp === 'below' ? -1 : 1) * (tg + reach([0, 1], rot))];
         }
-        D.text.ang = 0;
+        D.text.ang = rot;
       }
       D.grips.line = loc;
       break;
@@ -707,11 +719,8 @@ export function dimLayout(s: DimXMark, scale: Scale, measure: DimMeasureText): D
         D.lines.push([start, j1], [j1, j2], [j2, end]);
       }
       D.lines.forEach((l) => D.hit.push(l));
-      const ang = st.ta === 'horizontal' ? 0 : readable(Math.atan2(lead[1], lead[0]));
-      const tu: Pt = [Math.cos(ang), Math.sin(ang)],
-        tv = perp(tu);
-      const ext = Math.abs(dot(lead, tu)) * (tw / 2) + Math.abs(dot(lead, tv)) * (th / 2);
-      D.text.at = add(end, mul(lead, tg + ext));
+      const ang = (st.ta === 'horizontal' ? 0 : readable(Math.atan2(lead[1], lead[0]))) + rot;
+      D.text.at = add(end, mul(lead, tg + reach(lead, ang)));
       D.text.ang = ang;
       D.grips.line = end;
       break;

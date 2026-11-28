@@ -588,8 +588,8 @@ await page.evaluate(() => window.ADDPDF.setRibbon && window.ADDPDF.setRibbon('ri
 await page.click('#btnGrid');
 await page.click('#btnGridSnap');
 const gst = await page.evaluate(() => ({
-  shown: !document.querySelector('.pgrid').hidden,
-  img: document.querySelector('.pgrid').style.backgroundImage.length > 0,
+  shown: !document.querySelector('.pagegrid').hidden,
+  img: document.querySelector('.pagegrid').style.backgroundImage.length > 0,
   snap: window.ADDPDF.grid.snapping(),
   step: window.ADDPDF.grid.step(),
 }));
@@ -617,7 +617,7 @@ await page.keyboard.press("Control+'");
 await page.waitForTimeout(80);
 check(
   "Ctrl+' and Ctrl+Shift+' turn them off again",
-  await page.evaluate(() => document.querySelector('.pgrid').hidden && !window.ADDPDF.grid.snapping()),
+  await page.evaluate(() => document.querySelector('.pagegrid').hidden && !window.ADDPDF.grid.snapping()),
 );
 
 /* ======================= copies, layers, the stack ======================= */

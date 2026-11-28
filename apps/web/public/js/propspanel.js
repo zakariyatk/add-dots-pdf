@@ -82,7 +82,7 @@
        make (an older build, a phone) is passed over */
     const LAYOUT = {
       transform: ['mpMove'],
-      appear: ['fsWrap', 'mpFillBtn', 'mpStrokeBtn', 'mpStyleWrap', 'mpWidthWrap', 'mpCapWrap', 'mpJoinWrap', '@mpOpacity', 'mpGrad'],
+      appear: ['fsWrap', 'mpFillBtn', 'mpStrokeBtn', 'mpBgBtn', 'mpStyleWrap', 'mpWidthWrap', 'mpCapWrap', 'mpJoinWrap', '@mpOpacity', 'mpGrad'],
       kind: ['mpText', 'mpType', 'mpExt'],
       align: ['mpArrange'],
       quick: []

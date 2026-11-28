@@ -71,7 +71,8 @@
     /* ---------------- the selected mark's properties, on the right ----------------
        Not in the Drawing Tool tab, which would take the left panel over from
        whatever tools were open there: a panel of their own in the rail on the
-       right, after Layers, opened by its icon (it never opens by itself). */
+       right, after Layers, opened by its icon, and open by default when a
+       document opens (below). */
     const railHost = $('railPages') ? $('railPages').parentNode : null;
     const ptab = document.createElement('button');
     ptab.className = 'btn'; ptab.id = 'tabProps'; ptab.type = 'button'; ptab.textContent = 'Properties';
@@ -99,6 +100,31 @@
       document.querySelectorAll('.rail-tabs .btn').forEach(function (t) { t.classList.toggle('on', t === ptab); });
     }
     ptab.addEventListener('click', showProps);
+
+    /* Open from the start: each document opens with the Properties panel
+       out on the right, as Illustrator's is (not on a phone, where the rail
+       is a drawer over the page). Closed by hand while a document is open,
+       it stays closed for the rest of this session; the next start opens it
+       again. */
+    let fresh = true, userClosed = false, loading = false;
+    X.on('reset', function () { fresh = true; loading = true; });
+    X.on('pages', function () {
+      if (!fresh || !S.items.length) return;
+      fresh = false;
+      /* after the layout core does for the new document */
+      setTimeout(function () {
+        loading = false;
+        if (!userClosed && !X.isMobile()) showProps();
+      }, 0);
+    });
+    if ($('rail') && window.MutationObserver) {
+      new MutationObserver(function () {
+        if ($('rail').hidden && S.items.length && !loading && !fresh && !X.isMobile()) userClosed = true;
+        else if (!$('rail').hidden) userClosed = false;
+      }).observe($('rail'), { attributes: true, attributeFilter: ['hidden'] });
+    }
+    /* a document already open by the time this ran (restored at start) */
+    if (S.items.length) { fresh = false; if (!X.isMobile()) showProps(); }
     document.querySelectorAll('.rail-tabs .btn:not(#railClose)').forEach(function (t) {
       if (t === ptab) return;
       t.addEventListener('click', function () { ppanel.hidden = true; ptab.classList.remove('on'); });

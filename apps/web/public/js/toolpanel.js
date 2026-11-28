@@ -199,7 +199,8 @@
     try { const kept = localStorage.getItem(QLAST); if (kept) lastSrc(kept); } catch (e) { /* the first */ }
     new MutationObserver(function () {
       const t = X.S.tool;
-      if (!t || t === 'select' || rail.querySelector('[data-tool-btn="' + t + '"]:not(#qLast)')) return;
+      /* a tool in one of the bar's groups (js/toolgroups.js) is on the bar already */
+      if (!t || t === 'select' || rail.querySelector('[data-tool-btn="' + t + '"]:not(#qLast), [data-tools~="' + t + '"]')) return;
       const id = TOOL_ID[t] || (X.toolBtn || {})[t];
       if (id) lastUsed(id);
     }).observe(document.body, { attributes: true, attributeFilter: ['data-tool'] });

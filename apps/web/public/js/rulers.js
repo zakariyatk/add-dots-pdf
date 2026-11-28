@@ -481,7 +481,7 @@
       let g = it.gridLayer;
       if (!g || g.parentNode !== it.wrap) {
         g = it.gridLayer = document.createElement('div');
-        g.className = 'pgrid';
+        g.className = 'pagegrid';
         g.setAttribute('aria-hidden', 'true');
         it.wrap.insertBefore(g, it.wrap.firstChild);
       }
