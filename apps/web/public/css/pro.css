@@ -2470,6 +2470,18 @@ body.move-mode .anno .dxhit { cursor: var(--cur-move) }
 .mpdx .dxtext input { width: 210px }
 .mpdx .unit input { width: 52px }
 .mpdx input.short { width: 70px }
+/* in the Properties panel: no wider than the panel (the Text field was a
+   fixed 210px, which pushed the whole section past its right edge) */
+.rprops .mpdx { min-width: 0; max-width: 100% }
+.rprops .mpdx .dxrow { min-width: 0; max-width: 100% }
+.rprops .mpdx .dxval { flex: 1 1 100%; min-width: 0; white-space: normal; overflow-wrap: anywhere }
+.rprops .mpdx .dxrow > .mfield.dxtext { flex: 1 1 100%; min-width: 0; display: flex }
+.rprops .mpdx .dxtext input { width: auto; flex: 1 1 auto; min-width: 0 }
+/* the text's rotation: the angle, and under it the quarter turns and 0° sharing a row */
+.mpdx .dxrot .dxturns { display: flex; gap: 6px; flex: 1 1 100%; min-width: 0 }
+.mpdx .dxrot .cbtn, .rprops .markpop .mpdx .dxrot .cbtn {
+  width: auto; flex: 1 1 0; min-width: 0; justify-content: center; padding: 0 6px; white-space: nowrap
+}
 .mpdx .chk { display: inline-flex; align-items: center; gap: 4px }
 .dxstyle { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px }
 .dxstyle fieldset { border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px 8px; margin: 0; display: flex; flex-direction: column; gap: 6px }
