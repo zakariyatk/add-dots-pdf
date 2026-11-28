@@ -1175,7 +1175,8 @@
           tool.move(it, at, e);
           const m = cfg.mark(geom(), d);
           end();
-          if (m.b[0] - m.a[0] < 0.5 && m.b[1] - m.a[1] < 0.5) { X.drawShapes(it); return; }
+          /* too small to keep: a box under half a point, or the tool's own test (a path has no box) */
+          if (cfg.tiny ? cfg.tiny(m) : m.b[0] - m.a[0] < 0.5 && m.b[1] - m.a[1] < 0.5) { X.drawShapes(it); return; }
           X.snapshot();
           it.shapes.push(m);
           X.drawShapes(it); X.drawThumb(it); X.updateMeta();
@@ -1430,6 +1431,20 @@
       return m;
     }
     X.rectMark = rectMark;
+    /* what the other shape tools (js/shapetools.js) draw with: the same drag,
+       snapping, modifiers, live size and click-to-type-a-size as these */
+    X.drawKit = {
+      boxTool: boxTool, readBox: readBox, boxAtClick: boxAtClick, ctl: ctl,
+      rectMark: rectMark, rr2: rr2,
+      /** the Rectangle tool's look (fill, no stroke, dash, opacity) on a new shape */
+      look: function (m) {
+        if (rectLook.fill) m.fill = rectLook.fill;
+        if (rectLook.nos) m.nos = true;
+        if (rectLook.d) m.d = rectLook.d;
+        if (rectLook.o != null && rectLook.o < 1) m.o = rectLook.o;
+        return m;
+      }
+    };
 
     X.tools.rect = boxTool({
       t: 'rect', label: 'Rectangle',
@@ -3338,7 +3353,7 @@
 
     const SNAP_TOOLS = { rect: 1, line: 1, arrow: 1, ellipse: 1, cloud: 1, arc: 1,
                          dim: 1, dimal: 1, dimc: 1, dimb: 1, dimr: 1, dimd: 1, dima: 1, dimarc: 1, dimo: 1,
-                         poly: 1, pen: 1 };
+                         poly: 1, pen: 1, rrect: 1, polygon: 1, star: 1, spiral: 1 };
     const SNAP_KINDS = [['end', 'Endpoint'], ['mid', 'Midpoint'], ['int', 'Intersection'],
                         ['near', 'Nearest'], ['perp', 'Perpendicular'], ['par', 'Parallel'],
                         ['mark', 'Points of your marks'], ['guide', 'Guides']];

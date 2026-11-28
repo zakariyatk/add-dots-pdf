@@ -923,7 +923,8 @@
       ta.addEventListener('input', function () {
         n.text = ta.value;
       });
-      ta.addEventListener('blur', function () { X.drawShapes(openOn.it); renderComments(); });
+      /* the thread may be shut already (Esc) by the time the box loses the focus */
+      ta.addEventListener('blur', function () { if (openOn) X.drawShapes(openOn.it); renderComments(); });
       if (focus) ta.focus();
 
       pop.querySelector('#ctClose').addEventListener('click', closeThread);

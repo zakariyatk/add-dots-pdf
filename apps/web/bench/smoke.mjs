@@ -3027,7 +3027,7 @@ try {
     const first = await state();
     await page.click('#ribEdit');
     const edit = await state();
-    await page.click('#qtDim');
+    await page.click('#qg-measure');
     const measuring = await state();
     await page.click('#ribEdit');
     const picked = await state();

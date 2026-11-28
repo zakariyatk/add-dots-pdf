@@ -188,6 +188,59 @@ body.acro .qrail .btn svg { width: 24px; height: 24px; stroke-width: var(--ico-s
 /* the tool in hand: a grey tile with a violet icon, the way Acrobat shows it */
 body.acro .qrail .btn.on { background: var(--on-bg); color: var(--on-ink) }
 body.acro .qrail .btn.on svg { stroke: currentColor }
+/* a bar taller than the window scrolls, without a scroll bar of its own */
+body.acro .qrail { max-height: calc(100% - 24px); overflow-y: auto; scrollbar-width: none }
+body.acro .qrail::-webkit-scrollbar { display: none }
+
+/* ---------- tool groups and their flyouts (js/toolgroups.js) ----------
+   Illustrator's: a small triangle in the corner of a button that holds a
+   group; held, a flyout of the group beside it */
+body.acro .qrail .tgbtn { position: relative; flex: none; -webkit-touch-callout: none; user-select: none }
+.tgbtn .tgtri {
+  position: absolute; right: 3px; bottom: 3px; width: 0; height: 0;
+  border-style: solid; border-width: 0 0 5px 5px;
+  border-color: transparent transparent var(--text-dim) transparent
+}
+/* a little bigger to hit than to see */
+.tgbtn .tgtri::after { content: ""; position: absolute; right: -3px; bottom: -8px; width: 13px; height: 13px }
+.tgbtn.on .tgtri, .tgbtn:hover .tgtri, .tgbtn.tgopen .tgtri { border-bottom-color: currentColor }
+body.acro .qrail .tgbtn.tgopen:not(.on) { background: var(--hover, var(--chrome-2)) }
+
+.tgfly {
+  position: fixed; z-index: 40; display: grid;
+  grid-template-columns: repeat(var(--tg-cols, 1), minmax(0, auto));
+  column-gap: 2px; row-gap: 1px; padding: 5px;
+  background: var(--chrome); color: var(--text);
+  border: 1px solid var(--line); border-radius: 10px;
+  box-shadow: var(--shadow-pop, 0 10px 30px rgba(0, 0, 0, .35));
+  font-size: 13px; animation: tgIn .09s ease-out
+}
+.tgfly[hidden] { display: none }
+@keyframes tgIn { from { opacity: 0; transform: translateX(-3px) } to { opacity: 1; transform: none } }
+@media (prefers-reduced-motion: reduce) { .tgfly { animation: none } }
+.tgfly .tgitem {
+  display: grid; grid-template-columns: 8px 22px 1fr auto; align-items: center; column-gap: 9px;
+  min-width: 212px; height: 34px; padding: 0 10px 0 7px; margin: 0;
+  border: 0; border-radius: 6px; background: none; color: inherit;
+  font: inherit; text-align: left; cursor: pointer; white-space: nowrap
+}
+.tgfly.two .tgitem { min-width: 168px }
+.tgfly .tgitem svg {
+  width: 22px; height: 22px; fill: none; stroke: currentColor;
+  stroke-width: var(--ico-stroke, 1.2); stroke-linecap: round; stroke-linejoin: round
+}
+.tgfly .tgname { overflow: hidden; text-overflow: ellipsis }
+.tgfly .tgkey { font: inherit; font-size: 12px; color: var(--text-dim); padding-left: 14px }
+/* the group's tool shown on its button: a small square, as Illustrator marks it */
+.tgfly .tgmark { width: 6px; height: 6px; border-radius: 1px }
+.tgfly .tgitem.cur .tgmark { background: var(--text-dim) }
+.tgfly .tgitem.on .tgmark { background: var(--on-ink, var(--marker)) }
+.tgfly .tgitem.on { color: var(--on-ink, var(--marker)) }
+.tgfly .tgitem:hover, .tgfly .tgitem.hot, .tgfly .tgitem:focus-visible {
+  background: var(--hover, var(--chrome-2)); outline: none
+}
+.tgfly .tgitem:focus-visible { box-shadow: inset 0 0 0 2px var(--marker) }
+@media (pointer: coarse) { .tgfly .tgitem { height: 42px } }
 
 /* ---------- the page, and the sidebar on its right ---------- */
 body.acro .main > #ribbon { order: 0 }
